@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Next.js / Fumadocs
+.next/
+out/
+.source/
+
+# Laravel (api/, from M0)
+api/.env
+api/storage/*.key
+api/public/vendor/
+
+# Env & local config
+.env
+.env.local
+.env.*.local
+
+# Build artifacts & caches
+dist/
+*.tsbuildinfo
+.turbo/
+
+# OS / editor
+.DS_Store
+*.swp
