@@ -20,7 +20,7 @@
 
 - [x] ~~P1 (S) `/design-explore` the comment gutter~~ — **done 2026-07-03**: 6 variants explored; **"Protocol Rebuild" approved** (clean-room Protocol aesthetic). Design language codified in `docs/DESIGN.md`; canonical mockup `docs/designs/review-page.html`; losing variants deleted.
 - [ ] P1 (S) **Spike: port hypothes.is anchoring** (`dom-anchor-text-quote` + diff-match-patch) — validate the exact→fuzzy→orphan ladder on 2-3 real RFCs before M3 design hardens.
-- [ ] P1 (S) **M0 spike: validate Fumadocs** can be restyled to `docs/DESIGN.md` tokens + the comment-gutter layout; fallback Nextra (SPEC §4.1).
+- [x] ~~P1 (S) M0 spike: validate Fumadocs~~ — **done 2026-07-03: VALIDATED** (`web/` in repo, run `npm run dev`). Fumadocs 16 + Next 16 renders `.md` and `.mdx`; DESIGN.md tokens applied via `--color-fd-*` overrides; system fonts + dark default work; right TOC column swapped for a static review rail — the comment-gutter layout is feasible. Dogfooding: SPEC/DESIGN/TODOS render as content copies. **Findings for the real build:** (a) unknown fence languages (`plantuml`) crash Shiki — `langAlias` workaround in `source.config.ts`; product needs a never-crash fallback for arbitrary fence langs (add to §19 failure modes at M1); (b) content needs frontmatter — the ingestion pipeline must synthesize `title`/`description` at import; (c) M2 work identified: sticky/anchor-aligned rail, sidebar "Threads" nav group.
 - [ ] P2 (S) **Decide web-side error reporting** — Sentry in M1 vs defer; must be optional in self-host builds (SPEC §22.4).
 - [ ] P2 (S) **Pick the name/domain** — "Margin" is a placeholder and becomes the public repo name (SPEC §22.1).
 - [ ] P2 (S) **CLA/DCO decision** before accepting the first external contribution (SPEC §22.6).
