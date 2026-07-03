@@ -1,5 +1,6 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
+import { remarkDiagrams } from './lib/remark-diagrams';
 
 // You can customize Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -18,10 +19,12 @@ export const docs = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
+    // Converts mermaid/plantuml fences into live diagram components (SPEC §6.2)
+    remarkPlugins: [remarkDiagrams],
     rehypeCodeOptions: {
       themes: { light: 'github-light', dark: 'github-dark' },
-      // Unknown fence languages must render as plain text, never crash the
-      // page. plantuml/mermaid fences become live diagrams later (SPEC §6.2).
+      // Safety net: any other unknown fence language renders as plain text,
+      // never crashes the page.
       langAlias: { plantuml: 'txt' },
     },
   },
