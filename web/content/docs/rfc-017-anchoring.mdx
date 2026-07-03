@@ -1,0 +1,50 @@
+---
+title: RFC-017 — Comment Re-anchoring Across Document Versions
+description: How Margin keeps threads attached — or honestly orphaned — as specs evolve underneath them.
+---
+
+<Callout title="Version 5 is available" type="info">
+  A newer version of this document was synced from GitHub 4 minutes ago. Comments below anchor to v4.
+</Callout>
+
+## Motivation
+
+A review comment is only useful if it survives the document it reviews. Authors revise specs continuously while review is underway; a comment pinned to character offsets alone is destroyed by the first edit. We bind anchors to the rendered **plain-text projection** rather than the markdown source, so cosmetic markup changes never move a highlight.
+
+## Anchor model
+
+Each anchor follows the W3C Web Annotation selector shape — an exact quote, its surrounding context, and a position hint:
+
+```json title="threads/512/anchors/v4"
+{
+  "exact": "similarity threshold of 0.75",
+  "prefix": "fall back to fuzzy matching with a ",
+  "suffix": ", tuned against the golden corpus",
+  "start": 10412,
+  "end": 10441,
+  "projection_version": 1
+}
+```
+
+| Property | Type | Purpose |
+| --- | --- | --- |
+| `exact` | string | The selected text, verbatim, from the projection |
+| `prefix` / `suffix` | string | ~64 chars of context either side, for disambiguation |
+| `start` / `end` | integer | Offset hints — never trusted on their own |
+| `projection_version` | integer | Extraction algorithm version this anchor was created against |
+
+## Re-anchoring algorithm
+
+When a new version syncs, each thread re-anchors in three attempts:
+
+1. **Exact match** of the quote with prefix/suffix context.
+2. **Fuzzy match** (diff-match-patch, position-hinted) above a similarity threshold of 0.75 — flagged `relocated`.
+3. Otherwise the thread is set aside as **orphaned** rather than guessed.
+
+<Callout title="Why never guess" type="warn">
+  A comment reattached to the wrong sentence is worse than an orphaned one — it silently changes what the reviewer said. The orphan tray keeps the original quotation and offers one-click re-attach.
+</Callout>
+
+## Orphaned threads
+
+An orphaned thread is never discarded. It keeps its original quotation and waits in a tray at the foot of the margin, where the author can re-attach it to new text with a single selection.
