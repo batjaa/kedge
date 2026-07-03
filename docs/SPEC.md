@@ -33,7 +33,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 - Support `.md` and `.mdx` sources; ingest `.html` and Confluence storage format by converting to markdown.
 - Beautiful long-form rendering (TOC, dark mode, search, code highlighting) via **Fumadocs** (MIT), styled to the Tailwind Plus Protocol aesthetic — Protocol is a design reference only; its licensed code cannot ship in a public AGPL repo.
 - **Self-hostable**: AGPL-3.0 public repo, full feature parity with the SaaS (demo mode excepted), one `docker compose up` reference deployment. Companies with private RFCs run it inside their own network.
-- Render **Mermaid** and **PlantUML** diagrams from fenced code blocks — live SVG, never attached images.
+- Render diagrams from fenced code blocks as live SVG — **PlantUML, Mermaid, Excalidraw, GraphViz, D2, and ~20 more engines via Kroki** — never attached images.
 - Private share links; anchored comment threads; thread forking from any comment; **suggested edits** (propose replacement text).
 - **Versioned re-sync** with comment re-anchoring (or an "orphaned" tray) across versions; **version diff view** with comment overlay.
 - **Approvals lite:** document lifecycle status + version-pinned reviewer sign-offs.
@@ -100,7 +100,7 @@ package "web (Next.js + Protocol)" {
   [MDX renderer + compile cache\n(allowlisted components)] as MDX
   [Text projection service\n(plain_text extraction)] as PROJ
   [Comment/suggestion layer\n(selection → anchors)] as CL
-  [Diagram blocks\n(Mermaid client-side,\nPlantUML via cached Kroki)] as DIA
+  [Diagram blocks\n(all engines via cached Kroki)] as DIA
 }
 
 package "api (Laravel 12)" {
@@ -115,7 +115,7 @@ package "api (Laravel 12)" {
 database "Postgres\n(SQLite in dev)" as DB
 cloud "Cloudflare R2\n(re-hosted images,\ncached diagram SVGs)" as R2
 cloud "GitHub / Confluence / URL" as SRC
-cloud "Kroki" as KROKI
+cloud "Kroki\n(self-hosted, both editions)" as KROKI
 
 Author --> MDX
 Reviewer --> CL
@@ -256,9 +256,16 @@ MDX is code; imported docs are untrusted:
 
 ### 6.2 Diagrams
 
-- **Mermaid**: client-side ESM render — private diagram source never leaves the browser.
-- **PlantUML**: rendered via Kroki **once per diagram source hash, server-side, cached in R2** — readers get the cached SVG from Margin, never hit Kroki directly. v1 uses hosted `kroki.io` (UI discloses this); `KROKI_URL` switches to a self-hosted container for private mode.
-- Both: loading skeleton, error state showing raw source, click-to-zoom.
+**Kroki is the sole diagram engine** (decision 2026-07-03, validated in the web spike; supersedes the earlier client-Mermaid + Kroki-PlantUML split). Fenced code blocks whose language matches an **explicit engine allowlist** (`plantuml`, `mermaid`, `excalidraw`, `graphviz`/`dot`, `d2`, `dbml`, `erd`, `svgbob`, `vegalite`, `wavedrom`, `c4plantuml`, …) render as live SVG:
+
+- Rendered **server-side** via Kroki (`GET /{engine}/svg/{deflate+base64url(source)}`), **cached by diagram source hash** (R2 in production) — one render per diagram, readers never contact Kroki and execute zero diagram code.
+- SVG embedded with no script surface (`<img>` / sanitized) — eliminates the in-browser diagram-parser XSS class entirely.
+- **Kroki runs self-hosted in both editions from M1** — one container, bundled in the self-host compose and on the SaaS droplet. Private diagram source never reaches a third party; hosted `kroki.io` is acceptable only in local dev (`KROKI_URL`).
+- Deterministic and versionable: the SVG is effectively part of the version snapshot; output can't drift with client library upgrades — which matters when comments anchor around diagrams.
+- States: loading skeleton, never-crash error state showing the raw source, click-to-zoom (needed — complex diagrams scale down to fit the column).
+- Unknown fence languages fall through to plain-text code highlighting — never to Kroki, never a crash.
+
+Why sole-engine won: one code path for ~20 diagram types (Excalidraw sketches and precise PlantUML — the full authoring spectrum), deterministic cached output, smaller client bundle (no mermaid ESM), and a stronger security posture. The old rationale for client-side Mermaid (privacy) is fully answered by self-hosting Kroki from day one.
 
 ## 7. Documents, versions, diff & re-sync
 
@@ -359,7 +366,7 @@ Per-user prefs: immediate / daily digest / off, per channel. Defaults: authors i
 - **Integration credentials** (PATs, Atlassian tokens, GitHub App key) in encrypted casts; never serialized into API responses; Nova-masked; **log scrubbing ensures tokens never reach logs**.
 - **Webhooks**: signature-verified, delivery-ID idempotent, unknown paths → 200 ignore.
 - **Demo mode abuse**: per-IP rate limits, public connectors only, capped sizes, 48h TTL.
-- **Rate limiting** on auth, comment, import, AI, and demo endpoints. Kroki disclosure per §6.2 (self-host compose bundles Kroki, so PlantUML never leaves the network).
+- **Rate limiting** on auth, comment, import, AI, and demo endpoints. Kroki is self-hosted in both editions from M1 (§6.2) — diagram source never leaves the deployment; only the explicit engine allowlist is ever forwarded.
 - **Self-hosting is the enterprise trust story, not a security substitute**: everything above applies identically to a self-hosted instance — a malicious share link or poisoned doc attacks it the same way. What self-hosting removes is the *data-custody* concern (specs never leave the customer's network) and with it the near-term need for SSO/SAML/SCIM/compliance work.
 
 ## 14. AI features
@@ -516,7 +523,7 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 - **api**: Forge → DigitalOcean droplet (`~/api.margin.dev/current`), queue worker + scheduler, Postgres, R2, Postmark.
 - **web**: Vercel for prototyping (consolidate to a Forge Node daemon later). `app.margin.dev` / `api.margin.dev`.
 - **Rules**: additive-only migrations with two-phase drops · deploy **api before web** · rollback = previous Forge release · feature flags are plain config flags per connector/AI feature.
-- **Bootstrap checklist**: Postmark domain + DKIM · R2 bucket + token · `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS`/CORS origins · Forge queue worker + scheduler · `KROKI_URL` · GitHub OAuth app (login) · GitHub App creation (M6) · demo-mode rate-limit config.
+- **Bootstrap checklist**: Postmark domain + DKIM · R2 bucket + token · `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS`/CORS origins · Forge queue worker + scheduler · **Kroki container on the droplet + `KROKI_URL`** (M1) · GitHub OAuth app (login) · GitHub App creation (M6) · demo-mode rate-limit config.
 - **Post-deploy smoke**: `/up` health · import a known public doc end-to-end · queue depth check.
 
 ### 20.2 Self-hosted (AGPL-3.0, full parity)
@@ -543,14 +550,14 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 **Standing constraint from M0 — self-host-clean**: 12-factor env config only, no hard dependency on any paid/SaaS service (Nova optional, Postmark→SMTP, R2→local), SaaS-only surfaces behind `SELF_HOSTED`, and the repo is written as if public from the first commit (no secrets, no proprietary code — Protocol code stays out).
 
 - **M0 — Scaffold**: monorepo (AGPL LICENSE from commit one); `api/` via standard Laravel recipe (Sanctum, Socialite, enums, Policies wired; Nova as optional SaaS-ops install); `web/` on Fumadocs (**spike: validate the shell fits the review-page + gutter layout; fallback Nextra**); pinned auth handshake (BFF pattern). ✅ log in from the Next.js app.
-- **M1 — Render, share & demo**: import public GitHub / raw URL / upload + **PAT stopgap** for private GitHub; normalization pipeline with warnings; projection service; Protocol rendering; Mermaid + cached-Kroki PlantUML; MDX allowlist + compile cache + fallback; share links; **instant demo mode** (TTL + claim). ✅ a stranger pastes a URL and gets a beautiful doc with zero signup.
+- **M1 — Render, share & demo**: import public GitHub / raw URL / upload + **PAT stopgap** for private GitHub; normalization pipeline with warnings; projection service; Fumadocs rendering; **Kroki diagrams (self-hosted container, full engine allowlist, hash-cached, click-to-zoom)**; MDX allowlist + compile cache + fallback; share links; **instant demo mode** (TTL + claim). ✅ a stranger pastes a URL and gets a beautiful doc with zero signup.
 - **M2 — Comments & suggestions**: selection anchors (web-owned projection, `projection_version`), threads, replies, resolve, fork-from-comment, **suggested edits** with accept/decline, magic-link identity (transactional mail), pagination, orphan-tray shell, localStorage drafts. ✅ full review conversation including an accepted suggestion, in two browsers.
 - **M3 — Versions, diff & approvals**: manual re-sync (idempotent), re-anchoring job (hypothes.is port) with relocated/orphaned states + re-attach UI, version switcher, "new version" banner, **diff view with comment overlay**, **approvals lite** (lifecycle status + version-pinned ✓ + staleness). ✅ push a change → re-sync → comments survive or land in the tray; approval shows stale against the new version.
 - **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
 - **M5 — Notifications & queue**: in-app inbox, Postmark notifications, mentions, digest scheduling, per-user prefs, approval events, **review-queue dashboard**. ✅ reviewer replies → author gets the email; dashboard shows "needs your attention".
 - **M6 — Private sources & post-back**: **GitHub App** (install → pick repo → private import → push-webhook auto re-sync) for the SaaS; **PAT remains a supported connector** (self-host primary) — plus the guided register-your-own-App docs for self-hosters; Confluence via API token (storage-format conversion); **digest post-back** to PR/Confluence. ✅ private repo doc auto-resyncs on push; digest lands on the PR.
 - **M7 — Self-host distribution**: `deploy/` compose + Caddy single-origin mode, tagged Docker images, migrate-on-boot, telemetry ping + opt-out, backup/upgrade docs, self-hosting guide, public-repo hygiene (CONTRIBUTING, SECURITY.md, issue templates). ✅ fresh VM: `docker compose up` → working instance importing a private doc via PAT, nothing leaving the network.
-- **Later**: raw comment sync-back · team workspaces UI · generic OIDC SSO (both editions) · generic git connector · Slack + reply-by-email · realtime (Reverb) + presence · required reviewers/deadlines · review analytics · RFC index (draft→accepted→superseded) · SaaS Kroki self-hosting (compose already bundles it for self-hosters).
+- **Later**: raw comment sync-back · team workspaces UI · generic OIDC SSO (both editions) · generic git connector · Slack + reply-by-email · realtime (Reverb) + presence · required reviewers/deadlines · review analytics · RFC index (draft→accepted→superseded).
 
 ## 22. Open questions
 

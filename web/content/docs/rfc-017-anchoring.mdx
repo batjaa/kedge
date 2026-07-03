@@ -49,7 +49,7 @@ flowchart LR
   B -->|miss| C([orphaned tray])
 ```
 
-The same ladder, as PlantUML — both diagram engines render live from fenced code blocks:
+The same ladder, as PlantUML — every diagram fence renders through the same Kroki engine:
 
 ```plantuml
 @startuml
@@ -60,6 +60,12 @@ skinparam defaultFontName ui-sans-serif
 "fuzzy >= 0.75" --> [hit] "relocated"
 "fuzzy >= 0.75" --> [miss] "orphaned tray"
 @enduml
+```
+
+Kroki also covers GraphViz, D2, Excalidraw, and ~20 other engines — a whiteboard sketch, straight from a fence:
+
+```excalidraw
+{"type":"excalidraw","version":2,"source":"margin-spike","elements":[{"id":"r1","type":"rectangle","x":0,"y":0,"width":160,"height":60,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":2,"opacity":100,"seed":1,"version":1,"versionNonce":1,"isDeleted":false,"groupIds":[],"frameId":null,"roundness":{"type":3},"boundElements":[],"updated":1,"link":null,"locked":false},{"id":"r2","type":"rectangle","x":240,"y":0,"width":160,"height":60,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":2,"opacity":100,"seed":2,"version":1,"versionNonce":2,"isDeleted":false,"groupIds":[],"frameId":null,"roundness":{"type":3},"boundElements":[],"updated":1,"link":null,"locked":false},{"id":"a1","type":"arrow","x":170,"y":30,"width":60,"height":0,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":2,"opacity":100,"seed":3,"version":1,"versionNonce":3,"isDeleted":false,"groupIds":[],"frameId":null,"roundness":{"type":2},"boundElements":[],"updated":1,"link":null,"locked":false,"points":[[0,0],[60,0]],"lastCommittedPoint":null,"startBinding":null,"endBinding":null,"startArrowhead":null,"endArrowhead":"arrow"}],"appState":{"viewBackgroundColor":"#ffffff"},"files":{}}
 ```
 
 <Callout title="Why never guess" type="warn">
