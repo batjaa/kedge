@@ -46,6 +46,21 @@
   --color-fd-ring: #34d399;
 }
 
+/* Full-width review layout. Fumadocs constrains the page three ways:
+   (1) the docs grid caps total width via --fd-layout-width (default 97rem),
+   (2) a hidden TOC placeholder still reserves a 268px column at xl,
+   (3) DocsPage caps its article at 900px.
+   Margin replaced the TOC with the comment rail, so we lift all three and
+   let the page layout (page.tsx) own the measure. */
+#nd-docs-layout {
+  --fd-layout-width: 100%;
+  --fd-toc-width: 0px !important;
+}
+
+#nd-page {
+  max-width: none;
+}
+
 html {
   scrollbar-gutter: stable;
 }

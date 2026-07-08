@@ -52,6 +52,10 @@
 - **Secondary**: `bg-zinc-100 dark:bg-white/5 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10`.
 - **Text actions** (panel footers): `text-xs text-zinc-400/500`, hover → hue of the panel's status.
 
+## Page layout
+
+Use the full viewport width — the docs grid must not reserve space for chrome that isn't there (`--fd-layout-width: 100%`, no phantom TOC column). The review pair (prose + rail) centers in the remaining width: prose column capped at **52rem** (readability measure — full width goes to the pair and its breathing room, never to line length), comment rail **320px** (`360px` at 2xl), gap 40–56px. Below `xl` the rail hides behind the mobile pill and prose keeps its measure.
+
 ## Component inventory (all present in the canonical mockup)
 
 - **Header** — fixed, `h-14`, `bg-white/85 dark:bg-zinc-900/85 backdrop-blur`, hairline bottom border. Logo · ⌘K search pill · nav links · theme toggle · approval avatar stack (stale approvals at `opacity-50` with title tooltip) · primary AI-digest button.

@@ -18,7 +18,7 @@ function StatusChip({ hue, children }: { hue: 'emerald' | 'amber' | 'violet'; ch
 
 export function ReviewRail() {
   return (
-    <aside className="w-[300px] shrink-0 space-y-5 max-xl:hidden" data-review-rail>
+    <aside className="w-[320px] shrink-0 space-y-5 max-xl:hidden 2xl:w-[360px]" data-review-rail>
       {/* Open thread */}
       <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
         <div className="flex items-center gap-2 border-b border-zinc-900/5 px-4 py-2.5 dark:border-white/5">
