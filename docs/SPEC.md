@@ -81,7 +81,7 @@ Two deployables, one monorepo:
 
 ```
 margin/                # public repo, AGPL-3.0
-├── api/               # Laravel 12 — auth, ingestion, versions, comments, approvals, notifications, AI, MCP
+├── api/               # Laravel 13 — auth, ingestion, versions, comments, approvals, notifications, AI, MCP
 ├── web/               # Next.js — Fumadocs MDX shell, rendering, text projection, comment UI
 ├── deploy/            # docker-compose.yml, Caddyfile, per-service Dockerfiles
 ├── docs/              # this spec, TODOS.md, ADRs, self-hosting guide
@@ -103,7 +103,7 @@ package "web (Next.js + Protocol)" {
   [Diagram blocks\n(all engines via cached Kroki)] as DIA
 }
 
-package "api (Laravel 12)" {
+package "api (Laravel 13)" {
   [REST API /api/v1\n(Policies on every route)] as API
   [MCP server] as MCP
   [Queue workers\n(import, re-anchor, notify, AI)] as Q
@@ -150,7 +150,7 @@ MCP --> API : same policies, same data
 
 ### 4.1 Stack
 
-**api/ — Laravel 12** (standard scaffold recipe):
+**api/ — Laravel 13** (standard scaffold recipe):
 - PHP 8.5, PHPUnit (never Pest), Pint, `app/Services/` + `app/Enums/` + `app/Actions/`.
 - SQLite dev / Postgres prod. `QUEUE_CONNECTION=database`, `SESSION_DRIVER=database`, `CACHE_STORE=database`.
 - Auth: **Sanctum** (SPA cookies for web; tokens for MCP/agents) + **Socialite** (GitHub login). **Every resource route is guarded by a Policy** — no inline ownership checks.

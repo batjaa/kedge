@@ -16,7 +16,7 @@ Onboarding for AI agents (and humans) working in this repo. Keep this file curre
 
 ```
 margin/
-├── api/      # Laravel 12 backend — NOT YET SCAFFOLDED (arrives at M0)
+├── api/      # Laravel 13 backend — NOT YET SCAFFOLDED (arrives at M0)
 ├── web/      # Next.js + Fumadocs reading surface — real code, spike-stage
 ├── deploy/   # docker-compose reference deployment — arrives at M7
 ├── docs/     # spec, design language, todos, approved mockup
@@ -37,7 +37,7 @@ Pre-M0. Completed: spec reviewed (Rev 3), design approved, repo initialized, two
 
 ## Working in `api/` (once it exists)
 
-Laravel 12 per SPEC §4.1: PHPUnit (never Pest) · `vendor/bin/pint --dirty` before finalizing · authorization via Policies on every resource route (no inline ownership checks) · backed enums for fixed-value columns · business logic in `app/Services/` · `php artisan make:*` for new files.
+Laravel 13 per SPEC §4.1: PHPUnit (never Pest) · `vendor/bin/pint --dirty` before finalizing · authorization via Policies on every resource route (no inline ownership checks) · backed enums for fixed-value columns · business logic in `app/Services/` · `php artisan make:*` for new files.
 
 ## Hard rules (violations are never acceptable)
 
