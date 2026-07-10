@@ -2,8 +2,8 @@
 
 > **Kedge** /kɛdʒ/ — a kedge is the anchor a crew carries ahead of the ship, drops, and winches toward;
 > *kedging* is moving forward by repeatedly re-anchoring. Exactly what review comments do here.
-> Named **2026-07-09** (previously working-titled "Margin"). Domains: **kedge.review** (product),
-> **kedge.ink** (docs), kedge.md (candidate). GitHub org: **kedgehq**.
+> Named **2026-07-09**. Domains: **kedge.review** (product), **kedge.ink** (docs), kedge.md (candidate).
+> GitHub org: **kedgehq**.
 > **Rev 2 — 2026-07-01**: amended after CEO plan review. Scope = B′ baseline + 7 approved expansions
 > (MCP server, approvals lite, suggested edits, digest post-back, instant demo mode, version diff view,
 > review queue). Review checklist lives in `docs/TODOS.md`.

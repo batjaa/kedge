@@ -34,7 +34,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 ## Decision log (naming, 2026-07-09)
 
-- ✅ **Product named "Kedge"** /kɛdʒ/ (was working-title "Margin"). Rationale: *kedging* = moving a ship forward by repeatedly re-setting an anchor — names the moat itself (comments re-anchoring across versions); 5-letter CLI-friendly; unique in search (unlike "margin" vs CSS); best availability of all candidates checked. Runner-ups: Stet, Manicule, keep-Margin+margin.review. Availability verified 2026-07-08 via RDAP/whois: **kedge.review and kedge.ink unregistered; kedge.md likely free**; bare `github.com/kedge` taken → org **kedgehq**. Repo dir renamed `margin/` → `kedge/`; all docs, web app, and dogfood copies updated.
+- ✅ **Product named "Kedge"** /kɛdʒ/. Rationale: *kedging* = moving a ship forward by repeatedly re-setting an anchor — names the moat itself (comments re-anchoring across versions); 5-letter CLI-friendly; unique in search; best availability of all candidates checked. Runner-ups: Stet, Manicule. Availability verified 2026-07-08 via RDAP/whois: **kedge.review and kedge.ink unregistered; kedge.md likely free**; bare `github.com/kedge` taken → org **kedgehq**. Repo, docs, web app, and dogfood copies all carry the name.
 - [ ] **USER ACTION** P1 (S): register `kedge.review` + `kedge.ink` (and `kedge.md` if free); create the `kedgehq` GitHub org.
 - [ ] **USER ACTION** P1 (S): run a proper trademark search (USPTO/EUIPO) on "Kedge" for software/SaaS classes before public launch — note KEDGE Business School (France) exists in a different class.
 - [ ] P2 (S) Logo pass: forward-tilted kedge-anchor mark per DESIGN.md Brand section.
