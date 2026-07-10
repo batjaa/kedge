@@ -1,4 +1,4 @@
-# TODOS — Margin
+# TODOS — Kedge
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
@@ -27,7 +27,14 @@
 
 - ✅ **Kroki is the sole diagram engine** (SPEC §6.2 rewritten). Supersedes the client-Mermaid + Kroki-PlantUML split. Rationale: one code path for ~20 engines (incl. Excalidraw + PlantUML — the full sketch-to-precise spectrum), deterministic version-cacheable SVG, no mermaid ESM in the reader bundle, no in-browser diagram-parser XSS surface. **Condition attached: Kroki self-hosted in both editions from M1** — kills the third-party privacy leak that originally justified client-side Mermaid. Explicit engine allowlist; unknown fence langs fall through to plain text.
 - [ ] P2 (S) **Decide web-side error reporting** — Sentry in M1 vs defer; must be optional in self-host builds (SPEC §22.4).
-- [ ] P2 (S) **Pick the name/domain** — "Margin" is a placeholder and becomes the public repo name (SPEC §22.1).
+- [x] ~~P2 (S) Pick the name/domain~~ — **done 2026-07-09: Kedge** (see decision log below).
+
+## Decision log (naming, 2026-07-09)
+
+- ✅ **Product named "Kedge"** /kɛdʒ/ (was working-title "Margin"). Rationale: *kedging* = moving a ship forward by repeatedly re-setting an anchor — names the moat itself (comments re-anchoring across versions); 5-letter CLI-friendly; unique in search (unlike "margin" vs CSS); best availability of all candidates checked. Runner-ups: Stet, Manicule, keep-Margin+margin.review. Availability verified 2026-07-08 via RDAP/whois: **kedge.review and kedge.ink unregistered; kedge.md likely free**; bare `github.com/kedge` taken → org **kedgehq**. Repo dir renamed `margin/` → `kedge/`; all docs, web app, and dogfood copies updated.
+- [ ] **USER ACTION** P1 (S): register `kedge.review` + `kedge.ink` (and `kedge.md` if free); create the `kedgehq` GitHub org.
+- [ ] **USER ACTION** P1 (S): run a proper trademark search (USPTO/EUIPO) on "Kedge" for software/SaaS classes before public launch — note KEDGE Business School (France) exists in a different class.
+- [ ] P2 (S) Logo pass: forward-tilted kedge-anchor mark per DESIGN.md Brand section.
 - [ ] P2 (S) **CLA/DCO decision** before accepting the first external contribution (SPEC §22.6).
 - [ ] P3 (S) Write the register-your-own-GitHub-App guide for self-hosters (lands with M6/M7).
 

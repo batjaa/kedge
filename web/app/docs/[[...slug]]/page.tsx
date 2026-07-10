@@ -22,7 +22,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
 
-  // Spike layout: Fumadocs' right TOC column is replaced by Margin's review
+  // Spike layout: Fumadocs' right TOC column is replaced by Kedge's review
   // rail (the comment gutter). Doc nav stays in the left DocsLayout sidebar.
   // #nd-page's default width cap is lifted in global.css; this container owns
   // the measure: readable prose column + rail, centered, using the full width.

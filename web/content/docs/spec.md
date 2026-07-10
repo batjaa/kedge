@@ -1,9 +1,12 @@
 ---
-title: "Margin — Spec Review Platform"
+title: "Kedge — Spec Review Platform"
 description: "Rev 3 — the reviewed product & engineering spec (dogfood copy)"
 ---
 
-> Working title: **Margin** (comments in the margin). Rename freely.
+> **Kedge** /kɛdʒ/ — a kedge is the anchor a crew carries ahead of the ship, drops, and winches toward;
+> *kedging* is moving forward by repeatedly re-anchoring. Exactly what review comments do here.
+> Named **2026-07-09** (previously working-titled "Margin"). Domains: **kedge.review** (product),
+> **kedge.ink** (docs), kedge.md (candidate). GitHub org: **kedgehq**.
 > **Rev 2 — 2026-07-01**: amended after CEO plan review. Scope = B′ baseline + 7 approved expansions
 > (MCP server, approvals lite, suggested edits, digest post-back, instant demo mode, version diff view,
 > review queue). Review checklist lives in `docs/TODOS.md`.
@@ -13,7 +16,7 @@ description: "Rev 3 — the reviewed product & engineering spec (dogfood copy)"
 > from Tailwind Plus Protocol (license forbids its code in an open-source repo) to **Fumadocs** (MIT),
 > with Protocol kept as design reference only. PAT connector is now permanent (self-host primary path).
 
-A web application for reviewing RFC/spec documents that live in different places (GitHub, git, Confluence) and different formats (`.md`, `.mdx`, `.html`). Margin ingests a document from a pasted link, renders it beautifully, and layers first-class commenting, approvals, notifications, and AI review tooling on top. Humans **and AI agents** are both first-class review participants.
+A web application for reviewing RFC/spec documents that live in different places (GitHub, git, Confluence) and different formats (`.md`, `.mdx`, `.html`). Kedge ingests a document from a pasted link, renders it beautifully, and layers first-class commenting, approvals, notifications, and AI review tooling on top. Humans **and AI agents** are both first-class review participants.
 
 ## 1. Problem
 
@@ -26,7 +29,7 @@ Spec documents have no single good home:
 | `.html` | Readability | Token-heavy for agents, no comments, awkward in git |
 | Confluence | Comments, discovery | No git/filesystem integration, bad for agents |
 
-Commenting is table stakes Margin must match (Confluence, Google Docs, Notion all have it). **The moat is the git-versioned review loop with AI/agent participation**: comments → AI digest → improve-prompt → agent revises the source → re-sync → comments survive the new version. No existing tool closes that loop.
+Commenting is table stakes Kedge must match (Confluence, Google Docs, Notion all have it). **The moat is the git-versioned review loop with AI/agent participation**: comments → AI digest → improve-prompt → agent revises the source → re-sync → comments survive the new version. No existing tool closes that loop.
 
 ## 2. Goals & non-goals
 
@@ -36,7 +39,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 - Support `.md` and `.mdx` sources; ingest `.html` and Confluence storage format by converting to markdown.
 - Beautiful long-form rendering (TOC, dark mode, search, code highlighting) via **Fumadocs** (MIT), styled to the Tailwind Plus Protocol aesthetic — Protocol is a design reference only; its licensed code cannot ship in a public AGPL repo.
 - **Self-hostable**: AGPL-3.0 public repo, full feature parity with the SaaS (demo mode excepted), one `docker compose up` reference deployment. Companies with private RFCs run it inside their own network.
-- Render **Mermaid** and **PlantUML** diagrams from fenced code blocks — live SVG, never attached images.
+- Render diagrams from fenced code blocks as live SVG — **PlantUML, Mermaid, Excalidraw, GraphViz, D2, and ~20 more engines via Kroki** — never attached images.
 - Private share links; anchored comment threads; thread forking from any comment; **suggested edits** (propose replacement text).
 - **Versioned re-sync** with comment re-anchoring (or an "orphaned" tray) across versions; **version diff view** with comment overlay.
 - **Approvals lite:** document lifecycle status + version-pinned reviewer sign-offs.
@@ -47,7 +50,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 
 **Non-goals (v1):**
 
-- Editing documents in-app (Margin is a review surface; revisions flow through the source). Suggested edits are *proposals*, not writes.
+- Editing documents in-app (Kedge is a review surface; revisions flow through the source). Suggested edits are *proposals*, not writes.
 - Raw comment sync-back to GitHub/Confluence (digest post-back only; full sync is a later phase).
 - Real-time collaborative cursors/presence (polling v1; Reverb later).
 - Cross-document full-text search, wikis, folders beyond the review queue.
@@ -57,7 +60,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 ## 3. Personas & core flows
 
 **Author** (has an RFC in a repo or Confluence):
-1. Signs in (GitHub OAuth or email). Pastes the doc link. Margin imports + renders it.
+1. Signs in (GitHub OAuth or email). Pastes the doc link. Kedge imports + renders it.
 2. Shares the private link; sets lifecycle status to *in review*.
 3. Triages comments and suggestions: replies, resolves, forks off-topic replies into new threads, accepts/declines suggestions.
 4. Runs the AI digest → themes + action items → **generate improve-prompt** (includes accepted suggestions) → pastes into their coding agent to revise the source.
@@ -70,7 +73,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 3. Gets notified on replies; sees what changed via the diff view when a new version lands; clicks ✓ Approve when satisfied.
 
 **Agent** (v1, via MCP):
-1. Connects to Margin's MCP server with a workspace-scoped token.
+1. Connects to Kedge's MCP server with a workspace-scoped token.
 2. Reads the doc + threads; posts review comments (badged as agent-authored) alongside humans.
 3. Fetches the improve-prompt and revises the source doc in its own environment; the author pushes and re-syncs.
 
@@ -83,7 +86,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 Two deployables, one monorepo:
 
 ```
-margin/                # public repo, AGPL-3.0
+kedge/                # public repo, AGPL-3.0
 ├── api/               # Laravel 13 — auth, ingestion, versions, comments, approvals, notifications, AI, MCP
 ├── web/               # Next.js — Fumadocs MDX shell, rendering, text projection, comment UI
 ├── deploy/            # docker-compose.yml, Caddyfile, per-service Dockerfiles
@@ -103,7 +106,7 @@ package "web (Next.js + Protocol)" {
   [MDX renderer + compile cache\n(allowlisted components)] as MDX
   [Text projection service\n(plain_text extraction)] as PROJ
   [Comment/suggestion layer\n(selection → anchors)] as CL
-  [Diagram blocks\n(Mermaid client-side,\nPlantUML via cached Kroki)] as DIA
+  [Diagram blocks\n(all engines via cached Kroki)] as DIA
 }
 
 package "api (Laravel 13)" {
@@ -118,7 +121,7 @@ package "api (Laravel 13)" {
 database "Postgres\n(SQLite in dev)" as DB
 cloud "Cloudflare R2\n(re-hosted images,\ncached diagram SVGs)" as R2
 cloud "GitHub / Confluence / URL" as SRC
-cloud "Kroki" as KROKI
+cloud "Kroki\n(self-hosted, both editions)" as KROKI
 
 Author --> MDX
 Reviewer --> CL
@@ -149,7 +152,7 @@ MCP --> API : same policies, same data
 - **Self-host constraint (Rev 3)**: no hard SaaS dependencies. The stack was already 12-factor — database queues (no Redis), SQLite-capable, `MEDIA_DISK` local/R2, Laravel mail abstracts Postmark→SMTP. Self-hosting formalizes this: every external service is env-pluggable, every SaaS-only surface sits behind a `SELF_HOSTED` flag. Nova (paid license) is SaaS-ops only — **never a runtime dependency of the open-source app** (it ships in the repo behind a composer suggest / separate install so self-hosters run without it).
 - Accepted costs: two deployables; cross-app auth (pinned below); API types duplicated in TS (OpenAPI codegen later).
 
-**Auth pattern (pinned):** `app.margin.dev` + `api.margin.dev`, `SESSION_DOMAIN=.margin.dev`, `SANCTUM_STATEFUL_DOMAINS=app.margin.dev`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are additive within `/v1`** — the two deployables are never atomic.
+**Auth pattern (pinned):** `app.kedge.review` + `api.kedge.review`, `SESSION_DOMAIN=.kedge.review`, `SANCTUM_STATEFUL_DOMAINS=app.kedge.review`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are additive within `/v1`** — the two deployables are never atomic.
 
 ### 4.1 Stack
 
@@ -162,7 +165,7 @@ MCP --> API : same policies, same data
 - 4-way `composer dev` script (serve + queue:listen + pail + npm).
 
 **web/ — Next.js (App Router)**:
-- **Fumadocs** (MIT) as the docs/MDX shell, restyled to Margin's approved design language — see **`docs/DESIGN.md`** (approved 2026-07-03; canonical mockup `docs/designs/review-page.html`, a clean-room rebuild of the Protocol aesthetic: system fonts, zinc + emerald, dark-first with full light theme, panel-based comment rail). Tailwind Plus code never ships in this repo. (Validation spike in M0 confirms Fumadocs accommodates the design + comment-gutter layout; Nextra is the fallback.)
+- **Fumadocs** (MIT) as the docs/MDX shell, restyled to Kedge's approved design language — see **`docs/DESIGN.md`** (approved 2026-07-03; canonical mockup `docs/designs/review-page.html`, a clean-room rebuild of the Protocol aesthetic: system fonts, zinc + emerald, dark-first with full light theme, panel-based comment rail). Tailwind Plus code never ships in this repo. (Validation spike in M0 confirms Fumadocs accommodates the design + comment-gutter layout; Nextra is the fallback.)
 - Tailwind v4, TypeScript, Playwright E2E; animations respect `prefers-reduced-motion`.
 - MDX compiled via `@mdx-js/mdx` (§6.1), **cached by `content_hash`** — compile once per version, not per request.
 - Owns the **text projection service** (§5.4) — the single source of truth for anchor text.
@@ -178,7 +181,7 @@ MCP --> API : same policies, same data
 | Raw URL (`.md`/`.mdx`/`.html`) | none | M1 | SSRF-guarded fetch (§13) |
 | Upload / paste | n/a | M1 | Size-capped; manual-only versioning |
 | GitHub private file | **PAT** | M1 | Encrypted per-workspace token; **permanent connector** — the primary path for self-hosted instances |
-| GitHub private file | **GitHub App** | M6 | Fine-grained installs, org approval, push webhooks for auto re-sync. SaaS uses Margin's App; **self-hosters register their own** (guided setup docs) or stay on PAT |
+| GitHub private file | **GitHub App** | M6 | Fine-grained installs, org approval, push webhooks for auto re-sync. SaaS uses Kedge's App; **self-hosters register their own** (guided setup docs) or stay on PAT |
 | Confluence page URL | Atlassian API token | M6 | Storage-format XHTML + version number; OAuth 2.0 (3LO) later |
 
 Generic git-over-https (GitLab/Bitbucket/self-hosted) is deferred; the `Connector` interface accommodates it:
@@ -252,16 +255,23 @@ MDX is code; imported docs are untrusted:
 
 - Compile with `@mdx-js/mdx` in the web server layer; **compiled artifact cached by `content_hash`**.
 - A remark plugin **rejects `import`/`export`** and non-literal expressions.
-- JSX resolves only from an **allowlist**: Protocol's `Callout`/`Note`/`Warning`/`CodeGroup`/`Tabs` + Margin's `Mermaid`/`PlantUML`. Unknown components render as a neutral "unsupported component" box.
+- JSX resolves only from an **allowlist**: Protocol's `Callout`/`Note`/`Warning`/`CodeGroup`/`Tabs` + Kedge's `Mermaid`/`PlantUML`. Unknown components render as a neutral "unsupported component" box.
 - Raw HTML sanitized via rehype-sanitize (tight schema). Comment bodies (`body_md`) render through the same sanitized pipeline.
 - Compile errors → plain-markdown fallback + banner + `mdx.compile_failed` log event.
 - Adversarial fixture suite in CI: import smuggling, expression payloads, script injection, pathological nesting (§18).
 
 ### 6.2 Diagrams
 
-- **Mermaid**: client-side ESM render — private diagram source never leaves the browser.
-- **PlantUML**: rendered via Kroki **once per diagram source hash, server-side, cached in R2** — readers get the cached SVG from Margin, never hit Kroki directly. v1 uses hosted `kroki.io` (UI discloses this); `KROKI_URL` switches to a self-hosted container for private mode.
-- Both: loading skeleton, error state showing raw source, click-to-zoom.
+**Kroki is the sole diagram engine** (decision 2026-07-03, validated in the web spike; supersedes the earlier client-Mermaid + Kroki-PlantUML split). Fenced code blocks whose language matches an **explicit engine allowlist** (`plantuml`, `mermaid`, `excalidraw`, `graphviz`/`dot`, `d2`, `dbml`, `erd`, `svgbob`, `vegalite`, `wavedrom`, `c4plantuml`, …) render as live SVG:
+
+- Rendered **server-side** via Kroki (`GET /{engine}/svg/{deflate+base64url(source)}`), **cached by diagram source hash** (R2 in production) — one render per diagram, readers never contact Kroki and execute zero diagram code.
+- SVG embedded with no script surface (`<img>` / sanitized) — eliminates the in-browser diagram-parser XSS class entirely.
+- **Kroki runs self-hosted in both editions from M1** — one container, bundled in the self-host compose and on the SaaS droplet. Private diagram source never reaches a third party; hosted `kroki.io` is acceptable only in local dev (`KROKI_URL`).
+- Deterministic and versionable: the SVG is effectively part of the version snapshot; output can't drift with client library upgrades — which matters when comments anchor around diagrams.
+- States: loading skeleton, never-crash error state showing the raw source, click-to-zoom (needed — complex diagrams scale down to fit the column).
+- Unknown fence languages fall through to plain-text code highlighting — never to Kroki, never a crash.
+
+Why sole-engine won: one code path for ~20 diagram types (Excalidraw sketches and precise PlantUML — the full authoring spectrum), deterministic cached output, smaller client bundle (no mermaid ESM), and a stronger security posture. The old rationale for client-side Mermaid (privacy) is fully answered by self-hosting Kroki from day one.
 
 ## 7. Documents, versions, diff & re-sync
 
@@ -362,7 +372,7 @@ Per-user prefs: immediate / daily digest / off, per channel. Defaults: authors i
 - **Integration credentials** (PATs, Atlassian tokens, GitHub App key) in encrypted casts; never serialized into API responses; Nova-masked; **log scrubbing ensures tokens never reach logs**.
 - **Webhooks**: signature-verified, delivery-ID idempotent, unknown paths → 200 ignore.
 - **Demo mode abuse**: per-IP rate limits, public connectors only, capped sizes, 48h TTL.
-- **Rate limiting** on auth, comment, import, AI, and demo endpoints. Kroki disclosure per §6.2 (self-host compose bundles Kroki, so PlantUML never leaves the network).
+- **Rate limiting** on auth, comment, import, AI, and demo endpoints. Kroki is self-hosted in both editions from M1 (§6.2) — diagram source never leaves the deployment; only the explicit engine allowlist is ever forwarded.
 - **Self-hosting is the enterprise trust story, not a security substitute**: everything above applies identically to a self-hosted instance — a malicious share link or poisoned doc attacks it the same way. What self-hosting removes is the *data-custody* concern (specs never leave the customer's network) and with it the near-term need for SSO/SAML/SCIM/compliance work.
 
 ## 14. AI features
@@ -514,12 +524,12 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 
 ## 20. Deployment & distribution
 
-### 20.1 SaaS (margin.dev)
+### 20.1 SaaS (kedge.review)
 
-- **api**: Forge → DigitalOcean droplet (`~/api.margin.dev/current`), queue worker + scheduler, Postgres, R2, Postmark.
-- **web**: Vercel for prototyping (consolidate to a Forge Node daemon later). `app.margin.dev` / `api.margin.dev`.
+- **api**: Forge → DigitalOcean droplet (`~/api.kedge.review/current`), queue worker + scheduler, Postgres, R2, Postmark.
+- **web**: Vercel for prototyping (consolidate to a Forge Node daemon later). `app.kedge.review` / `api.kedge.review`.
 - **Rules**: additive-only migrations with two-phase drops · deploy **api before web** · rollback = previous Forge release · feature flags are plain config flags per connector/AI feature.
-- **Bootstrap checklist**: Postmark domain + DKIM · R2 bucket + token · `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS`/CORS origins · Forge queue worker + scheduler · `KROKI_URL` · GitHub OAuth app (login) · GitHub App creation (M6) · demo-mode rate-limit config.
+- **Bootstrap checklist**: Postmark domain + DKIM · R2 bucket + token · `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS`/CORS origins · Forge queue worker + scheduler · **Kroki container on the droplet + `KROKI_URL`** (M1) · GitHub OAuth app (login) · GitHub App creation (M6) · demo-mode rate-limit config.
 - **Post-deploy smoke**: `/up` health · import a known public doc end-to-end · queue depth check.
 
 ### 20.2 Self-hosted (AGPL-3.0, full parity)
@@ -528,7 +538,7 @@ Reference deployment in `deploy/`: **one hostname, one `docker compose up`**.
 
 ```
                     ┌─ Caddy (TLS, single origin) ─┐
-  https://margin.internal ──┤  /api/* ──▶ api (FrankenPHP: fpm + queue worker + scheduler)
+  https://kedge.internal ──┤  /api/* ──▶ api (FrankenPHP: fpm + queue worker + scheduler)
                     │  /*     ──▶ web (Node)        │
                     └──▶ postgres · kroki (bundled) ┘
 ```
@@ -546,18 +556,18 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 **Standing constraint from M0 — self-host-clean**: 12-factor env config only, no hard dependency on any paid/SaaS service (Nova optional, Postmark→SMTP, R2→local), SaaS-only surfaces behind `SELF_HOSTED`, and the repo is written as if public from the first commit (no secrets, no proprietary code — Protocol code stays out).
 
 - **M0 — Scaffold**: monorepo (AGPL LICENSE from commit one); `api/` via standard Laravel recipe (Sanctum, Socialite, enums, Policies wired; Nova as optional SaaS-ops install); `web/` on Fumadocs (**spike: validate the shell fits the review-page + gutter layout; fallback Nextra**); pinned auth handshake (BFF pattern). ✅ log in from the Next.js app.
-- **M1 — Render, share & demo**: import public GitHub / raw URL / upload + **PAT stopgap** for private GitHub; normalization pipeline with warnings; projection service; Protocol rendering; Mermaid + cached-Kroki PlantUML; MDX allowlist + compile cache + fallback; share links; **instant demo mode** (TTL + claim). ✅ a stranger pastes a URL and gets a beautiful doc with zero signup.
+- **M1 — Render, share & demo**: import public GitHub / raw URL / upload + **PAT stopgap** for private GitHub; normalization pipeline with warnings; projection service; Fumadocs rendering; **Kroki diagrams (self-hosted container, full engine allowlist, hash-cached, click-to-zoom)**; MDX allowlist + compile cache + fallback; share links; **instant demo mode** (TTL + claim). ✅ a stranger pastes a URL and gets a beautiful doc with zero signup.
 - **M2 — Comments & suggestions**: selection anchors (web-owned projection, `projection_version`), threads, replies, resolve, fork-from-comment, **suggested edits** with accept/decline, magic-link identity (transactional mail), pagination, orphan-tray shell, localStorage drafts. ✅ full review conversation including an accepted suggestion, in two browsers.
 - **M3 — Versions, diff & approvals**: manual re-sync (idempotent), re-anchoring job (hypothes.is port) with relocated/orphaned states + re-attach UI, version switcher, "new version" banner, **diff view with comment overlay**, **approvals lite** (lifecycle status + version-pinned ✓ + staleness). ✅ push a change → re-sync → comments survive or land in the tray; approval shows stale against the new version.
 - **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
 - **M5 — Notifications & queue**: in-app inbox, Postmark notifications, mentions, digest scheduling, per-user prefs, approval events, **review-queue dashboard**. ✅ reviewer replies → author gets the email; dashboard shows "needs your attention".
 - **M6 — Private sources & post-back**: **GitHub App** (install → pick repo → private import → push-webhook auto re-sync) for the SaaS; **PAT remains a supported connector** (self-host primary) — plus the guided register-your-own-App docs for self-hosters; Confluence via API token (storage-format conversion); **digest post-back** to PR/Confluence. ✅ private repo doc auto-resyncs on push; digest lands on the PR.
 - **M7 — Self-host distribution**: `deploy/` compose + Caddy single-origin mode, tagged Docker images, migrate-on-boot, telemetry ping + opt-out, backup/upgrade docs, self-hosting guide, public-repo hygiene (CONTRIBUTING, SECURITY.md, issue templates). ✅ fresh VM: `docker compose up` → working instance importing a private doc via PAT, nothing leaving the network.
-- **Later**: raw comment sync-back · team workspaces UI · generic OIDC SSO (both editions) · generic git connector · Slack + reply-by-email · realtime (Reverb) + presence · required reviewers/deadlines · review analytics · RFC index (draft→accepted→superseded) · SaaS Kroki self-hosting (compose already bundles it for self-hosters).
+- **Later**: raw comment sync-back · team workspaces UI · generic OIDC SSO (both editions) · generic git connector · Slack + reply-by-email · realtime (Reverb) + presence · required reviewers/deadlines · review analytics · RFC index (draft→accepted→superseded).
 
 ## 22. Open questions
 
-1. **Name + domain** — "Margin" is a placeholder; now also the public repo name.
+1. ~~Name + domain~~ — **resolved 2026-07-09: Kedge** (kedge.review / kedge.ink, GitHub org kedgehq). Domain registration + trademark search are user actions (TODOS.md).
 2. **Confluence team auth** — ship per-user API tokens first; OAuth 2.0 (3LO) app when a team adopts.
 3. **Reviewer friction** — magic-link-required commenting is the default; revisit if drop-off is high.
 4. **Web-side error reporting** — Sentry in M1, or defer until first real users? (Must be off/optional in self-host builds either way.)

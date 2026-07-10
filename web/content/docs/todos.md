@@ -23,9 +23,21 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - [x] ~~P1 (S) `/design-explore` the comment gutter~~ — **done 2026-07-03**: 6 variants explored; **"Protocol Rebuild" approved** (clean-room Protocol aesthetic). Design language codified in `docs/DESIGN.md`; canonical mockup `docs/designs/review-page.html`; losing variants deleted.
 - [ ] P1 (S) **Spike: port hypothes.is anchoring** (`dom-anchor-text-quote` + diff-match-patch) — validate the exact→fuzzy→orphan ladder on 2-3 real RFCs before M3 design hardens.
-- [ ] P1 (S) **M0 spike: validate Fumadocs** can be restyled to `docs/DESIGN.md` tokens + the comment-gutter layout; fallback Nextra (SPEC §4.1).
+- [x] ~~P1 (S) M0 spike: validate Fumadocs~~ — **done 2026-07-03: VALIDATED** (`web/` in repo, run `npm run dev`). Fumadocs 16 + Next 16 renders `.md` and `.mdx`; DESIGN.md tokens applied via `--color-fd-*` overrides; system fonts + dark default work; right TOC column swapped for a static review rail — the comment-gutter layout is feasible. Dogfooding: SPEC/DESIGN/TODOS render as content copies. **Findings for the real build:** (a) unknown fence languages (`plantuml`) crash Shiki — `langAlias` workaround in `source.config.ts`; product needs a never-crash fallback for arbitrary fence langs (add to §19 failure modes at M1); (b) content needs frontmatter — the ingestion pipeline must synthesize `title`/`description` at import; (c) M2 work identified: sticky/anchor-aligned rail, sidebar "Threads" nav group.
+- [x] ~~Diagram rendering spike~~ — **done 2026-07-03: VALIDATED, then revised same day.** Final state: **Kroki is the sole diagram engine** (decision below). `remark-diagrams` converts any fence on the engine allowlist (~20 engines) → `<KrokiDiagram/>` before Shiki, for both `.md` and `.mdx`; async RSC → Kroki GET (deflate+base64url), fetch-cached, `KROKI_URL` override, SVG via `<img data:>` (no script surface), skeleton + show-source error state. Verified live: Mermaid, PlantUML (incl. SPEC.md's architecture/sequence/ER diagrams), and an Excalidraw sketch. **Findings:** (a) complex diagrams shrink to fit — click-to-zoom is genuinely needed, build at M1; (b) product needs the R2-backed SVG cache keyed by source hash (§6.2) — Next fetch cache is per-build, not shared.
+
+## Decision log (diagram engine, 2026-07-03)
+
+- ✅ **Kroki is the sole diagram engine** (SPEC §6.2 rewritten). Supersedes the client-Mermaid + Kroki-PlantUML split. Rationale: one code path for ~20 engines (incl. Excalidraw + PlantUML — the full sketch-to-precise spectrum), deterministic version-cacheable SVG, no mermaid ESM in the reader bundle, no in-browser diagram-parser XSS surface. **Condition attached: Kroki self-hosted in both editions from M1** — kills the third-party privacy leak that originally justified client-side Mermaid. Explicit engine allowlist; unknown fence langs fall through to plain text.
 - [ ] P2 (S) **Decide web-side error reporting** — Sentry in M1 vs defer; must be optional in self-host builds (SPEC §22.4).
-- [ ] P2 (S) **Pick the name/domain** — "Margin" is a placeholder and becomes the public repo name (SPEC §22.1).
+- [x] ~~P2 (S) Pick the name/domain~~ — **done 2026-07-09: Kedge** (see decision log below).
+
+## Decision log (naming, 2026-07-09)
+
+- ✅ **Product named "Kedge"** /kɛdʒ/ (was working-title "Margin"). Rationale: *kedging* = moving a ship forward by repeatedly re-setting an anchor — names the moat itself (comments re-anchoring across versions); 5-letter CLI-friendly; unique in search (unlike "margin" vs CSS); best availability of all candidates checked. Runner-ups: Stet, Manicule, keep-Margin+margin.review. Availability verified 2026-07-08 via RDAP/whois: **kedge.review and kedge.ink unregistered; kedge.md likely free**; bare `github.com/kedge` taken → org **kedgehq**. Repo dir renamed `margin/` → `kedge/`; all docs, web app, and dogfood copies updated.
+- [ ] **USER ACTION** P1 (S): register `kedge.review` + `kedge.ink` (and `kedge.md` if free); create the `kedgehq` GitHub org.
+- [ ] **USER ACTION** P1 (S): run a proper trademark search (USPTO/EUIPO) on "Kedge" for software/SaaS classes before public launch — note KEDGE Business School (France) exists in a different class.
+- [ ] P2 (S) Logo pass: forward-tilted kedge-anchor mark per DESIGN.md Brand section.
 - [ ] P2 (S) **CLA/DCO decision** before accepting the first external contribution (SPEC §22.6).
 - [ ] P3 (S) Write the register-your-own-GitHub-App guide for self-hosters (lands with M6/M7).
 

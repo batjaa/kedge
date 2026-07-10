@@ -1,10 +1,10 @@
-# AGENTS.md — Margin
+# AGENTS.md — Kedge
 
 Onboarding for AI agents (and humans) working in this repo. Keep this file current: when a rule or decision here changes, update it in the same commit.
 
 ## What this project is
 
-**Margin** is an open-source (AGPL-3.0) spec-review platform: paste a link to an RFC/spec wherever it lives (GitHub, Confluence, raw URL, `.md`/`.mdx`/`.html`), get a beautifully rendered page with anchored comment threads, suggested edits, version-pinned approvals, and AI review tooling. The moat: comments survive document versions (re-anchoring), and **AI agents are first-class reviewers** via MCP. Runs as a SaaS and fully self-hosted (`docker compose up`).
+**Kedge** is an open-source (AGPL-3.0) spec-review platform: paste a link to an RFC/spec wherever it lives (GitHub, Confluence, raw URL, `.md`/`.mdx`/`.html`), get a beautifully rendered page with anchored comment threads, suggested edits, version-pinned approvals, and AI review tooling. The moat: comments survive document versions (re-anchoring), and **AI agents are first-class reviewers** via MCP. Runs as a SaaS and fully self-hosted (`docker compose up`).
 
 ## Read first, in this order
 
@@ -15,7 +15,7 @@ Onboarding for AI agents (and humans) working in this repo. Keep this file curre
 ## Repo layout
 
 ```
-margin/
+kedge/
 ├── api/      # Laravel 13 backend — NOT YET SCAFFOLDED (arrives at M0)
 ├── web/      # Next.js + Fumadocs reading surface — real code, spike-stage
 ├── deploy/   # docker-compose reference deployment — arrives at M7
@@ -23,9 +23,9 @@ margin/
 └── LICENSE   # AGPL-3.0
 ```
 
-## Current state (last updated 2026-07-03)
+## Current state (last updated 2026-07-09)
 
-Pre-M0. Completed: spec reviewed (Rev 3), design approved, repo initialized, two spikes validated (Fumadocs MDX rendering + review-rail layout; Kroki diagram rendering). Open P1: hypothes.is anchoring port spike. Milestone plan: SPEC §21.
+Pre-M0. Completed: spec reviewed (Rev 3), design approved, repo initialized, two spikes validated (Fumadocs MDX rendering + review-rail layout; Kroki sole-engine diagrams), product named Kedge (2026-07-09; domains kedge.review/kedge.ink, org kedgehq). Open P1: hypothes.is anchoring port spike. Milestone plan: SPEC §21.
 
 ## Working in `web/`
 
@@ -58,4 +58,4 @@ Laravel 13 per SPEC §4.1: PHPUnit (never Pest) · `vendor/bin/pint --dirty` bef
 
 ## Dogfooding principle
 
-Margin reviews its own documents in its own tool. When you add product capability, prefer demonstrating it on Margin's real docs (`web/content/docs/`) over synthetic examples — spikes here have repeatedly caught real bugs that fixtures wouldn't (e.g., SPEC.md's `plantuml` fences crashing Shiki).
+Kedge reviews its own documents in its own tool. When you add product capability, prefer demonstrating it on Kedge's real docs (`web/content/docs/`) over synthetic examples — spikes here have repeatedly caught real bugs that fixtures wouldn't (e.g., SPEC.md's `plantuml` fences crashing Shiki).

@@ -1,9 +1,17 @@
-# Margin — Design Language
+# Kedge — Design Language
 
 > **Approved 2026-07-03** from the design exploration round (6 variants; "Protocol Rebuild" won).
 > Canonical mockup: `docs/designs/review-page.html` (open it in a browser; it has a working theme toggle).
 > Provenance: clean-room rebuild of the Tailwind Plus **Protocol** template aesthetic — studied from the live
 > preview, every line of markup written from scratch. **No Tailwind Plus code may ever enter this repo** (AGPL).
+
+## Brand
+
+- **Name**: Kedge /kɛdʒ/ — the anchor a crew carries ahead and re-sets to pull the ship forward; *kedging* = progress by re-anchoring, which is the product's moat (comments that keep their place across versions).
+- **Tagline**: "Comments that keep their place." (alt: "Reviews that hold fast.")
+- **Wordmark**: lowercase `kedge`, system sans, semibold, tight tracking — same treatment as the current header logo type.
+- **Mark**: minimal line-drawn kedge anchor tilted ~15° forward (motion, not mooring); stroke weight matching panel hairlines; emerald-400 on dark, emerald-600 on light. Anchor-glyph fallback at favicon sizes. (Proper logo pass is a TODO — this is the working direction.)
+- **Voice**: editorial-nautical restraint — "anchored / relocated / orphaned", "hold fast", "re-anchor". Never pirate-themed.
 
 ## Principles
 

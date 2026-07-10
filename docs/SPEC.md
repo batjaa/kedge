@@ -1,6 +1,9 @@
-# Margin — Spec Review Platform
+# Kedge — Spec Review Platform
 
-> Working title: **Margin** (comments in the margin). Rename freely.
+> **Kedge** /kɛdʒ/ — a kedge is the anchor a crew carries ahead of the ship, drops, and winches toward;
+> *kedging* is moving forward by repeatedly re-anchoring. Exactly what review comments do here.
+> Named **2026-07-09** (previously working-titled "Margin"). Domains: **kedge.review** (product),
+> **kedge.ink** (docs), kedge.md (candidate). GitHub org: **kedgehq**.
 > **Rev 2 — 2026-07-01**: amended after CEO plan review. Scope = B′ baseline + 7 approved expansions
 > (MCP server, approvals lite, suggested edits, digest post-back, instant demo mode, version diff view,
 > review queue). Review checklist lives in `docs/TODOS.md`.
@@ -10,7 +13,7 @@
 > from Tailwind Plus Protocol (license forbids its code in an open-source repo) to **Fumadocs** (MIT),
 > with Protocol kept as design reference only. PAT connector is now permanent (self-host primary path).
 
-A web application for reviewing RFC/spec documents that live in different places (GitHub, git, Confluence) and different formats (`.md`, `.mdx`, `.html`). Margin ingests a document from a pasted link, renders it beautifully, and layers first-class commenting, approvals, notifications, and AI review tooling on top. Humans **and AI agents** are both first-class review participants.
+A web application for reviewing RFC/spec documents that live in different places (GitHub, git, Confluence) and different formats (`.md`, `.mdx`, `.html`). Kedge ingests a document from a pasted link, renders it beautifully, and layers first-class commenting, approvals, notifications, and AI review tooling on top. Humans **and AI agents** are both first-class review participants.
 
 ## 1. Problem
 
@@ -23,7 +26,7 @@ Spec documents have no single good home:
 | `.html` | Readability | Token-heavy for agents, no comments, awkward in git |
 | Confluence | Comments, discovery | No git/filesystem integration, bad for agents |
 
-Commenting is table stakes Margin must match (Confluence, Google Docs, Notion all have it). **The moat is the git-versioned review loop with AI/agent participation**: comments → AI digest → improve-prompt → agent revises the source → re-sync → comments survive the new version. No existing tool closes that loop.
+Commenting is table stakes Kedge must match (Confluence, Google Docs, Notion all have it). **The moat is the git-versioned review loop with AI/agent participation**: comments → AI digest → improve-prompt → agent revises the source → re-sync → comments survive the new version. No existing tool closes that loop.
 
 ## 2. Goals & non-goals
 
@@ -44,7 +47,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 
 **Non-goals (v1):**
 
-- Editing documents in-app (Margin is a review surface; revisions flow through the source). Suggested edits are *proposals*, not writes.
+- Editing documents in-app (Kedge is a review surface; revisions flow through the source). Suggested edits are *proposals*, not writes.
 - Raw comment sync-back to GitHub/Confluence (digest post-back only; full sync is a later phase).
 - Real-time collaborative cursors/presence (polling v1; Reverb later).
 - Cross-document full-text search, wikis, folders beyond the review queue.
@@ -54,7 +57,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 ## 3. Personas & core flows
 
 **Author** (has an RFC in a repo or Confluence):
-1. Signs in (GitHub OAuth or email). Pastes the doc link. Margin imports + renders it.
+1. Signs in (GitHub OAuth or email). Pastes the doc link. Kedge imports + renders it.
 2. Shares the private link; sets lifecycle status to *in review*.
 3. Triages comments and suggestions: replies, resolves, forks off-topic replies into new threads, accepts/declines suggestions.
 4. Runs the AI digest → themes + action items → **generate improve-prompt** (includes accepted suggestions) → pastes into their coding agent to revise the source.
@@ -67,7 +70,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 3. Gets notified on replies; sees what changed via the diff view when a new version lands; clicks ✓ Approve when satisfied.
 
 **Agent** (v1, via MCP):
-1. Connects to Margin's MCP server with a workspace-scoped token.
+1. Connects to Kedge's MCP server with a workspace-scoped token.
 2. Reads the doc + threads; posts review comments (badged as agent-authored) alongside humans.
 3. Fetches the improve-prompt and revises the source doc in its own environment; the author pushes and re-syncs.
 
@@ -80,7 +83,7 @@ Commenting is table stakes Margin must match (Confluence, Google Docs, Notion al
 Two deployables, one monorepo:
 
 ```
-margin/                # public repo, AGPL-3.0
+kedge/                # public repo, AGPL-3.0
 ├── api/               # Laravel 13 — auth, ingestion, versions, comments, approvals, notifications, AI, MCP
 ├── web/               # Next.js — Fumadocs MDX shell, rendering, text projection, comment UI
 ├── deploy/            # docker-compose.yml, Caddyfile, per-service Dockerfiles
@@ -146,7 +149,7 @@ MCP --> API : same policies, same data
 - **Self-host constraint (Rev 3)**: no hard SaaS dependencies. The stack was already 12-factor — database queues (no Redis), SQLite-capable, `MEDIA_DISK` local/R2, Laravel mail abstracts Postmark→SMTP. Self-hosting formalizes this: every external service is env-pluggable, every SaaS-only surface sits behind a `SELF_HOSTED` flag. Nova (paid license) is SaaS-ops only — **never a runtime dependency of the open-source app** (it ships in the repo behind a composer suggest / separate install so self-hosters run without it).
 - Accepted costs: two deployables; cross-app auth (pinned below); API types duplicated in TS (OpenAPI codegen later).
 
-**Auth pattern (pinned):** `app.margin.dev` + `api.margin.dev`, `SESSION_DOMAIN=.margin.dev`, `SANCTUM_STATEFUL_DOMAINS=app.margin.dev`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are additive within `/v1`** — the two deployables are never atomic.
+**Auth pattern (pinned):** `app.kedge.review` + `api.kedge.review`, `SESSION_DOMAIN=.kedge.review`, `SANCTUM_STATEFUL_DOMAINS=app.kedge.review`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are additive within `/v1`** — the two deployables are never atomic.
 
 ### 4.1 Stack
 
@@ -159,7 +162,7 @@ MCP --> API : same policies, same data
 - 4-way `composer dev` script (serve + queue:listen + pail + npm).
 
 **web/ — Next.js (App Router)**:
-- **Fumadocs** (MIT) as the docs/MDX shell, restyled to Margin's approved design language — see **`docs/DESIGN.md`** (approved 2026-07-03; canonical mockup `docs/designs/review-page.html`, a clean-room rebuild of the Protocol aesthetic: system fonts, zinc + emerald, dark-first with full light theme, panel-based comment rail). Tailwind Plus code never ships in this repo. (Validation spike in M0 confirms Fumadocs accommodates the design + comment-gutter layout; Nextra is the fallback.)
+- **Fumadocs** (MIT) as the docs/MDX shell, restyled to Kedge's approved design language — see **`docs/DESIGN.md`** (approved 2026-07-03; canonical mockup `docs/designs/review-page.html`, a clean-room rebuild of the Protocol aesthetic: system fonts, zinc + emerald, dark-first with full light theme, panel-based comment rail). Tailwind Plus code never ships in this repo. (Validation spike in M0 confirms Fumadocs accommodates the design + comment-gutter layout; Nextra is the fallback.)
 - Tailwind v4, TypeScript, Playwright E2E; animations respect `prefers-reduced-motion`.
 - MDX compiled via `@mdx-js/mdx` (§6.1), **cached by `content_hash`** — compile once per version, not per request.
 - Owns the **text projection service** (§5.4) — the single source of truth for anchor text.
@@ -175,7 +178,7 @@ MCP --> API : same policies, same data
 | Raw URL (`.md`/`.mdx`/`.html`) | none | M1 | SSRF-guarded fetch (§13) |
 | Upload / paste | n/a | M1 | Size-capped; manual-only versioning |
 | GitHub private file | **PAT** | M1 | Encrypted per-workspace token; **permanent connector** — the primary path for self-hosted instances |
-| GitHub private file | **GitHub App** | M6 | Fine-grained installs, org approval, push webhooks for auto re-sync. SaaS uses Margin's App; **self-hosters register their own** (guided setup docs) or stay on PAT |
+| GitHub private file | **GitHub App** | M6 | Fine-grained installs, org approval, push webhooks for auto re-sync. SaaS uses Kedge's App; **self-hosters register their own** (guided setup docs) or stay on PAT |
 | Confluence page URL | Atlassian API token | M6 | Storage-format XHTML + version number; OAuth 2.0 (3LO) later |
 
 Generic git-over-https (GitLab/Bitbucket/self-hosted) is deferred; the `Connector` interface accommodates it:
@@ -249,7 +252,7 @@ MDX is code; imported docs are untrusted:
 
 - Compile with `@mdx-js/mdx` in the web server layer; **compiled artifact cached by `content_hash`**.
 - A remark plugin **rejects `import`/`export`** and non-literal expressions.
-- JSX resolves only from an **allowlist**: Protocol's `Callout`/`Note`/`Warning`/`CodeGroup`/`Tabs` + Margin's `Mermaid`/`PlantUML`. Unknown components render as a neutral "unsupported component" box.
+- JSX resolves only from an **allowlist**: Protocol's `Callout`/`Note`/`Warning`/`CodeGroup`/`Tabs` + Kedge's `Mermaid`/`PlantUML`. Unknown components render as a neutral "unsupported component" box.
 - Raw HTML sanitized via rehype-sanitize (tight schema). Comment bodies (`body_md`) render through the same sanitized pipeline.
 - Compile errors → plain-markdown fallback + banner + `mdx.compile_failed` log event.
 - Adversarial fixture suite in CI: import smuggling, expression payloads, script injection, pathological nesting (§18).
@@ -518,10 +521,10 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 
 ## 20. Deployment & distribution
 
-### 20.1 SaaS (margin.dev)
+### 20.1 SaaS (kedge.review)
 
-- **api**: Forge → DigitalOcean droplet (`~/api.margin.dev/current`), queue worker + scheduler, Postgres, R2, Postmark.
-- **web**: Vercel for prototyping (consolidate to a Forge Node daemon later). `app.margin.dev` / `api.margin.dev`.
+- **api**: Forge → DigitalOcean droplet (`~/api.kedge.review/current`), queue worker + scheduler, Postgres, R2, Postmark.
+- **web**: Vercel for prototyping (consolidate to a Forge Node daemon later). `app.kedge.review` / `api.kedge.review`.
 - **Rules**: additive-only migrations with two-phase drops · deploy **api before web** · rollback = previous Forge release · feature flags are plain config flags per connector/AI feature.
 - **Bootstrap checklist**: Postmark domain + DKIM · R2 bucket + token · `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS`/CORS origins · Forge queue worker + scheduler · **Kroki container on the droplet + `KROKI_URL`** (M1) · GitHub OAuth app (login) · GitHub App creation (M6) · demo-mode rate-limit config.
 - **Post-deploy smoke**: `/up` health · import a known public doc end-to-end · queue depth check.
@@ -532,7 +535,7 @@ Reference deployment in `deploy/`: **one hostname, one `docker compose up`**.
 
 ```
                     ┌─ Caddy (TLS, single origin) ─┐
-  https://margin.internal ──┤  /api/* ──▶ api (FrankenPHP: fpm + queue worker + scheduler)
+  https://kedge.internal ──┤  /api/* ──▶ api (FrankenPHP: fpm + queue worker + scheduler)
                     │  /*     ──▶ web (Node)        │
                     └──▶ postgres · kroki (bundled) ┘
 ```
@@ -561,7 +564,7 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 
 ## 22. Open questions
 
-1. **Name + domain** — "Margin" is a placeholder; now also the public repo name.
+1. ~~Name + domain~~ — **resolved 2026-07-09: Kedge** (kedge.review / kedge.ink, GitHub org kedgehq). Domain registration + trademark search are user actions (TODOS.md).
 2. **Confluence team auth** — ship per-user API tokens first; OAuth 2.0 (3LO) app when a team adopts.
 3. **Reviewer friction** — magic-link-required commenting is the default; revisit if drop-off is high.
 4. **Web-side error reporting** — Sentry in M1, or defer until first real users? (Must be off/optional in self-host builds either way.)

@@ -2,7 +2,7 @@ import type { Root, Code } from 'mdast';
 import { visit } from 'unist-util-visit';
 
 /**
- * Kroki is Margin's sole diagram engine (SPEC §6.2). Fences whose language is
+ * Kroki is Kedge's sole diagram engine (SPEC §6.2). Fences whose language is
  * a supported Kroki engine become <KrokiDiagram/> elements BEFORE rehype-code
  * (Shiki) runs. Everything else stays a code block — unknown languages fall
  * through to the plain-text Shiki path, never to Kroki.
