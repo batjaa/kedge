@@ -30,6 +30,19 @@ per-module specs.
 
 No paid or SaaS services are required to boot or test either app.
 
+## Quick start (repo root)
+
+```bash
+npm run setup       # install deps for both apps, bootstrap api/.env + SQLite, migrate
+npm run dev         # run api (:8000) and web (:3000) together, prefixed output
+npm test            # api PHPUnit + web type check
+```
+
+Run one app on its own with `npm run dev:api` / `npm run dev:web` — useful when
+the other side isn't needed, or (later) when pointing the web app at a different
+backend. The per-app instructions below remain the source of truth for what each
+command does under the hood.
+
 ## api/ — Laravel backend
 
 ```bash

@@ -1,0 +1,19 @@
+{
+  "name": "kedge",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "setup": "npm install && npm run setup:api && npm run setup:web",
+    "setup:api": "composer --working-dir=api install && npm --prefix api install && (test -f api/.env || cp api/.env.example api/.env) && (grep -q '^APP_KEY=.\\{10,\\}' api/.env || php api/artisan key:generate) && (test -f api/database/database.sqlite || touch api/database/database.sqlite) && php api/artisan migrate",
+    "setup:web": "npm --prefix web install",
+    "dev": "concurrently --kill-others --names api,web --prefix-colors blue,green npm:dev:api npm:dev:web",
+    "dev:api": "composer --working-dir=api dev",
+    "dev:web": "npm --prefix web run dev",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "composer --working-dir=api test",
+    "test:web": "npm --prefix web run types:check"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  }
+}
