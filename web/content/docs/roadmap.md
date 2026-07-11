@@ -16,8 +16,8 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 
 | Module | Size | Depends on | Status | Spec |
 |---|---|---|---|---|
-| Scaffold | M | — | ticketed | `docs/specs/scaffold.md` · tracking issue #7 |
-| Import & render | L | Scaffold | ready-to-spec | — |
+| Scaffold | M | — | ticketed | [specs/scaffold.md](specs/scaffold.md) · [#7](https://github.com/batjaa/kedge/issues/7) |
+| Import & render | L | Scaffold | specced | [specs/import-render.md](specs/import-render.md) |
 | Comments & suggestions | L | Import & render | ready-to-spec | — |
 | Versions, diff & approvals | L | Comments & suggestions | deciding | — |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
@@ -43,9 +43,8 @@ Gists (full scope + demo criteria: SPEC §21):
 Work these one per session (`/wayfinder` work mode):
 
 1. **Anchoring port spike** (P1, S) — validate hypothes.is's `dom-anchor-text-quote` + diff-match-patch exact→fuzzy→orphan ladder on 2–3 real RFCs. Blocks **Versions, diff & approvals**. (TODOS.md open spikes)
-2. **Web-side error reporting** (P2, S) — Sentry at M1 vs defer; must be off/optional when self-hosted. Resolve while speccing **Import & render**. (SPEC §22.4)
-3. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
-4. **Domains, org & trademark** (P1, user actions) — register kedge.review/kedge.ink, create the kedgehq org, USPTO/EUIPO search. Gates **Launch**. (TODOS.md)
+2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
+3. **Domains, org & trademark** (P1, user actions) — register kedge.review/kedge.ink, create the kedgehq org, USPTO/EUIPO search. Gates **Launch**. (TODOS.md)
 
 ## Decisions so far
 
@@ -60,6 +59,7 @@ Work these one per session (`/wayfinder` work mode):
 - **Product named Kedge** (kedge.review / kedge.ink, org kedgehq) — TODOS.md 2026-07-09.
 - **Destination includes launch of both editions** — this charting, 2026-07-10.
 - **Sync-agent idea stays in the fog** (v1 is pull-based via connectors) — this charting, 2026-07-10.
+- **Web-side error reporting deferred to Launch** (SaaS has no public traffic before go-live; must be off/optional self-hosted either way) — Import & render speccing, 2026-07-11.
 
 ## Not yet specified
 

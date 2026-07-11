@@ -29,7 +29,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 ## Decision log (diagram engine, 2026-07-03)
 
 - ✅ **Kroki is the sole diagram engine** (SPEC §6.2 rewritten). Supersedes the client-Mermaid + Kroki-PlantUML split. Rationale: one code path for ~20 engines (incl. Excalidraw + PlantUML — the full sketch-to-precise spectrum), deterministic version-cacheable SVG, no mermaid ESM in the reader bundle, no in-browser diagram-parser XSS surface. **Condition attached: Kroki self-hosted in both editions from M1** — kills the third-party privacy leak that originally justified client-side Mermaid. Explicit engine allowlist; unknown fence langs fall through to plain text.
-- [ ] P2 (S) **Decide web-side error reporting** — Sentry in M1 vs defer; must be optional in self-host builds (SPEC §22.4).
+- [x] ~~P2 (S) Decide web-side error reporting~~ — **done 2026-07-11: deferred to Launch** (Import & render spec). Demo mode is SaaS-only and the SaaS has no public traffic until go-live; anything adopted must be off/optional in self-host builds. Revisit in Launch's tail.
 - [x] ~~P2 (S) Pick the name/domain~~ — **done 2026-07-09: Kedge** (see decision log below).
 
 ## Decision log (naming, 2026-07-09)

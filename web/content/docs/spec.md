@@ -501,7 +501,7 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 - **Named events**: `import.started/completed/failed{connector,duration,bytes}` · `reanchor.completed{anchored,relocated,orphaned}` · `webhook.received/ignored` · `ai_run.completed{model,tokens,cost}` · `mdx.compile_failed` · `kroki.render_failed` · `ssrf.blocked` · `notification.sent/failed` · `demo.created/claimed/pruned`.
 - **Day-1 metrics**: import success rate · **orphan rate** (a spike means the moat is broken — alert on it) · notification delivery failures · AI cost/day · demo→claim conversion.
 - **Correlation**: web forwards `X-Request-Id` to the API; a comment-posting bug must be reconstructable from logs alone.
-- Backend: Nightwatch (requests, jobs, exceptions). Frontend: error reporting choice (Sentry vs defer) is an open question (§22).
+- Backend: Nightwatch (requests, jobs, exceptions). Frontend: error reporting deferred to Launch (§22.4, resolved 2026-07-11); must be off/optional in self-host builds.
 
 ### Failure modes registry (day-1 behavior)
 
@@ -570,6 +570,6 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 1. ~~Name + domain~~ — **resolved 2026-07-09: Kedge** (kedge.review / kedge.ink, GitHub org kedgehq). Domain registration + trademark search are user actions (TODOS.md).
 2. **Confluence team auth** — ship per-user API tokens first; OAuth 2.0 (3LO) app when a team adopts.
 3. **Reviewer friction** — magic-link-required commenting is the default; revisit if drop-off is high.
-4. **Web-side error reporting** — Sentry in M1, or defer until first real users? (Must be off/optional in self-host builds either way.)
+4. ~~Web-side error reporting~~ — **resolved 2026-07-11 (Import & render spec): deferred to Launch.** No public traffic before SaaS go-live; must be off/optional in self-host builds either way.
 5. **Demo-mode abuse thresholds** — initial per-IP limits need tuning once public.
 6. **Contributor CLA** — with AGPL + a commercial SaaS, decide early whether contributions require a CLA/DCO (keeps future licensing options open).
