@@ -16,7 +16,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 
 | Module | Size | Depends on | Status | Spec |
 |---|---|---|---|---|
-| Scaffold | M | — | ticketed | `docs/specs/scaffold.md` · issues #1–#6 |
+| Scaffold | M | — | ticketed | `docs/specs/scaffold.md` · tracking issue #7 |
 | Import & render | L | Scaffold | ready-to-spec | — |
 | Comments & suggestions | L | Import & render | ready-to-spec | — |
 | Versions, diff & approvals | L | Comments & suggestions | deciding | — |
