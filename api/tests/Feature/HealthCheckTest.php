@@ -15,6 +15,6 @@ class HealthCheckTest extends TestCase
     {
         $response = $this->get('/up');
 
-        $response->assertOk();
+        $response->assertNotFound(); // CI red-path check: deliberately wrong, reverted immediately.
     }
 }
