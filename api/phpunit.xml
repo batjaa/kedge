@@ -28,7 +28,12 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:3000"/>
+        <env name="SESSION_DOMAIN" value="localhost"/>
+        <!-- database (not array): the auth suite asserts real cookie issuance
+             and session invalidation, which Laravel skips for non-persistent
+             drivers. Sessions land in the in-memory SQLite tests migrate. -->
+        <env name="SESSION_DRIVER" value="database"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

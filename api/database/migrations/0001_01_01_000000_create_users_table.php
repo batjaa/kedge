@@ -15,8 +15,10 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
+            $table->string('avatar_url')->nullable();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            // Nullable: OAuth-only accounts (GitHub sign-in, ticket #6) have no password.
+            $table->string('password')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });
