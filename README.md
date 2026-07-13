@@ -41,9 +41,20 @@ npm test            # api PHPUnit + web type check
 ```
 
 Run one app on its own with `npm run dev:api` / `npm run dev:web` — useful when
-the other side isn't needed, or (later) when pointing the web app at a different
+the other side isn't needed, or when pointing the web app at a different
 backend. The per-app instructions below remain the source of truth for what each
 command does under the hood.
+
+### Pointing web at a different backend
+
+The web app's API base URL is env-driven (`web/.env.example`), so it can target
+any Kedge backend without code changes. Two knobs: `API_URL` (server-side, used
+by the BFF that forwards cookies) and `NEXT_PUBLIC_API_URL` (inlined into the
+browser for the auth mutations). Both default to `http://localhost:8000`. Copy
+`web/.env.example` to `web/.env.local` and set them to a remote API, or leave
+`NEXT_PUBLIC_API_URL` empty for a same-origin reverse-proxy deployment. The
+three topologies (dev two-port, SaaS split-domain, self-host single-origin) are
+worked through in `web/.env.example` and `api/.env.example` in lockstep.
 
 ## api/ — Laravel backend
 

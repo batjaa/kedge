@@ -22,11 +22,18 @@ In the project, you can see:
 - `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
 - `lib/layout.shared.tsx`: Shared options for layouts, optional but preferred to keep.
 
-| Route                     | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `app/(home)`              | The route group for your landing page and other pages. |
-| `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+| Route                     | Description                                                        |
+| ------------------------- | ----------------------------------------------------------------- |
+| `app/(app)`               | The authenticated shell (`/`), guarded server-side via the BFF.   |
+| `app/(auth)`              | Public sign-in / sign-up pages (`/signin`, `/signup`).            |
+| `app/docs`                | The documentation layout and pages (public).                      |
+| `app/api/bff/me/route.ts` | BFF read handler — forwards cookies to the API's `/api/v1/me`.     |
+| `app/api/search/route.ts` | The Route Handler for search.                                     |
+
+Auth (SPEC §4): client components call the API directly for mutations
+(`lib/auth-client.ts`); server components read session state through the BFF
+(`lib/session.ts` / `app/api/bff/me`). API base URLs are env-driven — see
+`.env.example`.
 
 ### Fumadocs MDX
 

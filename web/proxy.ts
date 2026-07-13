@@ -25,5 +25,13 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  // Expose the requested path to Server Components so the auth guard can build
+  // the sign-in return URL (?next=…) when it bounces an anonymous visitor.
+  // Set fresh from nextUrl each request, overriding any client-sent value.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(
+    'x-kedge-pathname',
+    request.nextUrl.pathname + request.nextUrl.search,
+  );
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
