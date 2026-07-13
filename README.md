@@ -38,6 +38,7 @@ No paid or SaaS services are required to boot or test either app.
 npm run setup       # install deps for both apps, bootstrap api/.env + SQLite, migrate
 npm run dev         # run api (:8000) and web (:3000) together, prefixed output
 npm test            # api PHPUnit + web type check
+npm run test:e2e    # Playwright: boot both apps, drive the M0 demo in a real browser
 ```
 
 Run one app on its own with `npm run dev:api` / `npm run dev:web` — useful when
@@ -55,6 +56,24 @@ browser for the auth mutations). Both default to `http://localhost:8000`. Copy
 `NEXT_PUBLIC_API_URL` empty for a same-origin reverse-proxy deployment. The
 three topologies (dev two-port, SaaS split-domain, self-host single-origin) are
 worked through in `web/.env.example` and `api/.env.example` in lockstep.
+
+### End-to-end journey (Playwright)
+
+One browser journey proves the cross-app auth handshake — the riskiest piece of
+the walking skeleton — end to end: register through the real UI, land on the
+authenticated shell, reload (session persists), sign out. It is deliberately a
+single journey, not a suite.
+
+```bash
+npx playwright install chromium   # one-time: fetch the browser
+npm run test:e2e                  # boots api + web, drives the journey, tears them down
+```
+
+`npm run test:e2e` needs nothing running first — Playwright boots both apps
+itself (`web/playwright.config.ts`). The API runs against a throwaway SQLite
+database migrated fresh each run (`web/e2e/serve-api.sh`), so it never touches
+your dev data, and re-runs never collide. The same journey runs as the `e2e`
+job in CI.
 
 ## api/ — Laravel backend
 

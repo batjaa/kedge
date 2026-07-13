@@ -11,7 +11,8 @@
     "dev:web": "npm --prefix web run dev",
     "test": "npm run test:api && npm run test:web",
     "test:api": "composer --working-dir=api test",
-    "test:web": "npm --prefix web run types:check"
+    "test:web": "npm --prefix web run types:check",
+    "test:e2e": "npm --prefix web run e2e"
   },
   "devDependencies": {
     "concurrently": "^9.2.0"
