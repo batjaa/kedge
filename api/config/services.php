@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    // One-click GitHub sign-in (Socialite, ticket #6). Both credentials empty
+    // = feature off: the OAuth routes 404 and the web app hides the button
+    // (BYO-key pattern, SPEC 14). The callback URL defaults to this API's own
+    // APP_URL so it tracks the deployment topology without extra config.
+    'github' => [
+        'client_id' => env('GITHUB_CLIENT_ID'),
+        'client_secret' => env('GITHUB_CLIENT_SECRET'),
+        'redirect' => env('GITHUB_REDIRECT_URI', env('APP_URL').'/auth/github/callback'),
+    ],
+
 ];
