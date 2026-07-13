@@ -26,6 +26,13 @@ const COPY = {
   },
 } as const;
 
+// Friendly copy for the reasons the API bounces an OAuth attempt back here.
+const OAUTH_ERRORS: Record<string, string> = {
+  github_failed: "GitHub sign-in didn't complete. Please try again.",
+  github_no_verified_email:
+    'Your GitHub account has no verified email. Verify one on GitHub, or sign in with a password.',
+};
+
 // Only allow same-origin, non-protocol-relative return paths (no open redirects).
 function safeNext(next: string | undefined): string {
   if (next && next.startsWith('/') && !next.startsWith('//')) return next;
@@ -40,14 +47,23 @@ export function AuthForm({
   mode,
   redirectTo,
   expired,
+  githubHref,
+  oauthError,
 }: {
   mode: Mode;
   redirectTo?: string;
   expired?: boolean;
+  /** GitHub redirect URL, present only when the API reports OAuth configured. */
+  githubHref?: string;
+  /** Error code from a bounced OAuth attempt (?error=… on the sign-in page). */
+  oauthError?: string;
 }) {
   const router = useRouter();
   const copy = COPY[mode];
   const next = safeNext(redirectTo);
+  const oauthMessage = oauthError
+    ? (OAUTH_ERRORS[oauthError] ?? OAUTH_ERRORS.github_failed)
+    : null;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -110,6 +126,32 @@ export function AuthForm({
           <p className="mb-5 rounded-xl bg-amber-400/10 px-3.5 py-2.5 text-sm text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300">
             Your session expired. Please sign in again.
           </p>
+        ) : null}
+
+        {oauthMessage ? (
+          <p
+            role="alert"
+            className="mb-5 rounded-xl bg-rose-400/10 px-3.5 py-2.5 text-sm text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300"
+          >
+            {oauthMessage}
+          </p>
+        ) : null}
+
+        {githubHref ? (
+          <>
+            <a
+              href={githubHref}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 px-3.5 py-2 text-sm font-medium text-zinc-900 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:hover:bg-white/10"
+            >
+              <GitHubMark />
+              Continue with GitHub
+            </a>
+            <div className="my-5 flex items-center gap-3" aria-hidden="true">
+              <div className="h-px flex-1 bg-zinc-900/10 dark:bg-white/10" />
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">or</span>
+              <div className="h-px flex-1 bg-zinc-900/10 dark:bg-white/10" />
+            </div>
+          </>
         ) : null}
 
         {formError ? (
@@ -183,6 +225,18 @@ export function AuthForm({
         </Link>
       </p>
     </div>
+  );
+}
+
+function GitHubMark() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-4 w-4 fill-current"
+    >
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+    </svg>
   );
 }
 
