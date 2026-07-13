@@ -1,0 +1,29 @@
+import { cache } from 'react';
+import { apiBaseUrl } from './config';
+import type { Capabilities } from './auth-types';
+
+// Server-only. Reads the API's public capability surface (GET /api/v1/config)
+// to learn which credential-gated features the API has switched on. The single
+// source of truth is the API's env — never a duplicated web var — so the web
+// app and the API can't disagree about whether, say, GitHub sign-in exists.
+//
+// Fails closed: if the API is unreachable or the shape is unexpected, every
+// capability is treated as OFF. An unconfigured feature therefore hides rather
+// than rendering a button that 404s (the BYO-key pattern, SPEC §14).
+export const getCapabilities = cache(async (): Promise<Capabilities> => {
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/v1/config`, {
+      headers: { accept: 'application/json' },
+      // Capabilities only change on redeploy / env change, so a short cache
+      // keeps a shared server IP well under the endpoint's rate limit.
+      next: { revalidate: 30 },
+    });
+
+    if (!res.ok) return { github: false };
+
+    const data = (await res.json()) as { auth?: { github?: unknown } };
+    return { github: data.auth?.github === true };
+  } catch {
+    return { github: false };
+  }
+});

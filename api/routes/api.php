@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\MeController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,6 +16,13 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function () {
+    // Public runtime capabilities the web app reads to decide what to render
+    // (e.g. the GitHub sign-in button). No auth; its own generous per-IP
+    // limiter so a page-load config read never eats the login budget.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('/config', ConfigController::class)->name('api.v1.config');
+    });
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
     });

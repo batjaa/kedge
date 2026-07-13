@@ -23,7 +23,9 @@ class RegistrationService
     ) {}
 
     /**
-     * Register a new account. Password is null for OAuth-only accounts.
+     * Register a new account. Password is null for OAuth-only accounts;
+     * githubId is set when the account is born from a GitHub sign-in, so the
+     * provider identity is written inside the same transaction (ticket #6).
      */
     public function register(
         string $name,
@@ -31,13 +33,15 @@ class RegistrationService
         ?string $password,
         ?string $avatarUrl = null,
         ?string $ip = null,
+        ?string $githubId = null,
     ): User {
-        return DB::transaction(function () use ($name, $email, $password, $avatarUrl, $ip): User {
+        return DB::transaction(function () use ($name, $email, $password, $avatarUrl, $ip, $githubId): User {
             $user = User::create([
                 'name' => $name,
                 'email' => $email,
                 'password' => $password,
                 'avatar_url' => $avatarUrl,
+                'github_id' => $githubId,
             ]);
 
             $workspace = Workspace::create([

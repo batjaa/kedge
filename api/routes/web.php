@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\GitHubController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use Illuminate\Support\Facades\Route;
@@ -27,4 +28,12 @@ Route::middleware('throttle:auth')->group(function () {
     Route::post('/logout', [SessionController::class, 'destroy'])
         ->middleware('auth:sanctum')
         ->name('logout');
+
+    // GitHub OAuth (ticket #6): top-level browser navigations, not JSON — they
+    // 302 to github.com and back. Registered unconditionally but 404 in the
+    // controller when OAuth is unconfigured, so the feature toggles at request
+    // time (single source of truth: GitHubAuthService::isConfigured). Same
+    // per-IP `auth` limiter as the other auth endpoints (SPEC 13).
+    Route::get('/auth/github/redirect', [GitHubController::class, 'redirect'])->name('auth.github.redirect');
+    Route::get('/auth/github/callback', [GitHubController::class, 'callback'])->name('auth.github.callback');
 });

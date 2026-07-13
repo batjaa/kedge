@@ -28,6 +28,9 @@ POST /register  {name, email, password}         → 201, signs the account in
 POST /login     {email, password}               → 200
 POST /logout                                    → 204, invalidates the session
 GET  /api/v1/me                                 → 200 { user, workspace }
+GET  /api/v1/config                             → 200 { auth: { github } } (public capabilities)
+GET  /auth/github/redirect                      → 302 github.com (or 404 if unconfigured)
+GET  /auth/github/callback                      → create-or-link, then 302 to FRONTEND_URL
 ```
 
 Credentialed requests send the session cookie plus the `X-XSRF-TOKEN` header.
@@ -36,6 +39,45 @@ one, no workspace UI). The cross-app handshake knobs — `SESSION_DOMAIN`,
 `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` — express the dev two-port,
 SaaS split-domain, and self-host single-origin topologies as pure env changes;
 see the worked examples in `.env.example`.
+
+### GitHub sign-in (optional, Socialite)
+
+One-click sign-in. First sign-in creates the account through the same atomic
+path as email registration (user + personal workspace + owner membership +
+audit, password `null`); a GitHub account whose **verified primary email**
+matches an existing account links to it instead of duplicating — one account
+either way. The `github_id` lives on the `users` row (the workspace-level
+`integrations` table stays reserved for source connectors).
+
+The feature is **off until credentials are set**: with `GITHUB_CLIENT_ID` /
+`GITHUB_CLIENT_SECRET` empty the two `/auth/github/*` routes return 404 and
+`/api/v1/config` reports `auth.github: false`, so the web app hides the button
+(BYO-key pattern, SPEC §14). The redirect/callback use the session-based
+Socialite driver (both legs are top-level navigations to this API's origin, so
+CSRF `state` validation is kept), and all three routes share the per-IP `auth`
+rate limiter.
+
+To enable it, register a GitHub OAuth app at
+<https://github.com/settings/developers> → **New OAuth App**:
+
+| Field                       | Value (dev)                                  |
+| --------------------------- | -------------------------------------------- |
+| Application name            | `Kedge` (or your instance name)              |
+| Homepage URL                | `http://localhost:3000` (your `FRONTEND_URL`) |
+| Authorization callback URL  | `http://localhost:8000/auth/github/callback` |
+
+Then set in `api/.env` (the callback URL must match `APP_URL` exactly — the
+default `GITHUB_REDIRECT_URI` derives from it):
+
+```
+GITHUB_CLIENT_ID=<client id>
+GITHUB_CLIENT_SECRET=<generated secret>
+FRONTEND_URL=http://localhost:3000
+```
+
+For the SaaS split-domain / self-host topologies, point Homepage URL at the web
+origin, the callback URL at `<API origin>/auth/github/callback`, and set
+`FRONTEND_URL` to the web origin.
 
 ## Test & lint
 
