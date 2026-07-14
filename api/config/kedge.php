@@ -59,4 +59,29 @@ return [
         'allowed_schemes' => ['https'],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Text projection service (anchor substrate)
+    |--------------------------------------------------------------------------
+    |
+    | The web layer owns the plain-text projection (SPEC §5.4): the import job
+    | POSTs normalized content to the web app's internal /internal/projection
+    | endpoint and stores the returned plain_text + projection_version on the
+    | version. That endpoint is internal — never publicly reachable — and guards
+    | itself with a shared secret, so both sides must carry the SAME
+    | PROJECTION_SHARED_SECRET.
+    |
+    | The URL is env-driven for every topology (dev two-port, SaaS split-domain,
+    | self-host single-origin). In dev the secret defaults to a well-known value
+    | the web app also defaults to, so imports project with no extra config; in
+    | production it MUST be set on both sides.
+    |
+    */
+
+    'projection' => [
+        'url' => rtrim((string) env('PROJECTION_URL', 'http://localhost:3000'), '/'),
+        'secret' => env('PROJECTION_SHARED_SECRET', 'dev-projection-secret'),
+        'timeout' => (float) env('PROJECTION_TIMEOUT', 10),
+    ],
+
 ];

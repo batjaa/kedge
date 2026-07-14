@@ -14,9 +14,11 @@ use App\Services\Fetch\FetchResult;
 use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\DocumentImporter;
 use App\Services\Import\Exceptions\ImportFailedException;
+use App\Services\Import\Exceptions\ProjectionFailedException;
 use App\Services\RegistrationService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -36,6 +38,7 @@ class DocumentImportTest extends TestCase
     {
         Queue::fake();
         $this->fakeFetchReturns("# Hello Kedge\n\nA rendered doc.\n");
+        $this->fakeProjection();
         $user = $this->registerUser();
 
         $create = $this->actingAs($user)->fromWebApp()
@@ -73,6 +76,7 @@ class DocumentImportTest extends TestCase
     {
         Queue::fake();
         $this->fakeFetchReturns("Just a paragraph, no heading.\n", finalUrl: 'https://example.test/specs/api-design.md');
+        $this->fakeProjection();
         $user = $this->registerUser();
 
         $this->actingAs($user)->fromWebApp()
@@ -89,6 +93,7 @@ class DocumentImportTest extends TestCase
     {
         Queue::fake();
         $this->fakeFetchReturns("# Stable\n\nUnchanged body.\n");
+        $this->fakeProjection();
         $user = $this->registerUser();
 
         $this->actingAs($user)->fromWebApp()
@@ -179,6 +184,7 @@ class DocumentImportTest extends TestCase
 
         Queue::fake();
         $this->fakeFetchReturns("# Recovered\n\nNow it works.\n");
+        $this->fakeProjection();
 
         $this->actingAs($user)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/retry")
@@ -245,6 +251,61 @@ class DocumentImportTest extends TestCase
         $this->assertSame((string) $document->id, $job->uniqueId());
     }
 
+    public function test_import_projects_the_version_and_stores_the_substrate(): void
+    {
+        Queue::fake();
+        $this->fakeFetchReturns("# Doc\n\n![img](x.png)\n");
+        // The web endpoint owns the projection; the API stores whatever it returns.
+        $this->fakeProjection(plainText: "Doc\n\n⟦image⟧", version: '1');
+        $user = $this->registerUser();
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/documents', ['url' => self::RAW_URL])
+            ->assertStatus(202);
+
+        $document = Document::sole();
+        $this->runImport($document);
+
+        // plain_text + projection_version land on the version (SPEC 5.4).
+        $version = $document->fresh()->currentVersion;
+        $this->assertSame("Doc\n\n⟦image⟧", $version->plain_text);
+        $this->assertSame('1', $version->projection_version);
+
+        // The importer POSTs the normalized content to the internal endpoint,
+        // presenting the shared secret — faked here at its HTTP boundary.
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/projection')
+            && $request->hasHeader('x-projection-secret')
+            && $request['content'] === "# Doc\n\n![img](x.png)\n"
+            && $request['format'] === 'md');
+    }
+
+    public function test_projection_failure_is_a_transient_import_failure(): void
+    {
+        Queue::fake();
+        $this->fakeFetchReturns("# Doc\n\nbody\n");
+        // The projection endpoint is down / errors: a 500 must be transient.
+        Http::fake(['*/internal/projection' => Http::response(['error' => 'boom'], 500)]);
+        $user = $this->registerUser();
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/documents', ['url' => self::RAW_URL])
+            ->assertStatus(202);
+
+        $document = Document::sole();
+
+        // Bubbles out of handle() so the queue retries it (SPEC 19) — never a
+        // silently-unprojected version.
+        try {
+            $this->runImport($document);
+            $this->fail('Expected the projection failure to bubble for a retry.');
+        } catch (ProjectionFailedException) {
+            // expected
+        }
+
+        $this->assertSame(DocumentStatus::Importing, $document->fresh()->status);
+        $this->assertDatabaseCount('document_versions', 0);
+    }
+
     // ---- helpers ------------------------------------------------------------
 
     private function registerUser(string $email = 'author@example.com'): User
@@ -278,6 +339,27 @@ class DocumentImportTest extends TestCase
             GuardedFetcher::class,
             fn ($mock) => $mock->shouldReceive('fetch')->andThrow($e),
         );
+    }
+
+    /**
+     * Fake the internal web projection endpoint at its HTTP boundary (testing
+     * decision 1: the projection endpoint is faked, never called for real).
+     *
+     * @param  list<string>  $warnings
+     */
+    private function fakeProjection(
+        string $plainText = 'Projected text.',
+        string $version = '1',
+        array $warnings = [],
+    ): void {
+        Http::fake([
+            '*/internal/projection' => Http::response([
+                'plain_text' => $plainText,
+                'projection_version' => $version,
+                'mdx_ok' => true,
+                'warnings' => $warnings,
+            ]),
+        ]);
     }
 
     private function runImport(Document $document): void

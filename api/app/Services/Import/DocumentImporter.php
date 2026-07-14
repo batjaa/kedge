@@ -17,16 +17,19 @@ use Illuminate\Support\Facades\Log;
  *
  * M1's normalization is deliberately thin: a `.md` source is stored as-is
  * (`content_raw` == `content_normalized`), and `content_hash` is
- * sha256(normalized). The projection (#18), HTML/image handling (#19), MDX
- * hardening (#20), and diagrams (#21) widen the normalization step later without
- * changing this shape. Fetch failures are not caught here — they propagate to
- * {@see ImportDocumentJob}, which owns retry-vs-terminal (SPEC 19).
+ * sha256(normalized). HTML/image handling (#19), MDX hardening (#20), and
+ * diagrams (#21) widen the normalization step later without changing this shape.
+ * Once content is normalized it is projected to the anchor substrate (#18) — the
+ * plain_text every version must carry (SPEC §5.4). Fetch and projection failures
+ * are not caught here — they propagate to {@see ImportDocumentJob}, which owns
+ * retry-vs-terminal (SPEC 19).
  */
 class DocumentImporter
 {
     public function __construct(
         private readonly ConnectorRegistry $registry,
         private readonly TitleSynthesizer $titles,
+        private readonly TextProjector $projector,
         private readonly AuditLogger $audit,
     ) {}
 
@@ -51,6 +54,11 @@ class DocumentImporter
         $hash = hash('sha256', $normalized);
         $title = $fetched->title ?? $this->titles->fromContent($normalized, $fetched->finalUrl);
 
+        // Project the normalized content to its plain-text anchor substrate
+        // (SPEC 5.4). A projection failure is transient — it propagates to the
+        // job's retry path — so a version never lands without its plain_text.
+        $projection = $this->projector->project($normalized, $document->format);
+
         // firstOrCreate honours the (document_id, content_hash) unique constraint:
         // re-importing identical content returns the existing version, no twin.
         $version = DocumentVersion::firstOrCreate(
@@ -58,6 +66,8 @@ class DocumentImporter
             [
                 'content_raw' => $fetched->content,
                 'content_normalized' => $normalized,
+                'plain_text' => $projection->plainText,
+                'projection_version' => $projection->projectionVersion,
                 'source_version' => $fetched->sourceVersion,
                 'synced_at' => now(),
             ],
