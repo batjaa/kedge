@@ -2,7 +2,9 @@
 # An early, minimal prototype of the M7 self-host shape: one public origin,
 # Caddy routes API paths to Laravel and everything else to Next.
 #
-# Required env (Coolify): APP_URL, APP_KEY, DB_DATABASE, DB_USERNAME, DB_PASSWORD.
+# Env (set by Coolify at runtime): APP_URL, APP_KEY, DB_DATABASE, DB_USERNAME, DB_PASSWORD.
+# Defaults (not :? requires) because Coolify interpolates the file at BUILD time
+# with only build-time vars present — hard requires fail the build.
 # Everything else defaults sensibly; SANCTUM_STATEFUL_DOMAINS and FRONTEND_URL
 # are derived from APP_URL by the api entrypoint when unset.
 
@@ -10,16 +12,16 @@ x-api-env: &api-env
   APP_NAME: ${APP_NAME:-Kedge}
   APP_ENV: ${APP_ENV:-production}
   APP_DEBUG: ${APP_DEBUG:-false}
-  APP_URL: ${APP_URL:?APP_URL is required}
-  APP_KEY: ${APP_KEY:?APP_KEY is required}
+  APP_URL: ${APP_URL:-}
+  APP_KEY: ${APP_KEY:-}
   LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DB_CONNECTION: pgsql
   DB_HOST: db
   DB_PORT: 5432
-  DB_DATABASE: ${DB_DATABASE:?DB_DATABASE is required}
-  DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
-  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+  DB_DATABASE: ${DB_DATABASE:-kedge}
+  DB_USERNAME: ${DB_USERNAME:-kedge}
+  DB_PASSWORD: ${DB_PASSWORD:-}
   CACHE_STORE: database
   QUEUE_CONNECTION: database
   SESSION_DRIVER: database
@@ -90,11 +92,11 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${DB_DATABASE:?DB_DATABASE is required}
-      POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME is required}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_DATABASE:-kedge}
+      POSTGRES_USER: ${DB_USERNAME:-kedge}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-kedge} -d ${DB_DATABASE:-kedge}"]
       interval: 10s
       timeout: 5s
       retries: 10
