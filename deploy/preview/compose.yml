@@ -5,6 +5,8 @@
 # Env (set by Coolify at runtime): APP_URL, APP_KEY, DB_DATABASE, DB_USERNAME, DB_PASSWORD.
 # Defaults (not :? requires) because Coolify interpolates the file at BUILD time
 # with only build-time vars present — hard requires fail the build.
+# Build contexts are REPO-ROOT-relative: Coolify runs compose with
+# --project-directory <repo root>. Locally: docker compose --project-directory . -f deploy/preview/compose.yml ...
 # Everything else defaults sensibly; SANCTUM_STATEFUL_DOMAINS and FRONTEND_URL
 # are derived from APP_URL by the api entrypoint when unset.
 
@@ -33,13 +35,13 @@ x-api-env: &api-env
   GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
 
 x-api-build: &api-build
-  context: ../../api
+  context: ./api
   dockerfile: Dockerfile
 
 services:
   proxy:
     build:
-      context: ./proxy
+      context: ./deploy/preview/proxy
       dockerfile: Dockerfile
     depends_on:
       - api
@@ -80,7 +82,7 @@ services:
 
   web:
     build:
-      context: ../../web
+      context: ./web
       dockerfile: Dockerfile
     environment:
       API_URL: http://api:80
