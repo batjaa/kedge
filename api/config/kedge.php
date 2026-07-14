@@ -105,4 +105,21 @@ return [
         'max_image_bytes' => (int) env('MEDIA_MAX_IMAGE_BYTES', 10 * 1024 * 1024),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Import
+    |--------------------------------------------------------------------------
+    |
+    | Caps for the import surfaces that don't fetch a remote URL. Pasted/uploaded
+    | content (#22) never touches the guarded fetcher, so it needs its own size
+    | ceiling — the request is rejected (422) before a document row is created.
+    | URL and GitHub imports are bounded by the fetch size cap above instead.
+    |
+    */
+
+    'import' => [
+        // Hard cap on directly pasted/uploaded content, in bytes (default 2 MiB).
+        'max_paste_bytes' => (int) env('IMPORT_MAX_PASTE_BYTES', 2 * 1024 * 1024),
+    ],
+
 ];
