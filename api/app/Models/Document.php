@@ -61,6 +61,17 @@ class Document extends Model
     }
 
     /**
+     * Share links handed out for this document (SPEC 10.2). Cascade-deleted with
+     * the document; a share never outlives what it points at.
+     *
+     * @return HasMany<Share, $this>
+     */
+    public function shares(): HasMany
+    {
+        return $this->hasMany(Share::class);
+    }
+
+    /**
      * The version currently rendered. Not a FK (the constraint would be circular
      * with document_versions.document_id) — just a pointer resolved by id.
      */

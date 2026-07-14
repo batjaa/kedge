@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\ShareController;
+use App\Http\Controllers\Api\V1\SharedDocumentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,6 +26,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/config', ConfigController::class)->name('api.v1.config');
     });
 
+    // Public read-only share surface (SPEC 10.2). No auth — the token is the
+    // capability. Per-IP limiter because it faces the open internet; a valid
+    // token grants exactly this doc and nothing else (no session, no id path).
+    Route::middleware('throttle:shared-read')->group(function () {
+        Route::get('/shared/{token}', [SharedDocumentController::class, 'show'])
+            ->name('api.v1.shared.show');
+    });
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
 
@@ -38,6 +48,20 @@ Route::prefix('v1')->group(function () {
                 ->name('api.v1.documents.store');
             Route::post('/documents/{document}/retry', [DocumentController::class, 'retry'])
                 ->name('api.v1.documents.retry');
+        });
+
+        // Share-link management (SPEC 10.2), all behind SharePolicy. Listing is a
+        // free read; create/revoke share a per-user limiter (share writes spawn
+        // no outbound fetch but are still mutations worth bounding).
+        Route::get('/documents/{document}/shares', [ShareController::class, 'index'])
+            ->name('api.v1.documents.shares.index');
+
+        Route::middleware('throttle:shares')->group(function () {
+            Route::post('/documents/{document}/shares', [ShareController::class, 'store'])
+                ->name('api.v1.documents.shares.store');
+            Route::delete('/documents/{document}/shares/{share}', [ShareController::class, 'destroy'])
+                ->scopeBindings()
+                ->name('api.v1.documents.shares.destroy');
         });
     });
 });
