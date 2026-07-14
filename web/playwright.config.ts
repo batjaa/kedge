@@ -56,10 +56,11 @@ export default defineConfig({
     },
     {
       name: 'web',
-      // `next dev`, not a production build: the app's `next build` currently
-      // fails prerendering /_global-error (a pre-existing app-source issue,
-      // unrelated to this seam — the web CI job only type-checks, never builds).
-      // Dev mode also mirrors how the app actually runs today.
+      // `next dev`, not a production build. The `next build` /_global-error
+      // prerender failure is fixed (#14), so a built app is now possible, but
+      // the swap is deferred: NEXT_PUBLIC_* below are build-time inlined, so a
+      // production run would need them baked at build, and rebuilding on every
+      // e2e run costs more than it proves for this single handshake journey.
       command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
       url: `http://127.0.0.1:${WEB_PORT}/docs`,
       reuseExistingServer: !isCI,

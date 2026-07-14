@@ -38,6 +38,10 @@
 - [ ] P2 (S) **CLA/DCO decision** before accepting the first external contribution (SPEC §22.6).
 - [ ] P3 (S) Write the register-your-own-GitHub-App guide for self-hosters (lands with M6/M7).
 
+## Decision log (web production build, 2026-07-13)
+
+- ✅ **`web/` build script forces `NODE_ENV=production`** (`#14`). `next build` only defaults `NODE_ENV` to `production` when it is *unset*; an ambient `NODE_ENV=development` (common in dev shells / some Docker base images) leaks through, so Next bundles React's **development** build. Prerendering the synthesized `/_global-error` page against dev React then crashes with `Cannot read properties of null (reading 'useContext')`, failing the build. Root cause is the env, **not** app code — reproduced on a bare, single-page Next app and unaffected by a custom `global-error.tsx`, the bundler (webpack fails identically), or patch bumps. Fix: `"build": "NODE_ENV=production next build"` makes the build immune to the ambient value. CI's web job now runs the build (it previously only type-checked, so this was latent). Also added a provider-independent `app/global-error.tsx` as a branded, self-contained crash surface.
+
 ## Known debt (accepted deliberately)
 
 - Polling inbox → SSE/Reverb later. (S)
