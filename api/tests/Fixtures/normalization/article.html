@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Designing the Import Pipeline</title>
+  <meta name="description" content="How Kedge normalizes imported specs.">
+  <style>
+    body { font-family: Georgia, serif; color: #222; }
+    .callout { background: #fffbe6; padding: 1rem; }
+  </style>
+  <script src="https://cdn.example.com/analytics.js"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    document.title = "hijacked";
+  </script>
+</head>
+<body onload="track('pageview')">
+  <header>
+    <nav><a href="/">Home</a> · <a href="/blog">Blog</a></nav>
+  </header>
+
+  <article>
+    <h1 style="font-size: 3rem">Designing the Import Pipeline</h1>
+
+    <p style="color: red" onclick="steal()">
+      An imported spec should render <strong>beautifully</strong> and
+      <em>safely</em>. Read the <a href="https://kedge.review/spec">spec</a>,
+      then try the <a href="javascript:alert(document.cookie)">interactive demo</a>.
+    </p>
+
+    <figure>
+      <img src="https://cdn.example.com/diagram.png" alt="Pipeline diagram" width="640" onerror="exfiltrate()">
+      <img src="/assets/relative-logo.svg" alt="Kedge logo">
+      <figcaption>The three-stage pipeline.</figcaption>
+    </figure>
+
+    <h2>Stages</h2>
+    <table>
+      <thead>
+        <tr><th>Stage</th><th>Input</th><th>Output</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Fetch</td><td>URL</td><td>Bytes</td></tr>
+        <tr><td>Normalize</td><td>HTML/MD</td><td>Markdown</td></tr>
+        <tr><td>Project</td><td>Markdown</td><td>Plain text</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Guarantees</h2>
+    <ul>
+      <li>Rendering never crashes on hostile input
+        <ul>
+          <li>Unknown fences fall back to plain text</li>
+          <li>Bad MDX degrades with a banner</li>
+        </ul>
+      </li>
+      <li>Comments survive versions</li>
+    </ul>
+
+    <blockquote>
+      <p>The moat is re-anchoring.</p>
+    </blockquote>
+
+    <pre><code>docker compose up</code></pre>
+
+    <iframe src="https://evil.example.com/tracker"></iframe>
+    <object data="https://evil.example.com/flash.swf"></object>
+  </article>
+
+  <footer><p>&copy; 2026 Kedge</p></footer>
+</body>
+</html>
