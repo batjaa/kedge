@@ -56,7 +56,7 @@ jobs:
         run: php artisan test
 
   web:
-    name: Web (types:check)
+    name: Web (types:check + build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -76,6 +76,12 @@ jobs:
 
       - name: Type check
         run: npm run types:check
+
+      # Guards the production build: types:check never exercises `next build`,
+      # so prerender regressions (e.g. the /_global-error build failure) slip
+      # through unless the build itself runs in CI.
+      - name: Production build
+        run: npm run build
 
   e2e:
     name: E2E (Playwright M0 journey)
