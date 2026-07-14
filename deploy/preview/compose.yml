@@ -1,0 +1,105 @@
+# Kedge preview deployment (issue #27) — single-origin topology on Coolify.
+# An early, minimal prototype of the M7 self-host shape: one public origin,
+# Caddy routes API paths to Laravel and everything else to Next.
+#
+# Required env (Coolify): APP_URL, APP_KEY, DB_DATABASE, DB_USERNAME, DB_PASSWORD.
+# Everything else defaults sensibly; SANCTUM_STATEFUL_DOMAINS and FRONTEND_URL
+# are derived from APP_URL by the api entrypoint when unset.
+
+x-api-env: &api-env
+  APP_NAME: ${APP_NAME:-Kedge}
+  APP_ENV: ${APP_ENV:-production}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  APP_URL: ${APP_URL:?APP_URL is required}
+  APP_KEY: ${APP_KEY:?APP_KEY is required}
+  LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DB_CONNECTION: pgsql
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_DATABASE: ${DB_DATABASE:?DB_DATABASE is required}
+  DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+  CACHE_STORE: database
+  QUEUE_CONNECTION: database
+  SESSION_DRIVER: database
+  SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-true}
+  SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-}
+  FRONTEND_URL: ${FRONTEND_URL:-}
+  SELF_HOSTED: ${SELF_HOSTED:-true}
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+
+x-api-build: &api-build
+  context: ../../api
+  dockerfile: Dockerfile
+
+services:
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+      - web
+    expose:
+      - "80"
+
+  api:
+    build: *api-build
+    environment:
+      <<: *api-env
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+    expose:
+      - "80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: *api-build
+    command: ["worker"]
+    environment:
+      <<: *api-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: *api-build
+    command: ["scheduler"]
+    environment:
+      <<: *api-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile
+    environment:
+      API_URL: http://api:80
+    expose:
+      - "3000"
+    depends_on:
+      - api
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?DB_DATABASE is required}
+      POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

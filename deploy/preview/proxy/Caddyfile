@@ -1,0 +1,20 @@
+# Single-origin routing for the Kedge preview deployment (issue #27).
+# TLS terminates upstream (SWAG → Coolify's proxy); this Caddy only routes.
+#
+# Order matters: /api/bff/* is a Next.js route handler and must stay on web;
+# everything else API-shaped goes to Laravel.
+:80 {
+	@bff path /api/bff/*
+	handle @bff {
+		reverse_proxy web:3000
+	}
+
+	@api path /api/* /sanctum/* /auth/* /login /logout /register /up /storage/*
+	handle @api {
+		reverse_proxy api:80
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
