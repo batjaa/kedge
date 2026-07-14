@@ -33,6 +33,8 @@ x-api-env: &api-env
   SELF_HOSTED: ${SELF_HOSTED:-true}
   GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
   GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  PROJECTION_URL: http://web:3000
+  PROJECTION_SHARED_SECRET: ${PROJECTION_SHARED_SECRET:-}
 
 x-api-build: &api-build
   context: ./api
@@ -86,6 +88,7 @@ services:
       dockerfile: Dockerfile
     environment:
       API_URL: http://api:80
+      PROJECTION_SHARED_SECRET: ${PROJECTION_SHARED_SECRET:-}
     expose:
       - "3000"
     depends_on:
