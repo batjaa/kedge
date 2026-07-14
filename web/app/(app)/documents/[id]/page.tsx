@@ -4,6 +4,7 @@ import { getDocument } from '@/lib/documents';
 import { renderMarkdown } from '@/lib/render-markdown';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { ImportFailed } from '@/components/app/import-failed';
+import { DocumentShares } from '@/components/app/document-shares';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
@@ -66,6 +67,8 @@ export default async function DocumentPage({
           {await renderMarkdown(document.current_version.content)}
         </article>
       ) : null}
+
+      {document.status === 'ready' ? <DocumentShares documentId={document.id} /> : null}
     </div>
   );
 }
