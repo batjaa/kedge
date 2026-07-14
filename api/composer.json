@@ -7,10 +7,13 @@
     "license": "AGPL-3.0-or-later",
     "require": {
         "php": "^8.3",
+        "enshrined/svg-sanitize": "^0.22.0",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.3",
         "laravel/socialite": "^5.28",
-        "laravel/tinker": "^3.0"
+        "laravel/tinker": "^3.0",
+        "league/html-to-markdown": "^5.1",
+        "symfony/html-sanitizer": "^8.1"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
