@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Document;
+use App\Models\Share;
 use App\Models\User;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -87,6 +89,68 @@ class AuthorizationMatrixTest extends TestCase
         $this->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/retry")
             ->assertStatus($expected);
+    }
+
+    /**
+     * Share management (SPEC 10.2) is workspace-scoped like the document it hangs
+     * off: list, create, and revoke all obey the same guest/other/owner rule.
+     */
+    #[DataProvider('documentRoleMatrix')]
+    public function test_share_list_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/shares")
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_share_create_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        // The owning member is authorized → a share is minted, so 201.
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/shares")
+            ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_share_revoke_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $share = Share::factory()->for($document)->create();
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->deleteJson("/api/v1/documents/{$document->id}/shares/{$share->id}")
+            ->assertStatus($expectedStatus);
+    }
+
+    /**
+     * The core share-visitor IDOR row (SPEC 10.2, ticket #24): the token grants
+     * exactly one document and no traversal — not the document's own API, not
+     * another token, not a session.
+     */
+    public function test_share_visitor_is_scoped_to_exactly_that_document(): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $token = Str::random(48);
+        Share::factory()->for($document)->withToken($token)->create();
+
+        // With the token (no cookie), the visitor reads exactly that document.
+        $this->getJson("/api/v1/shared/{$token}")->assertOk();
+
+        // The token is not a session: the document's authenticated API is closed.
+        $this->getJson("/api/v1/documents/{$document->id}")->assertUnauthorized();
+
+        // And it reaches no other share — another token is just "gone".
+        $this->getJson('/api/v1/shared/'.Str::random(48))->assertStatus(410);
     }
 
     /**
