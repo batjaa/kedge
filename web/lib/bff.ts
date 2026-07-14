@@ -50,6 +50,47 @@ export async function forwardMe(incoming: Headers): Promise<BffSessionResult> {
   }
 }
 
+export interface BffJsonResult<T> {
+  status: number;
+  data: T | null;
+}
+
+/**
+ * Forward the caller's cookies (and a stateful Origin) to an authenticated API
+ * GET, returning the parsed body on 200. The generalization of {@link forwardMe}
+ * for resource reads (e.g. a document poll) — same cookie-forwarding contract,
+ * same "no cookie ⇒ 401 without a round-trip" and "unreachable ⇒ 502" handling.
+ */
+export async function forwardApiGet<T>(
+  incoming: Headers,
+  path: string,
+): Promise<BffJsonResult<T>> {
+  const cookie = incoming.get('cookie') ?? '';
+
+  if (!cookie.includes('=')) {
+    return { status: 401, data: null };
+  }
+
+  try {
+    const res = await fetch(`${apiBaseUrl}${path}`, {
+      headers: {
+        cookie,
+        accept: 'application/json',
+        ...statefulOriginHeaders(incoming),
+      },
+      cache: 'no-store',
+    });
+
+    if (res.status !== 200) {
+      return { status: res.status, data: null };
+    }
+
+    return { status: 200, data: (await res.json()) as T };
+  } catch {
+    return { status: 502, data: null };
+  }
+}
+
 /**
  * Sanctum only honours the session cookie for requests whose Referer/Origin is
  * a configured stateful domain (EnsureFrontendRequestsAreStateful). A

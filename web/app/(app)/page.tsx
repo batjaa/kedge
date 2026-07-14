@@ -1,10 +1,10 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
+import { ImportForm } from '@/components/app/import-form';
 
-// The authenticated home shell — the review queue's landing surface. Empty in
-// M0 (importing a document arrives in M1); the point is that signing in visibly
-// landed somewhere that is yours. Panel-based, DESIGN.md tokens.
+// The authenticated home shell — the review queue's landing surface. M1 (#17)
+// lands the paste-a-URL import entry point here: sign in, paste a link, get a
+// rendered doc. Panel-based, DESIGN.md tokens.
 export default async function HomeShellPage() {
   const session = await getSession();
   if (!session) redirect('/signin'); // defensive; the layout already guards
@@ -26,27 +26,14 @@ export default async function HomeShellPage() {
         Welcome, {firstName}. This is {workspace.name} — your personal workspace.
       </p>
 
-      <div className="mt-8 rounded-2xl bg-white p-10 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-        <span
-          aria-hidden="true"
-          className="mx-auto flex h-10 w-10 items-end justify-end rounded-lg bg-emerald-400/90 p-2"
-        >
-          <span className="h-4 w-2.5 rounded-sm bg-zinc-900" />
-        </span>
-        <h2 className="mt-4 text-base font-semibold text-zinc-900 dark:text-white">
-          No documents in review yet
+      <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+          Import a document
         </h2>
-        <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Importing an RFC or spec — paste a link and get a rendered page with
-          anchored comment threads — arrives next. For now, browse the public
-          docs to see the reading surface.
+        <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          Paste a link to a spec or RFC and get a rendered page you can review.
         </p>
-        <Link
-          href="/docs"
-          className="mt-5 inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
-        >
-          Open the docs <span aria-hidden="true">→</span>
-        </Link>
+        <ImportForm />
       </div>
     </div>
   );
