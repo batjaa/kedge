@@ -7,7 +7,9 @@ WORKDIR /app
 # postinstall runs fumadocs-mdx, which needs the source tree — skip scripts
 # here and run the generation explicitly after the copy.
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+# --include=dev: NODE_ENV=production makes npm omit devDependencies by default,
+# but the build needs them (tailwind/postcss/typescript).
+RUN npm ci --ignore-scripts --include=dev
 
 COPY . .
 
