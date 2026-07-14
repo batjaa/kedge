@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ConfigController;
+use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\MeController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,5 +26,18 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
+
+        // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
+        // (import, retry) share a per-user limiter so a runaway paste loop or a
+        // retry hammer can't flood the fetch queue (SPEC 13).
+        Route::get('/documents/{document}', [DocumentController::class, 'show'])
+            ->name('api.v1.documents.show');
+
+        Route::middleware('throttle:imports')->group(function () {
+            Route::post('/documents', [DocumentController::class, 'store'])
+                ->name('api.v1.documents.store');
+            Route::post('/documents/{document}/retry', [DocumentController::class, 'retry'])
+                ->name('api.v1.documents.retry');
+        });
     });
 });
