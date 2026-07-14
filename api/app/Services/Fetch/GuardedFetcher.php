@@ -49,6 +49,7 @@ class GuardedFetcher
      * Fetch a user-supplied URL under the SSRF guard.
      *
      * @param  string  $url  Absolute https URL.
+     * @param  array<string, string>  $headers  Request headers to send on every hop (e.g. GitHub's Accept + User-Agent).
      * @param  int|null  $maxBytes  Per-call size-cap override (images and uploads differ); defaults to config.
      * @param  float|null  $timeout  Per-call transfer-timeout override in seconds; defaults to config.
      *
@@ -57,7 +58,7 @@ class GuardedFetcher
      * @throws FetchTimeoutException Connection or transfer timed out.
      * @throws UpstreamFetchException DNS lookup failed or another transport error occurred.
      */
-    public function fetch(string $url, ?int $maxBytes = null, ?float $timeout = null): FetchResult
+    public function fetch(string $url, array $headers = [], ?int $maxBytes = null, ?float $timeout = null): FetchResult
     {
         $maxBytes = $maxBytes ?? (int) config('kedge.fetch.max_bytes');
         $timeout = $timeout ?? (float) config('kedge.fetch.timeout');
@@ -67,7 +68,7 @@ class GuardedFetcher
         $currentUrl = $url;
 
         for ($hop = 0; $hop <= $maxRedirects; $hop++) {
-            $request = $this->vet($currentUrl, $timeout, $connectTimeout);
+            $request = $this->vet($currentUrl, $timeout, $connectTimeout, $headers);
             $response = $this->transport->send($request);
 
             if ($response->isRedirect() && $response->header('location') !== null) {
@@ -82,6 +83,7 @@ class GuardedFetcher
                 body: $this->readCapped($response, $maxBytes),
                 contentType: $this->contentType($response),
                 finalUrl: $currentUrl,
+                headers: $response->headers,
             );
         }
 
@@ -91,8 +93,10 @@ class GuardedFetcher
     /**
      * Run the full guard on one URL and return a request pinned to its validated
      * addresses. Throws {@see BlockedUrlException} on any policy failure.
+     *
+     * @param  array<string, string>  $headers
      */
-    private function vet(string $url, float $timeout, float $connectTimeout): PinnedRequest
+    private function vet(string $url, float $timeout, float $connectTimeout, array $headers = []): PinnedRequest
     {
         $parts = parse_url($url);
 
@@ -123,7 +127,7 @@ class GuardedFetcher
             }
         }
 
-        return new PinnedRequest($url, $host, $port, $ips, $timeout, $connectTimeout);
+        return new PinnedRequest($url, $host, $port, $ips, $timeout, $connectTimeout, $headers);
     }
 
     /**

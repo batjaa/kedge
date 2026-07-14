@@ -18,6 +18,7 @@ class PinnedRequest
      * @param  list<string>  $pinnedIps  Validated addresses the connection may use — and only these.
      * @param  float  $timeout  Total transfer timeout, seconds.
      * @param  float  $connectTimeout  Connection-establishment timeout, seconds.
+     * @param  array<string, string>  $headers  Request headers to send (e.g. GitHub's Accept + User-Agent).
      */
     public function __construct(
         public readonly string $url,
@@ -26,5 +27,6 @@ class PinnedRequest
         public readonly array $pinnedIps,
         public readonly float $timeout,
         public readonly float $connectTimeout,
+        public readonly array $headers = [],
     ) {}
 }

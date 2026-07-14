@@ -30,7 +30,7 @@ class CurlHttpTransport implements HttpTransport
     public function send(PinnedRequest $request): StreamedResponse
     {
         try {
-            $response = $this->http
+            $client = $this->http
                 ->connectTimeout($request->connectTimeout)
                 ->timeout($request->timeout)
                 ->withOptions([
@@ -38,8 +38,13 @@ class CurlHttpTransport implements HttpTransport
                     'allow_redirects' => false,
                     'http_errors' => false,
                     'curl' => $this->curlOptions($request),
-                ])
-                ->get($request->url);
+                ]);
+
+            if ($request->headers !== []) {
+                $client = $client->withHeaders($request->headers);
+            }
+
+            $response = $client->get($request->url);
         } catch (ConnectionException $e) {
             throw $this->isTimeout($e)
                 ? new FetchTimeoutException('Fetch timed out for '.$request->host.'.', 0, $e)
