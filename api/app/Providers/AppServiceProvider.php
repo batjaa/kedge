@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Services\Fetch\CurlHttpTransport;
+use App\Services\Fetch\DnsResolver;
+use App\Services\Fetch\HttpTransport;
+use App\Services\Fetch\SystemDnsResolver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -14,7 +18,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The SSRF guard's two swappable seams (SPEC 13): real DNS + curl pinning
+        // in production, faked in tests to drive private-range, rebinding-pin,
+        // redirect, size, and timeout behaviour. GuardedFetcher itself and
+        // AddressGuard are plain autowired singletons — no binding needed.
+        $this->app->bind(DnsResolver::class, SystemDnsResolver::class);
+        $this->app->bind(HttpTransport::class, CurlHttpTransport::class);
     }
 
     /**
