@@ -5,6 +5,7 @@ import { renderMarkdown } from '@/lib/render-markdown';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { ImportFailed } from '@/components/app/import-failed';
 import { DocumentShares } from '@/components/app/document-shares';
+import { ImportWarnings } from '@/components/app/import-warnings';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
@@ -63,9 +64,14 @@ export default async function DocumentPage({
       ) : null}
 
       {document.status === 'ready' && document.current_version ? (
-        <article className="prose max-w-none">
-          {await renderMarkdown(document.current_version.content)}
-        </article>
+        <>
+          <ImportWarnings
+            warnings={document.current_version.import_warnings ?? []}
+          />
+          <article className="prose max-w-none">
+            {await renderMarkdown(document.current_version.content)}
+          </article>
+        </>
       ) : null}
 
       {document.status === 'ready' ? <DocumentShares documentId={document.id} /> : null}
