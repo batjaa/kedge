@@ -54,6 +54,9 @@ class DocumentImporter
         $fetched = $connector->fetch(new DocumentSource(
             url: (string) $document->source_url,
             meta: $document->source_meta ?? [],
+            // Bound only for authenticated sources (#23) — the PAT connector reads
+            // the token from this integration; null for public/raw/upload.
+            integrationId: $document->integration_id,
         ));
 
         // Normalize beyond bare markdown: HTML → markdown, images re-hosted,

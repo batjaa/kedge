@@ -20,6 +20,15 @@ enum SourceType: string
     case GithubPublic = 'github_public';
 
     /**
+     * A GitHub file imported with a workspace's encrypted personal access token
+     * (#23) — the private-repo path, and the higher authenticated rate budget for
+     * public repos too. Same blob-URL shape as {@see GithubPublic}; the connector
+     * differs only in authenticating (SPEC §5.1). The bound token lives on the
+     * document's `integration_id`.
+     */
+    case GithubPat = 'github_pat';
+
+    /**
      * Directly pasted / uploaded content (#22). No URL and no re-sync source —
      * versioning is manual-only; the pasted body lives in `documents.source_meta`
      * so a retry re-imports it.

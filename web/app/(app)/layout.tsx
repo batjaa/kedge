@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BrandMark } from '@/components/brand-mark';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -27,6 +28,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-zinc-900/10 bg-white/85 px-6 backdrop-blur dark:border-white/10 dark:bg-zinc-900/85">
         <BrandMark />
         <div className="ml-auto flex items-center gap-3">
+          <Link
+            href="/settings"
+            className="hidden text-sm text-zinc-600 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:hover:text-white sm:block"
+          >
+            Settings
+          </Link>
           <ThemeToggle />
           <div className="hidden items-center gap-2 sm:flex">
             <Avatar name={user.name} avatarUrl={user.avatar_url} />
