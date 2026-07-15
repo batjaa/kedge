@@ -76,11 +76,17 @@ class CurlHttpTransport implements HttpTransport
             CURLOPT_LOW_SPEED_TIME => (int) ceil($request->timeout),
         ];
 
-        // Defence in depth — the scheme is already https-checked and redirects are
-        // followed by the guard, not curl, but pin the wire protocol regardless.
+        // Defence in depth — redirects are followed by the guard, not curl, but
+        // pin the wire protocol to exactly the scheme the guard vetted regardless.
+        // That is https everywhere, except the plain-http hop of an explicitly
+        // FETCH_ALLOW_HOSTS-allowlisted test-fixture host (the guard only ever
+        // lets http through for those — see GuardedFetcher::vet()).
         if (defined('CURLPROTO_HTTPS')) {
-            $options[CURLOPT_PROTOCOLS] = CURLPROTO_HTTPS;
-            $options[CURLOPT_REDIR_PROTOCOLS] = CURLPROTO_HTTPS;
+            $protocol = str_starts_with(strtolower($request->url), 'http://')
+                ? CURLPROTO_HTTP
+                : CURLPROTO_HTTPS;
+            $options[CURLOPT_PROTOCOLS] = $protocol;
+            $options[CURLOPT_REDIR_PROTOCOLS] = $protocol;
         }
 
         return $options;

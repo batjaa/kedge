@@ -104,8 +104,19 @@ class GuardedFetcher
             $this->blocked(BlockReason::DisallowedScheme, $url, 'URL could not be parsed.');
         }
 
+        // TEST-ONLY escape hatch (FETCH_ALLOW_HOSTS — empty in every real
+        // deployment, see config/kedge.php): an explicitly allowlisted host skips
+        // the private-address rejection below and may be fetched over plain http,
+        // so the Playwright journeys (#26, #39) can import a fixture served on
+        // loopback. Everything else — redirect re-vetting (a hop OFF the
+        // allowlisted host runs the full guard), size caps, timeouts — still
+        // applies.
+        $allowlistedHost = isset($parts['host'])
+            && $this->isAllowlistedHost($this->normalizeHost($parts['host']));
+
         $scheme = strtolower($parts['scheme']);
-        if (! in_array($scheme, config('kedge.fetch.allowed_schemes'), true)) {
+        if (! in_array($scheme, config('kedge.fetch.allowed_schemes'), true)
+            && ! ($allowlistedHost && $scheme === 'http')) {
             $this->blocked(BlockReason::DisallowedScheme, $url, "Scheme '{$scheme}' is not allowed.");
         }
 
@@ -114,20 +125,35 @@ class GuardedFetcher
         }
 
         $host = $this->normalizeHost($parts['host']);
-        $port = $parts['port'] ?? 443;
+        $port = $parts['port'] ?? ($scheme === 'http' ? 80 : 443);
 
         $ips = $this->addressesFor($host, $url);
 
-        foreach ($ips as $ip) {
-            if (! $this->addressGuard->isAllowed($ip)) {
-                $this->blocked(BlockReason::PrivateAddress, $url, 'Host resolves to a private or reserved address.', [
-                    'host' => $host,
-                    'resolved_ip' => $ip,
-                ]);
+        if (! $allowlistedHost) {
+            foreach ($ips as $ip) {
+                if (! $this->addressGuard->isAllowed($ip)) {
+                    $this->blocked(BlockReason::PrivateAddress, $url, 'Host resolves to a private or reserved address.', [
+                        'host' => $host,
+                        'resolved_ip' => $ip,
+                    ]);
+                }
             }
         }
 
         return new PinnedRequest($url, $host, $port, $ips, $timeout, $connectTimeout, $headers);
+    }
+
+    /**
+     * True only when the operator explicitly listed this host in
+     * FETCH_ALLOW_HOSTS (test-only; empty by default, so this is always false in
+     * a real deployment).
+     */
+    private function isAllowlistedHost(string $host): bool
+    {
+        /** @var list<string> $hosts */
+        $hosts = config('kedge.fetch.allow_hosts', []);
+
+        return $hosts !== [] && in_array(strtolower($host), $hosts, true);
     }
 
     /**
