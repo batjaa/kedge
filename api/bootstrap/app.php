@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureDemoModeEnabled;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -22,6 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // its leading/trailing whitespace would alter the rendered document and its
         // content_hash. Exempt it from the global TrimStrings middleware.
         $middleware->trimStrings(except: ['content']);
+
+        // Instant demo mode is SaaS-only (SPEC §10.3, #25): this alias 404s the
+        // demo + claim routes on a self-hosted instance, per request.
+        $middleware->alias(['demo.enabled' => EnsureDemoModeEnabled::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // The API is a headless JSON backend: versioned routes and the

@@ -9,6 +9,7 @@ use App\Enums\SourceType;
 use App\Enums\SyncStatus;
 use App\Models\Document;
 use App\Models\Workspace;
+use App\Services\SystemWorkspace;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -53,6 +54,20 @@ class DocumentFactory extends Factory
             'status' => DocumentStatus::Failed,
             'last_sync_status' => SyncStatus::Failed,
             'sync_error' => $error,
+        ]);
+    }
+
+    /**
+     * A demo document (SPEC 10.3, #25): owned by the reserved system workspace,
+     * no creator, with a TTL. `$expiresAt` defaults to the configured TTL ahead;
+     * pass a past time to model an expired one for the prune.
+     */
+    public function demo(?\DateTimeInterface $expiresAt = null): static
+    {
+        return $this->state(fn () => [
+            'workspace_id' => app(SystemWorkspace::class)->id(),
+            'created_by' => null,
+            'expires_at' => $expiresAt ?? now()->addHours((int) config('kedge.demo.ttl_hours')),
         ]);
     }
 }

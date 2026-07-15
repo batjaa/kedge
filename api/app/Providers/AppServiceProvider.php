@@ -11,6 +11,7 @@ use App\Services\Import\Connectors\GithubPatConnector;
 use App\Services\Import\Connectors\GithubPublicConnector;
 use App\Services\Import\Connectors\RawUrlConnector;
 use App\Services\Import\Connectors\UploadConnector;
+use App\Services\SystemWorkspace;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -29,6 +30,11 @@ class AppServiceProvider extends ServiceProvider
         // AddressGuard are plain autowired singletons — no binding needed.
         $this->app->bind(DnsResolver::class, SystemDnsResolver::class);
         $this->app->bind(HttpTransport::class, CurlHttpTransport::class);
+
+        // The reserved demo workspace (#25) is resolved once and memoized, so
+        // Document::isDemo() — hit on every shared-doc read — costs at most one
+        // query per request.
+        $this->app->singleton(SystemWorkspace::class);
 
         // The connector set (SPEC 5.1), most-specific first: GitHub blob URLs route
         // to GitHub before the catch-all raw-URL connector claims them. Upload never
@@ -91,6 +97,18 @@ class AppServiceProvider extends ServiceProvider
         // one visitor refreshing a doc can't be starved by another.
         RateLimiter::for('shared-read', function (Request $request) {
             return Limit::perMinute(60)->by($request->ip());
+        });
+
+        // Instant demo mode is an unauthenticated, public-internet abuse surface
+        // (SPEC §10.3, §13), so its limiter is the most aggressive: strictly
+        // per-IP, with a burst-per-minute AND a per-day ceiling (each anonymous
+        // POST spawns a guarded outbound fetch + a queued import). The numbers are
+        // config so Launch can tune them without a deploy.
+        RateLimiter::for('demo', function (Request $request) {
+            return [
+                Limit::perMinute((int) config('kedge.demo.rate_per_minute'))->by($request->ip()),
+                Limit::perDay((int) config('kedge.demo.rate_per_day'))->by($request->ip()),
+            ];
         });
     }
 }
