@@ -79,6 +79,16 @@ For the SaaS split-domain / self-host topologies, point Homepage URL at the web
 origin, the callback URL at `<API origin>/auth/github/callback`, and set
 `FRONTEND_URL` to the web origin.
 
+### Private-repo imports (per-workspace PAT)
+
+The `/settings` page connects a GitHub personal access token for importing
+private files. Its "create a token" link deep-links to GitHub's **fine-grained
+token** form pre-filled with the minimum Kedge needs (`contents=read` — Metadata
+read is implied; 90-day expiry) — the user only picks **"Only select
+repositories"**. Classic tokens also work as a fallback
+(`https://github.com/settings/tokens/new?scopes=repo&description=Kedge+imports`),
+but the `repo` scope is much broader than Kedge uses — prefer fine-grained.
+
 ## Test & lint
 
 ```bash

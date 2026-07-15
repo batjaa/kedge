@@ -14,6 +14,17 @@ import {
 // echoed back), and removes one. The token is sent once and never returned.
 // DESIGN.md tokens, matching the share panel.
 
+// Deep-link to GitHub's fine-grained token form pre-filled with the MINIMUM
+// Kedge needs (#43): Contents read-only (Metadata read is implied), a bounded
+// expiry, and a recognizable name. Repository selection can't be pre-filled —
+// the copy below tells the user to pick "Only select repositories".
+const NEW_TOKEN_URL =
+  'https://github.com/settings/personal-access-tokens/new' +
+  '?name=Kedge%20imports' +
+  '&description=Read-only%20access%20so%20Kedge%20can%20import%20specs%20for%20review.' +
+  '&contents=read' +
+  '&expires_in=90';
+
 export function IntegrationsPanel() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,15 +94,21 @@ export function IntegrationsPanel() {
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
         Connect a{' '}
         <a
-          href="https://github.com/settings/personal-access-tokens"
+          href={NEW_TOKEN_URL}
           target="_blank"
           rel="noreferrer"
           className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
         >
-          personal access token
+          fine-grained personal access token
         </a>{' '}
-        to import files from private repositories. The token is encrypted and never shown again —
-        remove it any time.
+        to import files from private repositories. The link pre-selects the minimum Kedge needs
+        (<span className="font-medium text-zinc-700 dark:text-zinc-300">Contents: read-only</span>)
+        — just choose{' '}
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+          &ldquo;Only select repositories&rdquo;
+        </span>{' '}
+        and pick the repos to review. The token is encrypted and never shown again — remove it any
+        time.
       </p>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
