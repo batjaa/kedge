@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDocument } from '@/lib/documents';
-import { renderMarkdown } from '@/lib/render-markdown';
+import { DocumentBody } from '@/components/app/document-body';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { ImportFailed } from '@/components/app/import-failed';
 import { DocumentShares } from '@/components/app/document-shares';
@@ -9,10 +9,10 @@ import { ImportWarnings } from '@/components/app/import-warnings';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
-// states — importing (poll), failed (retry CTA), ready (rendered markdown) —
-// inside the authenticated shell. Markdown-level rendering only; the hardened
-// MDX pipeline (#20) and diagrams (#21) widen this later. Never cached: an
-// import in flight must re-read on every navigation.
+// states — importing (poll), failed (retry CTA), ready (rendered body) — inside
+// the authenticated shell. The body goes through the shared DocumentBody, which
+// picks markdown vs. the hardened MDX pipeline by format + mdx_ok (#20). Never
+// cached: an import in flight must re-read on every navigation.
 export const dynamic = 'force-dynamic';
 
 export default async function DocumentPage({
@@ -68,9 +68,11 @@ export default async function DocumentPage({
           <ImportWarnings
             warnings={document.current_version.import_warnings ?? []}
           />
-          <article className="prose max-w-none">
-            {await renderMarkdown(document.current_version.content)}
-          </article>
+          <DocumentBody
+            format={document.format}
+            mdxOk={document.current_version.mdx_ok}
+            content={document.current_version.content}
+          />
         </>
       ) : null}
 

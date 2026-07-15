@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import { getSharedDocument } from '@/lib/shared-document';
-import { renderMarkdown } from '@/lib/render-markdown';
+import { DocumentBody } from '@/components/app/document-body';
 import { SharedLinkGone } from '@/components/shared/shared-link-gone';
 
 // The public, read-only share surface (SPEC 10.2, ticket #24). Anonymous — no
-// auth, no session — rendering the doc through the same safe interim renderer as
-// the authenticated page. A revoked / expired / unknown token lands on the
-// friendly gone page, never a raw error. `noindex` is enforced by the /shared
-// layout (meta robots) + next.config (X-Robots-Tag header).
+// auth, no session — rendering the doc through the SAME DocumentBody as the
+// authenticated page, so an imported .mdx doc is hardened identically here (SPEC
+// §6.1). A revoked / expired / unknown token lands on the friendly gone page,
+// never a raw error. `noindex` is enforced by the /shared layout (meta robots) +
+// next.config (X-Robots-Tag header).
 //
 // Never cached: a revoked or expired link must go dark on the very next open.
 export const dynamic = 'force-dynamic';
@@ -55,9 +56,11 @@ export default async function SharedDocumentPage({
       </header>
 
       {doc.status === 'ready' && doc.current_version ? (
-        <article className="prose max-w-none">
-          {await renderMarkdown(doc.current_version.content)}
-        </article>
+        <DocumentBody
+          format={doc.format}
+          mdxOk={doc.current_version.mdx_ok}
+          content={doc.current_version.content}
+        />
       ) : (
         <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           This document is still being prepared. Refresh in a moment.

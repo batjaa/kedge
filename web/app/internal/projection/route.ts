@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorized, PROJECTION_SECRET_HEADER } from '@/lib/projection-auth';
 import { project } from '@/lib/projection';
+import { validateMdx } from '@/lib/mdx';
 
 // Internal projection service (SPEC §5.4). The API's import job POSTs normalized
 // content here and stores the returned plain_text + projection_version on the
@@ -32,13 +33,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'content must be a string' }, { status: 400 });
   }
 
+  // Format decides whether mdx_ok is a real gate. Only `mdx` content is compiled
+  // and validated; `md`/`html` always parse, so mdx_ok stays true (SPEC §5.2).
+  const format = (body as { format?: unknown } | null)?.format;
+
   try {
-    const { plainText, projectionVersion, mdxOk, warnings } = project(content);
+    const { plainText, projectionVersion, warnings } = project(content);
+
+    // The same hardened compile the page renders through is the MDX validator:
+    // a rejected construct or a syntax error is mdx_ok=false, which the API
+    // stores and the doc page reads to render the plain-markdown fallback (SPEC
+    // §6.1) — without the page ever recompiling to find out.
+    let mdxOk = true;
+    const allWarnings = [...warnings];
+    if (format === 'mdx') {
+      const validation = await validateMdx(content);
+      mdxOk = validation.ok;
+      allWarnings.push(...validation.warnings);
+    }
+
     return NextResponse.json({
       plain_text: plainText,
       projection_version: projectionVersion,
       mdx_ok: mdxOk,
-      warnings,
+      warnings: allWarnings,
     });
   } catch {
     // A projection failure is a transient import failure — the API retries — never

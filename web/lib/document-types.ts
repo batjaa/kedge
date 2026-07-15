@@ -21,10 +21,16 @@ export interface ImportWarning {
 export interface DocumentVersion {
   id: number;
   content_hash: string;
-  /** content_normalized — the markdown the reading surface renders. */
+  /** content_normalized — the markdown/MDX the reading surface renders. */
   content: string;
   /** What didn't survive normalization; always present, empty when clean. */
   import_warnings: ImportWarning[];
+  /**
+   * Whether this version's MDX compiled (SPEC §6.1). `null` for non-MDX formats
+   * (not applicable); `false` routes the doc to the plain-markdown fallback +
+   * banner. Set by the projection endpoint's real compile validation (#20).
+   */
+  mdx_ok: boolean | null;
   source_version: string | null;
   synced_at: string | null;
 }
