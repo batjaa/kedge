@@ -5,8 +5,12 @@ import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit } from 'unist-util-visit';
 import type { Nodes } from 'hast';
 import { createRemarkProcessor } from './pipeline';
+import { remarkDiagramsHast } from './remark-diagrams';
+import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
 
-// INTERIM markdown renderer for imported documents (ticket #17 tracer bullet).
+// Markdown renderer for imported documents — the safe, markdown-level path used
+// for `.md`/`.html` docs and as the plain-markdown fallback when an `.mdx`
+// document fails the hardened compile (ticket #17; diagrams added at #21).
 //
 // This is deliberately the *simple, safe* path — markdown-level rendering only.
 // The hardened MDX pipeline (import/export rejection, component allowlist) is
@@ -23,8 +27,11 @@ import { createRemarkProcessor } from './pipeline';
 //     a `[x](javascript:…)` link cannot execute script.
 //   - Output is real React elements via the jsx runtime — no
 //     dangerouslySetInnerHTML.
-// Fenced code renders as plain <pre><code> (no language execution), which also
-// satisfies the never-crash-on-unknown-fence rule.
+//   - Diagram fences (the Kroki allowlist) are retargeted to <kroki-diagram> by
+//     remarkDiagramsHast and mapped to the API-mediated diagram component, which
+//     renders a cached SVG <img> from /storage (readers never contact Kroki).
+// Non-diagram fences render as plain <pre><code> (no language execution) — the
+// same path an unknown fence language takes, so rendering never crashes on it.
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
@@ -54,6 +61,9 @@ function sanitizeUrls() {
 // projection walks (SPEC §5.4) — with the render-only hast half. Rendering and
 // projection therefore agree, by construction, on where every block begins.
 const processor = createRemarkProcessor()
+  // Retarget diagram fences to <kroki-diagram> before remark-rehype builds hast,
+  // so they carry engine + source into the render below (unknown fences untouched).
+  .use(remarkDiagramsHast)
   // No allowDangerousHtml: raw HTML nodes are dropped rather than emitted.
   .use(remarkRehype)
   .use(sanitizeUrls);
@@ -64,5 +74,12 @@ const processor = createRemarkProcessor()
  */
 export async function renderMarkdown(markdown: string): Promise<ReactNode> {
   const tree = (await processor.run(processor.parse(markdown))) as Nodes;
-  return toJsxRuntime(tree, { Fragment, jsx, jsxs });
+  return toJsxRuntime(tree, {
+    Fragment,
+    jsx,
+    jsxs,
+    // The one non-standard element the pipeline emits: diagram fences. Everything
+    // else is standard markdown hast rendered by the runtime directly.
+    components: { 'kroki-diagram': CachedKrokiDiagram },
+  });
 }
