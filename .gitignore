@@ -30,3 +30,6 @@ dist/
 
 # Personal deploy manifest (app-bootstrap)
 .batjaa/
+
+# Local one-command run (deploy/local/up.sh)
+deploy/local/.env

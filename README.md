@@ -34,6 +34,15 @@ No paid or SaaS services are required to boot or test either app.
 
 ## Quick start (repo root)
 
+Just want to *run* Kedge (any machine with git + docker)? One command — see
+[deploy/local/README.md](deploy/local/README.md):
+
+```bash
+./deploy/local/up.sh    # → http://localhost:8080
+```
+
+For hacking on it:
+
 ```bash
 npm run setup       # install deps for both apps, bootstrap api/.env + SQLite, migrate
 npm run dev         # run api (:8000) and web (:3000) together, prefixed output
