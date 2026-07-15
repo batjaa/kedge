@@ -40,6 +40,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Deterministic upstream server error (#39). A source at this path always
+  // 500s, so the import-failure journey can exercise the non-2xx transient path
+  // (RawUrlConnector → ImportFailedException) without a live flaky host. Also
+  // stands in for a broken image URL in the import-warnings journey. Stateless —
+  // every request 500s the same way, so parallel specs never race over it.
+  if (pathname === '/status/500') {
+    res.writeHead(500, { 'content-type': 'text/plain' });
+    res.end('deliberate upstream error');
+    return;
+  }
+
   // Resolve strictly inside fixtures/ — anything else is a 404.
   const relative = normalize(decodeURIComponent(pathname)).replace(/^[/\\]+/, '');
   const file = resolve(join(ROOT, relative));

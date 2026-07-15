@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Import warnings report</title>
+</head>
+<body>
+  <h1>Import warnings report</h1>
+  <p>
+    This HTML fixture is converted to markdown on import, then its images are
+    re-hosted so the document no longer depends on the origin. One image
+    resolves and is re-hosted; one 404s and is kept as a warning — honestly,
+    never silently.
+  </p>
+  <p>
+    A working image that the import re-hosts onto the media disk:
+    <img src="/pixel.png" alt="a working pixel">
+  </p>
+  <p>
+    A broken image the import cannot fetch, kept as an honest warning:
+    <img src="/status/500" alt="a broken image">
+  </p>
+  <p>The prose still renders in full once the images are handled.</p>
+</body>
+</html>

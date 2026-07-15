@@ -1,0 +1,17 @@
+# MDX component safety
+
+An imported `.mdx` document is untrusted code. The hardened compile keeps the
+allowlisted components and rewrites everything else into a neutral box — it never
+executes an unknown component, and it never crashes the page (hard rule #2).
+
+<Callout type="info" title="Allowlisted callout">
+This Callout is on the imported-MDX allowlist, so it renders as a styled
+admonition — proof an approved component survives the harden pass intact.
+</Callout>
+
+Below, a component that is NOT on the allowlist. It must degrade to a neutral
+placeholder, showing its name so the author sees what was dropped:
+
+<Fancy>this child is intentionally ignored</Fancy>
+
+Ordinary prose after the unsupported component still renders as markdown.
