@@ -57,6 +57,8 @@ Work these one per session (`/wayfinder` work mode):
 - **Destination includes launch of both editions** — this charting, 2026-07-10.
 - **Sync-agent idea stays in the fog** (v1 is pull-based via connectors) — this charting, 2026-07-10.
 - **Web-side error reporting deferred to Launch** (SaaS has no public traffic before go-live; must be off/optional self-hosted either way) — Import & render speccing, 2026-07-11.
+- **A PR is a candidate version, not a separate document** — constrains the Versions module's lineage schema (lineage-with-candidates, not linear-only) — [ADR 0001](adr/0001-pr-is-a-candidate-version.md), 2026-07-15.
+- **Organization language pinned: Project (container) + Source (origin)** — a repo is a source, never the container (monorepos and mixed-source efforts break the 1:1); issues attach as References, never import — CONTEXT.md, 2026-07-15.
 
 ## Not yet specified
 
@@ -64,6 +66,7 @@ Work these one per session (`/wayfinder` work mode):
 - **Confluence macro conversion coverage** — which macros beyond panels/code get converters; sharpens against real pages when Private sources & post-back is specced.
 - **Sync agent** (IDEAS.md) — push-model sync: a CLI/CI step pushes content to Kedge instead of Kedge pulling. May fall out of `POST /documents {content}` plus a thin CLI; post-v1 unless the destination is redrawn.
 - **Raw/source view** (IDEAS.md) — "raw view of html, md" alongside the rendered template; too blurry to phrase as a decision yet.
+- **Projects & references** (post-v1) — the Project container, attaching documents/references, and a PR-URL connector resolving to candidate versions (per ADR 0001). Language is pinned in CONTEXT.md; scheduling waits until v1's non-goal ("no folders") is deliberately reopened — nearest existing later-item is the RFC index.
 
 ## Out of scope
 

@@ -114,3 +114,8 @@
 - Required reviewers + review deadlines (approvals lite shipped instead)
 - Review analytics · RFC index (draft→accepted→superseded) — 12-month ideal
 - localStorage draft persistence is IN scope (M2); listed here previously — moved.
+
+## Decision log (domain model: projects, sources, PRs, 2026-07-15)
+
+- ✅ **A PR is a candidate version of existing documents, never a separate document** — [ADR 0001](adr/0001-pr-is-a-candidate-version.md). Decided ahead of M3 so the version-lineage schema is designed as lineage-with-candidates from the start. SPEC untouched (no v1 scope change); amend SPEC §7/§16 when M3 is specced.
+- ✅ **Organization language pinned in CONTEXT.md** (new root glossary, via /domain-modeling): **Project** = free container in a workspace (post-v1); **Source** = where content comes from — a repo is a source, never the container; issues/external links attach as **References**, never import. Roadmap fog carries the post-v1 scheduling.

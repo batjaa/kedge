@@ -1,0 +1,80 @@
+# Kedge
+
+Spec-review platform: documents are imported from wherever they live, rendered,
+and reviewed with comments that survive new versions. One context — this is the
+ubiquitous language for specs, code, and tickets.
+
+## Language
+
+### Tenancy & organization
+
+**Workspace**:
+The tenancy boundary. Every person gets a personal one; every document,
+credential, and audit record belongs to exactly one.
+_Avoid_: team, org, account
+
+**Project**:
+An organizational container inside a workspace that documents attach to
+(post-v1). A project is what you're working on, not where content lives — it
+can mix documents from many sources, and one repo can feed many projects.
+_Avoid_: repo (a repo is a Source), folder, collection
+
+**Reference**:
+A context link attached to a project or document — an issue, a discussion, an
+external page (post-v1). Rendered as a link, never imported, never anchorable.
+_Avoid_: attachment, linked document
+
+### Content & versions
+
+**Source**:
+Where a document's content comes from: a repo file, a raw URL, pasted content,
+a Confluence page. Every document has exactly one.
+_Avoid_: origin, upstream, integration
+
+**Connector**:
+The code that knows how to fetch from one kind of source and (later) post back
+to it.
+
+**Document**:
+The stable identity of one reviewable text at one source — the thing people
+share, discuss, and approve. Its content changes only by gaining versions.
+_Avoid_: file, page, spec (a spec is what the document contains)
+
+**Document Version**:
+An immutable snapshot of a document's content, created by import or re-sync,
+deduplicated by content hash. Anchors, approvals, and diffs bind to versions.
+_Avoid_: revision, snapshot
+
+**Candidate Version**:
+A proposed next version of an existing document, originating from a pull
+request (or any pre-merge state of its source). Reviewed like any version;
+when the proposal merges, comments re-anchor into the document's lineage.
+A PR is never a separate document. (See ADR 0001.)
+_Avoid_: PR doc, branch copy, draft document
+
+**Projection**:
+A version's plain-text rendering-derived substrate that anchors bind to. One
+pipeline defines what a document *is* for both reading and anchoring.
+_Avoid_: plain text (ambiguous), extraction
+
+### Access & review
+
+**Integration**:
+A workspace's stored credential for a private source (today: a GitHub PAT).
+Credentials are never shown after connect.
+_Avoid_: connection, token (the token is the secret inside it)
+
+**Share**:
+An unguessable, revocable link granting read-only access to one document. The
+token is shown once; possession of it grants exactly that document.
+_Avoid_: public link, invite
+
+**Demo Document**:
+An anonymously imported document living in the reserved system workspace with
+an expiry, viewable through its share, claimable into a real workspace
+(SaaS only).
+_Avoid_: guest doc, trial doc
+
+**Import Warning**:
+A per-version record of what didn't survive normalization (failed image, dropped
+construct) — always shown to the author, never silent.
