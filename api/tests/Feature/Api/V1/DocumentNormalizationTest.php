@@ -130,6 +130,62 @@ class DocumentNormalizationTest extends TestCase
         $this->assertEmpty(Storage::disk('public')->allFiles('media/'.$document->id));
     }
 
+    public function test_relative_links_absolutize_against_a_github_blob_source_and_compose_with_image_rehosting(): void
+    {
+        Queue::fake();
+        Storage::fake('public');
+        $this->fakeProjection();
+
+        // A GitHub blob source: the connector fetches the contents API but reports
+        // the human blob URL as finalUrl, so siblings resolve to blob URLs (#50).
+        $blobUrl = 'https://github.com/octocat/hello/blob/main/docs/rfc.md';
+        $contentsApi = 'https://api.github.com/repos/octocat/hello/contents/docs/rfc.md?ref=main';
+        // The relative image resolves against the same blob base before it is fetched.
+        $imageBlobUrl = 'https://github.com/octocat/hello/blob/main/docs/diagram.png';
+        $png = 'PNG-DIAGRAM-BYTES';
+
+        $markdown = "# RFC\n\n"
+            ."See the [sibling](./other.md) and the [parent](../CONTRIBUTING.md).\n\n"
+            .'A [fragment](#intro), an [absolute](https://example.com/x), and '
+            ."an ![diagram](./diagram.png).\n\n"
+            .'[ref]: ./reference.md';
+
+        $this->fakeFetchMap([
+            $contentsApi => new FetchResult(200, $markdown, 'text/plain', $contentsApi),
+            $imageBlobUrl => new FetchResult(200, $png, 'image/png', $imageBlobUrl),
+        ]);
+
+        $user = $this->registerUser();
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/documents', ['url' => $blobUrl])
+            ->assertStatus(202);
+
+        $document = Document::sole();
+        $this->runImport($document);
+
+        $content = (string) $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}")
+            ->assertOk()
+            ->assertJsonPath('format', 'md')
+            ->json('current_version.content');
+
+        // Relative links (inline + reference) resolve to sibling blob URLs.
+        $this->assertStringContainsString('[sibling](https://github.com/octocat/hello/blob/main/docs/other.md)', $content);
+        $this->assertStringContainsString('[parent](https://github.com/octocat/hello/blob/main/CONTRIBUTING.md)', $content);
+        $this->assertStringContainsString('[ref]: https://github.com/octocat/hello/blob/main/docs/reference.md', $content);
+        $this->assertStringNotContainsString('](./other.md)', $content);
+
+        // Self-locating hrefs are left alone.
+        $this->assertStringContainsString('[fragment](#intro)', $content);
+        $this->assertStringContainsString('[absolute](https://example.com/x)', $content);
+
+        // Composes with image re-hosting: the image was rehosted (not link-rewritten).
+        $storedPath = 'media/'.$document->id.'/'.hash('sha256', $png).'.png';
+        Storage::disk('public')->assertExists($storedPath);
+        $this->assertStringContainsString('![diagram](/storage/'.$storedPath.')', $content);
+        $this->assertStringNotContainsString('./diagram.png', $content);
+    }
+
     // ---- helpers ------------------------------------------------------------
 
     private function registerUser(string $email = 'author@example.com'): User

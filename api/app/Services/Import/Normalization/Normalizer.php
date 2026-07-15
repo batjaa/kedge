@@ -20,16 +20,22 @@ use App\Services\Import\FetchedContent;
  *   2. Re-host every referenced image ({@see ImageReHoster}) so the document
  *      doesn't depend on its origin, collecting a warning for each one that
  *      doesn't survive.
+ *   3. Absolutize relative link hrefs ({@see LinkReWriter}) against the source
+ *      URL, so `[other](./other.md)` points back at the source's sibling rather
+ *      than 404ing on the Kedge origin (#50). Runs after image re-hosting and
+ *      touches only links (never `![…]` images), so the two passes don't overlap.
  *
  * Nothing here throws for bad content: HTML that won't convert degrades to
  * recovered text, and images that won't fetch stay as their original URL — both
- * as warnings on the returned {@see NormalizationResult}.
+ * as warnings on the returned {@see NormalizationResult}. Link rewriting is a
+ * pure text transform with no fetch, so it never warns.
  */
 class Normalizer
 {
     public function __construct(
         private readonly HtmlNormalizer $html,
         private readonly ImageReHoster $images,
+        private readonly LinkReWriter $links,
     ) {}
 
     public function normalize(FetchedContent $fetched, Document $document): NormalizationResult
@@ -55,7 +61,11 @@ class Normalizer
         [$rehosted, $imageWarnings] = $this->images->rehost($markdown, $document, $fetched->finalUrl);
         $warnings = array_merge($warnings, $imageWarnings);
 
-        return new NormalizationResult($rehosted, $format, $warnings);
+        // Absolutize relative link hrefs against the source URL (#50). Non-image
+        // links only, so it composes cleanly with the image pass above.
+        $linked = $this->links->rewrite($rehosted, $fetched->finalUrl);
+
+        return new NormalizationResult($linked, $format, $warnings);
     }
 
     /**

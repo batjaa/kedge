@@ -200,6 +200,7 @@ All content normalizes to **markdown/MDX + a plain-text projection**:
 - `.html` → sanitized → `league/html-to-markdown`.
 - Confluence storage format → converters for common macros (panels → callouts, code macro → fenced blocks); unknown macros dropped **with an import warning list shown to the author**.
 - Referenced images: fetched, re-hosted to R2, URLs rewritten. **A failed image fetch is an import warning, never silent.** SVG assets are sanitized (or rasterized); all media served from a separate media origin with a tight CSP.
+- Relative link hrefs are absolutized against the **source** URL, not the Kedge origin: `[x](./other.md)` in a doc imported from `github.com/o/r/blob/main/docs/rfc.md` becomes `github.com/o/r/blob/main/docs/other.md` (a sibling of the source, itself importable), and against a raw-URL source resolves to a raw sibling. Absolute/`mailto:`/`tel:` links, protocol-relative (`//host/…`) hrefs, and pure fragments (`#section`) are left untouched; root-relative (`/x`) resolves against the source origin (RFC 3986); a pasted/uploaded doc has no source URL, so its hrefs are left as-authored. Linking to the target's page *inside Kedge* (when it too was imported) is the post-v1 Project concept, out of scope here.
 - `content_hash` = sha256(normalized content). Same hash on re-sync ⇒ no new version.
 
 ### 5.3 Import & re-sync flow
