@@ -7,6 +7,7 @@ use App\Enums\DocumentStatus;
 use App\Enums\LifecycleStatus;
 use App\Enums\SourceType;
 use App\Enums\SyncStatus;
+use App\Services\SystemWorkspace;
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -47,6 +48,18 @@ class Document extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * A demo document (SPEC §10.3, #25): one owned by the reserved system
+     * workspace, awaiting either a claim or the 48h prune. Membership in that
+     * workspace is the canonical signal — claiming moves the doc out of it (and
+     * clears {@see $expires_at}), so this flips to false the instant it is owned.
+     * Drives the claim Policy and the "Claim this doc" surface on the share page.
+     */
+    public function isDemo(): bool
+    {
+        return $this->workspace_id === app(SystemWorkspace::class)->id();
     }
 
     public function creator(): BelongsTo

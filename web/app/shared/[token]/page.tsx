@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { getSharedDocument } from '@/lib/shared-document';
 import { DocumentBody } from '@/components/app/document-body';
 import { SharedLinkGone } from '@/components/shared/shared-link-gone';
+import { ClaimCta } from '@/components/shared/claim-cta';
+import { SharedDocumentPoller } from '@/components/shared/shared-document-poller';
 
 // The public, read-only share surface (SPEC 10.2, ticket #24). Anonymous — no
 // auth, no session — rendering the doc through the SAME DocumentBody as the
@@ -43,12 +45,15 @@ export default async function SharedDocumentPage({
   }
 
   const doc = result.document;
+  // A demo doc (SPEC §10.3, #25) advertises itself as claimable and carries its
+  // id; that's the whole difference from an ordinary share on this surface.
+  const isDemo = doc.claimable === true && typeof doc.document_id === 'number';
 
   return (
     <div>
       <header className="mb-8 border-b border-zinc-900/10 pb-6 dark:border-white/10">
         <p className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-          Shared document · read-only
+          {isDemo ? 'Demo document' : 'Shared document · read-only'}
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
           {doc.title}
@@ -61,11 +66,17 @@ export default async function SharedDocumentPage({
           mdxOk={doc.current_version.mdx_ok}
           content={doc.current_version.content}
         />
+      ) : doc.status === 'importing' && isDemo ? (
+        // A freshly-pasted demo doc: poll the public surface and reveal the
+        // render the moment it lands, without asking the visitor to refresh.
+        <SharedDocumentPoller token={token} />
       ) : (
         <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           This document is still being prepared. Refresh in a moment.
         </p>
       )}
+
+      {isDemo ? <ClaimCta documentId={doc.document_id!} /> : null}
     </div>
   );
 }

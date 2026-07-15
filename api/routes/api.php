@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\ConfigController;
+use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
@@ -35,6 +37,20 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.shared.show');
     });
 
+    // ---- Instant demo mode (SPEC 10.3, #25) — SaaS-only -------------------
+    //
+    // The PLG wedge: an anonymous stranger pastes a public URL and gets the
+    // rendered doc with zero signup. Unauthenticated by design, so it is the
+    // most aggressively bounded surface in the app — `demo.enabled` 404s the
+    // whole thing on a self-hosted instance, and `throttle:demo` caps it hard
+    // per IP (public connectors only + SSRF guarding live in the controller and
+    // the shared fetcher). The claim endpoint (authenticated) lives in the
+    // guarded group below, edition-gated the same way.
+    Route::middleware(['demo.enabled', 'throttle:demo'])->group(function () {
+        Route::post('/demo/documents', [DemoDocumentController::class, 'store'])
+            ->name('api.v1.demo.documents.store');
+    });
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
 
@@ -49,6 +65,12 @@ Route::prefix('v1')->group(function () {
                 ->name('api.v1.documents.store');
             Route::post('/documents/{document}/retry', [DocumentController::class, 'retry'])
                 ->name('api.v1.documents.retry');
+
+            // Claim a demo doc into my workspace (SPEC 10.3, #25). Edition-gated
+            // like the anonymous demo import: absent entirely when self-hosted.
+            Route::post('/documents/{document}/claim', ClaimDocumentController::class)
+                ->middleware('demo.enabled')
+                ->name('api.v1.documents.claim');
         });
 
         // Share-link management (SPEC 10.2), all behind SharePolicy. Listing is a

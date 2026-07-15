@@ -36,4 +36,11 @@ export interface ValidationErrorBody {
 export interface Capabilities {
   /** One-click GitHub sign-in — true only when the API has OAuth credentials. */
   github: boolean;
+  /**
+   * Self-hosted edition (#25). Drives the anonymous home surface: false (SaaS)
+   * shows the instant-demo paste box; true keeps the sign-in redirect. Fails
+   * closed to true if the API can't be reached, so the public demo surface never
+   * shows on an instance we can't confirm is the SaaS.
+   */
+  selfHosted: boolean;
 }

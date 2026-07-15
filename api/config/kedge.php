@@ -122,4 +122,28 @@ return [
         'max_paste_bytes' => (int) env('IMPORT_MAX_PASTE_BYTES', 2 * 1024 * 1024),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Instant demo mode (PLG wedge — SaaS only, SPEC §10.3, #25)
+    |--------------------------------------------------------------------------
+    |
+    | The anonymous paste-a-URL surface. Disabled entirely when self_hosted is
+    | true — the demo endpoints 404. Every knob here is a growth/abuse lever, so
+    | it lives in config, never in code: the numbers are deliberately
+    | conservative sane-initial-defaults, tuned at Launch against real traffic
+    | (ROADMAP "Not yet specified").
+    |
+    */
+
+    'demo' => [
+        // How long an unclaimed demo doc lives before the scheduled prune reaps
+        // it (document + versions + shares), in hours. SPEC §10.3: +48h.
+        'ttl_hours' => (int) env('DEMO_TTL_HOURS', 48),
+
+        // Aggressive per-IP rate limits (SPEC §13 demo abuse): a burst-per-minute
+        // ceiling and a per-day ceiling, both keyed on the caller's IP.
+        'rate_per_minute' => (int) env('DEMO_RATE_PER_MINUTE', 5),
+        'rate_per_day' => (int) env('DEMO_RATE_PER_DAY', 40),
+    ],
+
 ];

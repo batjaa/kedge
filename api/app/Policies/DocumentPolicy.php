@@ -37,6 +37,18 @@ class DocumentPolicy
         return $this->memberOf($user, $document);
     }
 
+    /**
+     * Claim a demo document into your own workspace (SPEC §10.3, #25). Deliberately
+     * NOT a membership check — the whole point is that the doc is *not* yours yet:
+     * it lives in the reserved system workspace. Only a demo doc is claimable, so
+     * a normal document and an already-claimed one (both no longer demo) are both
+     * refused with a 403. First come, first owned.
+     */
+    public function claim(User $user, Document $document): bool
+    {
+        return $document->isDemo();
+    }
+
     private function memberOf(User $user, Document $document): bool
     {
         return $user->workspaces()

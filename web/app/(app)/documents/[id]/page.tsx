@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getDocument } from '@/lib/documents';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentPoller } from '@/components/app/document-poller';
+import { DocumentClaim } from '@/components/app/document-claim';
 import { ImportFailed } from '@/components/app/import-failed';
 import { DocumentShares } from '@/components/app/document-shares';
 import { ImportWarnings } from '@/components/app/import-warnings';
@@ -17,10 +18,29 @@ export const dynamic = 'force-dynamic';
 
 export default async function DocumentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ claim?: string }>;
 }) {
   const { id } = await params;
+  const { claim } = await searchParams;
+
+  // Claim intent (#25): a just-signed-up visitor arriving from the demo page's
+  // "Claim this doc" CTA. The doc still lives in the system workspace, so we must
+  // NOT read it as this (non-member) user yet — hand off to the client claim,
+  // which POSTs the claim and then lands on the clean, now-owned doc URL.
+  if (claim === '1') {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
+          Claiming your document
+        </h1>
+        <DocumentClaim id={Number(id)} />
+      </div>
+    );
+  }
+
   const { status, document } = await getDocument(id);
 
   // 403 (another workspace) and 404 both land on the 404 page — an id in a URL

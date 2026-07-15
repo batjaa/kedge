@@ -28,6 +28,11 @@ class ConfigController extends Controller
             'auth' => [
                 'github' => $this->github->isConfigured(),
             ],
+            // Edition (#25). The web reads this to pick the anonymous home surface:
+            // the paste-a-URL demo box on the SaaS, the sign-in redirect
+            // self-hosted. Env lives only on the API, so this is the single source
+            // of truth — the web never carries its own SELF_HOSTED var.
+            'self_hosted' => (bool) config('kedge.self_hosted'),
         ]);
     }
 }

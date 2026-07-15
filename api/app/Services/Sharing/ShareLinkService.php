@@ -27,8 +27,11 @@ class ShareLinkService
      * token — the only moment it exists in the clear. The caller surfaces it once
      * (as the share URL) and then it is unrecoverable: the row keeps only the
      * hash.
+     *
+     * `$creator` is nullable: a demo doc (#25) is imported by an anonymous
+     * visitor with no account, so the share it hands back has no creator either.
      */
-    public function issue(Document $document, User $creator, ?Carbon $expiresAt = null): IssuedShare
+    public function issue(Document $document, ?User $creator = null, ?Carbon $expiresAt = null): IssuedShare
     {
         $token = Str::random(self::TOKEN_LENGTH);
 
@@ -36,7 +39,7 @@ class ShareLinkService
             'token_hash' => Share::hashToken($token),
             'visibility' => ShareVisibility::Link,
             'expires_at' => $expiresAt,
-            'created_by' => $creator->id,
+            'created_by' => $creator?->id,
         ]);
 
         return new IssuedShare($share, $token, $this->urlFor($token));
