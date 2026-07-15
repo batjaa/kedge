@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Services\Fetch\Exceptions\BlockedUrlException;
 use App\Services\Import\DocumentImporter;
 use App\Services\Import\Exceptions\RateLimitedException;
+use App\Services\Import\Exceptions\TokenRevokedException;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -76,6 +77,12 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
             // one on the next attempt. Terminal now, no retry, no rethrow.
             $this->markFailed($e->userMessage());
             Log::warning('import.failed', $this->logContext('blocked', $e));
+        } catch (TokenRevokedException $e) {
+            // Terminal (SPEC 19 token-revoked row): a revoked/expired/under-scoped
+            // PAT won't heal on retry. Mark failed at once with the reconnect copy,
+            // no retry, no rethrow. The exception message carries no token.
+            $this->markFailed($e->userMessage());
+            Log::warning('import.failed', $this->logContext('token_revoked', $e));
         } catch (RateLimitedException $e) {
             // Not a failure (SPEC 19): back off for the honored Retry-After and
             // resume. The document stays `importing` — the web keeps polling.

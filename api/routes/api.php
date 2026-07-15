@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
@@ -62,6 +63,20 @@ Route::prefix('v1')->group(function () {
             Route::delete('/documents/{document}/shares/{share}', [ShareController::class, 'destroy'])
                 ->scopeBindings()
                 ->name('api.v1.documents.shares.destroy');
+        });
+
+        // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.
+        // The masked list is a free read; connect/disconnect share a per-user
+        // limiter (credential mutations are rare and worth bounding). Credentials
+        // are encrypted at rest and never returned — see IntegrationResource.
+        Route::get('/integrations', [IntegrationController::class, 'index'])
+            ->name('api.v1.integrations.index');
+
+        Route::middleware('throttle:integrations')->group(function () {
+            Route::post('/integrations', [IntegrationController::class, 'store'])
+                ->name('api.v1.integrations.store');
+            Route::delete('/integrations/{integration}', [IntegrationController::class, 'destroy'])
+                ->name('api.v1.integrations.destroy');
         });
     });
 });

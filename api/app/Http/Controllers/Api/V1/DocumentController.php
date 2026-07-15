@@ -71,6 +71,11 @@ class DocumentController extends Controller
 
     /**
      * A URL import: match a connector (GitHub, raw, …) and record its provenance.
+     *
+     * When the workspace has a connected GitHub PAT (#23), a github.com blob URL is
+     * imported through the authenticated connector — it reads private repos and
+     * public ones alike — and the bound integration is recorded on the document so
+     * the queued job authenticates with it.
      */
     private function createFromUrl(
         StoreDocumentRequest $request,
@@ -80,7 +85,9 @@ class DocumentController extends Controller
         TitleSynthesizer $titles,
     ): Document {
         $url = (string) $request->validated('url');
-        $connector = $registry->match($url);
+
+        $integration = $workspace->githubPatIntegration();
+        $connector = $registry->preferredMatch($url, hasGithubPat: $integration !== null);
 
         if ($connector === null) {
             throw ValidationException::withMessages([
@@ -88,9 +95,16 @@ class DocumentController extends Controller
             ]);
         }
 
+        // Bind the integration only when the PAT reader was actually chosen — a raw
+        // URL never carries one even if the workspace has a token.
+        $boundIntegration = $connector->sourceType() === SourceType::GithubPat
+            ? $integration
+            : null;
+
         return Document::create([
             'workspace_id' => $workspace->id,
             'created_by' => $user->id,
+            'integration_id' => $boundIntegration?->id,
             'source_type' => $connector->sourceType(),
             'source_url' => $url,
             'title' => $titles->filenameFrom($url),

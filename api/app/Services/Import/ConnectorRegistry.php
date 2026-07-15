@@ -4,6 +4,7 @@ namespace App\Services\Import;
 
 use App\Enums\SourceType;
 use App\Providers\AppServiceProvider;
+use App\Services\Import\Connectors\GithubPublicConnector;
 
 /**
  * The ordered set of connectors (SPEC 5.1). {@see match()} resolves a fresh import
@@ -35,6 +36,29 @@ class ConnectorRegistry
         }
 
         return null;
+    }
+
+    /**
+     * The connector to record for a fresh import, given whether the importing
+     * workspace has a connected GitHub PAT (#23). Normally the URL-only
+     * {@see match()}, but a GitHub blob URL is upgraded from the public reader to
+     * the authenticated PAT reader whenever the workspace has a token: a PAT reads
+     * private repos and public ones alike, on the higher authenticated rate
+     * budget. Raw and upload sources are never upgraded.
+     *
+     * Plain {@see match()} still resolves the public reader for a github.com blob
+     * URL (the PAT reader is registered after it), so this preference is the only
+     * path to the authenticated connector at import-creation time.
+     */
+    public function preferredMatch(string $url, bool $hasGithubPat): ?Connector
+    {
+        $connector = $this->match($url);
+
+        if ($hasGithubPat && $connector instanceof GithubPublicConnector) {
+            return $this->forSourceType(SourceType::GithubPat);
+        }
+
+        return $connector;
     }
 
     /**

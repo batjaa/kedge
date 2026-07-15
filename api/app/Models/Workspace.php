@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\IntegrationProvider;
 use Database\Factories\WorkspaceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['name', 'slug', 'settings'])]
 class Workspace extends Model
@@ -23,6 +25,30 @@ class Workspace extends Model
             ->using(WorkspaceMember::class)
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * The credentials this workspace holds for third-party sources (SPEC §16).
+     *
+     * @return HasMany<Integration, $this>
+     */
+    public function integrations(): HasMany
+    {
+        return $this->hasMany(Integration::class);
+    }
+
+    /**
+     * The workspace's connected GitHub PAT, or null (#23). The single source of
+     * truth for "does this workspace import GitHub authenticated" — the import
+     * flow prefers the authenticated connector whenever this is non-null. The
+     * latest wins, so reconnecting (a fresh token) supersedes an older one.
+     */
+    public function githubPatIntegration(): ?Integration
+    {
+        return $this->integrations()
+            ->where('provider', IntegrationProvider::GithubPat)
+            ->latest('id')
+            ->first();
     }
 
     /**
