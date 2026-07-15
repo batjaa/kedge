@@ -235,6 +235,74 @@ class GuardedFetcherTest extends TestCase
         $this->assertSame(BlockReason::TooManyRedirects, $e->reason);
     }
 
+    // --- Test-only host allowlist (FETCH_ALLOW_HOSTS, #26/#39) ---------------
+
+    public function test_allow_hosts_is_off_by_default(): void
+    {
+        // The escape hatch must be opt-in per env: with FETCH_ALLOW_HOSTS unset
+        // the config is empty, loopback stays private-address-blocked over https,
+        // and plain http stays scheme-blocked — the guard is exactly as specced.
+        $this->assertSame([], config('kedge.fetch.allow_hosts'));
+
+        $e = $this->assertBlocks('https://127.0.0.1:4801/fixture.md');
+        $this->assertSame(BlockReason::PrivateAddress, $e->reason);
+
+        $e = $this->assertBlocks('http://127.0.0.1:4801/fixture.md');
+        $this->assertSame(BlockReason::DisallowedScheme, $e->reason);
+
+        $this->assertSame([], $this->transport->requests, 'no connection should be attempted');
+    }
+
+    public function test_allowlisted_host_may_be_fetched_over_loopback_http(): void
+    {
+        config(['kedge.fetch.allow_hosts' => ['127.0.0.1']]);
+        $this->transport->respond(200, ['Content-Type' => 'text/markdown'], '# Fixture');
+
+        $result = $this->fetcher()->fetch('http://127.0.0.1:4801/fixture.md');
+
+        $this->assertSame('# Fixture', $result->body);
+
+        // Still pinned like any other fetch — to the literal loopback address and
+        // the URL's explicit port.
+        $request = $this->transport->lastRequest();
+        $this->assertSame(['127.0.0.1'], $request->pinnedIps);
+        $this->assertSame(4801, $request->port);
+    }
+
+    public function test_allowlist_exempts_only_the_listed_host(): void
+    {
+        config(['kedge.fetch.allow_hosts' => ['127.0.0.1']]);
+        $this->dns->set('internal.corp', ['10.0.0.5']);
+
+        // Another private address is still blocked...
+        $e = $this->assertBlocks('https://internal.corp/secrets');
+        $this->assertSame(BlockReason::PrivateAddress, $e->reason);
+
+        // ...IPv6 loopback is not 127.0.0.1...
+        $e = $this->assertBlocks('https://[::1]/fixture.md');
+        $this->assertSame(BlockReason::PrivateAddress, $e->reason);
+
+        // ...and plain http stays scheme-blocked for unlisted hosts.
+        $e = $this->assertBlocks('http://example.com/fixture.md');
+        $this->assertSame(BlockReason::DisallowedScheme, $e->reason);
+
+        $this->assertSame([], $this->transport->requests);
+    }
+
+    public function test_redirect_off_an_allowlisted_host_still_runs_the_full_guard(): void
+    {
+        // The allowlist is per-host, per-hop: a fixture host must not become a
+        // springboard into the private network via a redirect.
+        config(['kedge.fetch.allow_hosts' => ['127.0.0.1']]);
+        $this->dns->set('internal.corp', ['10.0.0.5']);
+
+        $this->transport->redirectTo('https://internal.corp/secrets');
+
+        $e = $this->assertBlocks('http://127.0.0.1:4801/fixture.md');
+        $this->assertSame(BlockReason::PrivateAddress, $e->reason);
+        $this->assertCount(1, $this->transport->requests, 'only the allowlisted hop connected');
+    }
+
     // --- Size cap -----------------------------------------------------------
 
     public function test_rejects_oversized_response_from_content_length_without_reading_body(): void

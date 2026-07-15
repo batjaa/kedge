@@ -57,6 +57,19 @@ return [
 
         // Scheme allowlist. https-only by acceptance criteria (issue #16).
         'allowed_schemes' => ['https'],
+
+        // TEST-ONLY escape hatch (#26, reused by #39): hostnames the guard exempts
+        // from the private-address rejection (plain http is also permitted for
+        // them), so the Playwright journeys can import a fixture document served
+        // on loopback. Comma-separated, EMPTY by default — the guard behaves
+        // exactly as specced unless an operator explicitly sets it. It must never
+        // be set in production or any real deployment: a listed host is a tunnel
+        // through the SSRF guard. Redirects OFF an allowlisted host still run the
+        // full guard.
+        'allow_hosts' => array_values(array_filter(array_map(
+            fn (string $host): string => strtolower(trim($host)),
+            explode(',', (string) env('FETCH_ALLOW_HOSTS', '')),
+        ), fn (string $host): bool => $host !== '')),
     ],
 
     /*
