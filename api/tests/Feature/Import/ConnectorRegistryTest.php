@@ -4,6 +4,7 @@ namespace Tests\Feature\Import;
 
 use App\Enums\SourceType;
 use App\Services\Import\ConnectorRegistry;
+use App\Services\Import\Connectors\GithubPatConnector;
 use App\Services\Import\Connectors\GithubPublicConnector;
 use App\Services\Import\Connectors\RawUrlConnector;
 use App\Services\Import\Connectors\UploadConnector;
@@ -49,8 +50,53 @@ class ConnectorRegistryTest extends TestCase
         $registry = $this->registry();
 
         $this->assertInstanceOf(GithubPublicConnector::class, $registry->forSourceType(SourceType::GithubPublic));
+        $this->assertInstanceOf(GithubPatConnector::class, $registry->forSourceType(SourceType::GithubPat));
         $this->assertInstanceOf(UploadConnector::class, $registry->forSourceType(SourceType::Upload));
         $this->assertInstanceOf(RawUrlConnector::class, $registry->forSourceType(SourceType::RawUrl));
+    }
+
+    public function test_plain_match_never_returns_the_pat_connector(): void
+    {
+        // The PAT reader is registered after the public one, so a URL-only match of
+        // a github blob URL always resolves the public reader — the authenticated
+        // reader is reached only by preference (a workspace with a token).
+        $this->assertInstanceOf(
+            GithubPublicConnector::class,
+            $this->registry()->match('https://github.com/o/r/blob/main/SPEC.md'),
+        );
+    }
+
+    // --- Workspace-aware preference (#23) -----------------------------------
+
+    public function test_preferred_match_upgrades_a_github_url_to_pat_when_the_workspace_has_a_token(): void
+    {
+        $connector = $this->registry()->preferredMatch(
+            'https://github.com/o/r/blob/main/SPEC.md',
+            hasGithubPat: true,
+        );
+
+        $this->assertInstanceOf(GithubPatConnector::class, $connector);
+    }
+
+    public function test_preferred_match_keeps_the_public_reader_when_there_is_no_token(): void
+    {
+        $connector = $this->registry()->preferredMatch(
+            'https://github.com/o/r/blob/main/SPEC.md',
+            hasGithubPat: false,
+        );
+
+        $this->assertInstanceOf(GithubPublicConnector::class, $connector);
+    }
+
+    public function test_preferred_match_never_upgrades_a_non_github_url_even_with_a_token(): void
+    {
+        // A raw URL is not a GitHub file; a workspace token must not hijack it.
+        $connector = $this->registry()->preferredMatch(
+            'https://raw.githubusercontent.com/o/r/main/README.md',
+            hasGithubPat: true,
+        );
+
+        $this->assertInstanceOf(RawUrlConnector::class, $connector);
     }
 
     public function test_upload_is_never_matched_by_url(): void

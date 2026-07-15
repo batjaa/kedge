@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Document;
+use App\Models\Integration;
 use App\Models\Share;
 use App\Models\User;
 use App\Services\RegistrationService;
@@ -133,6 +134,80 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     /**
+     * Integration credentials (SPEC §16, ticket #23) are workspace-scoped like
+     * shares. Delete resolves a row by id, so it obeys the full guest/other/owner
+     * rule: a foreign integration id is never an access path.
+     */
+    #[DataProvider('documentRoleMatrix')]
+    public function test_integration_delete_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $integration] = $this->ownedIntegration();
+        $this->actAsDocumentRole($role, $owner);
+
+        // The owning member is authorized → the credential is removed, so 204.
+        $expected = $expectedStatus === 200 ? 204 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->deleteJson("/api/v1/integrations/{$integration->id}")
+            ->assertStatus($expected);
+    }
+
+    /**
+     * List and connect are scoped to the caller's own workspace, so cross-workspace
+     * reach is structural — a member of another workspace can't even see this
+     * workspace's connection, let alone use its id. Both still require a session.
+     * (One request per test: mixing an anonymous request with actingAs in a single
+     * method leaves the resolved guard stuck on the guest.)
+     */
+    public function test_integration_list_requires_a_session(): void
+    {
+        $this->ownedIntegration();
+
+        $this->fromWebApp()->getJson('/api/v1/integrations')->assertUnauthorized();
+    }
+
+    public function test_integration_list_shows_only_the_callers_own_workspace(): void
+    {
+        [$owner] = $this->ownedIntegration();
+
+        $this->actingAs($owner)->fromWebApp()
+            ->getJson('/api/v1/integrations')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_a_member_of_another_workspace_never_sees_this_workspaces_integration(): void
+    {
+        [$owner] = $this->ownedIntegration();
+        $this->actAsDocumentRole('other', $owner);
+
+        $this->fromWebApp()
+            ->getJson('/api/v1/integrations')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_integration_create_requires_a_session(): void
+    {
+        $this->fromWebApp()
+            ->postJson('/api/v1/integrations', ['token' => 'ghp_'.str_repeat('x', 36)])
+            ->assertUnauthorized();
+    }
+
+    public function test_a_member_can_connect_an_integration_in_their_own_workspace(): void
+    {
+        $member = app(RegistrationService::class)->register(
+            name: 'Member User',
+            email: 'member@example.com',
+            password: 'correct-horse-battery',
+        );
+
+        $this->actingAs($member)->fromWebApp()
+            ->postJson('/api/v1/integrations', ['token' => 'ghp_'.str_repeat('x', 36)])
+            ->assertStatus(201);
+    }
+
+    /**
      * The core share-visitor IDOR row (SPEC 10.2, ticket #24): the token grants
      * exactly one document and no traversal — not the document's own API, not
      * another token, not a session.
@@ -184,6 +259,24 @@ class AuthorizationMatrixTest extends TestCase
             ->create(['created_by' => $owner->id]);
 
         return [$owner, $document];
+    }
+
+    /**
+     * @return array{User, Integration}
+     */
+    private function ownedIntegration(): array
+    {
+        $owner = app(RegistrationService::class)->register(
+            name: 'Owner User',
+            email: 'owner@example.com',
+            password: 'correct-horse-battery',
+        );
+
+        $integration = Integration::factory()
+            ->for($owner->personalWorkspace())
+            ->create();
+
+        return [$owner, $integration];
     }
 
     private function actAsDocumentRole(string $role, User $owner): void
