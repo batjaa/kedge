@@ -30,7 +30,7 @@ export async function resolveDiagram({
 }): Promise<ReactElement> {
   const result = await fetchDiagramUrl(engine, source);
   if (!result.ok || !result.url) {
-    return <DiagramSourceError engine={engine} source={source} />;
+    return <DiagramSourceError engine={engine} source={source} errorDetail={result.errorDetail} />;
   }
   return <DiagramFigure engine={engine} src={result.url} />;
 }

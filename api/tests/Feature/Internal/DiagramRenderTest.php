@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Internal;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -106,6 +107,69 @@ class DiagramRenderTest extends TestCase
         Log::shouldHaveReceived('warning')->withArgs(
             fn (string $event, array $ctx = []) => $event === 'kroki.render_failed' && ($ctx['engine'] ?? null) === 'mermaid',
         )->once();
+    }
+
+    public function test_a_kroki_render_failure_surfaces_the_sanitized_error_detail(): void
+    {
+        Storage::fake('public');
+        Log::spy();
+        // A realistic bad-source reply: Kroki 400s with a multi-line, ANSI-coloured
+        // reason. It is UNTRUSTED text, so the endpoint must surface it flattened
+        // to a single control-char-free line (issue #56) and log a short form.
+        $body = "Parse error on line 2:\n\tExpected 'end'\x1B[31m here\x1B[0m";
+        Http::fake(['*' => Http::response($body, 400)]);
+
+        $response = $this->render(['engine' => 'mermaid', 'source' => 'not a diagram']);
+
+        $response->assertStatus(422)->assertJsonPath('error', 'render_failed');
+
+        $detail = $response->json('detail');
+        $this->assertIsString($detail);
+        $this->assertStringContainsString('Parse error on line 2:', $detail);
+        $this->assertStringContainsString("Expected 'end'", $detail);
+        // Flattened and control-char-free — no raw newline or ANSI escape survives.
+        $this->assertStringNotContainsString("\n", $detail);
+        $this->assertStringNotContainsString("\x1B", $detail);
+
+        // The same reason reaches the log context, in short form (SPEC §19).
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn (string $event, array $ctx = []) => $event === 'kroki.render_failed'
+                && str_contains($ctx['detail'] ?? '', 'Parse error on line 2:'),
+        )->once();
+    }
+
+    public function test_the_surfaced_detail_strips_control_chars_and_truncates(): void
+    {
+        Storage::fake('public');
+        // A hostile/oversized reason: null bytes and escapes embedded in a body far
+        // longer than the cap. The surfaced detail is hard-bounded and clean.
+        $body = "start\x00\x07 ".str_repeat('A', 800)." \x1Bend";
+        Http::fake(['*' => Http::response($body, 400)]);
+
+        $detail = $this->render(['engine' => 'graphviz', 'source' => 'x'])->json('detail');
+
+        $this->assertIsString($detail);
+        $this->assertLessThanOrEqual(500, mb_strlen($detail));
+        $this->assertDoesNotMatchRegularExpression('/[\x00-\x1F\x7F]/', $detail);
+    }
+
+    public function test_a_network_failure_surfaces_a_generic_detail_without_leaking_internals(): void
+    {
+        Storage::fake('public');
+        // Kroki unreachable/timeout: the low-level message must never reach the
+        // page — the author gets a generic detail, the internals stay in the log.
+        Http::fake(function () {
+            throw new ConnectionException('cURL error 28: Connection to kroki:8000 timed out');
+        });
+
+        $response = $this->render(['engine' => 'mermaid', 'source' => 'x']);
+
+        $response->assertStatus(422)->assertJsonPath('error', 'render_failed');
+        $this->assertSame('diagram service unreachable', $response->json('detail'));
+
+        $content = (string) $response->getContent();
+        $this->assertStringNotContainsString('kroki:8000', $content);
+        $this->assertStringNotContainsString('cURL', $content);
     }
 
     public function test_a_non_svg_kroki_body_is_treated_as_a_render_failure(): void

@@ -35,9 +35,18 @@ class DiagramController extends Controller
 
         try {
             $url = $renderer->render($engine, $source);
-        } catch (DiagramRenderException) {
+        } catch (DiagramRenderException $e) {
             // Never-crash contract: the web renders its show-source panel on 422.
-            return response()->json(['error' => 'render_failed'], 422);
+            // When the renderer captured a safe reason (issue #56) — Kroki's
+            // sanitized error body, or a generic "unreachable" — pass it through
+            // as `detail` so the panel can show it beside the source. Absent
+            // detail keeps the response byte-for-byte as before.
+            $payload = ['error' => 'render_failed'];
+            if ($e->detail !== null && $e->detail !== '') {
+                $payload['detail'] = $e->detail;
+            }
+
+            return response()->json($payload, 422);
         }
 
         return response()->json(['url' => $url]);

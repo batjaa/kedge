@@ -27,8 +27,23 @@ export function DiagramSkeleton({ engine }: { engine: string }) {
  * The never-crash error panel (hard rule #2): a Kroki failure or a bad-source
  * diagram shows its raw source with an error chip, so a diagram hiccup can never
  * take down the page. Rose = the DESIGN.md danger hue, confined to the chip/ring.
+ *
+ * `errorDetail` is the renderer's own reason (issue #56) — Kroki's sanitized
+ * error body (e.g. mermaid "Parse error on line 2: …") or a generic "diagram
+ * service unreachable" — shown between the chip and the source so the author can
+ * fix the diagram without leaving the page. It is UNTRUSTED text: rendered as a
+ * plain string child, which React escapes, so an injected tag shows as literal
+ * text and never as markup. Absent detail → the panel renders exactly as before.
  */
-export function DiagramSourceError({ engine, source }: { engine: string; source: string }) {
+export function DiagramSourceError({
+  engine,
+  source,
+  errorDetail,
+}: {
+  engine: string;
+  source: string;
+  errorDetail?: string;
+}) {
   return (
     <div className="not-prose my-6 rounded-2xl bg-rose-400/5 p-4 ring-1 ring-inset ring-rose-500/20">
       <p className="mb-2 inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">
@@ -37,6 +52,14 @@ export function DiagramSourceError({ engine, source }: { engine: string; source:
         </span>
         render failed — showing source
       </p>
+      {errorDetail ? (
+        <p className="mb-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+          <span className="mr-1 font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            Renderer said:
+          </span>
+          {errorDetail}
+        </p>
+      ) : null}
       <pre className="overflow-x-auto font-mono text-xs text-zinc-600 dark:text-zinc-400">{source}</pre>
     </div>
   );

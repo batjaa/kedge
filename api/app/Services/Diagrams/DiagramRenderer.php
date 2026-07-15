@@ -42,6 +42,21 @@ use Throwable;
 class DiagramRenderer
 {
     /**
+     * Max characters of Kroki's error body ever surfaced to the author or logged
+     * (issue #56). A hard ceiling on untrusted text — a hostile diagram can make
+     * Kroki spew, and this bounds it before it reaches a log line or a page.
+     */
+    private const MAX_DETAIL_CHARS = 500;
+
+    /**
+     * What the author sees when the failure is infrastructure, not their diagram
+     * (Kroki down, timeout, unexpected client error). Deliberately generic — the
+     * real message goes to the log, never to the page, so no internal endpoint,
+     * host, or stack detail leaks (issue #56).
+     */
+    private const UNREACHABLE_DETAIL = 'diagram service unreachable';
+
+    /**
      * Return the public URL of the cached SVG for this diagram, rendering it via
      * Kroki on a cache miss. The engine MUST already be allowlisted (the caller
      * checks {@see DiagramEngines}); this method assumes it and never forwards an
@@ -83,30 +98,46 @@ class DiagramRenderer
         $url = config('kedge.kroki.url')."/{$engine}/svg/".$this->encode($source);
 
         try {
+            // No Accept header on purpose: the `/svg/` path already fixes the
+            // SUCCESS format (Kroki always returns SVG here), while requesting
+            // `image/svg+xml` would make Kroki answer a FAILURE with an SVG
+            // "error card" whose human-readable reason is buried in <text>
+            // markup — useless as a surfaced detail (issue #56). Omitting Accept
+            // makes Kroki return the plain-text reason (e.g. mermaid "Error 400:
+            // … No diagram type detected …") that authors can act on.
             $response = Http::connectTimeout((float) config('kedge.kroki.connect_timeout'))
                 ->timeout((float) config('kedge.kroki.timeout'))
-                ->withHeaders(['Accept' => 'image/svg+xml'])
                 ->get($url);
         } catch (ConnectionException $e) {
-            $this->fail($engine, 'unreachable', $e->getMessage());
+            // Infrastructure failure: the exception message is operator-only, so
+            // the author gets a generic detail (no internal host/stack leaks).
+            $this->fail($engine, 'unreachable', $e->getMessage(), self::UNREACHABLE_DETAIL);
         } catch (Throwable $e) {
-            $this->fail($engine, 'error', $e->getMessage());
+            $this->fail($engine, 'error', $e->getMessage(), self::UNREACHABLE_DETAIL);
         }
 
         if (! $response->successful()) {
             // Kroki answers a bad-source diagram with a non-2xx and a plain-text
-            // reason — the ordinary "this diagram won't render" path.
-            $this->fail($engine, 'http_'.$response->status(), $this->reason($response->body()));
+            // reason (e.g. mermaid "Parse error on line 2: …") — the ordinary
+            // "this diagram won't render" path. Its body is UNTRUSTED (Kroki
+            // parsed untrusted source), so we sanitize it before it becomes the
+            // author's detail AND the log detail (issue #56).
+            $detail = $this->sanitizeDetail($response->body());
+            $this->fail($engine, 'http_'.$response->status(), $detail, $detail);
         }
 
         $svg = $response->body();
 
         if (strlen($svg) > (int) config('kedge.kroki.max_bytes')) {
+            // Our own sanity cap, not anything the author can fix — no surfaced detail.
             $this->fail($engine, 'too_large', strlen($svg).' bytes');
         }
 
         if (! str_contains($svg, '<svg')) {
-            $this->fail($engine, 'not_svg', $this->reason($svg));
+            // A 2xx body that isn't SVG is still Kroki telling us something the
+            // author may act on — surface the sanitized body, same as a non-2xx.
+            $detail = $this->sanitizeDetail($svg);
+            $this->fail($engine, 'not_svg', $detail, $detail);
         }
 
         return $svg;
@@ -114,19 +145,26 @@ class DiagramRenderer
 
     /**
      * Log `kroki.render_failed` (SPEC §19) and throw. Never lets the raw diagram
-     * source into the log — only the engine and a short reason.
+     * source into the log — only the engine, a short reason, and a short form of
+     * the (already-sanitized) detail. `$publicDetail` is what the web may surface
+     * beside the source (issue #56): Kroki's sanitized error body for a bad
+     * diagram, a generic string for an infrastructure failure, or null when
+     * nothing is safe or useful to show (the panel then renders exactly as before).
      *
      * @return never
      */
-    private function fail(string $engine, string $reason, string $detail): void
+    private function fail(string $engine, string $reason, string $logDetail, ?string $publicDetail = null): void
     {
         Log::warning('kroki.render_failed', [
             'engine' => $engine,
             'reason' => $reason,
-            'detail' => mb_substr($detail, 0, 200),
+            'detail' => mb_substr($logDetail, 0, 200),
         ]);
 
-        throw new DiagramRenderException("Kroki render failed ({$reason}) for engine {$engine}.");
+        throw new DiagramRenderException(
+            "Kroki render failed ({$reason}) for engine {$engine}.",
+            $publicDetail,
+        );
     }
 
     /**
@@ -140,10 +178,20 @@ class DiagramRenderer
         return rtrim(strtr(base64_encode(gzcompress($source, 9)), '+/', '-_'), '=');
     }
 
-    /** A short, single-line snippet of a Kroki error body for the log detail. */
-    private function reason(string $body): string
+    /**
+     * Reduce a Kroki error body to a short, single-line, plain-text detail safe
+     * to log and to surface to the author (issue #56). Kroki processes UNTRUSTED
+     * diagram source, so its response body is untrusted too: collapse all
+     * whitespace to single spaces, strip any remaining control characters, and
+     * hard-truncate. Never HTML — the web escapes it on render and the API
+     * contract stays plain text.
+     */
+    private function sanitizeDetail(string $body): string
     {
-        return trim(preg_replace('/\s+/', ' ', $body) ?? '');
+        $collapsed = preg_replace('/\s+/', ' ', $body) ?? '';
+        $stripped = preg_replace('/[\x00-\x1F\x7F]/', '', $collapsed) ?? '';
+
+        return mb_substr(trim($stripped), 0, self::MAX_DETAIL_CHARS);
     }
 
     private function disk(): Filesystem
