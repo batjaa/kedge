@@ -41,6 +41,12 @@ class Normalizer
             [$markdown, $htmlWarnings] = $this->html->toMarkdown($fetched->content);
             $warnings = array_merge($warnings, $htmlWarnings);
             $format = DocumentFormat::Html;
+        } elseif ($this->looksLikeMdx($fetched)) {
+            // `.mdx` is stored as-is like markdown, but the format flag routes it
+            // through the hardened MDX render path — where it is compiled,
+            // allowlisted, and validated for the mdx_ok gate (#20, SPEC 6.1).
+            $markdown = $fetched->content;
+            $format = DocumentFormat::Mdx;
         } else {
             $markdown = $fetched->content;
             $format = DocumentFormat::Md;
@@ -63,11 +69,24 @@ class Normalizer
             return true;
         }
 
-        $extension = strtolower((string) pathinfo(
-            (string) parse_url($fetched->finalUrl, PHP_URL_PATH),
+        return in_array($this->extensionOf($fetched->finalUrl), ['html', 'htm', 'xhtml'], true);
+    }
+
+    /**
+     * MDX by URL/filename extension (SPEC 5.2, #20). There is no registered MDX
+     * mime type, so the `.mdx` extension is the signal; a URL-less upload has no
+     * extension and stays markdown.
+     */
+    private function looksLikeMdx(FetchedContent $fetched): bool
+    {
+        return $this->extensionOf($fetched->finalUrl) === 'mdx';
+    }
+
+    private function extensionOf(string $url): string
+    {
+        return strtolower((string) pathinfo(
+            (string) parse_url($url, PHP_URL_PATH),
             PATHINFO_EXTENSION,
         ));
-
-        return in_array($extension, ['html', 'htm', 'xhtml'], true);
     }
 }

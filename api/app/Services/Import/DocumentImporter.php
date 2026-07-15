@@ -2,6 +2,7 @@
 
 namespace App\Services\Import;
 
+use App\Enums\DocumentFormat;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Jobs\ImportDocumentJob;
@@ -63,9 +64,23 @@ class DocumentImporter
         $title = $fetched->title ?? $this->titles->fromContent($normalized, $fetched->finalUrl);
 
         // Project the normalized content to its plain-text anchor substrate
-        // (SPEC 5.4). A projection failure is transient — it propagates to the
-        // job's retry path — so a version never lands without its plain_text.
-        $projection = $this->projector->project($normalized, $document->format);
+        // (SPEC 5.4). Pass the FRESHLY DETECTED format (not $document->format,
+        // which is still the creation-time default): only then does the endpoint
+        // run the real MDX compile that fills mdx_ok (#20). A projection failure
+        // is transient — it propagates to the job's retry path — so a version
+        // never lands without its plain_text.
+        $isMdx = $normalization->format === DocumentFormat::Mdx;
+        $projection = $this->projector->project($normalized, $normalization->format);
+
+        // A rejected or uncompilable MDX document is not an import failure — it
+        // renders as plain-markdown fallback. Record it so a broken source is
+        // observable (SPEC 6.1, 19).
+        if ($isMdx && ! $projection->mdxOk) {
+            Log::warning('mdx.compile_failed', [
+                'document_id' => $document->id,
+                'connector' => $connector->sourceType()->value,
+            ]);
+        }
 
         // firstOrCreate honours the (document_id, content_hash) unique constraint:
         // re-importing identical content returns the existing version, no twin.
@@ -76,6 +91,8 @@ class DocumentImporter
                 'content_normalized' => $normalized,
                 'plain_text' => $projection->plainText,
                 'projection_version' => $projection->projectionVersion,
+                // mdx_ok is meaningful only for MDX; null for md/html (SPEC 6.1).
+                'mdx_ok' => $isMdx ? $projection->mdxOk : null,
                 'import_warnings' => $normalization->warningsForStorage(),
                 'source_version' => $fetched->sourceVersion,
                 'synced_at' => now(),
