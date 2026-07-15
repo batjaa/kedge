@@ -59,5 +59,18 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('imports', function (Request $request) {
             return Limit::perMinute(20)->by($request->user()?->id ?: $request->ip());
         });
+
+        // Share-link writes (create + revoke). Per authenticated user — cheap
+        // mutations, but still bounded so a script can't churn links (SPEC 13).
+        RateLimiter::for('shares', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
+        });
+
+        // The public share read faces the open internet, so it is per-IP (SPEC
+        // 10.2, 13): a leaked or brute-forced token can't be probed at speed, and
+        // one visitor refreshing a doc can't be starved by another.
+        RateLimiter::for('shared-read', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
+        });
     }
 }
