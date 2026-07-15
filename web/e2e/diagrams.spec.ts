@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { DIAGRAMS_DOC } from './fixtures';
+import { BROKEN_DIAGRAM_DOC, DIAGRAMS_DOC } from './fixtures';
 import { documentTitle, importDocumentFromUrl, register, uniqueIdentity } from './helpers';
 
 // Diagram rendering surfaces (import-render spec — SPEC §6.2, #48/#53; #39). One
@@ -61,4 +61,34 @@ test('mermaid fence → decoded SVG image; unknown fence → plain code; click-t
 
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
+});
+
+test('broken mermaid fence → source panel shows the raw source AND the renderer error message', async ({
+  page,
+}) => {
+  test.setTimeout(JOURNEY_TIMEOUT);
+
+  await register(page, uniqueIdentity('broken-diagram'));
+  await importDocumentFromUrl(page, BROKEN_DIAGRAM_DOC.url);
+  await expect(documentTitle(page, BROKEN_DIAGRAM_DOC.title)).toBeVisible();
+
+  // The bad-source mermaid fence never rendered an <img>; it degraded to the
+  // never-crash show-source panel, which contains the raw source verbatim.
+  const source = page.locator('pre', { hasText: BROKEN_DIAGRAM_DOC.brokenSource });
+  await expect(source).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('img', { name: 'mermaid diagram' })).toHaveCount(0);
+
+  // Issue #56: Kroki's own error message is surfaced beside the source under a
+  // clear label. We don't pin mermaid's exact wording (it drifts across engine
+  // versions), but we assert a real, human-readable reason reached the page:
+  // non-empty, containing "error" (Kroki wraps every failure as "Error <code>:"),
+  // and NOT the raw SVG "error card" markup — proving the plain-text reason, not
+  // buried SVG, is what surfaces.
+  const message = page.locator('p', { hasText: BROKEN_DIAGRAM_DOC.detailLabel });
+  await expect(message).toBeVisible({ timeout: 30_000 });
+
+  const reason = (await message.innerText()).replace(BROKEN_DIAGRAM_DOC.detailLabel, '').trim();
+  expect(reason.length).toBeGreaterThan(0);
+  expect(reason.toLowerCase()).toContain('error');
+  expect(reason).not.toContain('<svg');
 });

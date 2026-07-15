@@ -44,6 +44,21 @@ export const DIAGRAMS_DOC = {
 } as const;
 
 /**
+ * A document whose mermaid fence is a deliberate parse error (an unknown diagram
+ * type), so Kroki 400s and the diagram degrades to the never-crash source panel
+ * WITH the renderer's own message shown beside the source (issue #56). Drives the
+ * broken-diagram assertion in the diagrams journey.
+ */
+export const BROKEN_DIAGRAM_DOC = {
+  url: fixtureUrl('rfc-201-broken-diagram.md'),
+  title: 'RFC-201: Broken diagram surfaces the renderer error',
+  /** Distinctive source text that must appear inside the show-source panel. */
+  brokenSource: 'notarealdiagramtype',
+  /** The panel's label for the renderer's message. */
+  detailLabel: 'Renderer said:',
+} as const;
+
+/**
  * An HTML document referencing one image that re-hosts and one that 404s → the
  * doc renders ready with an amber import-warning panel. Drives import-warnings.
  */
