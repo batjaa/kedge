@@ -250,12 +250,12 @@ Protocol template shell: sidebar nav from headings, sticky TOC with scroll-spy, 
 
 MDX is code; imported docs are untrusted:
 
-- Compile with `@mdx-js/mdx` in the web server layer; **compiled artifact cached by `content_hash`**.
-- A remark plugin **rejects `import`/`export`** and non-literal expressions.
-- JSX resolves only from an **allowlist**: Protocol's `Callout`/`Note`/`Warning`/`CodeGroup`/`Tabs` + Kedge's `Mermaid`/`PlantUML`. Unknown components render as a neutral "unsupported component" box.
-- Raw HTML sanitized via rehype-sanitize (tight schema). Comment bodies (`body_md`) render through the same sanitized pipeline.
-- Compile errors → plain-markdown fallback + banner + `mdx.compile_failed` log event.
-- Adversarial fixture suite in CI: import smuggling, expression payloads, script injection, pathological nesting (§18).
+- Compile with `@mdx-js/mdx` in the web server layer; **compiled artifact cached by `content_hash`** (in-process LRU + on-disk compiled-source layer — compile once per version, not per request; `#20`).
+- A remark plugin (`lib/remark-mdx-harden.ts`) **rejects `import`/`export`** and non-literal expressions (including expression-valued and spread JSX attributes) — a rejection throws, so the doc falls back and the hostile code never runs.
+- JSX resolves only from an **allowlist**: `Callout`/`Note`/`Warning`/`CodeGroup`/`Tabs` (simple Kedge-styled components, DESIGN.md tokens) + Kedge's `KrokiDiagram` (the sole diagram component; supersedes the earlier `Mermaid`/`PlantUML`). Unknown components render as a neutral "unsupported component" box.
+- Raw HTML is sanitized against a **tight schema sourced from `rehype-sanitize`'s `defaultSchema`** (tag/attribute/protocol allowlists), enforced in the same harden plugin at the mdxJsx level — because in MDX all raw HTML parses to `mdxJsx*Element` nodes and `hast-util-sanitize` silently drops every mdxJsx node (it would delete the allowlisted components too), so rehype-sanitize cannot run over the compiled MDX tree directly (`#20`). Markdown (`.md`) docs keep dropping raw HTML entirely (no `allowDangerousHtml`). Comment bodies (`body_md`) render through the same sanitized pipeline.
+- Compile errors / rejections → plain-markdown fallback + banner + `mdx.compile_failed` log event. The **projection endpoint runs the real hardened compile** to set `mdx_ok` on the version (nullable — null for non-MDX), so the reading surface renders the fallback without recompiling.
+- Adversarial fixture suite in CI (Vitest seam): import/export smuggling, expression payloads, attribute-channel smuggling, script-in-HTML, unknown components → neutral box, pathological nesting, compile-failure → fallback (§18).
 
 ### 6.2 Diagrams
 
