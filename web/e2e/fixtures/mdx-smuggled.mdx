@@ -1,0 +1,14 @@
+# Smuggled import falls back safely
+
+import secret from './secret-module'
+
+This `.mdx` document smuggles an ES import — a construct the harden pass must
+never let compile (it is an injection channel). The compile is rejected, the
+version is marked `mdx_ok = false`, and the page falls back to plain markdown
+with an author-visible banner. The hostile code never runs.
+
+<script>window.__kedge_xss_39 = 'XSSMARKER39'; document.title = 'XSSMARKER39';</script>
+
+Even the raw `<script>` above is inert: the plain-markdown fallback drops raw
+HTML entirely, so its marker text appears nowhere in the DOM and its global is
+never set. Ordinary prose after the script still renders.

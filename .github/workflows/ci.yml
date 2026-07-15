@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # The M1 journey renders a mermaid diagram through Kroki (SPEC 6.2). CI must
+    # The diagram journeys render mermaid through Kroki (SPEC 6.2). CI must
     # never call hosted kroki.io, so the job runs its own: the core Kroki
     # container plus the mermaid companion it delegates mermaid rendering to
     # (they talk over the Actions service network by service name). The API is
@@ -151,12 +151,14 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # Boots api (scratch SQLite, migrated fresh) + web + the loopback fixture
-      # host via playwright.config.ts, drives both journeys (M0 handshake, M1
-      # paste→render→share→claim), tears everything down. A failure fails the
-      # build. KROKI_URL reaches serve-api.sh through the environment and lands
-      # in the generated .env.e2e, pointing diagram renders at the job's Kroki
-      # service instead of kroki.io.
-      - name: Run the journeys (M0 + M1)
+      # host via playwright.config.ts, drives the journey pack (#39) across every
+      # shipped surface — the M0 handshake and M1 paste→render→share→claim plus
+      # auth edges, URL/paste/HTML import + failures + warnings, MDX safety, the
+      # share lifecycle, diagrams, and PAT settings — then tears everything down.
+      # A failure fails the build. KROKI_URL reaches serve-api.sh through the
+      # environment and lands in the generated .env.e2e, pointing diagram renders
+      # at the job's Kroki service instead of kroki.io.
+      - name: Run the journey pack
         working-directory: web
         run: npm run e2e
         env:
