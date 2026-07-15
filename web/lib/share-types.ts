@@ -44,6 +44,15 @@ export interface SharedDocument {
   status: DocumentStatus;
   format: DocumentFormat;
   current_version?: DocumentVersion | null;
+  /**
+   * Demo-doc claim affordance (SPEC §10.3, #25). `claimable` is true only for a
+   * demo doc; then — and only then — `document_id` and `expires_at` are present,
+   * the id the "Claim this doc" flow needs to POST the claim after sign-up. An
+   * ordinary share leaks no internal id.
+   */
+  claimable: boolean;
+  document_id?: number;
+  expires_at?: string | null;
 }
 
 /** Why a share link is no longer active — drives the friendly "gone" page. */

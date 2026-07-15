@@ -8,8 +8,12 @@ import type { Capabilities } from './auth-types';
 // app and the API can't disagree about whether, say, GitHub sign-in exists.
 //
 // Fails closed: if the API is unreachable or the shape is unexpected, every
-// capability is treated as OFF. An unconfigured feature therefore hides rather
-// than rendering a button that 404s (the BYO-key pattern, SPEC §14).
+// capability is treated as OFF and the edition as self-hosted. An unconfigured
+// feature therefore hides rather than rendering a button that 404s (the BYO-key
+// pattern, SPEC §14); and the public demo surface never shows on an instance we
+// can't confirm is the SaaS (#25).
+const FAIL_CLOSED: Capabilities = { github: false, selfHosted: true };
+
 export const getCapabilities = cache(async (): Promise<Capabilities> => {
   try {
     const res = await fetch(`${apiBaseUrl}/api/v1/config`, {
@@ -19,11 +23,17 @@ export const getCapabilities = cache(async (): Promise<Capabilities> => {
       next: { revalidate: 30 },
     });
 
-    if (!res.ok) return { github: false };
+    if (!res.ok) return FAIL_CLOSED;
 
-    const data = (await res.json()) as { auth?: { github?: unknown } };
-    return { github: data.auth?.github === true };
+    const data = (await res.json()) as {
+      auth?: { github?: unknown };
+      self_hosted?: unknown;
+    };
+    return {
+      github: data.auth?.github === true,
+      selfHosted: data.self_hosted === true,
+    };
   } catch {
-    return { github: false };
+    return FAIL_CLOSED;
   }
 });

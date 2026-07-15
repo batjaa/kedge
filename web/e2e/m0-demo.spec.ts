@@ -58,9 +58,18 @@ test('register → land on the shell → reload persists → sign out', async ({
     page.getByRole('button', { name: 'Sign in', exact: true }),
   ).toBeVisible();
 
-  // 5. Prove the session was really invalidated, not just navigated away from:
-  //    the guarded shell now bounces an anonymous visitor back to sign-in.
+  // 5. Prove the session was really invalidated, not just navigated away from.
+  //    The SaaS anonymous home is now the public instant-demo paste box (#25),
+  //    so `/` shows the stranger surface — not the signed-in review queue.
   await page.goto('/');
+  await expect(
+    page.getByRole('button', { name: 'Render it', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review queue' })).toBeHidden();
+
+  //    And a guarded route still bounces an anonymous visitor back to sign-in —
+  //    the actual proof the session is dead.
+  await page.goto('/documents/1');
   await expect(page).toHaveURL(/\/signin(\?|$)/);
   await expect(
     page.getByRole('button', { name: 'Sign in', exact: true }),
