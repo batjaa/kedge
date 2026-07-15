@@ -89,6 +89,17 @@ export function importUrl(url: string): Promise<ImportOutcome> {
   return mutate('/api/v1/documents', { url });
 }
 
+/** POST /api/v1/documents — begin importing directly pasted content (#22). */
+export function importPaste(
+  content: string,
+  title?: string,
+): Promise<ImportOutcome> {
+  const body: Record<string, unknown> = { content };
+  const trimmedTitle = title?.trim();
+  if (trimmedTitle) body.title = trimmedTitle;
+  return mutate('/api/v1/documents', body);
+}
+
 /** POST /api/v1/documents/{id}/retry — re-run a failed import. */
 export function retryImport(id: number): Promise<ImportOutcome> {
   return mutate(`/api/v1/documents/${id}/retry`);

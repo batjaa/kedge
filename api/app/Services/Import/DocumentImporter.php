@@ -38,7 +38,10 @@ class DocumentImporter
 
     public function import(Document $document): void
     {
-        $connector = $this->registry->match((string) $document->source_url)
+        // Resolve by the document's stored source type, not by re-parsing its URL:
+        // it is set once at import time and is the only handle the URL-less upload
+        // connector has (SPEC 5.1 — the source type doubles as the registry key).
+        $connector = $this->registry->forSourceType($document->source_type)
             ?? throw new UnsupportedSourceException('No connector handles this source.');
 
         $startedAt = microtime(true);

@@ -7,6 +7,7 @@ use App\Enums\SyncStatus;
 use App\Models\Document;
 use App\Services\Fetch\Exceptions\BlockedUrlException;
 use App\Services\Import\DocumentImporter;
+use App\Services\Import\Exceptions\RateLimitedException;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -18,19 +19,31 @@ use Throwable;
  * per document collapses a concurrent double-submit (or a manual retry racing an
  * in-flight import) onto a single job.
  *
- * Failure handling follows the §19 registry:
+ * Failure handling follows the §19 registry, and separates two policies:
  *   - A blocked URL is deterministic — it will not become allowed on retry — so
  *     the document is marked failed immediately, with no further attempts.
- *   - Any other fetch/normalize error bubbles up so the queue retries with
- *     backoff; once the {@see $tries} budget is spent, {@see failed()} records the
+ *   - A real fetch/normalize error bubbles up; {@see $maxExceptions} caps those at
+ *     three (the "retry ×3 backoff → failed"), then {@see failed()} records the
  *     terminal failure and the web offers a retry CTA.
+ *   - A source rate-limit (GitHub 403/429) is not a failure: the job releases
+ *     itself for the honored Retry-After without spending an exception, so a
+ *     throttled import backs off and resumes ("Rate-limited, retrying") instead of
+ *     burning its budget. {@see $tries} is the overall ceiling so a permanently
+ *     throttled source still terminates.
  */
 class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
-    /** Retry ×3 with backoff before giving up (SPEC 19). */
-    public int $tries = 3;
+    /**
+     * Overall attempt ceiling. Set well above {@see $maxExceptions} so Retry-After
+     * releases (rate limits) have room without tripping the real-failure budget,
+     * yet bounded so a source that throttles us forever still gives up.
+     */
+    public int $tries = 25;
+
+    /** Real errors fail after three — the §19 "retry ×3 backoff → failed". */
+    public int $maxExceptions = 3;
 
     public function __construct(
         public readonly Document $document,
@@ -63,6 +76,11 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
             // one on the next attempt. Terminal now, no retry, no rethrow.
             $this->markFailed($e->userMessage());
             Log::warning('import.failed', $this->logContext('blocked', $e));
+        } catch (RateLimitedException $e) {
+            // Not a failure (SPEC 19): back off for the honored Retry-After and
+            // resume. The document stays `importing` — the web keeps polling.
+            Log::info('import.rate_limited', $this->logContext('rate_limited', $e) + ['retry_after' => $e->retryAfter]);
+            $this->release($e->retryAfter);
         }
     }
 

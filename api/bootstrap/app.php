@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Referer in SANCTUM_STATEFUL_DOMAINS) authenticate api routes via
         // the session cookie instead of tokens (SPEC 4).
         $middleware->statefulApi();
+
+        // Pasted/uploaded document content is stored byte-for-byte (#22): trimming
+        // its leading/trailing whitespace would alter the rendered document and its
+        // content_hash. Exempt it from the global TrimStrings middleware.
+        $middleware->trimStrings(except: ['content']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // The API is a headless JSON backend: versioned routes and the

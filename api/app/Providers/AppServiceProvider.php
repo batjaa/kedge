@@ -7,7 +7,9 @@ use App\Services\Fetch\DnsResolver;
 use App\Services\Fetch\HttpTransport;
 use App\Services\Fetch\SystemDnsResolver;
 use App\Services\Import\ConnectorRegistry;
+use App\Services\Import\Connectors\GithubPublicConnector;
 use App\Services\Import\Connectors\RawUrlConnector;
+use App\Services\Import\Connectors\UploadConnector;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -27,9 +29,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(DnsResolver::class, SystemDnsResolver::class);
         $this->app->bind(HttpTransport::class, CurlHttpTransport::class);
 
-        // The connector set (SPEC 5.1), most-specific first. M1 has only the
-        // catch-all raw-URL connector; GitHub/Confluence register ahead of it.
+        // The connector set (SPEC 5.1), most-specific first: GitHub blob URLs route
+        // to GitHub before the catch-all raw-URL connector claims them. Upload never
+        // matches a URL (it is resolved by source type), so its order is immaterial.
         $this->app->singleton(ConnectorRegistry::class, fn ($app) => new ConnectorRegistry([
+            $app->make(GithubPublicConnector::class),
+            $app->make(UploadConnector::class),
             $app->make(RawUrlConnector::class),
         ]));
     }
