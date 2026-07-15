@@ -19,10 +19,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // the session cookie instead of tokens (SPEC 4).
         $middleware->statefulApi();
 
-        // Pasted/uploaded document content is stored byte-for-byte (#22): trimming
-        // its leading/trailing whitespace would alter the rendered document and its
-        // content_hash. Exempt it from the global TrimStrings middleware.
-        $middleware->trimStrings(except: ['content']);
+        // Byte-for-byte fields exempted from the global TrimStrings middleware:
+        //   content — pasted/uploaded document body (#22); trimming would alter the
+        //             rendered document and its content_hash.
+        //   source  — a diagram fence's source (#21); whitespace-sensitive engines
+        //             (svgbob/ditaa ASCII art) and the render cache key both depend
+        //             on the exact bytes the web sends.
+        $middleware->trimStrings(except: ['content', 'source']);
 
         // Instant demo mode is SaaS-only (SPEC §10.3, #25): this alias 404s the
         // demo + claim routes on a self-hosted instance, per request.
