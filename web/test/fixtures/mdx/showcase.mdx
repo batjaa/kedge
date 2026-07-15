@@ -1,0 +1,39 @@
+---
+title: Imported MDX showcase
+description: A realistic .mdx document exercising the hardened render path.
+---
+
+# Imported MDX showcase
+
+This fixture is a stand-in for an imported `.mdx` document. It flows through the
+hardened pipeline (SPEC §6.1): allowlisted components render, unknown components
+degrade to a neutral box, and raw HTML is sanitized against the tight schema.
+
+<Note title="Anchoring note">
+  Comments bind to the plain-text projection, not the markdown source, so
+  **cosmetic** edits never move a highlight.
+</Note>
+
+<Warning>
+  Re-syncing may orphan comments whose quote no longer matches.
+</Warning>
+
+## A component we do not ship
+
+<ExperimentalWidget prop="ignored">
+  Anything inside an unknown component is discarded.
+</ExperimentalWidget>
+
+## Raw HTML, sanitized
+
+Press <kbd>Esc</kbd> to close. The following are neutralized on the way in:
+
+<script>alert('xss')</script>
+
+## Code stays code
+
+```wat
+(module (func $noop))
+```
+
+That unknown fence language renders as plain text — never a crash, never Kroki.
