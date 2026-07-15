@@ -1,13 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 import { FIXTURE_PORT } from './e2e/fixture-doc';
 
-// The end-to-end seam: ONE journey per module — M0's demo criterion (the
+// The end-to-end seam: a journey PACK across every shipped surface (#39), grown
+// from the original one-journey-per-module seams — M0's demo criterion (the
 // cross-app Sanctum cookie handshake, seam 2 of the scaffold spec) and M1's
 // (paste → render with a live diagram → share → claim, seam 3 of the
-// import-render spec). Each journey boots the deployables against a throwaway
-// database and drives a real browser; deliberately journeys, never a suite, and
-// they must be deterministic and non-flaky — hence no retries and a single
-// worker.
+// import-render spec). The pack now also covers auth edges, URL/paste/HTML
+// import + failures + warnings, MDX safety in the browser, the share lifecycle,
+// diagram rendering, and PAT settings. Each journey boots the deployables
+// against a throwaway database and drives a real browser; every spec registers
+// its OWN unique user and creates its OWN documents (e2e/helpers.ts), so no spec
+// depends on another's state. They must be deterministic and non-flaky — hence
+// no retries. `workers: 1` is a scope choice, not a correctness requirement: the
+// pack is written worker-safe and stays green at `--workers=4` (proven locally),
+// so raising it later is a one-line change.
 //
 // Host choices are deliberate. The browser talks to web + API over `localhost`
 // so the session cookie (SESSION_DOMAIN=localhost) is same-site across both
@@ -23,8 +29,10 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: './e2e',
-  // Deliberately one journey per module, not a suite (the M1 coverage pack is
-  // #39; breadth beyond that arrives with M2).
+  // The pack is worker-safe (unique users/docs per spec), but the run stays
+  // serial by choice: one worker keeps CI resource use flat and the output
+  // deterministic. fullyParallel/workers can be raised together later without
+  // touching a spec — proven green at --workers=4.
   fullyParallel: false,
   workers: 1,
   // A flaky seam is worse than none: fail loudly instead of masking with retries.
@@ -47,16 +55,17 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
 
-  // Boots both deployables plus the loopback fixture host the M1 journey pastes
-  // from. Playwright waits for all three to answer before the journeys run, and
-  // tears them down afterwards. Locally an already-running stack is reused; CI
-  // always boots fresh against a scratch database.
+  // Boots both deployables plus the loopback fixture host the import journeys
+  // paste from. Playwright waits for all three to answer before the journeys
+  // run, and tears them down afterwards. Locally an already-running stack is
+  // reused; CI always boots fresh against a scratch database.
   //
-  // NOTE (M1): the API *must* come up via serve-api.sh — its generated E2E env
-  // carries the FETCH_ALLOW_HOSTS fixture exemption and the sync queue. A dev
-  // API already running on :8000 against api/.env will be reused instead and
-  // the M1 journey will fail its import (SSRF-blocked fixture URL): stop that
-  // server before running the journeys locally.
+  // NOTE: the API *must* come up via serve-api.sh — its generated E2E env
+  // carries the FETCH_ALLOW_HOSTS fixture exemption, the sync queue, and the
+  // array cache store that keeps rate limiters from coupling the pack's many
+  // users. A dev API already running on :8000 against api/.env will be reused
+  // instead and the import journeys will fail (SSRF-blocked fixture URL): stop
+  // that server before running the journeys locally.
   webServer: [
     {
       name: 'api',
@@ -69,9 +78,10 @@ export default defineConfig({
     },
     {
       name: 'fixtures',
-      // The deterministic "public URL" source (#26): a dependency-free static
-      // server over web/e2e/fixtures. See e2e/fixture-doc.ts for the one URL
-      // the journey pastes.
+      // The deterministic "public URL" source (#26, extended for the #39 pack):
+      // a dependency-free static server over web/e2e/fixtures, plus a /status/500
+      // route for the transient-failure and broken-image journeys. See
+      // e2e/fixtures.ts for the URLs the journeys paste.
       command: 'node e2e/serve-fixtures.mjs',
       url: `http://127.0.0.1:${FIXTURE_PORT}/health`,
       reuseExistingServer: !isCI,
