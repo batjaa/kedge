@@ -18,12 +18,27 @@ import {
 // Kedge needs (#43): Contents read-only (Metadata read is implied), a bounded
 // expiry, and a recognizable name. Repository selection can't be pre-filled —
 // the copy below tells the user to pick "Only select repositories".
-const NEW_TOKEN_URL =
-  'https://github.com/settings/personal-access-tokens/new' +
-  '?name=Kedge%20imports' +
-  '&description=Read-only%20access%20so%20Kedge%20can%20import%20specs%20for%20review.' +
-  '&contents=read' +
-  '&expires_in=90';
+//
+// Resource owner (#45): a fine-grained token is scoped to ONE owner and the
+// form defaults to the personal account, so org-owned repos don't appear
+// unless the org is the owner. Switching owner INSIDE the form drops the
+// pre-filled permissions, but `target_name` in the URL pre-fills it safely —
+// hence the optional org input. Collaborator-only repos on someone else's
+// account are a hard fine-grained limitation → classic-token fallback link.
+function newTokenUrl(org: string): string {
+  const owner = org.trim();
+  return (
+    'https://github.com/settings/personal-access-tokens/new' +
+    '?name=Kedge%20imports' +
+    '&description=Read-only%20access%20so%20Kedge%20can%20import%20specs%20for%20review.' +
+    '&contents=read' +
+    '&expires_in=90' +
+    (owner ? `&target_name=${encodeURIComponent(owner)}` : '')
+  );
+}
+
+const CLASSIC_TOKEN_URL =
+  'https://github.com/settings/tokens/new?scopes=repo&description=Kedge%20imports';
 
 export function IntegrationsPanel() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -33,6 +48,7 @@ export function IntegrationsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [org, setOrg] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -94,7 +110,7 @@ export function IntegrationsPanel() {
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
         Connect a{' '}
         <a
-          href={NEW_TOKEN_URL}
+          href={newTokenUrl(org)}
           target="_blank"
           rel="noreferrer"
           className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
@@ -109,6 +125,41 @@ export function IntegrationsPanel() {
         </span>{' '}
         and pick the repos to review. The token is encrypted and never shown again — remove it any
         time.
+      </p>
+
+      <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <label
+          htmlFor="pat-org"
+          className="shrink-0 text-xs font-medium text-zinc-600 dark:text-zinc-400"
+        >
+          Repos owned by an organization?
+        </label>
+        <input
+          id="pat-org"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="org name (optional)"
+          value={org}
+          onChange={(e) => setOrg(e.target.value)}
+          className="w-full rounded-xl bg-white px-3 py-1.5 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10 sm:max-w-56"
+        />
+      </div>
+      <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-500">
+        A fine-grained token sees one owner&apos;s repos: yours by default, or one organization —
+        enter it above so the link opens pre-scoped (changing the owner inside GitHub&apos;s form
+        resets the pre-filled permissions). Orgs can block these tokens or require approval. For a
+        private repo owned by another user where you&apos;re a collaborator, fine-grained tokens
+        can&apos;t help — use a{' '}
+        <a
+          href={CLASSIC_TOKEN_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+        >
+          classic token
+        </a>{' '}
+        (broader <code className="font-mono">repo</code> scope) instead.
       </p>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
