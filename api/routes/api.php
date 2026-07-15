@@ -8,7 +8,28 @@ use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
+use App\Http\Controllers\Internal\DiagramController;
+use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Internal endpoints — NOT part of the versioned /v1 public contract
+|--------------------------------------------------------------------------
+|
+| Trusted web→api calls, guarded by a shared secret (never publicly reachable
+| in the SaaS topology), the mirror of the web's /internal/projection endpoint.
+| Deliberately outside /v1 so they never look like a client-facing API.
+|
+| Diagram render (SPEC §6.2): the web's diagram component asks the API to render
+| a Kroki diagram and cache its SVG; the API returns the cached /storage URL so
+| readers embed a static <img> and never contact Kroki. A bad secret 404s (the
+| endpoint's existence stays hidden), so it needs no auth:sanctum.
+|
+*/
+Route::post('/internal/diagrams', DiagramController::class)
+    ->middleware(VerifyDiagramSecret::class)
+    ->name('api.internal.diagrams.render');
 
 /*
 |--------------------------------------------------------------------------

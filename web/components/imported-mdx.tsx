@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { MDXComponents } from 'mdx/types';
-import { KrokiDiagram } from '@/components/kroki-diagram';
+import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
 
 // The component allowlist for IMPORTED MDX (SPEC §6.1). Distinct from
 // components/mdx.tsx (the Fumadocs dogfood surface): imported documents are
@@ -8,6 +8,11 @@ import { KrokiDiagram } from '@/components/kroki-diagram';
 // Callout / Note / Warning / CodeGroup / Tabs / KrokiDiagram — plus the neutral
 // UnsupportedComponent the harden pass rewrites everything else into. Simple,
 // server-rendered, Kedge-styled with DESIGN.md tokens (no client JS, no webfonts).
+//
+// The JSX name `KrokiDiagram` (injected by remark-diagrams) binds here to the
+// API-mediated CachedKrokiDiagram — imported diagrams render through the shared
+// hash cache (SPEC §6.2), while the dogfood surface binds the same name to the
+// build-time component in components/mdx.tsx.
 
 type Tone = 'info' | 'warning';
 
@@ -165,6 +170,6 @@ export const IMPORTED_MDX_COMPONENTS = {
   Warning,
   CodeGroup,
   Tabs,
-  KrokiDiagram,
+  KrokiDiagram: CachedKrokiDiagram,
   UnsupportedComponent,
 } satisfies MDXComponents;

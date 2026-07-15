@@ -146,4 +146,53 @@ return [
         'rate_per_day' => (int) env('DEMO_RATE_PER_DAY', 40),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Diagrams — API-mediated Kroki render cache (SPEC §6.2)
+    |--------------------------------------------------------------------------
+    |
+    | Kroki is Kedge's sole diagram engine. The API renders each diagram once per
+    | (engine, source_hash), caches the SVG on the media disk, and hands the web
+    | only the cached /storage URL — readers fetch a static <img>, never contact
+    | Kroki, and execute zero diagram code. Repeated renders of the same diagram
+    | across documents and versions hit the cache (content-addressed).
+    |
+    | Kroki is a trusted, operator-configured internal service, so its render
+    | calls do NOT go through the SSRF guard (which would block the internal
+    | http://kroki:8000 container); they use the HTTP client directly with the
+    | size/timeout caps below. Only allowlisted engines are ever forwarded.
+    |
+    |   KROKI_URL   base URL of the Kroki service. Default hosted kroki.io is
+    |               acceptable in LOCAL DEV ONLY (SPEC §6.2); the self-host
+    |               compose and the SaaS run their own container (http://kroki:8000).
+    |
+    | DIAGRAM_SHARED_SECRET guards the internal web→api render endpoint (the
+    | projection pattern, roles swapped). No default here: the middleware supplies
+    | a well-known dev value and FAILS CLOSED in production if it is unset — a
+    | leaked or absent secret must not turn the endpoint into an open Kroki proxy.
+    |
+    */
+
+    'kroki' => [
+        'url' => rtrim((string) env('KROKI_URL', 'https://kroki.io'), '/'),
+
+        // Total transfer + connection-establishment timeouts, in seconds.
+        'timeout' => (float) env('KROKI_TIMEOUT', 15),
+        'connect_timeout' => (float) env('KROKI_CONNECT_TIMEOUT', 5),
+
+        // Hard ceiling on a rendered SVG, in bytes (default 4 MiB). Kroki is
+        // internal and trusted, so this is a sanity cap, not an SSRF control.
+        'max_bytes' => (int) env('KROKI_MAX_BYTES', 4 * 1024 * 1024),
+
+        // Reject a diagram source larger than this before encoding it into the
+        // Kroki GET URL (default 256 KiB) — bounds abuse and over-long URLs.
+        'max_source_bytes' => (int) env('KROKI_MAX_SOURCE_BYTES', 256 * 1024),
+    ],
+
+    'diagram' => [
+        // Shared secret the internal render endpoint requires (see above). Null
+        // when unset — the middleware decides dev-default vs. fail-closed.
+        'secret' => env('DIAGRAM_SHARED_SECRET'),
+    ],
+
 ];
