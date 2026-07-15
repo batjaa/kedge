@@ -84,4 +84,25 @@ return [
         'timeout' => (float) env('PROJECTION_TIMEOUT', 10),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Re-hosted media (SPEC 5.2)
+    |--------------------------------------------------------------------------
+    |
+    | Imported documents must not depend on their origin's servers, so every
+    | referenced image is fetched through the SSRF guard and re-hosted here
+    | (App\Services\Import\Normalization\ImageReHoster). `disk` is any Laravel
+    | filesystem disk — the `public` disk (served via the /storage symlink the
+    | entrypoint creates) in dev and self-host, an S3/R2 disk on the SaaS. Keep
+    | it env-driven so switching origins is config, never code (SPEC 4).
+    |
+    */
+
+    'media' => [
+        'disk' => env('MEDIA_DISK', 'public'),
+
+        // Per-image size cap for the guarded fetch, in bytes (default 10 MiB).
+        'max_image_bytes' => (int) env('MEDIA_MAX_IMAGE_BYTES', 10 * 1024 * 1024),
+    ],
+
 ];

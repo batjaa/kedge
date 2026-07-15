@@ -7,11 +7,24 @@ export type SyncStatus = 'ok' | 'failed';
 export type LifecycleStatus = 'draft' | 'in_review' | 'approved' | 'superseded';
 export type DocumentFormat = 'md' | 'mdx' | 'html';
 
+/**
+ * One thing that didn't survive normalization of this version (SPEC 5.2) — a
+ * failed image fetch, a degraded HTML conversion. `message` is author-facing;
+ * `type` is a stable machine key. Mirrors
+ * api/app/Services/Import/Normalization/ImportWarning.php.
+ */
+export interface ImportWarning {
+  type: string;
+  message: string;
+}
+
 export interface DocumentVersion {
   id: number;
   content_hash: string;
   /** content_normalized — the markdown the reading surface renders. */
   content: string;
+  /** What didn't survive normalization; always present, empty when clean. */
+  import_warnings: ImportWarning[];
   source_version: string | null;
   synced_at: string | null;
 }

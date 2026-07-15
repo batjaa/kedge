@@ -15,7 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'document_id', 'content_raw', 'content_normalized', 'plain_text',
-    'projection_version', 'content_hash', 'source_version', 'synced_at',
+    'projection_version', 'import_warnings', 'content_hash', 'source_version',
+    'synced_at',
 ])]
 class DocumentVersion extends Model
 {
@@ -35,6 +36,7 @@ class DocumentVersion extends Model
     protected function casts(): array
     {
         return [
+            'import_warnings' => 'array',
             'synced_at' => 'datetime',
         ];
     }

@@ -9,20 +9,22 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Services\AuditLogger;
 use App\Services\Import\Exceptions\UnsupportedSourceException;
+use App\Services\Import\Normalization\Normalizer;
 use Illuminate\Support\Facades\Log;
 
 /**
  * The heart of the import flow (SPEC 5.3): resolve the connector, fetch, normalize,
  * and land an immutable version — then point the document at it and mark it ready.
  *
- * M1's normalization is deliberately thin: a `.md` source is stored as-is
- * (`content_raw` == `content_normalized`), and `content_hash` is
- * sha256(normalized). HTML/image handling (#19), MDX hardening (#20), and
- * diagrams (#21) widen the normalization step later without changing this shape.
- * Once content is normalized it is projected to the anchor substrate (#18) — the
- * plain_text every version must carry (SPEC §5.4). Fetch and projection failures
- * are not caught here — they propagate to {@see ImportDocumentJob}, which owns
- * retry-vs-terminal (SPEC 19).
+ * Normalization (SPEC 5.2) lives behind a single {@see Normalizer} call so this
+ * stays a thin orchestrator: `.html` becomes markdown, referenced images are
+ * re-hosted, and anything that didn't survive comes back as warnings persisted
+ * on the version. A `.md` source still passes straight through (its images
+ * excepted). Once content is normalized it is projected to the anchor substrate
+ * (#18) — the plain_text every version must carry (SPEC 5.4). MDX hardening
+ * (#20) and diagrams (#21) widen the pipeline later without changing this
+ * shape. Fetch and projection failures are not caught here — they propagate to
+ * {@see ImportDocumentJob}, which owns retry-vs-terminal (SPEC 19).
  */
 class DocumentImporter
 {
@@ -31,6 +33,7 @@ class DocumentImporter
         private readonly TitleSynthesizer $titles,
         private readonly TextProjector $projector,
         private readonly AuditLogger $audit,
+        private readonly Normalizer $normalizer,
     ) {}
 
     public function import(Document $document): void
@@ -49,8 +52,10 @@ class DocumentImporter
             meta: $document->source_meta ?? [],
         ));
 
-        // .md is stored as-is (SPEC 5.2); richer formats normalize in later tickets.
-        $normalized = $fetched->content;
+        // Normalize beyond bare markdown: HTML → markdown, images re-hosted,
+        // warnings collected (SPEC 5.2). Never throws on bad content.
+        $normalization = $this->normalizer->normalize($fetched, $document);
+        $normalized = $normalization->content;
         $hash = hash('sha256', $normalized);
         $title = $fetched->title ?? $this->titles->fromContent($normalized, $fetched->finalUrl);
 
@@ -68,6 +73,7 @@ class DocumentImporter
                 'content_normalized' => $normalized,
                 'plain_text' => $projection->plainText,
                 'projection_version' => $projection->projectionVersion,
+                'import_warnings' => $normalization->warningsForStorage(),
                 'source_version' => $fetched->sourceVersion,
                 'synced_at' => now(),
             ],
@@ -75,6 +81,7 @@ class DocumentImporter
 
         $document->forceFill([
             'title' => $title,
+            'format' => $normalization->format,
             'current_version_id' => $version->id,
             'status' => DocumentStatus::Ready,
             'last_sync_status' => SyncStatus::Ok,
