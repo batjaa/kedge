@@ -1,4 +1,5 @@
 import { apiBaseUrl } from './config';
+import { sanitizeDiagramDetail } from './diagram-detail';
 
 // Server-only client for the API's internal diagram-render endpoint (SPEC §6.2).
 // The mirror of lib/projection-auth with the roles swapped: for projection the
@@ -31,12 +32,22 @@ export interface DiagramRenderResult {
   ok: boolean;
   /** The cached SVG's public /storage URL (present iff ok). */
   url?: string;
+  /**
+   * The renderer's own reason for a failure (issue #56) — Kroki's sanitized error
+   * body, or a generic "unreachable". Present only when ok is false AND the API
+   * returned a detail; the panel shows it beside the source. Absent for every
+   * failure that carries no safe detail (the panel then renders as before).
+   */
+  errorDetail?: string;
 }
 
 /**
  * Resolve the cached-SVG URL for one diagram, asking the API to render + cache it
  * on a miss. Never throws: an unreachable API, a non-200 (unsupported engine or a
- * Kroki render failure), or a malformed body all become { ok: false }.
+ * Kroki render failure), or a malformed body all become { ok: false }. On a
+ * render failure the API may include a `detail` (issue #56); it is surfaced as
+ * `errorDetail`, but failing to read or parse it never changes the { ok: false }
+ * outcome — the never-crash panel still renders.
  */
 export async function fetchDiagramUrl(engine: string, source: string): Promise<DiagramRenderResult> {
   try {
@@ -53,11 +64,27 @@ export async function fetchDiagramUrl(engine: string, source: string): Promise<D
       cache: 'no-store',
     });
 
-    if (res.status !== 200) return { ok: false };
+    if (res.status !== 200) return { ok: false, errorDetail: await readErrorDetail(res) };
 
     const data = (await res.json()) as { url?: unknown };
     return typeof data.url === 'string' ? { ok: true, url: data.url } : { ok: false };
   } catch {
     return { ok: false };
+  }
+}
+
+/**
+ * Best-effort extraction of the API's failure `detail`. Isolated in its own
+ * try/catch so a non-JSON or bodyless failure response degrades to no detail
+ * rather than throwing — the caller still returns { ok: false } and the panel
+ * still renders. The API already sanitizes the detail; we sanitize again as
+ * defence in depth (bound length, strip anything stray) before it reaches React.
+ */
+async function readErrorDetail(res: Response): Promise<string | undefined> {
+  try {
+    const data = (await res.json()) as { detail?: unknown };
+    return typeof data.detail === 'string' ? sanitizeDiagramDetail(data.detail) : undefined;
+  } catch {
+    return undefined;
   }
 }
