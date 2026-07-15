@@ -1,12 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { retryImport } from '@/lib/documents-client';
 
 // The failed-import state (SPEC 19): shows why it failed and offers a retry CTA.
 // Retry re-queues the import on the API, then refreshes so the page re-enters the
-// importing/poll state.
+// importing/poll state. A token-revoked failure (#23) additionally surfaces a
+// reconnect link to Settings — retrying a dead PAT can't help until it is renewed.
 export function ImportFailed({
   id,
   error,
@@ -14,6 +16,9 @@ export function ImportFailed({
   id: number;
   error: string | null;
 }) {
+  // The API's token-revoked sync_error carries "reconnect" (SPEC §19). Match on it
+  // to offer the fix — reconnecting the integration — not just a futile retry.
+  const needsReconnect = Boolean(error && /reconnect/i.test(error));
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
@@ -53,14 +58,24 @@ export function ImportFailed({
       <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
         {error ?? 'The document could not be imported.'}
       </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={pending}
-        className="mt-5 inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
-      >
-        {pending ? 'Retrying…' : 'Retry import'}
-      </button>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={pending}
+          className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+        >
+          {pending ? 'Retrying…' : 'Retry import'}
+        </button>
+        {needsReconnect ? (
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
+          >
+            Reconnect GitHub
+          </Link>
+        ) : null}
+      </div>
       {retryError ? (
         <p role="alert" className="mt-3 text-xs text-rose-600 dark:text-rose-400">
           {retryError}
