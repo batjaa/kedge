@@ -49,6 +49,7 @@ services:
     build:
       context: ../preview/proxy
       dockerfile: Dockerfile
+    restart: unless-stopped
     depends_on:
       - api
       - web
@@ -57,11 +58,19 @@ services:
 
   api:
     build: *api-build
+    restart: unless-stopped
     environment:
       <<: *api-env
       RUN_MIGRATIONS: "true"
     expose:
       - "80"
+    healthcheck:
+      # Healthy only once migrations have run and the app answers — workers
+      # gate on this so they never race the first boot's migrations.
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:80/up"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
     depends_on:
       db:
         condition: service_healthy
@@ -69,27 +78,34 @@ services:
   worker:
     build: *api-build
     command: ["worker"]
+    restart: unless-stopped
     environment:
       <<: *api-env
       RUN_MIGRATIONS: "false"
     depends_on:
       db:
         condition: service_healthy
+      api:
+        condition: service_healthy
 
   scheduler:
     build: *api-build
     command: ["scheduler"]
+    restart: unless-stopped
     environment:
       <<: *api-env
       RUN_MIGRATIONS: "false"
     depends_on:
       db:
+        condition: service_healthy
+      api:
         condition: service_healthy
 
   web:
     build:
       context: ../../web
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       API_URL: http://api:80
       PROJECTION_SHARED_SECRET: ${PROJECTION_SHARED_SECRET:-}
@@ -101,11 +117,13 @@ services:
 
   kroki:
     image: yuzutech/kroki:latest
+    restart: unless-stopped
     expose:
       - "8000"
 
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:-kedge}
       POSTGRES_USER: ${DB_USERNAME:-kedge}
