@@ -12,6 +12,7 @@ use App\Services\Import\DocumentImporter;
 use App\Services\Import\Normalization\ImportWarning;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -33,6 +34,7 @@ class DocumentNormalizationTest extends TestCase
     {
         Queue::fake();
         Storage::fake('public');
+        $this->fakeProjection();
 
         $docUrl = 'https://blog.example.test/post.html';
         $imgUrl = 'https://cdn.example.test/diagram.png';
@@ -91,6 +93,7 @@ class DocumentNormalizationTest extends TestCase
     {
         Queue::fake();
         Storage::fake('public');
+        $this->fakeProjection();
 
         $docUrl = 'https://raw.example.test/notes.md';
         $imgUrl = 'https://cdn.example.test/missing.png';
@@ -166,5 +169,19 @@ class DocumentNormalizationTest extends TestCase
     private function runImport(Document $document): void
     {
         (new ImportDocumentJob($document))->handle(app(DocumentImporter::class));
+    }
+
+    // The importer projects every version after normalization (#18); these
+    // tests fake that endpoint at its HTTP boundary like DocumentImportTest.
+    private function fakeProjection(): void
+    {
+        Http::fake([
+            '*/internal/projection' => Http::response([
+                'plain_text' => 'Projected text.',
+                'projection_version' => '1',
+                'mdx_ok' => true,
+                'warnings' => [],
+            ]),
+        ]);
     }
 }
