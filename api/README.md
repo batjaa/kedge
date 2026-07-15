@@ -85,9 +85,19 @@ The `/settings` page connects a GitHub personal access token for importing
 private files. Its "create a token" link deep-links to GitHub's **fine-grained
 token** form pre-filled with the minimum Kedge needs (`contents=read` — Metadata
 read is implied; 90-day expiry) — the user only picks **"Only select
-repositories"**. Classic tokens also work as a fallback
-(`https://github.com/settings/tokens/new?scopes=repo&description=Kedge+imports`),
-but the `repo` scope is much broader than Kedge uses — prefer fine-grained.
+repositories"**.
+
+Fine-grained tokens are scoped to **one resource owner**. The form defaults to
+the personal account, so org-owned repos only appear when the org is the owner —
+the settings panel's org field bakes `target_name=<org>` into the link, because
+switching owner inside GitHub's form drops the pre-filled permissions. Orgs can
+block fine-grained tokens or require approval of them. Two cases still need a
+**classic token**
+(`https://github.com/settings/tokens/new?scopes=repo&description=Kedge+imports`):
+repos owned by *another user* where you're only a collaborator (a hard
+fine-grained limitation), and orgs that block fine-grained tokens outright. The
+`repo` scope is much broader than Kedge uses — prefer fine-grained wherever it
+works.
 
 ## Test & lint
 
