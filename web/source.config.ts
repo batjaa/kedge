@@ -23,9 +23,13 @@ export default defineConfig({
     remarkPlugins: [remarkDiagrams],
     rehypeCodeOptions: {
       themes: { light: 'github-light', dark: 'github-dark' },
-      // Safety net: any other unknown fence language renders as plain text,
-      // never crashes the page.
-      langAlias: { plantuml: 'txt' },
+      // Unknown fence languages fall through to plain-text highlighting rather
+      // than crashing Shiki (SPEC §6.2, hard rule #2). This is the real fallback
+      // that replaces the spike's `langAlias: { plantuml: 'txt' }` workaround:
+      // a single rule that covers every unknown language, not one special case.
+      // (Diagram fences never reach Shiki — remarkDiagrams converts them to
+      // <KrokiDiagram> first.)
+      fallbackLanguage: 'plaintext',
     },
   },
 });
