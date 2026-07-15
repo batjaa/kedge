@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { MDXComponents } from 'mdx/types';
 import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
+import { CodeBlock } from '@/components/code-block';
 
 // The component allowlist for IMPORTED MDX (SPEC §6.1). Distinct from
 // components/mdx.tsx (the Fumadocs dogfood surface): imported documents are
@@ -106,7 +107,7 @@ export function CodeGroup({ title, children }: { title?: ReactNode; children?: R
           {title}
         </div>
       ) : null}
-      <div className="[&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!bg-transparent [&_pre]:overflow-x-auto p-1 text-zinc-100">
+      <div className="[&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!bg-transparent [&_pre]:!ring-0 [&_pre]:!shadow-none [&_pre]:overflow-x-auto p-1 text-zinc-100">
         {children}
       </div>
     </div>
@@ -172,4 +173,8 @@ export const IMPORTED_MDX_COMPONENTS = {
   Tabs,
   KrokiDiagram: CachedKrokiDiagram,
   UnsupportedComponent,
+  // A fenced code block's <pre> renders as the dark CodeBlock panel — the same
+  // component the markdown path uses (issue #48), so md and mdx match. Inline
+  // `code` (no <pre>) is untouched and keeps the prose pill.
+  pre: CodeBlock,
 } satisfies MDXComponents;

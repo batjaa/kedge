@@ -7,6 +7,7 @@ import type { Nodes } from 'hast';
 import { createRemarkProcessor } from './pipeline';
 import { remarkDiagramsHast } from './remark-diagrams';
 import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
+import { CodeBlock } from '@/components/code-block';
 
 // Markdown renderer for imported documents — the safe, markdown-level path used
 // for `.md`/`.html` docs and as the plain-markdown fallback when an `.mdx`
@@ -30,8 +31,11 @@ import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
 //   - Diagram fences (the Kroki allowlist) are retargeted to <kroki-diagram> by
 //     remarkDiagramsHast and mapped to the API-mediated diagram component, which
 //     renders a cached SVG <img> from /storage (readers never contact Kroki).
-// Non-diagram fences render as plain <pre><code> (no language execution) — the
-// same path an unknown fence language takes, so rendering never crashes on it.
+// Non-diagram fences render as one dark <CodeBlock> panel (no language
+// execution) — the same path an unknown fence language takes, so rendering never
+// crashes on it. The panel wrapper (issue #48) opts the block out of the prose
+// inline-code pill so a multi-line fence reads as one surface, not per-line
+// fragments; see components/code-block.tsx.
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
@@ -78,8 +82,10 @@ export async function renderMarkdown(markdown: string): Promise<ReactNode> {
     Fragment,
     jsx,
     jsxs,
-    // The one non-standard element the pipeline emits: diagram fences. Everything
-    // else is standard markdown hast rendered by the runtime directly.
-    components: { 'kroki-diagram': CachedKrokiDiagram },
+    // The non-standard element the pipeline emits (diagram fences) plus the one
+    // intrinsic we restyle: a fenced block's <pre> renders as the dark CodeBlock
+    // panel (issue #48). Everything else is standard markdown hast rendered by
+    // the runtime directly.
+    components: { 'kroki-diagram': CachedKrokiDiagram, pre: CodeBlock },
   });
 }
