@@ -124,7 +124,7 @@ class ImageReHoster
     private function store(string $url, Document $document, Filesystem $disk): array
     {
         try {
-            $result = $this->fetcher->fetch($url, $this->maxImageBytes());
+            $result = $this->fetcher->fetch($url, maxBytes: $this->maxImageBytes());
         } catch (BlockedUrlException) {
             return [null, ImportWarning::imageBlocked($url)];
         } catch (FetchException $e) {

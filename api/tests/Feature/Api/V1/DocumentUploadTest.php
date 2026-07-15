@@ -10,6 +10,7 @@ use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\DocumentImporter;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -167,6 +168,17 @@ class DocumentUploadTest extends TestCase
 
     private function runImport(Document $document): void
     {
+        // The importer projects every version after normalization (#18) —
+        // fake that endpoint at its HTTP boundary like DocumentImportTest.
+        Http::fake([
+            '*/internal/projection' => Http::response([
+                'plain_text' => 'Projected text.',
+                'projection_version' => '1',
+                'mdx_ok' => true,
+                'warnings' => [],
+            ]),
+        ]);
+
         (new ImportDocumentJob($document))->handle(app(DocumentImporter::class));
     }
 }
