@@ -7,6 +7,8 @@
     "dev": "next dev",
     "start": "next start",
     "e2e": "playwright test",
+    "test": "vitest run",
+    "test:update": "vitest run -u",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
@@ -20,6 +22,7 @@
     "next": "16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "remark-frontmatter": "5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
@@ -35,6 +38,7 @@
     "@types/react-dom": "^19.2.3",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "3.2.4"
   }
 }

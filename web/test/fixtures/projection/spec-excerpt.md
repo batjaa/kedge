@@ -1,0 +1,38 @@
+# Kedge
+
+Spec-review platform. This fixture is a frozen excerpt of the project's own
+`docs/SPEC.md` — the dogfood corpus seed (SPEC §18.2). It exercises the two
+gnarly constructs real Kedge docs carry: a GFM table and a PlantUML diagram
+fence.
+
+| Where specs live | Good at | Bad at |
+|---|---|---|
+| `.md` in git | Agent/AI consumption, versioning, PR workflow | Long-form rendering, commenting, sharing with non-git people |
+| `.mdx` in git | Same as md + rich components | Same as md; only renders inside a React app |
+| `.html` | Readability | Token-heavy for agents, no comments, awkward in git |
+| Confluence | Comments, discovery | No git/filesystem integration, bad for agents |
+
+## Architecture
+
+```plantuml
+@startuml
+skinparam componentStyle rectangle
+
+actor Author
+actor Reviewer
+actor "AI Agent" as Agent
+
+package "web (Next.js + Protocol)" {
+  [MDX renderer + compile cache] as MDX
+  [Text projection service] as PROJ
+  [Comment/suggestion layer] as CL
+}
+
+Author --> MDX
+Reviewer --> CL
+Agent --> PROJ
+@enduml
+```
+
+The diagram above renders through Kroki; in the projection it collapses to a
+single placeholder so comment offsets survive around it.

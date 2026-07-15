@@ -1,0 +1,15 @@
+Import failure modes
+
+Fetch
+SSRF-blocked URL → terminal, no retry
+Upstream 5xx → transient, retry ×3
+Normalization
+MDX compile failure → plain-markdown fallback
+Failed image fetch → import warning
+Record the warning
+Continue the import
+Surface it on the document
+
+First numbered step
+Second numbered step
+a bullet nested under an ordered item

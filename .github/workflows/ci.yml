@@ -77,6 +77,13 @@ jobs:
       - name: Type check
         run: npm run types:check
 
+      # Golden projection conformance corpus + pipeline unit tests (SPEC §5.4,
+      # §18.2). A pipeline change that alters any projection fails here until the
+      # goldens are regenerated intentionally (`npm run test:update`) alongside a
+      # projection_version bump.
+      - name: Projection tests (Vitest)
+        run: npm test
+
       # Guards the production build: types:check never exercises `next build`,
       # so prerender regressions (e.g. the /_global-error build failure) slip
       # through unless the build itself runs in CI.

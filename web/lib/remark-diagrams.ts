@@ -41,12 +41,26 @@ const ALIASES: Record<string, string> = {
   puml: 'plantuml',
 };
 
+/**
+ * The single source of truth for "is this fence a diagram?" — resolves a fence
+ * language (and its aliases) to a canonical Kroki engine, or null for anything
+ * that is not a diagram (prose code, unknown languages → plain text, never
+ * Kroki). Shared by the render transform below and the projection walk
+ * (lib/projection.ts), so a fence renders as a diagram exactly when it projects
+ * to a diagram placeholder — one allowlist, no drift (SPEC §6.2).
+ */
+export function diagramEngineFor(lang: string | null | undefined): string | null {
+  if (!lang) return null;
+  const engine = ALIASES[lang] ?? lang;
+  return KROKI_ENGINES.has(engine) ? engine : null;
+}
+
 export function remarkDiagrams() {
   return (tree: Root) => {
     visit(tree, 'code', (node: Code, index, parent) => {
-      if (!parent || index === undefined || !node.lang) return;
-      const engine = ALIASES[node.lang] ?? node.lang;
-      if (!KROKI_ENGINES.has(engine)) return;
+      if (!parent || index === undefined) return;
+      const engine = diagramEngineFor(node.lang);
+      if (engine === null) return;
 
       parent.children[index] = {
         type: 'mdxJsxFlowElement',

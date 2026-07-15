@@ -1,0 +1,10 @@
+Images and links
+
+A paragraph with an ⟦image⟧ inline
+image, some inline code, and a link to the spec
+whose visible text is anchor text but whose URL is not.
+
+⟦image⟧
+
+Text after the standalone image stays anchorable, and its offsets are stable
+because the image collapses to a fixed-width placeholder token.

@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkGfm from 'remark-gfm';
 import remarkRehype from 'remark-rehype';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit } from 'unist-util-visit';
 import type { Nodes } from 'hast';
+import { createRemarkProcessor } from './pipeline';
 
 // INTERIM markdown renderer for imported documents (ticket #17 tracer bullet).
 //
@@ -52,9 +50,10 @@ function sanitizeUrls() {
   };
 }
 
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
+// Extends the shared remark parser (lib/pipeline.ts) — the same mdast the
+// projection walks (SPEC §5.4) — with the render-only hast half. Rendering and
+// projection therefore agree, by construction, on where every block begins.
+const processor = createRemarkProcessor()
   // No allowDangerousHtml: raw HTML nodes are dropped rather than emitted.
   .use(remarkRehype)
   .use(sanitizeUrls);
