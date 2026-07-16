@@ -13,9 +13,9 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 
 | Module | Size | Depends on | Status | Spec |
 |---|---|---|---|---|
-| Scaffold | M | — | done (2026-07-12) | [specs/scaffold.md](specs/scaffold.md) · [#7](https://github.com/batjaa/kedge/issues/7) |
-| Import & render | L | Scaffold | done (2026-07-15) | [specs/import-render.md](specs/import-render.md) · [#15](https://github.com/batjaa/kedge/issues/15) |
-| Comments & suggestions | L | Import & render | specced | [specs/comments-suggestions.md](specs/comments-suggestions.md) |
+| Scaffold | M | — | done (2026-07-12) | [specs/m0-scaffold.md](specs/m0-scaffold.md) · [#7](https://github.com/batjaa/kedge/issues/7) |
+| Import & render | L | Scaffold | done (2026-07-15) | [specs/m1-import-render.md](specs/m1-import-render.md) · [#15](https://github.com/batjaa/kedge/issues/15) |
+| Comments & suggestions | L | Import & render | specced | [specs/m2-comments-suggestions.md](specs/m2-comments-suggestions.md) |
 | Versions, diff & approvals | L | Comments & suggestions | deciding | — |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |

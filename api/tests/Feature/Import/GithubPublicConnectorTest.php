@@ -113,11 +113,11 @@ class GithubPublicConnectorTest extends TestCase
         $this->transport->respond(200, ['Content-Type' => 'text/plain'], '# Spec');
 
         $this->connector()->fetch(new DocumentSource(
-            url: 'https://github.com/kedgehq/kedge/blob/main/docs/specs/import-render.md',
+            url: 'https://github.com/kedgehq/kedge/blob/main/docs/specs/m1-import-render.md',
         ));
 
         $this->assertSame(
-            'https://api.github.com/repos/kedgehq/kedge/contents/docs/specs/import-render.md?ref=main',
+            'https://api.github.com/repos/kedgehq/kedge/contents/docs/specs/m1-import-render.md?ref=main',
             $this->transport->lastRequest()->url,
         );
     }
