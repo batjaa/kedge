@@ -35,6 +35,17 @@ export type ReplyOutcome =
   | { ok: true; comment: ThreadComment }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
 
+export type ReplyToThreadInput =
+  | {
+      body: string;
+      comment_type?: 'comment';
+    }
+  | {
+      comment_type: 'suggestion';
+      body?: string;
+      proposed_text: string;
+    };
+
 export type ThreadMutationOutcome =
   | { ok: true; thread: ReviewThread }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
@@ -123,9 +134,13 @@ export async function createSuggestionThread(
   });
 }
 
-export async function replyToThread(threadId: number, body: string, idempotencyKey: string): Promise<ReplyOutcome> {
+export async function replyToThread(
+  threadId: number,
+  input: ReplyToThreadInput,
+  idempotencyKey: string,
+): Promise<ReplyOutcome> {
   const res = await mutate('POST', `/api/v1/threads/${threadId}/comments`, {
-    body,
+    ...input,
     idempotency_key: idempotencyKey,
   });
 

@@ -58,18 +58,29 @@ export function diffSuggestionText(before: string, after: string): SuggestionDif
 
 export function SuggestionDiff({ diff }: { diff: SuggestionDiffResult }) {
   return (
-    <div className="mt-2 space-y-2 rounded-md bg-zinc-50 p-2 ring-1 ring-inset ring-zinc-900/10 dark:bg-zinc-950 dark:ring-white/10">
-      <DiffLine label="Before" tokens={diff.before} />
-      <DiffLine label="After" tokens={diff.after} />
+    <div className="mt-2 overflow-hidden rounded-xl bg-zinc-900 font-mono text-xs ring-1 ring-white/10">
+      <DiffLine marker="-" tokens={diff.before} kind="before" />
+      <DiffLine marker="+" tokens={diff.after} kind="after" />
     </div>
   );
 }
 
-function DiffLine({ label, tokens }: { label: string; tokens: DiffToken[] }) {
+function DiffLine({
+  marker,
+  tokens,
+  kind,
+}: {
+  marker: string;
+  tokens: DiffToken[];
+  kind: 'before' | 'after';
+}) {
   return (
-    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-2 text-xs leading-5">
-      <span className="font-mono text-[10px] uppercase text-zinc-500 dark:text-zinc-500">{label}</span>
-      <p className="min-w-0 whitespace-pre-wrap break-words text-zinc-700 dark:text-zinc-300">
+    <div className="grid grid-cols-[1.5rem_minmax(0,1fr)] border-t border-zinc-700/50 first:border-t-0">
+      <span className="select-none px-3 py-1.5 text-zinc-600">{marker}</span>
+      <p className={kind === 'before'
+        ? 'min-w-0 whitespace-pre-wrap break-words px-3 py-1.5 text-rose-400/90'
+        : 'min-w-0 whitespace-pre-wrap break-words px-3 py-1.5 text-emerald-400'}
+      >
         {tokens.length > 0 ? renderTokens(tokens) : <span className="text-zinc-400">empty</span>}
       </p>
     </div>
@@ -83,8 +94,8 @@ function renderTokens(tokens: DiffToken[]): ReactNode[] {
     }
 
     const classes = token.kind === 'added'
-      ? 'rounded bg-emerald-100 px-0.5 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200'
-      : 'rounded bg-rose-100 px-0.5 text-rose-800 line-through decoration-rose-500/70 dark:bg-rose-400/15 dark:text-rose-200';
+      ? 'rounded bg-emerald-400/15 px-0.5 text-emerald-300'
+      : 'rounded bg-rose-400/15 px-0.5 text-rose-300 line-through decoration-rose-400/70';
 
     return (
       <span key={index} className={classes}>

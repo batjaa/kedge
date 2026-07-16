@@ -60,17 +60,20 @@ export default async function SharedDocumentPage({
   const isDemo = doc.claimable === true && typeof doc.document_id === 'number';
   const verifiedReviewer = doc.reviewer.verified === true && typeof doc.document_id === 'number';
   const verifyState = verifyReturnState(query.verify);
+  const showShareHeader = !verifiedReviewer || doc.status !== 'ready';
 
   return (
     <div>
-      <header className="mb-8 border-b border-zinc-900/10 pb-6 dark:border-white/10">
-        <p className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-          {isDemo ? 'Demo document' : verifiedReviewer ? 'Shared document · verified reviewer' : 'Shared document · read-only'}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          {doc.title}
-        </h1>
-      </header>
+      {showShareHeader ? (
+        <header className="mb-8 border-b border-zinc-900/10 pb-6 dark:border-white/10">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+            {isDemo ? 'Demo document' : verifiedReviewer ? 'Shared document · verified reviewer' : 'Shared document · read-only'}
+          </p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
+            {doc.title}
+          </h1>
+        </header>
+      ) : null}
 
       {doc.status === 'ready' && doc.current_version ? (
         verifiedReviewer ? (
@@ -80,6 +83,10 @@ export default async function SharedDocumentPage({
             ) : null}
             <DocumentReviewSurface
               documentId={doc.document_id!}
+              title={doc.title}
+              surfaceLabel="Shared document · verified reviewer"
+              versionLabel={`v${doc.current_version.id}`}
+              syncedAt={doc.current_version.synced_at}
               plainText={doc.current_version.plain_text ?? null}
               projectionVersion={doc.current_version.projection_version ?? null}
             >

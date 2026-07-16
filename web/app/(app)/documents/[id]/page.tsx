@@ -57,24 +57,28 @@ export default async function DocumentPage({
     );
   }
 
+  const showStaticHeader = document.status !== 'ready';
+
   return (
     <div>
-      <div className="mb-6">
-        <Link
-          href="/"
-          className="text-sm text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
-        >
-          ← Review queue
-        </Link>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          {document.title}
-        </h1>
-        {document.source_url ? (
-          <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-500">
-            {document.source_url}
-          </p>
-        ) : null}
-      </div>
+      {showStaticHeader ? (
+        <div className="mb-6">
+          <Link
+            href="/"
+            className="text-sm text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
+          >
+            ← Review queue
+          </Link>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
+            {document.title}
+          </h1>
+          {document.source_url ? (
+            <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-500">
+              {document.source_url}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {document.status === 'importing' ? (
         <DocumentPoller id={document.id} />
@@ -91,6 +95,14 @@ export default async function DocumentPage({
           />
           <DocumentReviewSurface
             documentId={document.id}
+            title={document.title}
+            surfaceLabel="Authenticated document"
+            sourceUrl={document.source_url}
+            lifecycleStatus={document.lifecycle_status}
+            versionLabel={`v${document.current_version.id}`}
+            syncedAt={document.current_version.synced_at}
+            backHref="/"
+            backLabel="← Review queue"
             plainText={document.current_version.plain_text ?? null}
             projectionVersion={document.current_version.projection_version ?? null}
           >

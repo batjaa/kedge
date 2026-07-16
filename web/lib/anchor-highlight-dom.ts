@@ -17,7 +17,20 @@ const ELEMENT_NODE = 1;
 const HIGHLIGHT_ATTR = 'data-kedge-anchor-highlight';
 const THREAD_IDS_ATTR = 'data-kedge-thread-ids';
 
-const BASE_ANCHOR_CLASSES = ['bg-emerald-300/20', 'ring-1', 'ring-inset', 'ring-emerald-400/20'];
+const BASE_ANCHOR_CLASSES = [
+  'cursor-pointer',
+  'rounded',
+  'bg-emerald-300/20',
+  'box-decoration-clone',
+  'border-b-2',
+  'border-emerald-500/60',
+  'ring-1',
+  'ring-inset',
+  'ring-emerald-400/20',
+  'focus:outline-none',
+  'focus-visible:ring-2',
+  'focus-visible:ring-emerald-500',
+];
 const ACTIVE_ANCHOR_CLASSES = ['bg-emerald-300/40', 'ring-2', 'ring-emerald-500/60'];
 
 interface BrowserProjectionNode extends ProjectionDomNode {
@@ -204,6 +217,9 @@ function wrapTextSlice(textNode: Text, slice: HighlightSlice, activeThreadId: nu
   const highlight = textNode.ownerDocument.createElement('mark');
   highlight.setAttribute(HIGHLIGHT_ATTR, 'true');
   highlight.setAttribute(THREAD_IDS_ATTR, slice.threadIds.map(String).join(' '));
+  highlight.setAttribute('role', 'button');
+  highlight.setAttribute('tabindex', '0');
+  highlight.setAttribute('aria-label', slice.threadIds.length === 1 ? 'Open thread' : 'Open threads');
   highlight.classList.add(...BASE_ANCHOR_CLASSES);
 
   if (activeThreadId != null && slice.threadIds.includes(activeThreadId)) {

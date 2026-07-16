@@ -39,7 +39,7 @@ export function AppShell({
           <SignOutButton />
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10 sm:py-14">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10 sm:py-14">
         {children}
       </main>
     </div>

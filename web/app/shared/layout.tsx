@@ -18,11 +18,11 @@ export const metadata: Metadata = {
 export default function SharedLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-900">
-      <header className="flex h-14 items-center justify-between border-b border-zinc-900/10 px-6 dark:border-white/10">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-zinc-900/10 bg-white/85 px-6 backdrop-blur dark:border-white/10 dark:bg-zinc-900/85">
         <BrandMark />
         <ThemeToggle />
       </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10 sm:py-14">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10 sm:py-14">{children}</main>
       <footer className="border-t border-zinc-900/10 px-6 py-4 text-center dark:border-white/10">
         <a
           href="/"
