@@ -155,3 +155,7 @@
 
 - ✅ **Reviewer identity is a distinct, share-scoped principal** — a passwordless, non-member User bound to one Share via `share_participants`; magic links NEVER authenticate a credentialed or workspace-member account (that path requires normal sign-in). Terms added to CONTEXT.md (Reviewer, Share Participant).
 - ✅ **Magic-link verify is two-step** — a safe/idempotent GET validates the signed link and hands a short-lived completion token to the web app, which completes login via a same-origin XSRF-protected POST in the Sanctum stateful session. This is what makes the reviewer session work over real HTTP while closing login-CSRF and mail-scanner-prefetch (the GET consumes nothing; the POST is single-use). Caught by curl smoke; the definitive regression is the #68 e2e.
+
+## Known debt (M2 #68 e2e mailbox helper, 2026-07-16)
+
+- The e2e magic-link mailbox helper (`web/e2e/mailbox.ts`) scopes to a fixed ±char window around the recipient email and only truncates the log at server boot (not per test). Both hold today via per-run unique emails; revisit (larger/again-computed window, per-test truncation) if the mail template grows or specs start reusing addresses. (S)

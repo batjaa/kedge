@@ -15,9 +15,10 @@ export interface MagicLinkLookupOptions {
  * Poll Laravel's log mailer output for the newest reviewer magic-link URL.
  *
  * The log transport writes a MIME email, not a clean URL list. The href is HTML
- * escaped by Blade (`&amp;`) and can be quoted-printable encoded/wrapped
- * (`=3D`, `=\n`, `=XX`). Decode in that order before extracting the URL so the
- * signed route's query string stays byte-for-byte intact.
+ * escaped by Blade (`&amp;`) and can be quoted-printable soft-wrapped (`=\r?\n`)
+ * on long lines. Undo the soft wrap and the entities before extracting the URL
+ * so the signed route's query string stays byte-for-byte intact — deliberately
+ * NOT doing a general `=XX`→byte decode (see decodeQuotedPrintable).
  */
 export async function latestReviewerMagicLinkUrl({
   email,
@@ -91,17 +92,15 @@ function normalizeExtractedUrl(value: string): string {
 }
 
 function decodeQuotedPrintable(value: string): string {
-  const withoutSoftBreaks = removeSoftBreaks(value);
-  const protectedQueryEquals = withoutSoftBreaks.replace(
-    /([?&][A-Za-z0-9_.~-]+)=((?!3[Dd])[0-9A-Fa-f]{2})/g,
-    '$1__KEDGE_QUERY_EQUALS__$2',
-  );
-
-  return protectedQueryEquals
-    .replace(/=([0-9A-Fa-f]{2})/g, (_match, hex: string) => {
-      return String.fromCharCode(Number.parseInt(hex, 16));
-    })
-    .replace(/__KEDGE_QUERY_EQUALS__/g, '=');
+  // The log-driver mail writes the magic-link URL with LITERAL `=` separators
+  // (`expires=…&signature=…`), HTML-entity ampersands (`&amp;`), and possible
+  // quoted-printable SOFT breaks on long lines (`=\r?\n`) — but never `=XX`
+  // byte escapes (signed-URL values are all printable ASCII, so nothing gets
+  // QP-encoded). So the only QP artifact to undo is the soft break. We must NOT
+  // run a general `=XX`→byte decode here: a signature that legitimately begins
+  // with the hex digits `3d` would have its `=3d` eaten as an escaped `=`,
+  // corrupting ~1/256 of links (a latent flake in the magic-link journey).
+  return removeSoftBreaks(value);
 }
 
 function removeSoftBreaks(value: string): string {
