@@ -9,7 +9,7 @@ import { anchorCaptureFixtures } from './anchor-capture-fixtures';
 
 // Golden anchor-capture corpus (SPEC §8.2 / M2). Each fixture is:
 //
-//   annotated rendered Projection structure + selection endpoints
+//   attrs-encoded rendered Projection structure + selection endpoints
 //       -> captured Anchor selector or typed capture failure
 //
 // Regenerate intentionally with:

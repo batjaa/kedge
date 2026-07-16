@@ -6,7 +6,9 @@
     "childNodes": [
       {
         "tagName": "code",
-        "projectionRange": { "start": 0, "end": 32 },
+        "attrs": [
+          { "name": "data-prange", "value": "0:33" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "const answer = 42;\nreturn answer;" }
         ]

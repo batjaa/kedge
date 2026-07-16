@@ -6,23 +6,27 @@
     "childNodes": [
       {
         "tagName": "h1",
-        "headingLevel": 1,
-        "projectionRange": { "start": 0, "end": 12 },
+        "attrs": [
+          { "name": "data-prange", "value": "0:12" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "Product Plan" }
         ]
       },
       {
         "tagName": "h2",
-        "headingLevel": 2,
-        "projectionRange": { "start": 14, "end": 23 },
+        "attrs": [
+          { "name": "data-prange", "value": "14:23" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "Anchoring" }
         ]
       },
       {
         "tagName": "p",
-        "projectionRange": { "start": 25, "end": 47 },
+        "attrs": [
+          { "name": "data-prange", "value": "25:47" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "Capture this sentence." }
         ]

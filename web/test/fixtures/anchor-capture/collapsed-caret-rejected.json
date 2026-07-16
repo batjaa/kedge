@@ -6,7 +6,9 @@
     "childNodes": [
       {
         "tagName": "p",
-        "projectionRange": { "start": 0, "end": 11 },
+        "attrs": [
+          { "name": "data-prange", "value": "0:11" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "Caret only." }
         ]

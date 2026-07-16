@@ -17,12 +17,15 @@ export interface ProjectionDomNode {
   nodeName?: string;
   tagName?: string;
   value?: string;
-  text?: string;
   attrs?: ProjectionDomAttribute[];
-  projectionRange?: ProjectionTextRange | null;
-  projectionAtomic?: boolean;
-  headingLevel?: number;
   childNodes?: ProjectionDomNode[];
+}
+
+export interface ProjectionNodeAnnotation {
+  range: ProjectionTextRange | null;
+  atomic: boolean;
+  malformed: boolean;
+  detail: string | null;
 }
 
 export interface ProjectionRenderedChildText {
@@ -32,7 +35,7 @@ export interface ProjectionRenderedChildText {
   end: number;
 }
 
-export function isProjectionElementNode(node: ProjectionDomNode): boolean {
+function isProjectionElementNode(node: ProjectionDomNode): boolean {
   return typeof node.tagName === 'string';
 }
 
@@ -48,21 +51,39 @@ function attr(node: ProjectionDomNode, name: string): string | undefined {
   return node.attrs?.find((entry) => entry.name === name)?.value;
 }
 
-export function projectionNodeRange(node: ProjectionDomNode): ProjectionTextRange | null {
-  if (node.projectionRange) return node.projectionRange;
+export function projectionNodeAnnotation(node: ProjectionDomNode): ProjectionNodeAnnotation {
   const raw = attr(node, PROJECTION_RANGE_ATTR);
-  if (!raw) return null;
-  const match = /^(\d+):(\d+)$/.exec(raw);
-  if (!match) return null;
-  return { start: Number(match[1]), end: Number(match[2]) };
-}
+  const atomic = attr(node, PROJECTION_ATOMIC_ATTR) === 'true';
+  let range: ProjectionTextRange | null = null;
+  let malformed = false;
+  let detail: string | null = null;
 
-export function projectionNodeIsAtomic(node: ProjectionDomNode): boolean {
-  return node.projectionAtomic === true || attr(node, PROJECTION_ATOMIC_ATTR) === 'true';
+  if (raw != null) {
+    const match = /^(\d+):(\d+)$/.exec(raw);
+    if (!match) {
+      malformed = true;
+      detail = `Invalid ${PROJECTION_RANGE_ATTR} value "${raw}".`;
+    } else {
+      const start = Number(match[1]);
+      const end = Number(match[2]);
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end) {
+        malformed = true;
+        detail = `Invalid ${PROJECTION_RANGE_ATTR} bounds "${raw}".`;
+      } else {
+        range = { start, end };
+      }
+    }
+  }
+
+  if (atomic && range == null) {
+    malformed = true;
+    detail ??= `Atomic projection node is missing a parseable ${PROJECTION_RANGE_ATTR}.`;
+  }
+
+  return { range, atomic, malformed, detail };
 }
 
 export function projectionNodeHeadingLevel(node: ProjectionDomNode): number | null {
-  if (typeof node.headingLevel === 'number') return node.headingLevel;
   const tagName = node.tagName?.toLowerCase();
   if (!tagName) return null;
   const match = /^h([1-6])$/.exec(tagName);
@@ -70,10 +91,10 @@ export function projectionNodeHeadingLevel(node: ProjectionDomNode): number | nu
 }
 
 export function projectionNodeTextValue(node: ProjectionDomNode): string {
-  return node.value ?? node.text ?? '';
+  return node.value ?? '';
 }
 
-export function projectionNodeTagName(node: ProjectionDomNode): string | undefined {
+function projectionNodeTagName(node: ProjectionDomNode): string | undefined {
   return node.tagName?.toLowerCase();
 }
 
@@ -95,9 +116,9 @@ export function renderedProjectionText(node: ProjectionDomNode, projection: stri
     return projectionNodeChildren(node).map((child) => renderedProjectionText(child, projection)).join('');
   }
 
-  const annotatedRange = projectionNodeRange(node);
-  if (projectionNodeIsAtomic(node) && annotatedRange) {
-    return projection.slice(annotatedRange.start, annotatedRange.end);
+  const annotation = projectionNodeAnnotation(node);
+  if (annotation.atomic && annotation.range) {
+    return projection.slice(annotation.range.start, annotation.range.end);
   }
   if (projectionNodeTagName(node) === 'br') return '\n';
 

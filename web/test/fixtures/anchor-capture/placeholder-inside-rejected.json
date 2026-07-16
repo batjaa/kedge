@@ -6,13 +6,17 @@
     "childNodes": [
       {
         "tagName": "p",
-        "projectionRange": { "start": 0, "end": 21 },
+        "attrs": [
+          { "name": "data-prange", "value": "0:21" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "Before " },
           {
             "tagName": "span",
-            "projectionRange": { "start": 7, "end": 14 },
-            "projectionAtomic": true,
+            "attrs": [
+              { "name": "data-prange", "value": "7:14" },
+              { "name": "data-patomic", "value": "true" }
+            ],
             "childNodes": [
               { "nodeName": "#text", "value": "rendered image" }
             ]

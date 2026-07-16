@@ -6,12 +6,16 @@
     "childNodes": [
       {
         "tagName": "p",
-        "projectionRange": { "start": 0, "end": 25 },
+        "attrs": [
+          { "name": "data-prange", "value": "0:25" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "This " },
           {
             "tagName": "strong",
-            "projectionRange": { "start": 5, "end": 9 },
+            "attrs": [
+              { "name": "data-prange", "value": "5:9" }
+            ],
             "childNodes": [
               { "nodeName": "#text", "value": "bold" }
             ]
@@ -19,7 +23,9 @@
           { "nodeName": "#text", "value": " " },
           {
             "tagName": "em",
-            "projectionRange": { "start": 10, "end": 14 },
+            "attrs": [
+              { "name": "data-prange", "value": "10:14" }
+            ],
             "childNodes": [
               { "nodeName": "#text", "value": "emph" }
             ]
@@ -27,7 +33,9 @@
           { "nodeName": "#text", "value": " " },
           {
             "tagName": "a",
-            "projectionRange": { "start": 15, "end": 19 },
+            "attrs": [
+              { "name": "data-prange", "value": "15:19" }
+            ],
             "childNodes": [
               { "nodeName": "#text", "value": "link" }
             ]

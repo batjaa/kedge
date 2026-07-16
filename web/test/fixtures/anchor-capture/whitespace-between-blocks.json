@@ -6,14 +6,18 @@
     "childNodes": [
       {
         "tagName": "p",
-        "projectionRange": { "start": 0, "end": 16 },
+        "attrs": [
+          { "name": "data-prange", "value": "0:16" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "First paragraph." }
         ]
       },
       {
         "tagName": "p",
-        "projectionRange": { "start": 18, "end": 35 },
+        "attrs": [
+          { "name": "data-prange", "value": "18:35" }
+        ],
         "childNodes": [
           { "nodeName": "#text", "value": "Second paragraph." }
         ]
