@@ -1813,6 +1813,53 @@ class ThreadCommentTest extends TestCase
         );
     }
 
+    public function test_thread_list_thread_capabilities_do_not_query_membership_per_thread(): void
+    {
+        [, $document] = $this->readyDocument();
+        $reviewer = User::factory()->create(['email' => 'thread-owner-reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+
+        for ($threadNumber = 1; $threadNumber <= 6; $threadNumber++) {
+            Thread::create([
+                'document_id' => $document->id,
+                'type' => 'document',
+                'status' => 'open',
+                'created_by' => $reviewer->id,
+            ]);
+        }
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
+            ->assertOk()
+            ->assertJsonCount(6, 'data')
+            ->assertJsonPath('data.0.can_resolve', true)
+            ->assertJsonPath('data.5.can_resolve', true);
+
+        $workspaceMembershipQueries = collect($queries)
+            ->filter(fn (string $sql) => str_contains($sql, 'workspace_members'))
+            ->count();
+        $shareParticipantQueries = collect($queries)
+            ->filter(fn (string $sql) => str_contains($sql, 'share_participants'))
+            ->count();
+
+        $this->assertLessThanOrEqual(
+            2,
+            $workspaceMembershipQueries,
+            'Thread listing should not query workspace membership once per thread capability.',
+        );
+        $this->assertLessThanOrEqual(
+            3,
+            $shareParticipantQueries,
+            'Thread listing should not query share reviewer state once per thread capability.',
+        );
+    }
+
     /**
      * @return array{User, Document}
      */

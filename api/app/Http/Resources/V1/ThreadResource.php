@@ -7,7 +7,6 @@ use App\Models\Comment;
 use App\Models\Thread;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Gate;
 
 /** @mixin Thread */
 class ThreadResource extends JsonResource
@@ -28,8 +27,8 @@ class ThreadResource extends JsonResource
     {
         $anchor = $this->railAnchor();
         $firstComment = $this->resourceFirstComment();
-        $gate = $request->user() ? Gate::forUser($request->user()) : null;
-        $canTriage = $gate?->allows('triage', $this->resource) ?? false;
+        $canTriage = ThreadCapabilities::for($request, $this->resource)
+            ->canTriage($this->resource);
 
         return [
             'id' => $this->id,

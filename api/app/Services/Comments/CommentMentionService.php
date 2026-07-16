@@ -141,11 +141,7 @@ class CommentMentionService
     {
         return ShareParticipant::query()
             ->where('user_id', $actor->id)
-            ->whereNotNull('verified_at')
-            ->whereHas('share', function (Builder $query) use ($document): void {
-                $query->where('document_id', $document->id)
-                    ->active();
-            })
+            ->verifiedForActiveDocumentShare($document)
             ->orderBy('id')
             ->first(['id', 'share_id', 'user_id']);
     }
@@ -158,16 +154,9 @@ class CommentMentionService
         $workspaceMembers = DB::table('workspace_members')
             ->select('user_id')
             ->where('workspace_id', $document->workspace_id);
-        $verifiedShareParticipants = DB::table('share_participants')
-            ->join('shares', 'shares.id', '=', 'share_participants.share_id')
+        $verifiedShareParticipants = ShareParticipant::query()
             ->select('share_participants.user_id')
-            ->whereNotNull('share_participants.verified_at')
-            ->where('shares.document_id', $document->id)
-            ->whereNull('shares.revoked_at')
-            ->where(function ($query): void {
-                $query->whereNull('shares.expires_at')
-                    ->orWhere('shares.expires_at', '>', now());
-            });
+            ->verifiedForActiveDocumentShare($document);
         $commentAuthors = $this->commentAuthorsForDocument($document);
 
         return User::query()

@@ -12,11 +12,7 @@ trait ResolvesShareReviewers
     {
         return ShareParticipant::query()
             ->where('user_id', $user->id)
-            ->whereNotNull('verified_at')
-            ->whereHas('share', function ($query) use ($document): void {
-                $query->where('document_id', $document->id)
-                    ->active();
-            })
+            ->verifiedForActiveDocumentShare($document)
             ->exists();
     }
 

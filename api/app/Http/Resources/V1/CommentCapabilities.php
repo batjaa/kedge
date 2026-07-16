@@ -5,6 +5,7 @@ namespace App\Http\Resources\V1;
 use App\Enums\CommentType;
 use App\Models\Comment;
 use App\Models\Document;
+use App\Models\ShareParticipant;
 use App\Models\Thread;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -130,16 +131,9 @@ final class CommentCapabilities
             return true;
         }
 
-        return DB::table('share_participants')
-            ->join('shares', 'shares.id', '=', 'share_participants.share_id')
-            ->where('share_participants.user_id', $viewerId)
-            ->whereNotNull('share_participants.verified_at')
-            ->where('shares.document_id', $document->id)
-            ->whereNull('shares.revoked_at')
-            ->where(function ($query): void {
-                $query->whereNull('shares.expires_at')
-                    ->orWhere('shares.expires_at', '>', now());
-            })
+        return ShareParticipant::query()
+            ->where('user_id', $viewerId)
+            ->verifiedForActiveDocumentShare($document)
             ->exists();
     }
 }
