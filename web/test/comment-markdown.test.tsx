@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderCommentMarkdown } from '@/lib/render-comment-markdown';
+import type { MentionCandidate } from '@/lib/thread-types';
 
-function html(markdown: string): string {
-  return renderToStaticMarkup(renderCommentMarkdown(markdown));
+function html(markdown: string, mentions: MentionCandidate[] = []): string {
+  return renderToStaticMarkup(renderCommentMarkdown(markdown, mentions));
 }
 
 describe('renderCommentMarkdown', () => {
@@ -49,7 +50,7 @@ describe('renderCommentMarkdown', () => {
   });
 
   test('renders mention tokens as inert styled text', () => {
-    const rendered = html('Please ask [@Alice Reviewer](mention:42).');
+    const rendered = html('Please ask [@Alice Reviewer](mention:42).', [{ id: 42, name: 'Alice Reviewer' }]);
 
     expect(rendered).toContain('data-mention-id="42"');
     expect(rendered).toContain('@Alice Reviewer');
@@ -57,10 +58,19 @@ describe('renderCommentMarkdown', () => {
   });
 
   test('does not turn crafted mention labels into markup', () => {
-    const rendered = html('Hi [@<img src=x onerror=alert(1)>](mention:7)');
+    const rendered = html('Hi [@<img src=x onerror=alert(1)>](mention:7)', [{ id: 7, name: 'Safe Reviewer' }]);
 
     expect(rendered).toContain('data-mention-id="7"');
+    expect(rendered).toContain('@Safe Reviewer');
     expect(rendered).not.toContain('<img');
     expect(rendered).not.toContain('onerror');
+  });
+
+  test('renders mention chips with the canonical linked user name instead of the embedded label', () => {
+    const rendered = html('Hi [@Workspace Owner](mention:42)', [{ id: 42, name: 'Actual Reviewer' }]);
+
+    expect(rendered).toContain('data-mention-id="42"');
+    expect(rendered).toContain('@Actual Reviewer');
+    expect(rendered).not.toContain('Workspace Owner');
   });
 });

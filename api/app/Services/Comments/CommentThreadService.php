@@ -455,7 +455,7 @@ class CommentThreadService
         $thread->load([
             'document.workspace',
             'anchors' => fn ($query) => $query->orderBy('start'),
-            'comments' => fn ($query) => $query->with('author')->orderBy('id'),
+            'comments' => fn ($query) => $query->with(['author', 'mentionedUsers:id,name'])->orderBy('id'),
         ]);
         $thread->comments->each(fn (Comment $comment) => $comment->setRelation('thread', $thread));
         $this->applyReactionAttributes($thread->comments, $viewer);
@@ -484,7 +484,7 @@ class CommentThreadService
 
     public function loadCommentForResource(Comment $comment, ?User $viewer = null): Comment
     {
-        $comment->load(['author', 'thread.document']);
+        $comment->load(['author', 'thread.document', 'mentionedUsers:id,name']);
         $this->applyReactionAttributes(collect([$comment]), $viewer);
 
         return $comment;
@@ -497,35 +497,14 @@ class CommentThreadService
             return;
         }
 
-        $reactionStats = DB::table('comment_reactions')
-            ->select('comment_id')
-            ->selectRaw('COUNT(*) as reaction_count')
-            ->where('emoji', CommentReactionService::THUMBS_UP)
-            ->groupBy('comment_id');
-
-        $commentsQuery = Comment::withTrashed()
+        $comments = Comment::withTrashed()
             ->whereIn('thread_id', $threadIds)
-            ->leftJoinSub($reactionStats, 'reaction_stats', 'reaction_stats.comment_id', '=', 'comments.id')
-            ->select('comments.*')
-            ->addSelect('reaction_stats.reaction_count as reaction_count')
-            ->with('author')
-            ->orderBy('comments.id');
+            ->with(['author', 'mentionedUsers:id,name'])
+            ->orderBy('id')
+            ->get();
+        $this->applyReactionAttributes($comments, $viewer);
 
-        if ($viewer instanceof User) {
-            $viewerReactions = DB::table('comment_reactions')
-                ->select('comment_id')
-                ->where('user_id', $viewer->id)
-                ->where('emoji', CommentReactionService::THUMBS_UP);
-
-            $commentsQuery
-                ->leftJoinSub($viewerReactions, 'viewer_reactions', 'viewer_reactions.comment_id', '=', 'comments.id')
-                ->selectRaw('CASE WHEN viewer_reactions.comment_id IS NULL THEN 0 ELSE 1 END as viewer_has_reacted');
-        } else {
-            $commentsQuery->selectRaw('0 as viewer_has_reacted');
-        }
-
-        $commentsByThread = $commentsQuery->get()
-            ->groupBy('thread_id');
+        $commentsByThread = $comments->groupBy('thread_id');
         $commentThreadMap = $commentsByThread
             ->flatten(1)
             ->mapWithKeys(fn (Comment $comment) => [(int) $comment->id => (int) $comment->thread_id]);
@@ -581,25 +560,25 @@ class CommentThreadService
             return;
         }
 
-        $counts = DB::table('comment_reactions')
+        $statsQuery = DB::table('comment_reactions')
             ->select('comment_id')
             ->selectRaw('COUNT(*) as reaction_count')
             ->whereIn('comment_id', $commentIds)
             ->where('emoji', CommentReactionService::THUMBS_UP)
-            ->groupBy('comment_id')
-            ->pluck('reaction_count', 'comment_id');
-        $viewerReacted = $viewer instanceof User
-            ? DB::table('comment_reactions')
-                ->whereIn('comment_id', $commentIds)
-                ->where('user_id', $viewer->id)
-                ->where('emoji', CommentReactionService::THUMBS_UP)
-                ->pluck('comment_id')
-                ->mapWithKeys(fn (mixed $id) => [(int) $id => true])
-            : collect();
+            ->groupBy('comment_id');
 
-        $comments->each(function (Comment $comment) use ($counts, $viewerReacted): void {
-            $comment->setAttribute('reaction_count', (int) ($counts[$comment->id] ?? 0));
-            $comment->setAttribute('viewer_has_reacted', (bool) ($viewerReacted[(int) $comment->id] ?? false));
+        if ($viewer instanceof User) {
+            $statsQuery->selectRaw('MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as viewer_has_reacted', [(int) $viewer->id]);
+        } else {
+            $statsQuery->selectRaw('0 as viewer_has_reacted');
+        }
+
+        $stats = $statsQuery->get()->keyBy(fn (object $row) => (int) $row->comment_id);
+
+        $comments->each(function (Comment $comment) use ($stats): void {
+            $row = $stats->get((int) $comment->id);
+            $comment->setAttribute('reaction_count', (int) ($row->reaction_count ?? 0));
+            $comment->setAttribute('viewer_has_reacted', (bool) ((int) ($row->viewer_has_reacted ?? 0)));
         });
     }
 

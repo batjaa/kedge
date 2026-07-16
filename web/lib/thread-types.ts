@@ -37,6 +37,7 @@ export interface ThreadComment {
   author?: ThreadAuthor;
   type: CommentType;
   body_md: string | null;
+  mentions: MentionCandidate[];
   proposed_text: string | null;
   suggestion_status: SuggestionStatus | null;
   client: CommentClient;

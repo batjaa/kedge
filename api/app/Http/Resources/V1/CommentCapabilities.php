@@ -7,24 +7,26 @@ use App\Models\Comment;
 use App\Models\Document;
 use App\Models\Thread;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class CommentCapabilities
 {
     private function __construct(
         private readonly ?int $viewerId,
         private readonly ?int $documentAuthorId,
+        private readonly bool $viewerCanReact,
     ) {}
 
     public static function for(Request $request, Comment $comment): self
     {
         $user = $request->user();
         if ($user === null) {
-            return new self(null, null);
+            return new self(null, null, false);
         }
 
         $document = self::documentFor($comment);
         if (! $document instanceof Document) {
-            return new self((int) $user->id, null);
+            return new self((int) $user->id, null, false);
         }
 
         $key = self::class.':'.$document->id.':'.$user->id;
@@ -33,7 +35,12 @@ final class CommentCapabilities
             return $capabilities;
         }
 
-        $capabilities = new self((int) $user->id, $document->created_by === null ? null : (int) $document->created_by);
+        $viewerId = (int) $user->id;
+        $capabilities = new self(
+            $viewerId,
+            $document->created_by === null ? null : (int) $document->created_by,
+            self::viewerParticipatesInDocument($viewerId, $document),
+        );
         $request->attributes->set($key, $capabilities);
 
         return $capabilities;
@@ -65,7 +72,7 @@ final class CommentCapabilities
 
     public function canReact(Comment $comment): bool
     {
-        return $this->viewerId !== null && ! $comment->trashed();
+        return $this->viewerCanReact && ! $comment->trashed();
     }
 
     private function isViewer(mixed $userId): bool
@@ -108,5 +115,31 @@ final class CommentCapabilities
         }
 
         return $thread;
+    }
+
+    private static function viewerParticipatesInDocument(int $viewerId, Document $document): bool
+    {
+        if ($document->created_by !== null && (int) $document->created_by === $viewerId) {
+            return true;
+        }
+
+        if (DB::table('workspace_members')
+            ->where('workspace_id', $document->workspace_id)
+            ->where('user_id', $viewerId)
+            ->exists()) {
+            return true;
+        }
+
+        return DB::table('share_participants')
+            ->join('shares', 'shares.id', '=', 'share_participants.share_id')
+            ->where('share_participants.user_id', $viewerId)
+            ->whereNotNull('share_participants.verified_at')
+            ->where('shares.document_id', $document->id)
+            ->whereNull('shares.revoked_at')
+            ->where(function ($query): void {
+                $query->whereNull('shares.expires_at')
+                    ->orWhere('shares.expires_at', '>', now());
+            })
+            ->exists();
     }
 }

@@ -10,6 +10,22 @@ describe('mention token helpers', () => {
     });
   });
 
+  test('keeps multi-word mention queries active', () => {
+    expect(findMentionTrigger('please ask @Same Share', 'please ask @Same Share'.length)).toEqual({
+      start: 11,
+      end: 22,
+      query: 'Same Share',
+    });
+  });
+
+  test('keeps unicode mention queries active', () => {
+    expect(findMentionTrigger('please ask @José', 'please ask @José'.length)).toEqual({
+      start: 11,
+      end: 16,
+      query: 'José',
+    });
+  });
+
   test('inserts a persisted mention token and leaves the caret after it', () => {
     const trigger = findMentionTrigger('please ask @ali today', 'please ask @ali'.length);
     if (!trigger) throw new Error('trigger missing');

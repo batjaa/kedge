@@ -124,24 +124,28 @@ class CommentModerationService
     public function updateComment(Comment $comment, User $actor, string $body, ?string $ip): Comment
     {
         $comment->loadMissing('thread.document.workspace');
+        $document = $comment->thread->document;
 
         if ($comment->trashed()) {
             $this->reject('comment_deleted', 'Deleted comments cannot be edited.', 'comment');
         }
 
         if ($comment->body_md === $body) {
-            return $comment->load('author');
+            return $comment->load(['author', 'mentionedUsers']);
         }
 
-        $comment->forceFill([
-            'body_md' => $body,
-            'edited_at' => now(),
-        ])->save();
-        $this->mentions->syncForComment($comment, $comment->thread->document, $actor);
+        DB::transaction(function () use ($comment, $document, $actor, $body): void {
+            $this->mentions->syncForUpdatedComment($comment, $document, $actor, $body);
 
-        $this->recordEvent('comment.edited', $comment->thread->document, $actor, $comment, $ip);
+            $comment->forceFill([
+                'body_md' => $body,
+                'edited_at' => now(),
+            ])->save();
+        });
 
-        $comment->refresh()->load('author');
+        $this->recordEvent('comment.edited', $document, $actor, $comment, $ip);
+
+        $comment->refresh()->load(['author', 'mentionedUsers']);
 
         return $comment;
     }
@@ -185,7 +189,7 @@ class CommentModerationService
 
             $previousStatus = $lockedComment->suggestion_status;
             if ($previousStatus === $status) {
-                return $lockedComment->load('author');
+                return $lockedComment->load(['author', 'mentionedUsers']);
             }
 
             $lockedComment->forceFill(['suggestion_status' => $status])->save();
@@ -202,7 +206,7 @@ class CommentModerationService
                 ],
             );
 
-            return $lockedComment->refresh()->load('author');
+            return $lockedComment->refresh()->load(['author', 'mentionedUsers']);
         });
     }
 

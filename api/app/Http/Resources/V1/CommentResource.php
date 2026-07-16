@@ -35,6 +35,12 @@ class CommentResource extends JsonResource
             ]),
             'type' => $this->type->value,
             'body_md' => $isDeleted ? null : $this->body_md,
+            'mentions' => $isDeleted ? [] : $this->whenLoaded('mentionedUsers', fn () => $this->mentionedUsers
+                ->map(fn ($user) => [
+                    'id' => (int) $user->id,
+                    'name' => $user->name,
+                ])
+                ->values()),
             'proposed_text' => $isDeleted ? null : $this->proposed_text,
             'suggestion_status' => $isDeleted ? null : $this->suggestion_status?->value,
             'client' => $this->client->value,

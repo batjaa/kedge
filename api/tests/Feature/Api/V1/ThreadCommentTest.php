@@ -1146,6 +1146,75 @@ class ThreadCommentTest extends TestCase
             && $context['user_id'] === $member->id);
     }
 
+    public function test_edit_with_new_out_of_audience_mention_is_rejected_without_persisting_body(): void
+    {
+        [, $document] = $this->readyDocument();
+        $workspaceMember = User::factory()->create(['name' => 'Workspace Member', 'email' => 'workspace-member@example.com']);
+        $workspaceMember->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $reviewer = User::factory()->create(['name' => 'Reviewer', 'email' => 'reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $reviewer->id,
+        ]);
+        $reply = $thread->comments()->create([
+            'author_id' => $reviewer->id,
+            'body_md' => 'Original reply',
+        ]);
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$reply->id}", [
+                'body' => "Original reply plus [@Workspace Member](mention:{$workspaceMember->id}).",
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'mention_out_of_audience');
+
+        $this->assertDatabaseHas('comments', ['id' => $reply->id, 'body_md' => 'Original reply']);
+        $this->assertDatabaseMissing('comment_mentions', [
+            'comment_id' => $reply->id,
+            'user_id' => $workspaceMember->id,
+        ]);
+    }
+
+    public function test_edit_allows_preexisting_mention_after_target_leaves_audience(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $reviewer = User::factory()->create(['name' => 'Mentioned Reviewer', 'email' => 'mentioned-reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => "Original [@Mentioned Reviewer](mention:{$reviewer->id}).",
+                'idempotency_key' => 'mention-before-revocation',
+            ])
+            ->assertCreated();
+        $commentId = $thread->json('first_comment.id');
+
+        $share->forceFill(['revoked_at' => now()])->save();
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$commentId}", [
+                'body' => "Edited typo [@Mentioned Reviewer](mention:{$reviewer->id}).",
+            ])
+            ->assertOk()
+            ->assertJsonPath('body_md', "Edited typo [@Mentioned Reviewer](mention:{$reviewer->id}).")
+            ->assertJsonPath('mentions.0.id', $reviewer->id)
+            ->assertJsonPath('mentions.0.name', 'Mentioned Reviewer');
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $commentId,
+            'body_md' => "Edited typo [@Mentioned Reviewer](mention:{$reviewer->id}).",
+        ]);
+        $this->assertDatabaseHas('comment_mentions', [
+            'comment_id' => $commentId,
+            'user_id' => $reviewer->id,
+        ]);
+    }
+
     public function test_noop_edit_does_not_stamp_edited_at(): void
     {
         [$author, $document] = $this->readyDocument();
@@ -1380,10 +1449,38 @@ class ThreadCommentTest extends TestCase
 
         $response->assertOk();
         $names = collect($response->json('data'))->pluck('name');
-        $this->assertTrue($names->contains($author->name));
+        $this->assertFalse($names->contains($author->name));
         $this->assertTrue($names->contains('Same Share Reviewer'));
         $this->assertFalse($names->contains('Workspace Member'));
         $this->assertFalse($names->contains('Other Share Reviewer'));
+    }
+
+    public function test_reviewer_mention_autocomplete_returns_author_after_author_comments(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $sameShareReviewer = User::factory()->create(['name' => 'Same Share Reviewer', 'email' => 'same-share@example.com']);
+        $currentReviewer = User::factory()->create(['name' => 'Current Reviewer', 'email' => 'current-reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $currentReviewer);
+        $this->verifyParticipant($share, $sameShareReviewer);
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $thread->comments()->create([
+            'author_id' => $author->id,
+            'body_md' => 'Author is now visible in the discussion',
+        ]);
+
+        $response = $this->actingAs($currentReviewer)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/mention-suggestions");
+
+        $response->assertOk();
+        $names = collect($response->json('data'))->pluck('name');
+        $this->assertTrue($names->contains($author->name));
+        $this->assertTrue($names->contains('Same Share Reviewer'));
     }
 
     public function test_workspace_member_mention_autocomplete_returns_workspace_members_and_document_participants(): void
@@ -1404,6 +1501,20 @@ class ThreadCommentTest extends TestCase
         $this->assertTrue($names->contains('Workspace Member'));
         $this->assertTrue($names->contains('Share Reviewer'));
         $this->assertFalse($names->contains($outsider->name));
+    }
+
+    public function test_mention_autocomplete_searches_literal_like_wildcards(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $percentReviewer = User::factory()->create(['name' => 'Percent % Reviewer', 'email' => 'percent-reviewer@example.com']);
+        $percentReviewer->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $response = $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/mention-suggestions?q=%25");
+
+        $response->assertOk();
+        $names = collect($response->json('data'))->pluck('name');
+        $this->assertTrue($names->contains('Percent % Reviewer'));
     }
 
     public function test_out_of_audience_mention_is_rejected_on_submit(): void
@@ -1438,10 +1549,12 @@ class ThreadCommentTest extends TestCase
         $thread = $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'document',
-                'body' => "Please ask [@Member One](mention:{$member->id}).",
+                'body' => "Please ask [@Anything](mention:{$member->id}).",
                 'idempotency_key' => 'mention-member-one',
             ])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('first_comment.mentions.0.id', $member->id)
+            ->assertJsonPath('first_comment.mentions.0.name', 'Member One');
 
         $this->assertDatabaseHas('comment_mentions', [
             'comment_id' => $thread->json('first_comment.id'),
@@ -1493,6 +1606,50 @@ class ThreadCommentTest extends TestCase
             ->assertJsonPath('data.0.first_comment.viewer_has_reacted', true);
 
         $this->assertDatabaseCount('comment_reactions', 2);
+    }
+
+    public function test_duplicate_reaction_add_converges_without_server_error(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Reactable comment',
+                'idempotency_key' => 'duplicate-reaction-add',
+            ])
+            ->assertCreated();
+        $commentId = $thread->json('first_comment.id');
+        $seededRaceWinner = false;
+
+        DB::listen(function ($query) use (&$seededRaceWinner, $commentId, $author): void {
+            $sql = strtolower($query->sql);
+            if ($seededRaceWinner || ! str_contains($sql, 'delete') || ! str_contains($sql, 'comment_reactions')) {
+                return;
+            }
+
+            $seededRaceWinner = true;
+            DB::table('comment_reactions')->insert([
+                'comment_id' => $commentId,
+                'user_id' => $author->id,
+                'emoji' => "\u{1F44D}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$commentId}/reactions", [])
+            ->assertOk()
+            ->assertJsonPath('reaction_count', 1)
+            ->assertJsonPath('viewer_has_reacted', true);
+
+        $this->assertTrue($seededRaceWinner);
+        $this->assertDatabaseCount('comment_reactions', 1);
+        $this->assertDatabaseHas('comment_reactions', [
+            'comment_id' => $commentId,
+            'user_id' => $author->id,
+            'emoji' => "\u{1F44D}",
+        ]);
     }
 
     public function test_verified_reviewer_can_react_on_their_share_document(): void

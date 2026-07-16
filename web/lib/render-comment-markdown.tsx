@@ -7,6 +7,7 @@ import type { Root } from 'mdast';
 import { visit } from 'unist-util-visit';
 import { createRemarkProcessor } from './pipeline';
 import { sanitizeUrls } from './sanitize-urls';
+import type { MentionCandidate } from './thread-types';
 
 function CommentPre({ children }: { children?: ReactNode }) {
   return (
@@ -16,14 +17,13 @@ function CommentPre({ children }: { children?: ReactNode }) {
   );
 }
 
-const processor = createRemarkProcessor()
-  // No diagram transform, no MDX components, and no dangerous HTML. Fences stay
-  // ordinary code blocks; raw HTML nodes are dropped by remark-rehype.
-  .use(remarkRehype)
-  .use(renderMentionLinks)
-  .use(sanitizeUrls);
-
-export function renderCommentMarkdown(markdown: string): ReactNode {
+export function renderCommentMarkdown(markdown: string, mentions: readonly MentionCandidate[] = []): ReactNode {
+  const processor = createRemarkProcessor()
+    // No diagram transform, no MDX components, and no dangerous HTML. Fences stay
+    // ordinary code blocks; raw HTML nodes are dropped by remark-rehype.
+    .use(remarkRehype)
+    .use(renderMentionLinks, mentions)
+    .use(sanitizeUrls);
   const mdast = processor.parse(markdown) as Root;
   const tree = processor.runSync(mdast) as Nodes;
   return toJsxRuntime(tree, {
@@ -34,7 +34,9 @@ export function renderCommentMarkdown(markdown: string): ReactNode {
   });
 }
 
-function renderMentionLinks() {
+function renderMentionLinks(mentions: readonly MentionCandidate[] = []) {
+  const canonicalNames = new Map(mentions.map((mention) => [String(mention.id), mention.name]));
+
   return (tree: Nodes) => {
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'a') return;
@@ -42,10 +44,13 @@ function renderMentionLinks() {
       const href = node.properties?.href;
       if (typeof href !== 'string') return;
 
+      // Persisted mention token format: [@Label](mention:id). Keep in sync with
+      // web/lib/mention-tokens.ts and api/app/Services/Comments/CommentMentionService.php.
       const match = href.match(/^mention:(\d+)$/);
       if (!match) return;
 
-      const label = textContent(node).trim();
+      const mentionId = match[1];
+      const label = canonicalNames.get(mentionId);
       node.tagName = 'span';
       node.properties = {
         className: [
@@ -64,18 +69,9 @@ function renderMentionLinks() {
           'ring-emerald-400/30',
           'dark:text-emerald-300',
         ],
-        dataMentionId: match[1],
+        dataMentionId: mentionId,
       };
-      node.children = [{ type: 'text', value: label.startsWith('@') ? label : `@${label || 'mention'}` }];
+      node.children = [{ type: 'text', value: label ? `@${label}` : '@mention' }];
     });
   };
-}
-
-function textContent(node: Nodes): string {
-  if (node.type === 'text') return node.value;
-  if ('children' in node && Array.isArray(node.children)) {
-    return node.children.map((child) => textContent(child as Nodes)).join('');
-  }
-
-  return '';
 }

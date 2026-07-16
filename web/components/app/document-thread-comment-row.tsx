@@ -85,8 +85,8 @@ export function CommentRow({
   const author = comment.author?.name ?? 'Reviewer';
   const controls = commentControlsFor(comment, isReply);
   const body = useMemo(
-    () => comment.is_deleted ? null : renderCommentMarkdown(comment.body_md ?? ''),
-    [comment.body_md, comment.is_deleted],
+    () => comment.is_deleted ? null : renderCommentMarkdown(comment.body_md ?? '', comment.mentions),
+    [comment.body_md, comment.is_deleted, comment.mentions],
   );
   const hasBody = !comment.is_deleted && (comment.body_md ?? '').trim() !== '';
   const isSuggestion = comment.type === 'suggestion' && !comment.is_deleted;

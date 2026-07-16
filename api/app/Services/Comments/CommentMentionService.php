@@ -14,6 +14,8 @@ use Illuminate\Support\Str;
 
 class CommentMentionService
 {
+    // Persisted mention token format: [@Label](mention:id). Keep in sync with
+    // web/lib/mention-tokens.ts and web/lib/render-comment-markdown.tsx.
     private const TOKEN_PATTERN = '/\[@[^\]\r\n]{1,120}\]\(mention:(\d+)\)/u';
 
     /**
@@ -25,8 +27,7 @@ class CommentMentionService
 
         return $this->audienceQuery($document, $actor)
             ->when($term !== '', function (Builder $query) use ($term): void {
-                $escaped = addcslashes($term, '%_\\');
-                $query->whereRaw('LOWER(name) LIKE ?', ['%'.$escaped.'%']);
+                $query->whereRaw("LOWER(name) LIKE ? ESCAPE '!'", ['%'.$this->escapeLike($term).'%']);
             })
             ->select(['users.id', 'users.name'])
             ->orderBy('users.name')
@@ -39,6 +40,15 @@ class CommentMentionService
     {
         $ids = $this->mentionedUserIds((string) $comment->body_md);
         $this->assertAllowed($document, $actor, $ids);
+
+        $comment->mentionedUsers()->sync($ids);
+    }
+
+    public function syncForUpdatedComment(Comment $comment, Document $document, User $actor, string $body): void
+    {
+        $ids = $this->mentionedUserIds($body);
+        $newIds = array_values(array_diff($ids, $this->linkedMentionIds($comment)));
+        $this->assertAllowed($document, $actor, $newIds);
 
         $comment->mentionedUsers()->sync($ids);
     }
@@ -182,13 +192,9 @@ class CommentMentionService
 
         return User::query()
             ->where('users.id', '!=', $actor->id)
-            ->where(function (Builder $query) use ($document, $sameShareParticipants, $commentAuthors): void {
+            ->where(function (Builder $query) use ($sameShareParticipants, $commentAuthors): void {
                 $query->whereIn('users.id', $sameShareParticipants)
                     ->orWhereIn('users.id', $commentAuthors);
-
-                if ($document->created_by !== null) {
-                    $query->orWhere('users.id', $document->created_by);
-                }
             });
     }
 
@@ -198,5 +204,24 @@ class CommentMentionService
             ->join('threads', 'threads.id', '=', 'comments.thread_id')
             ->select('comments.author_id')
             ->where('threads.document_id', $document->id);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function linkedMentionIds(Comment $comment): array
+    {
+        return DB::table('comment_mentions')
+            ->where('comment_id', $comment->id)
+            ->pluck('user_id')
+            ->map(fn (mixed $id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function escapeLike(string $term): string
+    {
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term);
     }
 }
