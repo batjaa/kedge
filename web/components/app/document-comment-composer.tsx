@@ -3,10 +3,10 @@
 import { type ReactNode } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
 import type { AnchorCaptureFailure, AnchorSelector } from '@/lib/anchor-capture-core';
+import { commentComposerSubmitState } from '@/lib/comment-composer';
+import type { CommentType } from '@/lib/thread-types';
 
-export type ComposerCommentType = 'comment' | 'suggestion';
-
-const TEXTAREA_CLASS_NAME = 'block w-full resize-none rounded-lg border-0 bg-zinc-50 p-3 text-sm leading-6 text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-zinc-700';
+const TEXTAREA_CLASS_NAME = 'block w-full resize-none rounded-lg border-0 bg-zinc-50 p-3 text-sm leading-6 text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white/[.03] dark:text-white dark:ring-zinc-700';
 
 export type ComposerState =
   | { open: false }
@@ -14,7 +14,6 @@ export type ComposerState =
       open: true;
       stage: 'affordance' | 'panel';
       mode: 'inline' | 'document';
-      commentType: ComposerCommentType;
       anchor: AnchorSelector | null;
       failure: AnchorCaptureFailure | null;
       x: number;
@@ -23,6 +22,7 @@ export type ComposerState =
 
 export function DocumentCommentComposer({
   composer,
+  commentType,
   body,
   proposedText,
   message,
@@ -35,23 +35,29 @@ export function DocumentCommentComposer({
   onSubmit,
 }: {
   composer: ComposerState;
+  commentType: CommentType;
   body: string;
   proposedText: string;
   message: string | null;
   submitting: boolean;
   onBodyChange: (body: string) => void;
   onProposedTextChange: (proposedText: string) => void;
-  onCommentTypeChange: (type: ComposerCommentType) => void;
+  onCommentTypeChange: (type: CommentType) => void;
   onClose: () => void;
   onOpenPanel: () => void;
   onSubmit: () => void;
 }) {
   if (!composer.open) return null;
   const canSuggest = composer.mode === 'inline' && composer.anchor != null && composer.failure == null;
-  const isSuggestion = canSuggest && composer.commentType === 'suggestion';
-  const suggestionUnchanged = isSuggestion && proposedText.trim() === composer.anchor?.exact.trim();
-  const submitDisabled = submitting
-    || (isSuggestion ? proposedText.trim() === '' || suggestionUnchanged : body.trim() === '');
+  const submitState = commentComposerSubmitState({
+    canSuggest,
+    commentType,
+    body,
+    proposedText,
+    anchorExact: composer.anchor?.exact,
+    submitting,
+  });
+  const { isSuggestion, suggestionUnchanged, submitDisabled } = submitState;
 
   if (composer.stage === 'affordance') {
     return (
@@ -79,11 +85,11 @@ export function DocumentCommentComposer({
       ) : null}
       {canSuggest ? (
         <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-white/5">
-          <ModeButton active={!isSuggestion} onClick={() => onCommentTypeChange('comment')}>
+          <ModeButton active={!isSuggestion} disabled={submitting} onClick={() => onCommentTypeChange('comment')}>
             <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
             Comment
           </ModeButton>
-          <ModeButton active={isSuggestion} onClick={() => onCommentTypeChange('suggestion')}>
+          <ModeButton active={isSuggestion} disabled={submitting} onClick={() => onCommentTypeChange('suggestion')}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             Suggest
           </ModeButton>
@@ -93,29 +99,38 @@ export function DocumentCommentComposer({
         <div className="space-y-2">
           <textarea
             value={proposedText}
-            onChange={(event) => onProposedTextChange(event.target.value)}
+            onChange={(event) => {
+              if (!submitting) onProposedTextChange(event.target.value);
+            }}
             rows={4}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Replacement text"
+            disabled={submitting}
           />
           {suggestionUnchanged ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Edit the text to suggest a change.</p>
           ) : null}
           <textarea
             value={body}
-            onChange={(event) => onBodyChange(event.target.value)}
+            onChange={(event) => {
+              if (!submitting) onBodyChange(event.target.value);
+            }}
             rows={2}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Add a note"
+            disabled={submitting}
           />
         </div>
       ) : (
         <textarea
           value={body}
-          onChange={(event) => onBodyChange(event.target.value)}
+          onChange={(event) => {
+            if (!submitting) onBodyChange(event.target.value);
+          }}
           rows={4}
           className={TEXTAREA_CLASS_NAME}
           placeholder="Write a comment"
+          disabled={submitting}
         />
       )}
       {message ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{message}</p> : null}
@@ -145,19 +160,24 @@ export function DocumentCommentComposer({
 
 function ModeButton({
   active,
+  disabled = false,
   onClick,
   children,
 }: {
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
       className={[
-        'inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium',
+        'inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60',
         active
           ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/10 dark:bg-zinc-950 dark:text-white dark:ring-white/10'
           : 'text-zinc-600 hover:bg-white/70 dark:text-zinc-400 dark:hover:bg-white/5',

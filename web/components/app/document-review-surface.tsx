@@ -8,6 +8,9 @@ import { DocumentReviewSidebar } from './document-review-sidebar';
 import { DocumentThreadRail } from './document-thread-rail';
 import { MobileThreadSheet } from './mobile-thread-sheet';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
+import { commentComposerSubmitState } from '@/lib/comment-composer';
+import { postDocumentComposerDraft } from '@/lib/comment-composer-actions';
+import { createCommentForkGuard, type CommentForkGuard } from '@/lib/comment-fork-guard';
 import {
   createSuggestionThread,
   createThread,
@@ -84,8 +87,13 @@ export function DocumentReviewSurface({
   const [composer, setComposer] = useState<ComposerState>({ open: false });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [forkingCommentIds, setForkingCommentIds] = useState<ReadonlySet<number>>(() => new Set());
   const submittingRef = useRef(false);
+  const forkGuardRef = useRef<CommentForkGuard | null>(null);
   const loadedPageRef = useRef(1);
+  if (forkGuardRef.current === null) {
+    forkGuardRef.current = createCommentForkGuard(newCommentDraftIdempotencyKey);
+  }
   const numericProjectionVersion = projectionVersion == null ? NaN : Number(projectionVersion);
   const canCapture = plainText != null && Number.isFinite(numericProjectionVersion);
   const openThreadCount = threads.filter((thread) => thread.status === 'open').length;
@@ -101,15 +109,20 @@ export function DocumentReviewSurface({
       target: composer.mode === 'inline' && composer.anchor
         ? { type: 'anchor', anchor: composer.anchor }
         : { type: 'document' },
-      mode: composer.commentType,
     });
   }, [composer, documentId]);
   const composerInitialProposedText = composer.open && composer.mode === 'inline' && composer.anchor
     ? composer.anchor.exact
     : '';
   const composerDraft = useCommentDraft(composerDraftContextKey, {
+    initialMode: 'comment',
     initialProposedText: composerInitialProposedText,
   });
+  const composerCanSuggest = composer.open
+    && composer.mode === 'inline'
+    && composer.anchor != null
+    && composer.failure == null;
+  const composerCommentType = composerCanSuggest ? composerDraft.mode : 'comment';
 
   const reloadThreads = useCallback(async (targetPage = 1) => {
     const firstPage = await listThreads(documentId, 1);
@@ -308,22 +321,26 @@ export function DocumentReviewSurface({
     };
 
     if (result.ok) {
-      setComposer({ ...base, mode: 'inline', commentType: 'comment', anchor: result.selector, failure: null });
+      setComposer({ ...base, mode: 'inline', anchor: result.selector, failure: null });
     } else {
       console.warn('anchor capture failed', result);
-      setComposer({ ...base, mode: 'document', commentType: 'comment', anchor: null, failure: result });
+      setComposer({ ...base, mode: 'document', anchor: null, failure: result });
     }
   }
 
   async function submit() {
     if (!composer.open || submittingRef.current) return;
-    const isSuggestion = composer.mode === 'inline' && composer.anchor != null && composer.commentType === 'suggestion';
     const body = composerDraft.body;
     const proposedText = composerDraft.proposedText;
-    const trimmedProposedText = proposedText.trim();
-    const suggestionUnchanged = isSuggestion && trimmedProposedText === composer.anchor?.exact.trim();
-    if (isSuggestion ? trimmedProposedText === '' || suggestionUnchanged : body.trim() === '') {
-      if (suggestionUnchanged) setMessage('Edit the text to suggest a change.');
+    const validity = commentComposerSubmitState({
+      canSuggest: composer.mode === 'inline' && composer.anchor != null && composer.failure == null,
+      commentType: composerDraft.mode,
+      body,
+      proposedText,
+      anchorExact: composer.anchor?.exact,
+    });
+    if (validity.submitDisabled) {
+      if (validity.suggestionUnchanged) setMessage('Edit the text to suggest a change.');
 
       return;
     }
@@ -332,44 +349,32 @@ export function DocumentReviewSurface({
     setSubmitting(true);
 
     try {
-      const anchor = composer.mode === 'inline' && composer.anchor
-        ? {
-            ...composer.anchor,
-            projection_version: String(composer.anchor.projection_version),
-          }
-        : null;
+      const result = await postDocumentComposerDraft({
+        documentId,
+        draft: {
+          mode: composer.mode,
+          commentType: composerDraft.mode,
+          anchor: composer.anchor,
+          failedCapture: composer.failure != null,
+          body,
+          proposedText,
+          idempotencyKey: composerDraft.idempotencyKey,
+        },
+        createThread,
+        createSuggestionThread,
+      });
 
-      const outcome = isSuggestion && anchor
-        ? await createSuggestionThread(documentId, {
-            body: body.trim() === '' ? undefined : body,
-            proposed_text: trimmedProposedText,
-            anchor,
-            idempotency_key: composerDraft.idempotencyKey,
-          })
-        : composer.mode === 'inline' && anchor
-          ? await createThread(documentId, {
-              type: 'inline',
-              body,
-              anchor,
-              idempotency_key: composerDraft.idempotencyKey,
-            })
-          : await createThread(documentId, {
-              type: 'document',
-              body,
-              failed_capture: composer.failure != null,
-              idempotency_key: composerDraft.idempotencyKey,
-            });
-
-      if (!outcome.ok) {
-        setMessage(outcome.message);
+      if (result.status === 'failed') {
+        setMessage(result.message);
         return;
       }
+      if (result.status === 'invalid') return;
 
       composerDraft.clear();
       setComposer({ open: false });
       window.getSelection()?.removeAllRanges();
       await refreshLoadedThreads();
-      setActiveThreadId(outcome.thread.id);
+      setActiveThreadId(result.value.id);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -411,13 +416,30 @@ export function DocumentReviewSurface({
   }
 
   async function fork(_thread: ReviewThread, comment: ThreadComment): Promise<string | null> {
-    const outcome = await forkComment(comment.id, newCommentDraftIdempotencyKey());
-    if (!outcome.ok) return outcome.message;
+    const forkGuard = forkGuardRef.current;
+    if (!forkGuard) return null;
+    const started = forkGuard.start(comment.id);
+    if (!started.started) return null;
+    syncForkingCommentIds();
 
-    await refreshLoadedThreads();
-    setActiveThreadId(outcome.thread.id);
+    let posted = false;
+    try {
+      const outcome = await forkComment(comment.id, started.idempotencyKey);
+      if (!outcome.ok) return outcome.message;
+
+      posted = true;
+      await refreshLoadedThreads();
+      setActiveThreadId(outcome.thread.id);
+    } finally {
+      forkGuard.finish(comment.id, { posted });
+      syncForkingCommentIds();
+    }
 
     return null;
+  }
+
+  function syncForkingCommentIds() {
+    setForkingCommentIds(forkGuardRef.current?.forkingCommentIds() ?? new Set());
   }
 
   async function edit(comment: ThreadComment, nextBody: string): Promise<string | null> {
@@ -505,6 +527,7 @@ export function DocumentReviewSurface({
           onSetThreadStatus={setThreadStatus}
           onReply={reply}
           onForkComment={fork}
+          forkingCommentIds={forkingCommentIds}
           onEditComment={edit}
           onDeleteComment={remove}
           onSetSuggestionStatus={setSuggestionStatus}
@@ -531,6 +554,7 @@ export function DocumentReviewSurface({
         onSetThreadStatus={setThreadStatus}
         onReply={reply}
         onForkComment={fork}
+        forkingCommentIds={forkingCommentIds}
         onEditComment={edit}
         onDeleteComment={remove}
         onSetSuggestionStatus={setSuggestionStatus}
@@ -538,22 +562,32 @@ export function DocumentReviewSurface({
 
       <DocumentCommentComposer
         composer={composer}
+        commentType={composerCommentType}
         body={composerDraft.body}
         proposedText={composerDraft.proposedText}
         message={message}
         submitting={submitting}
-        onBodyChange={composerDraft.setBody}
-        onProposedTextChange={composerDraft.setProposedText}
+        onBodyChange={(body) => {
+          if (!submittingRef.current) composerDraft.setBody(body);
+        }}
+        onProposedTextChange={(proposedText) => {
+          if (!submittingRef.current) composerDraft.setProposedText(proposedText);
+        }}
         onCommentTypeChange={(commentType) => {
-          if (!composer.open) return;
-          setComposer({ ...composer, commentType });
+          if (!composer.open || submittingRef.current) return;
+          if (commentType === 'suggestion' && composerDraft.proposedText === '' && composer.mode === 'inline' && composer.anchor) {
+            composerDraft.setProposedText(composer.anchor.exact);
+          }
+          composerDraft.setMode(commentType);
         }}
         onClose={() => {
+          if (submittingRef.current) return;
           composerDraft.clear();
           setComposer({ open: false });
           setMessage(null);
         }}
         onOpenPanel={() => {
+          if (submittingRef.current) return;
           if (composer.open) setComposer({ ...composer, stage: 'panel' });
         }}
         onSubmit={() => void submit()}

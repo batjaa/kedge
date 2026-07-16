@@ -26,6 +26,7 @@ export function DocumentThreadRail({
   onSetThreadStatus,
   onReply,
   onForkComment,
+  forkingCommentIds,
   onEditComment,
   onDeleteComment,
   onSetSuggestionStatus,
@@ -45,6 +46,7 @@ export function DocumentThreadRail({
   onSetThreadStatus: (thread: ReviewThread, status: ThreadStatus) => Promise<string | null>;
   onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
+  forkingCommentIds: ReadonlySet<number>;
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
@@ -101,6 +103,7 @@ export function DocumentThreadRail({
                 onSetThreadStatus={onSetThreadStatus}
                 onReply={onReply}
                 onForkComment={onForkComment}
+                forkingCommentIds={forkingCommentIds}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
                 onSetSuggestionStatus={onSetSuggestionStatus}

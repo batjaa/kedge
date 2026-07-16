@@ -23,6 +23,7 @@ export function ThreadCard({
   onSetThreadStatus,
   onReply,
   onForkComment,
+  forkingCommentIds,
   onEditComment,
   onDeleteComment,
   onSetSuggestionStatus,
@@ -38,6 +39,7 @@ export function ThreadCard({
   onSetThreadStatus: (thread: ReviewThread, status: ThreadStatus) => Promise<string | null>;
   onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
+  forkingCommentIds: ReadonlySet<number>;
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
@@ -56,7 +58,6 @@ export function ThreadCard({
   const [message, setMessage] = useState<string | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
   const edit = useCommentEditState(onEditComment, setMessage);
-  const [forkingId, setForkingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [suggestionBusyId, setSuggestionBusyId] = useState<number | null>(null);
 
@@ -69,10 +70,9 @@ export function ThreadCard({
   }
 
   async function fork(comment: ThreadComment) {
+    if (forkingCommentIds.has(comment.id)) return;
     setMessage(null);
-    setForkingId(comment.id);
     const error = await onForkComment(thread, comment);
-    setForkingId(null);
     if (error) setMessage(error);
   }
 
@@ -161,7 +161,7 @@ export function ThreadCard({
               isReply={firstCommentId !== comment.id}
               editing={edit.isEditing(comment)}
               editBody={edit.body}
-              forking={forkingId === comment.id}
+              forking={forkingCommentIds.has(comment.id)}
               deleting={deletingId === comment.id}
               onStartEdit={() => edit.start(comment)}
               onCancelEdit={edit.cancel}

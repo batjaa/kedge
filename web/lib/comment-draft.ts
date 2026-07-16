@@ -2,18 +2,19 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { AnchorSelector } from './anchor-capture-core';
-
-export type CommentDraftMode = 'comment' | 'suggestion';
+import type { CommentType } from './thread-types';
 
 export interface CommentDraftValue {
   body: string;
   proposedText: string;
+  mode: CommentType;
   idempotencyKey: string;
 }
 
 export interface UseCommentDraftResult extends CommentDraftValue {
   setBody: (body: string) => void;
   setProposedText: (proposedText: string) => void;
+  setMode: (mode: CommentType) => void;
   clear: () => void;
 }
 
@@ -25,20 +26,20 @@ export type CommentDraftTarget =
 export interface CommentDraftContext {
   documentId: number;
   target: CommentDraftTarget;
-  mode: CommentDraftMode;
 }
 
 export interface UseCommentDraftOptions {
   initialBody?: string;
   initialProposedText?: string;
+  initialMode?: CommentType;
   generateIdempotencyKey?: () => string;
 }
 
-const STORAGE_PREFIX = 'kedge:comment-draft:v1';
+const STORAGE_PREFIX = 'kedge:comment-draft:v2';
 const memoryDrafts = new Map<string, CommentDraftValue>();
 
 export function commentDraftContextKey(context: CommentDraftContext): string {
-  return `doc:${context.documentId}:${targetKey(context.target)}:mode:${context.mode}`;
+  return `doc:${context.documentId}:${targetKey(context.target)}`;
 }
 
 export function commentDraftStorageKey(contextKey: string): string {
@@ -56,12 +57,13 @@ export function useCommentDraft(
   const storageKey = useMemo(() => contextKey ? commentDraftStorageKey(contextKey) : null, [contextKey]);
   const initialBody = options.initialBody ?? '';
   const initialProposedText = options.initialProposedText ?? '';
+  const initialMode = options.initialMode ?? 'comment';
   const generateIdempotencyKey = options.generateIdempotencyKey ?? newCommentDraftIdempotencyKey;
   const loadedDraft = useMemo(
     () => storageKey
-      ? readCommentDraft(storageKey) ?? newDraft(initialBody, initialProposedText, generateIdempotencyKey)
-      : newDraft(initialBody, initialProposedText, generateIdempotencyKey),
-    [generateIdempotencyKey, initialBody, initialProposedText, storageKey],
+      ? readCommentDraft(storageKey) ?? newDraft(initialBody, initialProposedText, initialMode, generateIdempotencyKey)
+      : newDraft(initialBody, initialProposedText, initialMode, generateIdempotencyKey),
+    [generateIdempotencyKey, initialBody, initialMode, initialProposedText, storageKey],
   );
   const [state, setState] = useState<{ storageKey: string | null; draft: CommentDraftValue }>(() => ({
     storageKey,
@@ -70,13 +72,13 @@ export function useCommentDraft(
   const draft = state.storageKey === storageKey ? state.draft : loadedDraft;
   const draftRef = useRef(draft);
   const storageKeyRef = useRef(storageKey);
-  const optionsRef = useRef({ initialBody, initialProposedText, generateIdempotencyKey });
+  const optionsRef = useRef({ initialBody, initialProposedText, initialMode, generateIdempotencyKey });
 
   draftRef.current = draft;
   storageKeyRef.current = storageKey;
-  optionsRef.current = { initialBody, initialProposedText, generateIdempotencyKey };
+  optionsRef.current = { initialBody, initialProposedText, initialMode, generateIdempotencyKey };
 
-  const update = useCallback((patch: Partial<Pick<CommentDraftValue, 'body' | 'proposedText'>>) => {
+  const update = useCallback((patch: Partial<Pick<CommentDraftValue, 'body' | 'proposedText' | 'mode'>>) => {
     const key = storageKeyRef.current;
     const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
@@ -90,6 +92,7 @@ export function useCommentDraft(
     const next = newDraft(
       optionsRef.current.initialBody,
       optionsRef.current.initialProposedText,
+      optionsRef.current.initialMode,
       optionsRef.current.generateIdempotencyKey,
     );
     draftRef.current = next;
@@ -100,6 +103,7 @@ export function useCommentDraft(
     ...draft,
     setBody: (body) => update({ body }),
     setProposedText: (proposedText) => update({ proposedText }),
+    setMode: (mode) => update({ mode }),
     clear,
   };
 }
@@ -124,11 +128,13 @@ function targetKey(target: CommentDraftTarget): string {
 function newDraft(
   body: string,
   proposedText: string,
+  mode: CommentType,
   generateIdempotencyKey: () => string,
 ): CommentDraftValue {
   return {
     body,
     proposedText,
+    mode,
     idempotencyKey: generateIdempotencyKey(),
   };
 }
@@ -136,8 +142,9 @@ function newDraft(
 function readCommentDraft(storageKey: string): CommentDraftValue | null {
   try {
     const value = globalThis.localStorage?.getItem(storageKey);
-    const parsed = value ? parseCommentDraft(value) : null;
-    return parsed ?? memoryDrafts.get(storageKey) ?? null;
+    if (value == null) return memoryDrafts.get(storageKey) ?? null;
+
+    return parseCommentDraft(value);
   } catch {
     return memoryDrafts.get(storageKey) ?? null;
   }
@@ -168,11 +175,13 @@ function parseCommentDraft(value: string): CommentDraftValue | null {
       parsed
       && typeof parsed.body === 'string'
       && typeof parsed.proposedText === 'string'
+      && isCommentType(parsed.mode)
       && typeof parsed.idempotencyKey === 'string'
     ) {
       return {
         body: parsed.body,
         proposedText: parsed.proposedText,
+        mode: parsed.mode,
         idempotencyKey: parsed.idempotencyKey,
       };
     }
@@ -181,6 +190,10 @@ function parseCommentDraft(value: string): CommentDraftValue | null {
   }
 
   return null;
+}
+
+function isCommentType(value: unknown): value is CommentType {
+  return value === 'comment' || value === 'suggestion';
 }
 
 function hashString(value: string): string {

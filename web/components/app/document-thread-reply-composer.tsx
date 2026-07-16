@@ -3,9 +3,11 @@
 import { useRef, useState } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
 import { ModeButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
-import { commentDraftContextKey, useCommentDraft, type CommentDraftMode } from '@/lib/comment-draft';
+import { commentComposerSubmitState } from '@/lib/comment-composer';
+import { postReplyComposerDraft } from '@/lib/comment-composer-actions';
+import { commentDraftContextKey, useCommentDraft } from '@/lib/comment-draft';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
-import type { ReviewThread } from '@/lib/thread-types';
+import type { CommentType, ReviewThread } from '@/lib/thread-types';
 
 export function ReplyComposer({
   thread,
@@ -18,24 +20,29 @@ export function ReplyComposer({
 }) {
   const [replying, setReplying] = useState(false);
   const replyingRef = useRef(false);
-  const [replyType, setReplyType] = useState<CommentDraftMode>('comment');
   const canSuggest = thread.type === 'inline' && thread.anchor !== null;
-  const draftMode = canSuggest ? replyType : 'comment';
-  const isSuggestion = draftMode === 'suggestion';
   const draft = useCommentDraft(
     commentDraftContextKey({
       documentId: thread.document_id,
       target: { type: 'thread', threadId: thread.id },
-      mode: draftMode,
     }),
-    { initialProposedText: isSuggestion ? thread.anchor?.exact ?? '' : '' },
+    {
+      initialMode: 'comment',
+      initialProposedText: thread.anchor?.exact ?? '',
+    },
   );
+  const commentType = canSuggest ? draft.mode : 'comment';
   const replyBody = draft.body;
   const proposedText = draft.proposedText;
-  const trimmedProposedText = proposedText.trim();
-  const suggestionUnchanged = isSuggestion && trimmedProposedText === thread.anchor?.exact.trim();
-  const submitDisabled = replying
-    || (isSuggestion ? trimmedProposedText === '' || suggestionUnchanged : replyBody.trim() === '');
+  const submitState = commentComposerSubmitState({
+    canSuggest,
+    commentType,
+    body: replyBody,
+    proposedText,
+    anchorExact: thread.anchor?.exact,
+    submitting: replying,
+  });
+  const { isSuggestion, suggestionUnchanged, submitDisabled } = submitState;
 
   async function submitReply() {
     if (submitDisabled || replyingRef.current) return;
@@ -43,19 +50,23 @@ export function ReplyComposer({
     replyingRef.current = true;
     setReplying(true);
     try {
-      const error = isSuggestion
-        ? await onReply(thread, {
-            comment_type: 'suggestion',
-            body: replyBody.trim() === '' ? undefined : replyBody.trim(),
-            proposed_text: trimmedProposedText,
-          }, draft.idempotencyKey)
-        : await onReply(thread, { body: replyBody.trim() }, draft.idempotencyKey);
-      if (error) {
-        onMessage(error);
+      const result = await postReplyComposerDraft({
+        thread,
+        draft: {
+          commentType,
+          body: replyBody,
+          proposedText,
+          idempotencyKey: draft.idempotencyKey,
+        },
+        onReply,
+      });
+      if (result.status === 'failed') {
+        onMessage(result.message);
         return;
       }
+      if (result.status === 'invalid') return;
+
       draft.clear();
-      setReplyType('comment');
     } finally {
       replyingRef.current = false;
       setReplying(false);
@@ -68,6 +79,14 @@ export function ReplyComposer({
     onMessage(null);
   }
 
+  function setDraftMode(mode: CommentType) {
+    if (replyingRef.current) return;
+    if (mode === 'suggestion' && draft.proposedText === '' && thread.anchor) {
+      draft.setProposedText(thread.anchor.exact);
+    }
+    draft.setMode(mode);
+  }
+
   return (
     <div className="mt-4 border-t border-zinc-900/5 pt-3 dark:border-white/5">
       {thread.status === 'resolved' ? (
@@ -75,13 +94,14 @@ export function ReplyComposer({
       ) : null}
       {canSuggest ? (
         <div className="mb-2 grid w-full grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-white/5">
-          <ModeButton active={!isSuggestion} onClick={() => setReplyType('comment')}>
+          <ModeButton active={!isSuggestion} disabled={replying} onClick={() => setDraftMode('comment')}>
             <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
             Comment
           </ModeButton>
           <ModeButton
             active={isSuggestion}
-            onClick={() => setReplyType('suggestion')}
+            disabled={replying}
+            onClick={() => setDraftMode('suggestion')}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             Suggest
@@ -92,29 +112,38 @@ export function ReplyComposer({
         <div className="space-y-2">
           <textarea
             value={proposedText}
-            onChange={(event) => draft.setProposedText(event.target.value)}
+            onChange={(event) => {
+              if (!replyingRef.current) draft.setProposedText(event.target.value);
+            }}
             rows={3}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Replacement text"
+            disabled={replying}
           />
           {suggestionUnchanged ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Edit the text to suggest a change.</p>
           ) : null}
           <textarea
             value={replyBody}
-            onChange={(event) => draft.setBody(event.target.value)}
+            onChange={(event) => {
+              if (!replyingRef.current) draft.setBody(event.target.value);
+            }}
             rows={2}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Add a note"
+            disabled={replying}
           />
         </div>
       ) : (
         <textarea
           value={replyBody}
-          onChange={(event) => draft.setBody(event.target.value)}
+          onChange={(event) => {
+            if (!replyingRef.current) draft.setBody(event.target.value);
+          }}
           rows={2}
           className={TEXTAREA_CLASS_NAME}
           placeholder="Reply"
+          disabled={replying}
         />
       )}
       <div className="mt-2 flex justify-end gap-2">
