@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
+import { MetaChip } from './meta-chip';
 import { cn } from '@/lib/cn';
 import type { LifecycleStatus } from '@/lib/document-types';
+import { relativeTime } from '@/lib/relative-time';
 
 export function DocumentReviewHeader({
   title,
@@ -64,14 +66,6 @@ export function DocumentReviewHeader({
   );
 }
 
-function MetaChip({ children }: { children: string }) {
-  return (
-    <span className="rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-zinc-500 ring-1 ring-inset ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700">
-      {children}
-    </span>
-  );
-}
-
 function StatusChip({ status }: { status: LifecycleStatus }) {
   const active = status === 'in_review';
 
@@ -87,13 +81,4 @@ function StatusChip({ status }: { status: LifecycleStatus }) {
       {status.replace('_', ' ')}
     </span>
   );
-}
-
-function relativeTime(value: string): string {
-  const ms = Date.now() - new Date(value).getTime();
-  const minutes = Math.max(1, Math.round(ms / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
 }

@@ -51,7 +51,8 @@ export interface CommentControlState {
 }
 
 export function deriveTocEntriesFromHeadings(headings: HeadingInput[]): TocEntry[] {
-  const usedIds = new Map<string, number>();
+  const usedBaseIds = new Map<string, number>();
+  const emittedIds = new Set<string>();
   const entries: TocEntry[] = [];
 
   for (const heading of headings) {
@@ -60,7 +61,7 @@ export function deriveTocEntriesFromHeadings(headings: HeadingInput[]): TocEntry
     if (level === null || title === '') continue;
 
     const baseId = slugifyHeading(heading.id || title) || 'section';
-    const id = uniqueId(baseId, usedIds);
+    const id = uniqueId(baseId, usedBaseIds, emittedIds);
     entries.push({ id, title, level });
   }
 
@@ -93,9 +94,23 @@ export function placeThreadCards(
   const minGap = options.minGap ?? 16;
   const topPadding = options.topPadding ?? 0;
   let cursor = topPadding;
+  const sortedInputs = inputs
+    .map((input, index) => ({
+      ...input,
+      index,
+      normalizedAnchorY: finiteNumber(input.anchorY) ? Math.max(topPadding, input.anchorY) : null,
+    }))
+    .sort((left, right) => {
+      if (left.normalizedAnchorY !== null && right.normalizedAnchorY !== null) {
+        return left.normalizedAnchorY - right.normalizedAnchorY || left.index - right.index;
+      }
+      if (left.normalizedAnchorY !== null) return -1;
+      if (right.normalizedAnchorY !== null) return 1;
+      return left.index - right.index;
+    });
 
-  return inputs.map((input) => {
-    const anchorY = finiteNumber(input.anchorY) ? Math.max(topPadding, input.anchorY) : null;
+  return sortedInputs.map((input) => {
+    const anchorY = input.normalizedAnchorY;
     const desiredY = anchorY ?? cursor;
     const y = Math.max(desiredY, cursor);
     const height = Math.max(0, input.height);
@@ -162,10 +177,18 @@ function slugifyHeading(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function uniqueId(baseId: string, usedIds: Map<string, number>): string {
-  const count = usedIds.get(baseId) ?? 0;
-  usedIds.set(baseId, count + 1);
-  return count === 0 ? baseId : `${baseId}-${count + 1}`;
+function uniqueId(baseId: string, usedBaseIds: Map<string, number>, emittedIds: Set<string>): string {
+  let count = usedBaseIds.get(baseId) ?? 0;
+
+  while (true) {
+    const candidate = count === 0 ? baseId : `${baseId}-${count + 1}`;
+    usedBaseIds.set(baseId, count + 1);
+    if (!emittedIds.has(candidate)) {
+      emittedIds.add(candidate);
+      return candidate;
+    }
+    count += 1;
+  }
 }
 
 function finiteNumber(value: number | null): value is number {

@@ -15,9 +15,11 @@ export function DocumentThreadRail({
   page,
   lastPage,
   activeThreadId,
+  highlightedThreadId,
   anchorPositions,
   documentHeight,
   onFocusThread,
+  onActivateThread,
   onHoverThread,
   onLeaveThread,
   onLoadMore,
@@ -32,9 +34,11 @@ export function DocumentThreadRail({
   page: number;
   lastPage: number;
   activeThreadId: number | null;
+  highlightedThreadId: number | null;
   anchorPositions: Record<number, number>;
   documentHeight: number;
   onFocusThread: (thread: ReviewThread) => void;
+  onActivateThread: (thread: ReviewThread) => void;
   onHoverThread: (thread: ReviewThread) => void;
   onLeaveThread: () => void;
   onLoadMore: () => void;
@@ -46,21 +50,27 @@ export function DocumentThreadRail({
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
 }) {
   const [cardHeights, setCardHeights] = useState<Record<number, number>>({});
+  const [footerHeight, setFooterHeight] = useState(128);
+  const fallbackCardHeight = (threadId: number) => activeThreadId === threadId ? EXPANDED_CARD_HEIGHT : COLLAPSED_CARD_HEIGHT;
   const placements = useMemo(() => {
     return placeThreadCards(threads.map((thread) => ({
       threadId: thread.id,
       anchorY: thread.anchor ? anchorPositions[thread.id] ?? null : null,
-      height: cardHeights[thread.id] ?? (activeThreadId === thread.id ? EXPANDED_CARD_HEIGHT : COLLAPSED_CARD_HEIGHT),
+      height: cardHeights[thread.id] ?? fallbackCardHeight(thread.id),
     })), { minGap: 18 });
   }, [activeThreadId, anchorPositions, cardHeights, threads]);
   const placementByThread = useMemo(() => {
     return new Map(placements.map((placement) => [placement.threadId, placement]));
   }, [placements]);
+  const cardStackBottom = placements.length === 0
+    ? 0
+    : Math.max(...placements.map((placement) => placement.y + (cardHeights[placement.threadId] ?? fallbackCardHeight(placement.threadId)) + 32));
   const railHeight = Math.max(
     documentHeight,
     320,
-    ...placements.map((placement) => placement.y + (cardHeights[placement.threadId] ?? COLLAPSED_CARD_HEIGHT) + 32),
+    cardStackBottom + footerHeight,
   );
+  const footerTop = Math.max(0, railHeight - footerHeight);
 
   return (
     <aside className="relative hidden xl:block" data-review-rail aria-label="Thread rail">
@@ -69,6 +79,7 @@ export function DocumentThreadRail({
           const placement = placementByThread.get(thread.id);
           if (!placement) return null;
           const expanded = activeThreadId === thread.id;
+          const highlighted = highlightedThreadId === thread.id;
 
           return (
             <MeasuredThreadCard
@@ -78,12 +89,13 @@ export function DocumentThreadRail({
                 setCardHeights((current) => current[thread.id] === height ? current : { ...current, [thread.id]: height });
               }}
             >
-              <ThreadConnector placement={placement} active={expanded} />
+              <ThreadConnector placement={placement} active={highlighted} />
               <ThreadCard
                 thread={thread}
-                active={expanded}
+                active={highlighted}
                 expanded={expanded}
                 onFocusThread={onFocusThread}
+                onActivateThread={onActivateThread}
                 onHoverThread={onHoverThread}
                 onLeaveThread={onLeaveThread}
                 onSetThreadStatus={onSetThreadStatus}
@@ -101,19 +113,25 @@ export function DocumentThreadRail({
             No threads yet.
           </p>
         ) : null}
-      </div>
-
-      {page < lastPage ? (
-        <button
-          type="button"
-          onClick={onLoadMore}
-          className="mt-4 w-full rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/10"
+        <MeasuredRailFooter
+          top={footerTop}
+          onMeasure={(height) => {
+            setFooterHeight((current) => current === height ? current : height);
+          }}
         >
-          Load more threads
-        </button>
-      ) : null}
+          {page < lastPage ? (
+            <button
+              type="button"
+              onClick={onLoadMore}
+              className="w-full rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/10"
+            >
+              Load more threads
+            </button>
+          ) : null}
 
-      <OrphanedTray />
+          <OrphanedTray />
+        </MeasuredRailFooter>
+      </div>
     </aside>
   );
 }
@@ -158,6 +176,46 @@ function MeasuredThreadCard({
   );
 }
 
+function MeasuredRailFooter({
+  top,
+  onMeasure,
+  children,
+}: {
+  top: number;
+  onMeasure: (height: number) => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measuredNode = node;
+
+    function measure() {
+      const height = Math.ceil(measuredNode.getBoundingClientRect().height);
+      if (height > 0) onMeasure(height);
+    }
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(measuredNode);
+
+    return () => observer.disconnect();
+  }, [onMeasure]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute left-0 right-0 space-y-4"
+      style={{ top }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ThreadConnector({ placement, active }: { placement: ThreadPlacement; active: boolean }) {
   if (placement.connectorOffset === null) return null;
 
@@ -186,8 +244,9 @@ function ThreadConnector({ placement, active }: { placement: ThreadPlacement; ac
 function OrphanedTray() {
   return (
     <section
+      id="orphaned-threads"
       aria-label="Orphaned threads"
-      className="mt-6 rounded-2xl bg-rose-400/5 p-4 text-sm ring-1 ring-inset ring-rose-500/20"
+      className="rounded-2xl bg-rose-400/5 p-4 text-sm ring-1 ring-inset ring-rose-500/20"
     >
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />

@@ -88,6 +88,7 @@ export function MobileThreadSheet({
             active
             expanded
             onFocusThread={() => {}}
+            onActivateThread={() => {}}
             onHoverThread={() => {}}
             onLeaveThread={() => {}}
             onSetThreadStatus={onSetThreadStatus}

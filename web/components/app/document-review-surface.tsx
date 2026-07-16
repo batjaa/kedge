@@ -70,6 +70,7 @@ export function DocumentReviewSurface({
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
+  const [hoveredThreadId, setHoveredThreadId] = useState<number | null>(null);
   const [mobileThreadId, setMobileThreadId] = useState<number | null>(null);
   const [tocEntries, setTocEntries] = useState<TocEntry[]>([]);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
@@ -79,19 +80,33 @@ export function DocumentReviewSurface({
   const [body, setBody] = useState('');
   const [proposedText, setProposedText] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const loadedPageRef = useRef(1);
   const numericProjectionVersion = projectionVersion == null ? NaN : Number(projectionVersion);
   const canCapture = plainText != null && Number.isFinite(numericProjectionVersion);
   const openThreadCount = threads.filter((thread) => thread.status === 'open').length;
+  const highlightedThreadId = hoveredThreadId ?? activeThreadId;
   const selectedMobileThread = useMemo(() => {
     return mobileThreadId === null ? null : threads.find((thread) => thread.id === mobileThreadId) ?? null;
   }, [mobileThreadId, threads]);
 
-  const reloadThreads = useCallback(async (nextPage = 1) => {
-    const result = await listThreads(documentId, nextPage);
-    setThreads((current) => (nextPage === 1 ? result.data : [...current, ...result.data]));
-    setPage(result.meta?.current_page ?? nextPage);
-    setLastPage(result.meta?.last_page ?? nextPage);
+  const reloadThreads = useCallback(async (targetPage = 1) => {
+    const firstPage = await listThreads(documentId, 1);
+    const last = firstPage.meta?.last_page ?? 1;
+    const finalPage = Math.min(Math.max(1, targetPage), last);
+    const remainingPages = finalPage > 1
+      ? await Promise.all(Array.from({ length: finalPage - 1 }, (_, index) => listThreads(documentId, index + 2)))
+      : [];
+    const pages = [firstPage, ...remainingPages];
+
+    loadedPageRef.current = finalPage;
+    setThreads(pages.flatMap((threadPage) => threadPage.data));
+    setPage(finalPage);
+    setLastPage(last);
   }, [documentId]);
+
+  const refreshLoadedThreads = useCallback(async () => {
+    await reloadThreads(loadedPageRef.current);
+  }, [reloadThreads]);
 
   useEffect(() => {
     void reloadThreads(1);
@@ -100,8 +115,8 @@ export function DocumentReviewSurface({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    decorateAnchorHighlights(root, threads, activeThreadId, plainText ?? '');
-  }, [threads, activeThreadId, plainText]);
+    decorateAnchorHighlights(root, threads, highlightedThreadId, plainText ?? '');
+  }, [threads, highlightedThreadId, plainText]);
 
   const refreshDocumentLayout = useCallback(() => {
     const root = rootRef.current;
@@ -109,9 +124,10 @@ export function DocumentReviewSurface({
 
     const { entries, positions } = collectTocFromRenderedHeadings(root);
     headingPositionsRef.current = positions;
-    setTocEntries(entries);
+    setTocEntries((current) => tocEntriesEqual(current, entries) ? current : entries);
     setActiveHeadingId(activeHeadingIdForScroll(positions, window.scrollY, SCROLL_SPY_OFFSET));
-    setAnchorPositions(measureAnchorPositions(root, threads));
+    const nextAnchorPositions = measureAnchorPositions(root, threads);
+    setAnchorPositions((current) => anchorPositionsEqual(current, nextAnchorPositions) ? current : nextAnchorPositions);
     setDocumentHeight(Math.ceil(root.getBoundingClientRect().height));
   }, [threads]);
 
@@ -170,19 +186,34 @@ export function DocumentReviewSurface({
     if (targetId !== null) setActiveThreadId(targetId);
   }, [activeThreadId, threads]);
 
+  const activateThreadCard = useCallback((threadId: number) => {
+    setActiveThreadId(threadId);
+    setHoveredThreadId(null);
+    window.requestAnimationFrame(() => {
+      const card = document.querySelector<HTMLElement>(`[data-thread-card-id="${threadId}"]`);
+      card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      card?.focus({ preventScroll: true });
+    });
+  }, []);
+
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
     function over(event: MouseEvent) {
       const id = firstThreadIdFromTarget(event.target);
-      if (id) setActiveThreadId(id);
+      if (id) setHoveredThreadId(id);
     }
 
     function out(event: MouseEvent) {
-      if (event.target instanceof Element && event.target.closest('[data-kedge-thread-ids]')) {
-        setActiveThreadId(null);
-      }
+      const current = event.target instanceof Element
+        ? event.target.closest('[data-kedge-thread-ids]')
+        : null;
+      if (!current) return;
+      const next = event.relatedTarget instanceof Element
+        ? event.relatedTarget.closest('[data-kedge-thread-ids]')
+        : null;
+      if (current !== next) setHoveredThreadId(null);
     }
 
     function focusIn(event: FocusEvent) {
@@ -190,42 +221,42 @@ export function DocumentReviewSurface({
       if (id) setActiveThreadId(id);
     }
 
-    function focusOut(event: FocusEvent) {
-      if (event.target instanceof Element && event.target.closest('[data-kedge-thread-ids]')) {
-        setActiveThreadId(null);
-      }
-    }
-
     function click(event: MouseEvent) {
       const id = firstThreadIdFromTarget(event.target);
-      if (!id || window.innerWidth >= MOBILE_BREAKPOINT) return;
+      if (!id) return;
       event.preventDefault();
-      openMobileThread(id);
+      if (window.innerWidth < MOBILE_BREAKPOINT) {
+        openMobileThread(id);
+      } else {
+        activateThreadCard(id);
+      }
     }
 
     function keyDown(event: KeyboardEvent) {
       if (event.key !== 'Enter' && event.key !== ' ') return;
       const id = firstThreadIdFromTarget(event.target);
-      if (!id || window.innerWidth >= MOBILE_BREAKPOINT) return;
+      if (!id) return;
       event.preventDefault();
-      openMobileThread(id);
+      if (window.innerWidth < MOBILE_BREAKPOINT) {
+        openMobileThread(id);
+      } else {
+        activateThreadCard(id);
+      }
     }
 
     root.addEventListener('mouseover', over);
     root.addEventListener('mouseout', out);
     root.addEventListener('focusin', focusIn);
-    root.addEventListener('focusout', focusOut);
     root.addEventListener('click', click);
     root.addEventListener('keydown', keyDown);
     return () => {
       root.removeEventListener('mouseover', over);
       root.removeEventListener('mouseout', out);
       root.removeEventListener('focusin', focusIn);
-      root.removeEventListener('focusout', focusOut);
       root.removeEventListener('click', click);
       root.removeEventListener('keydown', keyDown);
     };
-  }, [openMobileThread]);
+  }, [activateThreadCard, openMobileThread]);
 
   function captureSelection() {
     if (!canCapture || !rootRef.current) return;
@@ -268,8 +299,9 @@ export function DocumentReviewSurface({
   async function submit() {
     if (!composer.open) return;
     const isSuggestion = composer.mode === 'inline' && composer.anchor != null && composer.commentType === 'suggestion';
-    const suggestionUnchanged = isSuggestion && proposedText.trim() === composer.anchor?.exact.trim();
-    if (isSuggestion ? proposedText.trim() === '' || suggestionUnchanged : body.trim() === '') {
+    const trimmedProposedText = proposedText.trim();
+    const suggestionUnchanged = isSuggestion && trimmedProposedText === composer.anchor?.exact.trim();
+    if (isSuggestion ? trimmedProposedText === '' || suggestionUnchanged : body.trim() === '') {
       if (suggestionUnchanged) setMessage('Edit the text to suggest a change.');
 
       return;
@@ -286,7 +318,7 @@ export function DocumentReviewSurface({
     const outcome = isSuggestion && anchor
       ? await createSuggestionThread(documentId, {
           body: body.trim() === '' ? undefined : body,
-          proposed_text: proposedText,
+          proposed_text: trimmedProposedText,
           anchor,
           idempotency_key: composer.idempotencyKey,
         })
@@ -313,7 +345,7 @@ export function DocumentReviewSurface({
     setProposedText('');
     setComposer({ open: false });
     window.getSelection()?.removeAllRanges();
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(outcome.thread.id);
   }
 
@@ -321,7 +353,7 @@ export function DocumentReviewSurface({
     const outcome = await updateThreadStatus(thread.id, status);
     if (!outcome.ok) return outcome.message;
 
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(outcome.thread.id);
 
     return null;
@@ -331,7 +363,7 @@ export function DocumentReviewSurface({
     const outcome = await updateSuggestionStatus(comment.id, status);
     if (!outcome.ok) return outcome.message;
 
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(comment.thread_id);
 
     return null;
@@ -341,7 +373,7 @@ export function DocumentReviewSurface({
     const outcome = await replyToThread(thread.id, input, newIdempotencyKey());
     if (!outcome.ok) return outcome.message;
 
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(thread.id);
 
     return null;
@@ -351,7 +383,7 @@ export function DocumentReviewSurface({
     const outcome = await forkComment(comment.id, newIdempotencyKey());
     if (!outcome.ok) return outcome.message;
 
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(outcome.thread.id);
 
     return null;
@@ -361,7 +393,7 @@ export function DocumentReviewSurface({
     const outcome = await editComment(comment.id, nextBody);
     if (!outcome.ok) return outcome.message;
 
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(comment.thread_id);
 
     return null;
@@ -371,7 +403,7 @@ export function DocumentReviewSurface({
     const outcome = await deleteComment(comment.id);
     if (!outcome.ok) return outcome.message;
 
-    await reloadThreads(1);
+    await refreshLoadedThreads();
     setActiveThreadId(comment.thread_id);
 
     return null;
@@ -379,10 +411,10 @@ export function DocumentReviewSurface({
 
   function focusThread(thread: ReviewThread) {
     setActiveThreadId(thread.id);
+    setHoveredThreadId(null);
     const root = rootRef.current;
     const target = firstAnchorHighlightForThread(root, thread.id);
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    window.setTimeout(() => setActiveThreadId(null), 1800);
   }
 
   function jumpToHeading(id: string) {
@@ -405,13 +437,12 @@ export function DocumentReviewSurface({
         backLabel={backLabel}
       />
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 py-8 lg:grid-cols-[16rem_minmax(0,52rem)] xl:grid-cols-[16rem_minmax(0,52rem)_320px] 2xl:grid-cols-[18rem_minmax(0,52rem)_360px]">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 py-8 lg:grid-cols-[16rem_minmax(0,52rem)] xl:grid-cols-[16rem_minmax(0,52rem)_320px] 2xl:grid-cols-[18rem_minmax(0,52rem)_360px]">
         <DocumentReviewSidebar
           tocEntries={tocEntries}
           activeHeadingId={activeHeadingId}
           threads={threads}
           activeThreadId={activeThreadId}
-          sourceUrl={sourceUrl}
           lifecycleStatus={lifecycleStatus}
           versionLabel={versionLabel}
           onJumpToHeading={jumpToHeading}
@@ -432,11 +463,13 @@ export function DocumentReviewSurface({
           page={page}
           lastPage={lastPage}
           activeThreadId={activeThreadId}
+          highlightedThreadId={highlightedThreadId}
           anchorPositions={anchorPositions}
           documentHeight={documentHeight}
           onFocusThread={focusThread}
-          onHoverThread={(thread) => setActiveThreadId(thread.id)}
-          onLeaveThread={() => setActiveThreadId(null)}
+          onActivateThread={(thread) => setActiveThreadId(thread.id)}
+          onHoverThread={(thread) => setHoveredThreadId(thread.id)}
+          onLeaveThread={() => setHoveredThreadId(null)}
           onLoadMore={() => void reloadThreads(page + 1)}
           onSetThreadStatus={setThreadStatus}
           onReply={reply}
@@ -537,6 +570,23 @@ function measureAnchorPositions(root: HTMLElement, threads: ReviewThread[]): Rec
   }
 
   return positions;
+}
+
+function tocEntriesEqual(left: TocEntry[], right: TocEntry[]): boolean {
+  if (left.length !== right.length) return false;
+
+  return left.every((entry, index) => {
+    const other = right[index];
+    return entry.id === other.id && entry.title === other.title && entry.level === other.level;
+  });
+}
+
+function anchorPositionsEqual(left: Record<number, number>, right: Record<number, number>): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every((key) => left[Number(key)] === right[Number(key)]);
 }
 
 function firstThreadIdFromTarget(target: EventTarget | null): number | null {

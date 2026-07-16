@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle } from 'lucide-react';
+import { MetaChip } from './meta-chip';
 import { cn } from '@/lib/cn';
 import type { LifecycleStatus } from '@/lib/document-types';
 import type { TocEntry } from '@/lib/review-surface-layout';
@@ -11,7 +11,6 @@ export function DocumentReviewSidebar({
   activeHeadingId,
   threads,
   activeThreadId,
-  sourceUrl,
   lifecycleStatus,
   versionLabel,
   onJumpToHeading,
@@ -21,7 +20,6 @@ export function DocumentReviewSidebar({
   activeHeadingId: string | null;
   threads: ReviewThread[];
   activeThreadId: number | null;
-  sourceUrl?: string | null;
   lifecycleStatus?: LifecycleStatus | null;
   versionLabel?: string | null;
   onJumpToHeading: (id: string) => void;
@@ -33,9 +31,6 @@ export function DocumentReviewSidebar({
         <div className="mb-4 flex min-w-0 items-center gap-2 text-xs font-mono">
           {versionLabel ? <MetaChip>{versionLabel}</MetaChip> : null}
           {lifecycleStatus ? <LifecycleChip status={lifecycleStatus} /> : null}
-          {sourceUrl ? (
-            <span className="truncate text-[11px] text-zinc-400 dark:text-zinc-500">{sourceUrl}</span>
-          ) : null}
         </div>
 
         <h2 className="text-xs font-semibold text-zinc-900 dark:text-white">Document</h2>
@@ -86,13 +81,12 @@ export function DocumentReviewSidebar({
           )}
         </nav>
 
-        <div className="mt-8 rounded-2xl bg-rose-400/5 px-3 py-2.5 text-xs text-rose-700 ring-1 ring-inset ring-rose-500/20 dark:text-rose-300">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="font-semibold">Orphaned tray</span>
-            <span className="ml-auto font-mono text-[9px] uppercase">empty</span>
-          </div>
-        </div>
+        <a
+          href="#orphaned-threads"
+          className="mt-8 inline-flex text-xs font-medium text-rose-700 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-rose-300 dark:hover:text-rose-200"
+        >
+          Orphaned threads
+        </a>
       </div>
     </aside>
   );
@@ -124,14 +118,6 @@ function ThreadStatusLabel({ thread }: { thread: ReviewThread }) {
   return (
     <span className={cn('font-mono text-[9px] font-semibold uppercase', classes)}>
       {label}
-    </span>
-  );
-}
-
-function MetaChip({ children }: { children: string }) {
-  return (
-    <span className="rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-zinc-500 ring-1 ring-inset ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700">
-      {children}
     </span>
   );
 }

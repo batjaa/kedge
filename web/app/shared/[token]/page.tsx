@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { getSharedDocument } from '@/lib/shared-document';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentReviewSurface } from '@/components/app/document-review-surface';
+import { DocumentStaticHeader } from '@/components/app/document-static-header';
 import { SharedLinkGone } from '@/components/shared/shared-link-gone';
 import { ClaimCta } from '@/components/shared/claim-cta';
 import { SharedDocumentPoller } from '@/components/shared/shared-document-poller';
@@ -65,14 +66,11 @@ export default async function SharedDocumentPage({
   return (
     <div>
       {showShareHeader ? (
-        <header className="mb-8 border-b border-zinc-900/10 pb-6 dark:border-white/10">
-          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-            {isDemo ? 'Demo document' : verifiedReviewer ? 'Shared document · verified reviewer' : 'Shared document · read-only'}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-            {doc.title}
-          </h1>
-        </header>
+        <DocumentStaticHeader
+          title={doc.title}
+          eyebrow={isDemo ? 'Demo document' : verifiedReviewer ? 'Shared document · verified reviewer' : 'Shared document · read-only'}
+          bordered
+        />
       ) : null}
 
       {doc.status === 'ready' && doc.current_version ? (

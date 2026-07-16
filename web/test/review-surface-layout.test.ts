@@ -22,6 +22,18 @@ describe('review surface layout helpers', () => {
     ]);
   });
 
+  it('dedupes explicit heading ids against already emitted auto ids', () => {
+    expect(deriveTocEntriesFromHeadings([
+      { tagName: 'h2', text: 'Foo' },
+      { tagName: 'h2', text: 'Foo' },
+      { tagName: 'h2', text: 'Different label', id: 'foo-2' },
+    ])).toEqual([
+      { id: 'foo', title: 'Foo', level: 2 },
+      { id: 'foo-2', title: 'Foo', level: 2 },
+      { id: 'foo-2-2', title: 'Different label', level: 2 },
+    ]);
+  });
+
   it('chooses the last heading above the sticky scroll-spy offset', () => {
     const headings = [
       { id: 'motivation', top: 100 },
@@ -40,6 +52,18 @@ describe('review surface layout helpers', () => {
       { threadId: 1, anchorY: 10, height: 100 },
       { threadId: 2, anchorY: 50, height: 80 },
       { threadId: 3, anchorY: 250, height: 60 },
+    ], { minGap: 10 })).toEqual([
+      { threadId: 1, anchorY: 10, y: 10, connectorOffset: 0, stacked: false },
+      { threadId: 2, anchorY: 50, y: 120, connectorOffset: -70, stacked: true },
+      { threadId: 3, anchorY: 250, y: 250, connectorOffset: 0, stacked: false },
+    ]);
+  });
+
+  it('sorts unsorted thread card inputs by anchor position before placement', () => {
+    expect(placeThreadCards([
+      { threadId: 3, anchorY: 250, height: 60 },
+      { threadId: 1, anchorY: 10, height: 100 },
+      { threadId: 2, anchorY: 50, height: 80 },
     ], { minGap: 10 })).toEqual([
       { threadId: 1, anchorY: 10, y: 10, connectorOffset: 0, stacked: false },
       { threadId: 2, anchorY: 50, y: 120, connectorOffset: -70, stacked: true },
