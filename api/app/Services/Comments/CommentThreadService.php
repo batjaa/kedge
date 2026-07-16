@@ -63,7 +63,6 @@ class CommentThreadService
 
         $type = ThreadType::from((string) $data['type']);
         $commentType = CommentType::from((string) ($data['comment_type'] ?? CommentType::Comment->value));
-        $this->rejectSuggestionOnDocumentThread($type, $commentType);
         $version = $this->commentableVersion($document, includePlainText: $type === ThreadType::Inline);
         $anchor = $type === ThreadType::Inline
             ? $this->validatedAnchor($document, $version, (array) $data['anchor'])
@@ -135,8 +134,7 @@ class CommentThreadService
         }
 
         $thread->loadMissing('document');
-        $type = CommentType::from((string) ($data['type'] ?? CommentType::Comment->value));
-        $this->rejectSuggestionOnDocumentThread($thread->type, $type);
+        $type = CommentType::from((string) ($data['comment_type'] ?? CommentType::Comment->value));
         $this->commentableVersion($thread->document);
 
         try {
@@ -169,7 +167,7 @@ class CommentThreadService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function commentAttributes(
+    public function commentAttributes(
         User $author,
         CommentType $type,
         array $data,
@@ -177,28 +175,27 @@ class CommentThreadService
         string $scope,
         int $scopeId,
     ): array {
-        return [
+        $attributes = [
             'author_id' => $author->id,
             'type' => $type,
             'body_md' => (string) ($data['body'] ?? ''),
-            'proposed_text' => $type === CommentType::Suggestion ? (string) $data['proposed_text'] : null,
-            'suggestion_status' => $type === CommentType::Suggestion ? SuggestionStatus::Pending : null,
-            'client' => CommentClient::Web,
+            'proposed_text' => $type === CommentType::Suggestion && array_key_exists('proposed_text', $data)
+                ? $data['proposed_text']
+                : null,
+            'suggestion_status' => $type === CommentType::Suggestion
+                ? (array_key_exists('suggestion_status', $data) ? $data['suggestion_status'] : SuggestionStatus::Pending)
+                : null,
+            'client' => $data['client'] ?? CommentClient::Web,
             'idempotency_key' => $idempotencyKey,
             'idempotency_scope' => $scope,
             'idempotency_scope_id' => $scopeId,
         ];
-    }
 
-    private function rejectSuggestionOnDocumentThread(ThreadType $threadType, CommentType $commentType): void
-    {
-        if ($threadType === ThreadType::Document && $commentType === CommentType::Suggestion) {
-            $this->reject(
-                'suggestion_requires_inline_thread',
-                'Suggested edits can only be posted on inline threads with an anchored selection.',
-                'type',
-            );
+        if (array_key_exists('edited_at', $data)) {
+            $attributes['edited_at'] = $data['edited_at'];
         }
+
+        return $attributes;
     }
 
     public function updateStatus(Thread $thread, User $actor, ThreadStatus $status, ?string $ip): Thread

@@ -3,7 +3,7 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { Check, GitFork, Pencil, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { renderCommentMarkdown } from '@/lib/render-comment-markdown';
-import { SuggestionDiff } from '@/lib/suggestion-diff';
+import { diffSuggestionText, SuggestionDiff } from '@/lib/suggestion-diff';
 import type { ReviewThread, SuggestionStatus, ThreadAnchor, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 export function DocumentThreadRail({
@@ -338,6 +338,11 @@ function CommentRow({
   );
   const hasBody = !comment.is_deleted && (comment.body_md ?? '').trim() !== '';
   const isSuggestion = comment.type === 'suggestion' && !comment.is_deleted;
+  const proposedText = comment.proposed_text ?? '';
+  const suggestionDiff = useMemo(
+    () => isSuggestion ? diffSuggestionText(anchorExact ?? '', proposedText) : null,
+    [anchorExact, proposedText, comment.is_deleted, comment.type],
+  );
 
   return (
     <div className="py-3 first:pt-0 last:pb-0">
@@ -373,8 +378,8 @@ function CommentRow({
             <p className="mt-1 text-sm italic leading-6 text-zinc-500 dark:text-zinc-500">comment deleted</p>
           ) : (
             <>
-              {isSuggestion ? (
-                <SuggestionDiff before={anchorExact ?? ''} after={comment.proposed_text ?? ''} />
+              {suggestionDiff ? (
+                <SuggestionDiff diff={suggestionDiff} />
               ) : null}
               {hasBody ? (
                 <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{body}</div>

@@ -12,9 +12,16 @@ export interface SuggestionDiffResult {
   after: DiffToken[];
 }
 
+const MAX_FULL_DIFF_TOKENS = 1200;
+
 export function diffSuggestionText(before: string, after: string): SuggestionDiffResult {
   const beforeTokens = tokenize(before);
   const afterTokens = tokenize(after);
+
+  if (beforeTokens.length + afterTokens.length > MAX_FULL_DIFF_TOKENS) {
+    return coarseDiff(before, after);
+  }
+
   const table = longestCommonSubsequenceTable(beforeTokens, afterTokens);
   const beforeDiff: DiffToken[] = [];
   const afterDiff: DiffToken[] = [];
@@ -49,9 +56,7 @@ export function diffSuggestionText(before: string, after: string): SuggestionDif
   return { before: beforeDiff, after: afterDiff };
 }
 
-export function SuggestionDiff({ before, after }: { before: string; after: string }) {
-  const diff = diffSuggestionText(before, after);
-
+export function SuggestionDiff({ diff }: { diff: SuggestionDiffResult }) {
   return (
     <div className="mt-2 space-y-2 rounded-md bg-zinc-50 p-2 ring-1 ring-inset ring-zinc-900/10 dark:bg-zinc-950 dark:ring-white/10">
       <DiffLine label="Before" tokens={diff.before} />
@@ -91,6 +96,19 @@ function renderTokens(tokens: DiffToken[]): ReactNode[] {
 
 function tokenize(value: string): string[] {
   return value.match(/\n+|[^\S\n]+|\S+/g) ?? [];
+}
+
+function coarseDiff(before: string, after: string): SuggestionDiffResult {
+  if (before === after) {
+    const equal = before === '' ? [] : [{ kind: 'equal' as const, value: before }];
+
+    return { before: equal, after: equal };
+  }
+
+  return {
+    before: before === '' ? [] : [{ kind: 'removed', value: before }],
+    after: after === '' ? [] : [{ kind: 'added', value: after }],
+  };
 }
 
 function longestCommonSubsequenceTable(before: string[], after: string[]): number[][] {

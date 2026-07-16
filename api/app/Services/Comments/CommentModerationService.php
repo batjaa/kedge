@@ -36,7 +36,7 @@ class CommentModerationService
      */
     public function fork(Comment $comment, User $actor, array $data, ?string $ip): array
     {
-        $comment->loadMissing(['thread.document.workspace', 'thread.anchors']);
+        $comment->loadMissing(['author', 'thread.document.workspace', 'thread.anchors']);
         $sourceThread = $comment->thread;
         $sourceThread->loadMissing(['comments' => fn ($query) => $query->orderBy('id')]);
 
@@ -66,18 +66,20 @@ class CommentModerationService
                     'created_by' => $actor->id,
                 ]);
 
-                $openingComment = $thread->comments()->create([
-                    'author_id' => $comment->author_id,
-                    'type' => $comment->type,
-                    'body_md' => $comment->trashed() ? '' : $comment->body_md,
-                    'proposed_text' => $comment->trashed() ? null : $comment->proposed_text,
-                    'suggestion_status' => $comment->trashed() ? null : $comment->suggestion_status,
-                    'client' => $comment->client,
-                    'edited_at' => $comment->edited_at,
-                    'idempotency_key' => $idempotencyKey,
-                    'idempotency_scope' => self::IDEMPOTENCY_SCOPE_FORK,
-                    'idempotency_scope_id' => $comment->id,
-                ]);
+                $openingComment = $thread->comments()->create($this->threads->commentAttributes(
+                    $comment->author,
+                    $comment->type,
+                    [
+                        'body' => $comment->trashed() ? '' : $comment->body_md,
+                        'proposed_text' => $comment->trashed() ? null : $comment->proposed_text,
+                        'suggestion_status' => $comment->trashed() ? null : $comment->suggestion_status,
+                        'client' => $comment->client,
+                        'edited_at' => $comment->edited_at,
+                    ],
+                    $idempotencyKey,
+                    self::IDEMPOTENCY_SCOPE_FORK,
+                    (int) $comment->id,
+                ));
 
                 if ($comment->trashed()) {
                     $openingComment->forceFill(['deleted_at' => $comment->deleted_at ?? now()])->save();
@@ -161,37 +163,42 @@ class CommentModerationService
 
     public function updateSuggestionStatus(Comment $comment, User $actor, SuggestionStatus $status, ?string $ip): Comment
     {
-        $comment->refresh();
-        $comment->loadMissing('thread.document.workspace');
+        return DB::transaction(function () use ($comment, $actor, $status, $ip) {
+            $lockedComment = Comment::withTrashed()
+                ->whereKey($comment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedComment->load('thread.document.workspace');
 
-        if ($comment->trashed()) {
-            $this->reject('comment_deleted', 'Deleted comments cannot be triaged as suggestions.', 'comment');
-        }
+            if ($lockedComment->trashed()) {
+                $this->reject('comment_deleted', 'Deleted comments cannot be triaged as suggestions.', 'comment');
+            }
 
-        if ($comment->type !== CommentType::Suggestion) {
-            $this->reject('comment_not_suggestion', 'Only suggested edits have a suggestion status.', 'comment');
-        }
+            if ($lockedComment->type !== CommentType::Suggestion) {
+                $this->reject('comment_not_suggestion', 'Only suggested edits have a suggestion status.', 'comment');
+            }
 
-        $previousStatus = $comment->suggestion_status;
-        if ($previousStatus === $status) {
-            return $comment->load('author');
-        }
+            $previousStatus = $lockedComment->suggestion_status;
+            if ($previousStatus === $status) {
+                return $lockedComment->load('author');
+            }
 
-        $comment->forceFill(['suggestion_status' => $status])->save();
+            $lockedComment->forceFill(['suggestion_status' => $status])->save();
 
-        $this->recordEvent(
-            $this->suggestionEventName($status),
-            $comment->thread->document,
-            $actor,
-            $comment,
-            $ip,
-            [
-                'previous_status' => $previousStatus?->value,
-                'status' => $status->value,
-            ],
-        );
+            $this->recordEvent(
+                $this->suggestionEventName($status),
+                $lockedComment->thread->document,
+                $actor,
+                $lockedComment,
+                $ip,
+                [
+                    'previous_status' => $previousStatus?->value,
+                    'status' => $status->value,
+                ],
+            );
 
-        return $comment->refresh()->load('author');
+            return $lockedComment->refresh()->load('author');
+        });
     }
 
     private function suggestionEventName(SuggestionStatus $status): string

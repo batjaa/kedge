@@ -6,6 +6,8 @@ import type { AnchorCaptureFailure, AnchorSelector } from '@/lib/anchor-capture-
 
 export type ComposerCommentType = 'comment' | 'suggestion';
 
+const TEXTAREA_CLASS_NAME = 'block w-full resize-none rounded-lg border-0 bg-zinc-50 p-3 text-sm leading-6 text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-zinc-700';
+
 export type ComposerState =
   | { open: false }
   | {
@@ -46,7 +48,8 @@ export function DocumentCommentComposer({
   if (!composer.open) return null;
   const canSuggest = composer.mode === 'inline' && composer.anchor != null && composer.failure == null;
   const isSuggestion = canSuggest && composer.commentType === 'suggestion';
-  const submitDisabled = isSuggestion ? proposedText.trim() === '' : body.trim() === '';
+  const suggestionUnchanged = isSuggestion && proposedText.trim() === composer.anchor?.exact.trim();
+  const submitDisabled = isSuggestion ? proposedText.trim() === '' || suggestionUnchanged : body.trim() === '';
 
   if (composer.stage === 'affordance') {
     return (
@@ -90,14 +93,17 @@ export function DocumentCommentComposer({
             value={proposedText}
             onChange={(event) => onProposedTextChange(event.target.value)}
             rows={4}
-            className="block w-full resize-none rounded-lg border-0 bg-zinc-50 p-3 text-sm leading-6 text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-zinc-700"
+            className={TEXTAREA_CLASS_NAME}
             placeholder="Replacement text"
           />
+          {suggestionUnchanged ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Edit the text to suggest a change.</p>
+          ) : null}
           <textarea
             value={body}
             onChange={(event) => onBodyChange(event.target.value)}
             rows={2}
-            className="block w-full resize-none rounded-lg border-0 bg-zinc-50 p-3 text-sm leading-6 text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-zinc-700"
+            className={TEXTAREA_CLASS_NAME}
             placeholder="Add a note"
           />
         </div>
@@ -106,7 +112,7 @@ export function DocumentCommentComposer({
           value={body}
           onChange={(event) => onBodyChange(event.target.value)}
           rows={4}
-          className="block w-full resize-none rounded-lg border-0 bg-zinc-50 p-3 text-sm leading-6 text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-zinc-700"
+          className={TEXTAREA_CLASS_NAME}
           placeholder="Write a comment"
         />
       )}

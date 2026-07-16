@@ -5,6 +5,7 @@ namespace Tests\Feature\Api\V1;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\WorkspaceRole;
+use App\Models\AuditLog;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
@@ -110,7 +111,7 @@ class ThreadCommentTest extends TestCase
 
         $reply = $this->actingAs($reviewer)->fromWebApp()
             ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
-                'type' => 'suggestion',
+                'comment_type' => 'suggestion',
                 'proposed_text' => 'Second target paragraph, revised again.',
                 'idempotency_key' => 'inline-suggestion-reply',
             ]);
@@ -159,7 +160,7 @@ class ThreadCommentTest extends TestCase
 
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/threads/{$inlineThread->json('id')}/comments", [
-                'type' => 'suggestion',
+                'comment_type' => 'suggestion',
                 'idempotency_key' => 'suggestion-missing-text',
             ])
             ->assertUnprocessable()
@@ -182,16 +183,75 @@ class ThreadCommentTest extends TestCase
                 'idempotency_key' => 'document-suggestion-rejected',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('code', 'suggestion_requires_inline_thread');
+            ->assertJsonPath('message', 'Suggested edits can only be posted on inline threads with an anchored selection.')
+            ->assertJsonPath('errors.comment_type.0', 'Suggested edits can only be posted on inline threads with an anchored selection.');
 
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/threads/{$documentThread->json('id')}/comments", [
-                'type' => 'suggestion',
+                'comment_type' => 'suggestion',
                 'proposed_text' => 'No anchor exists.',
                 'idempotency_key' => 'document-reply-suggestion-rejected',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('code', 'suggestion_requires_inline_thread');
+            ->assertJsonPath('message', 'Suggested edits can only be posted on inline threads with an anchored selection.')
+            ->assertJsonPath('errors.comment_type.0', 'Suggested edits can only be posted on inline threads with an anchored selection.');
+    }
+
+    public function test_suggestions_must_change_the_anchor_text_on_create_and_reply(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'target', '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'comment_type' => 'suggestion',
+                'proposed_text' => ' target ',
+                'idempotency_key' => 'same-suggestion-create',
+                'anchor' => $anchor,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['proposed_text'])
+            ->assertJsonPath('errors.proposed_text.0', 'Suggested edits must change the selected text.');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'comment_type' => 'suggestion',
+                'proposed_text' => 'replacement',
+                'idempotency_key' => 'changed-suggestion-create',
+                'anchor' => $anchor,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('first_comment.proposed_text', 'replacement');
+
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Parent',
+                'idempotency_key' => 'same-suggestion-reply-parent',
+                'anchor' => $anchor,
+            ])
+            ->assertCreated();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'comment_type' => 'suggestion',
+                'proposed_text' => ' target ',
+                'idempotency_key' => 'same-suggestion-reply',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['proposed_text'])
+            ->assertJsonPath('errors.proposed_text.0', 'Suggested edits must change the selected text.');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'comment_type' => 'suggestion',
+                'proposed_text' => 'target replacement',
+                'idempotency_key' => 'changed-suggestion-reply',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('proposed_text', 'target replacement');
     }
 
     public function test_document_author_can_accept_decline_and_reopen_suggestion_idempotently(): void
@@ -299,7 +359,7 @@ class ThreadCommentTest extends TestCase
 
         $suggestion = $this->actingAs($suggestionAuthor)->fromWebApp()
             ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
-                'type' => 'suggestion',
+                'comment_type' => 'suggestion',
                 'proposed_text' => 'replacement',
                 'idempotency_key' => 'suggestion-auth-reply',
             ])
@@ -340,6 +400,8 @@ class ThreadCommentTest extends TestCase
         $declineSnapshot = Comment::query()->findOrFail($suggestion->id);
         $service = app(CommentModerationService::class);
 
+        // True concurrent flips are serialized by lockForUpdate; this stale-model
+        // sequence verifies the audit reads the committed prior status.
         $service->updateSuggestionStatus($acceptSnapshot, $author, SuggestionStatus::Accepted, null);
         $service->updateSuggestionStatus($declineSnapshot, $author, SuggestionStatus::Declined, null);
 
@@ -349,6 +411,14 @@ class ThreadCommentTest extends TestCase
         ]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.accepted', 'subject_id' => $suggestion->id]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.declined', 'subject_id' => $suggestion->id]);
+
+        $declineMeta = AuditLog::query()
+            ->where('action', 'suggestion.declined')
+            ->where('subject_id', $suggestion->id)
+            ->firstOrFail()
+            ->meta;
+        $this->assertSame('accepted', $declineMeta['previous_status'] ?? null);
+        $this->assertSame('declined', $declineMeta['status'] ?? null);
     }
 
     public function test_divergent_inline_anchor_fails_after_reprojection_with_reselect_code(): void

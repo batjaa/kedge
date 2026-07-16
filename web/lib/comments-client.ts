@@ -35,10 +35,6 @@ export type ReplyOutcome =
   | { ok: true; comment: ThreadComment }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
 
-export type SuggestionMutationOutcome =
-  | { ok: true; comment: ThreadComment }
-  | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
-
 export type ThreadMutationOutcome =
   | { ok: true; thread: ReviewThread }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
@@ -152,7 +148,7 @@ export async function replyToThread(threadId: number, body: string, idempotencyK
 export async function updateSuggestionStatus(
   commentId: number,
   status: SuggestionStatus,
-): Promise<SuggestionMutationOutcome> {
+): Promise<ReplyOutcome> {
   const res = await mutate('PATCH', `/api/v1/comments/${commentId}/suggestion`, { status });
 
   if (res.ok) {

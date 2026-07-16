@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\CommentType;
 use App\Enums\ThreadType;
+use App\Http\Requests\Concerns\ValidatesSuggestionPayload;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -11,6 +12,8 @@ use Illuminate\Validation\Validator;
 
 class StoreThreadRequest extends FormRequest
 {
+    use ValidatesSuggestionPayload;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -53,22 +56,16 @@ class StoreThreadRequest extends FormRequest
                     $validator->errors()->add('anchor', 'Inline threads require an anchor selector.');
                 }
 
-                $commentType = $this->input('comment_type', CommentType::Comment->value);
-                if ($commentType === CommentType::Suggestion->value) {
-                    if (trim((string) $this->input('proposed_text', '')) === '') {
-                        $validator->errors()->add('proposed_text', 'Suggested edits require proposed replacement text.');
-                    }
-
-                    return;
-                }
-
-                if (trim((string) $this->input('body', '')) === '') {
-                    $validator->errors()->add('body', 'Comments require a body.');
-                }
-
-                if ($this->has('proposed_text')) {
-                    $validator->errors()->add('proposed_text', 'Plain comments cannot include proposed replacement text.');
-                }
+                $anchor = $this->input('anchor');
+                $commentType = CommentType::tryFrom((string) $this->input('comment_type', CommentType::Comment->value))
+                    ?? CommentType::Comment;
+                $this->validateCommentOrSuggestionPayload(
+                    $validator,
+                    $commentType,
+                    $this->input('type') === ThreadType::Inline->value && is_array($anchor),
+                    is_array($anchor) && array_key_exists('exact', $anchor) ? (string) $anchor['exact'] : null,
+                    'comment_type',
+                );
             },
         ];
     }

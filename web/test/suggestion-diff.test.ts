@@ -28,4 +28,16 @@ describe('diffSuggestionText', () => {
     expect(diff.before.map((token) => token.value).join('')).toBe('No change here');
     expect(diff.after.map((token) => token.value).join('')).toBe('No change here');
   });
+
+  test('falls back quickly to a coarse diff for very large inputs', () => {
+    const before = Array.from({ length: 2000 }, (_, index) => `before-${index}`).join(' ');
+    const after = Array.from({ length: 2000 }, (_, index) => `after-${index}`).join(' ');
+    const start = performance.now();
+
+    const diff = diffSuggestionText(before, after);
+
+    expect(performance.now() - start).toBeLessThan(250);
+    expect(diff.before).toEqual([{ kind: 'removed', value: before }]);
+    expect(diff.after).toEqual([{ kind: 'added', value: after }]);
+  });
 });

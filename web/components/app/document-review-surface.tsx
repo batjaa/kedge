@@ -129,7 +129,12 @@ export function DocumentReviewSurface({
   async function submit() {
     if (!composer.open) return;
     const isSuggestion = composer.mode === 'inline' && composer.anchor != null && composer.commentType === 'suggestion';
-    if (isSuggestion ? proposedText.trim() === '' : body.trim() === '') return;
+    const suggestionUnchanged = isSuggestion && proposedText.trim() === composer.anchor?.exact.trim();
+    if (isSuggestion ? proposedText.trim() === '' || suggestionUnchanged : body.trim() === '') {
+      if (suggestionUnchanged) setMessage('Edit the text to suggest a change.');
+
+      return;
+    }
     setMessage(null);
 
     const anchor = composer.mode === 'inline' && composer.anchor
