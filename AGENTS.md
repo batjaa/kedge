@@ -51,6 +51,7 @@ Laravel 13 per SPEC §4.1: PHPUnit (never Pest) · `vendor/bin/pint --dirty` bef
 ## Conventions
 
 - **Conventional Commits**, imperative, scoped: `feat(web): …`, `fix(api): …`, `docs: …`. Commit per logical unit.
+- **Module specs** live in `docs/specs/` named `<milestone>-<module>.md` (`m0-scaffold.md`, `m2-comments-suggestions.md`).
 - **Verify before moving on**: run the dev server / tests and confirm the change actually works; smoke-test affected routes.
 - **Decisions are recorded**, not just made: scope/architecture changes go into SPEC.md (with rationale) and the TODOS.md decision log in the same commit as the code.
 - Diagrams inside `docs/` are PlantUML/Mermaid fenced blocks — the product renders them itself (dogfooding).
