@@ -23,6 +23,7 @@ class CommentModerationService
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly CommentThreadService $threads,
+        private readonly CommentMentionService $mentions,
     ) {}
 
     protected function auditLogger(): AuditLogger
@@ -53,7 +54,7 @@ class CommentModerationService
             self::IDEMPOTENCY_SCOPE_FORK,
             (int) $comment->id,
         )) {
-            return [$this->threads->loadThreadForResource($existing->thread), 200];
+            return [$this->threads->loadThreadForResource($existing->thread, $actor), 200];
         }
 
         try {
@@ -83,6 +84,8 @@ class CommentModerationService
 
                 if ($comment->trashed()) {
                     $openingComment->forceFill(['deleted_at' => $comment->deleted_at ?? now()])->save();
+                } else {
+                    $this->mentions->copyMentionLinks($comment, $openingComment);
                 }
 
                 foreach ($sourceThread->anchors as $anchor) {
@@ -100,7 +103,7 @@ class CommentModerationService
                 (int) $comment->id,
             );
 
-            return [$this->threads->loadThreadForResource($existing->thread), 200];
+            return [$this->threads->loadThreadForResource($existing->thread, $actor), 200];
         }
 
         $this->recordEvent(
@@ -115,7 +118,7 @@ class CommentModerationService
             ],
         );
 
-        return [$this->threads->loadThreadForResource($thread), 201];
+        return [$this->threads->loadThreadForResource($thread, $actor), 201];
     }
 
     public function updateComment(Comment $comment, User $actor, string $body, ?string $ip): Comment
@@ -134,6 +137,7 @@ class CommentModerationService
             'body_md' => $body,
             'edited_at' => now(),
         ])->save();
+        $this->mentions->syncForComment($comment, $comment->thread->document, $actor);
 
         $this->recordEvent('comment.edited', $comment->thread->document, $actor, $comment, $ip);
 
@@ -156,6 +160,7 @@ class CommentModerationService
             'proposed_text' => null,
             'suggestion_status' => null,
         ])->save();
+        $comment->mentionedUsers()->sync([]);
         $comment->delete();
 
         $this->recordEvent('comment.deleted', $comment->thread->document, $actor, $comment, $ip);

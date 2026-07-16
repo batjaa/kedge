@@ -17,6 +17,7 @@ export function MobileThreadSheet({
   onEditComment,
   onDeleteComment,
   onSetSuggestionStatus,
+  onToggleReaction,
 }: {
   open: boolean;
   thread: ReviewThread | null;
@@ -28,6 +29,7 @@ export function MobileThreadSheet({
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
+  onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -100,6 +102,7 @@ export function MobileThreadSheet({
             onEditComment={onEditComment}
             onDeleteComment={onDeleteComment}
             onSetSuggestionStatus={onSetSuggestionStatus}
+            onToggleReaction={onToggleReaction}
           />
         ) : (
           <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">

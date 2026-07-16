@@ -2,6 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
+import { MentionTextarea } from './mention-textarea';
 import type { AnchorCaptureFailure, AnchorSelector } from '@/lib/anchor-capture-core';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
 import type { CommentType } from '@/lib/thread-types';
@@ -21,6 +22,7 @@ export type ComposerState =
     };
 
 export function DocumentCommentComposer({
+  documentId,
   composer,
   commentType,
   body,
@@ -34,6 +36,7 @@ export function DocumentCommentComposer({
   onOpenPanel,
   onSubmit,
 }: {
+  documentId: number;
   composer: ComposerState;
   commentType: CommentType;
   body: string;
@@ -110,10 +113,11 @@ export function DocumentCommentComposer({
           {suggestionUnchanged ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Edit the text to suggest a change.</p>
           ) : null}
-          <textarea
+          <MentionTextarea
+            documentId={documentId}
             value={body}
-            onChange={(event) => {
-              if (!submitting) onBodyChange(event.target.value);
+            onChange={(nextBody) => {
+              if (!submitting) onBodyChange(nextBody);
             }}
             rows={2}
             className={TEXTAREA_CLASS_NAME}
@@ -122,10 +126,11 @@ export function DocumentCommentComposer({
           />
         </div>
       ) : (
-        <textarea
+        <MentionTextarea
+          documentId={documentId}
           value={body}
-          onChange={(event) => {
-            if (!submitting) onBodyChange(event.target.value);
+          onChange={(nextBody) => {
+            if (!submitting) onBodyChange(nextBody);
           }}
           rows={4}
           className={TEXTAREA_CLASS_NAME}

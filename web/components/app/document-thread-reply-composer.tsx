@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
 import { ModeButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
+import { MentionTextarea } from './mention-textarea';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
 import { postReplyComposerDraft } from '@/lib/comment-composer-actions';
 import { commentDraftContextKey, useCommentDraft } from '@/lib/comment-draft';
@@ -123,10 +124,11 @@ export function ReplyComposer({
           {suggestionUnchanged ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Edit the text to suggest a change.</p>
           ) : null}
-          <textarea
+          <MentionTextarea
+            documentId={thread.document_id}
             value={replyBody}
-            onChange={(event) => {
-              if (!replyingRef.current) draft.setBody(event.target.value);
+            onChange={(nextBody) => {
+              if (!replyingRef.current) draft.setBody(nextBody);
             }}
             rows={2}
             className={TEXTAREA_CLASS_NAME}
@@ -135,10 +137,11 @@ export function ReplyComposer({
           />
         </div>
       ) : (
-        <textarea
+        <MentionTextarea
+          documentId={thread.document_id}
           value={replyBody}
-          onChange={(event) => {
-            if (!replyingRef.current) draft.setBody(event.target.value);
+          onChange={(nextBody) => {
+            if (!replyingRef.current) draft.setBody(nextBody);
           }}
           rows={2}
           className={TEXTAREA_CLASS_NAME}

@@ -13,6 +13,11 @@ export interface ThreadAuthor {
   name: string;
 }
 
+export interface MentionCandidate {
+  id: number;
+  name: string;
+}
+
 export interface ThreadAnchor {
   id: number;
   document_version_id: number;
@@ -42,6 +47,9 @@ export interface ThreadComment {
   can_delete: boolean;
   can_fork: boolean;
   can_resolve_suggestion: boolean;
+  can_react: boolean;
+  reaction_count: number;
+  viewer_has_reacted: boolean;
   created_at: string | null;
 }
 

@@ -9,6 +9,8 @@ use App\Models\AuditLog;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Share;
+use App\Models\ShareParticipant;
 use App\Models\Thread;
 use App\Models\User;
 use App\Models\Workspace;
@@ -949,7 +951,7 @@ class ThreadCommentTest extends TestCase
     public function test_forking_member_reply_as_document_author_is_idempotent_on_retry(): void
     {
         [$owner, $document] = $this->readyDocument();
-        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member = $this->registerUser('member@example.com');
         $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
 
         $thread = Thread::create([
@@ -1359,6 +1361,215 @@ class ThreadCommentTest extends TestCase
             ->assertJsonPath('code', 'demo_document_unclaimed');
     }
 
+    public function test_reviewer_mention_autocomplete_returns_same_share_participants_not_workspace_roster(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $workspaceMember = User::factory()->create(['name' => 'Workspace Member', 'email' => 'workspace-member@example.com']);
+        $workspaceMember->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $sameShareReviewer = User::factory()->create(['name' => 'Same Share Reviewer', 'email' => 'same-share@example.com']);
+        $currentReviewer = User::factory()->create(['name' => 'Current Reviewer', 'email' => 'current-reviewer@example.com']);
+        $otherShareReviewer = User::factory()->create(['name' => 'Other Share Reviewer', 'email' => 'other-share@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $otherShare = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $currentReviewer);
+        $this->verifyParticipant($share, $sameShareReviewer);
+        $this->verifyParticipant($otherShare, $otherShareReviewer);
+
+        $response = $this->actingAs($currentReviewer)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/mention-suggestions");
+
+        $response->assertOk();
+        $names = collect($response->json('data'))->pluck('name');
+        $this->assertTrue($names->contains($author->name));
+        $this->assertTrue($names->contains('Same Share Reviewer'));
+        $this->assertFalse($names->contains('Workspace Member'));
+        $this->assertFalse($names->contains('Other Share Reviewer'));
+    }
+
+    public function test_workspace_member_mention_autocomplete_returns_workspace_members_and_document_participants(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $workspaceMember = User::factory()->create(['name' => 'Workspace Member', 'email' => 'workspace-member@example.com']);
+        $workspaceMember->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $shareReviewer = User::factory()->create(['name' => 'Share Reviewer', 'email' => 'share-reviewer@example.com']);
+        $outsider = User::factory()->create(['name' => 'Unrelated Person', 'email' => 'unrelated@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $shareReviewer);
+
+        $response = $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/mention-suggestions");
+
+        $response->assertOk();
+        $names = collect($response->json('data'))->pluck('name');
+        $this->assertTrue($names->contains('Workspace Member'));
+        $this->assertTrue($names->contains('Share Reviewer'));
+        $this->assertFalse($names->contains($outsider->name));
+    }
+
+    public function test_out_of_audience_mention_is_rejected_on_submit(): void
+    {
+        [, $document] = $this->readyDocument();
+        $workspaceMember = User::factory()->create(['name' => 'Workspace Member', 'email' => 'workspace-member@example.com']);
+        $workspaceMember->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $reviewer = User::factory()->create(['name' => 'Reviewer', 'email' => 'reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => "Please ask [@Workspace Member](mention:{$workspaceMember->id}).",
+                'idempotency_key' => 'out-of-audience-mention',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'mention_out_of_audience');
+
+        $this->assertDatabaseCount('threads', 0);
+        $this->assertDatabaseCount('comments', 0);
+        $this->assertDatabaseCount('comment_mentions', 0);
+    }
+
+    public function test_allowed_mention_persists_its_linkage(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['name' => 'Member One', 'email' => 'member-one@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => "Please ask [@Member One](mention:{$member->id}).",
+                'idempotency_key' => 'mention-member-one',
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('comment_mentions', [
+            'comment_id' => $thread->json('first_comment.id'),
+            'user_id' => $member->id,
+        ]);
+    }
+
+    public function test_reaction_toggle_dedupes_and_counts_across_users(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Reactable comment',
+                'idempotency_key' => 'reactable-thread',
+            ])
+            ->assertCreated();
+        $commentId = $thread->json('first_comment.id');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$commentId}/reactions", [])
+            ->assertOk()
+            ->assertJsonPath('reaction_count', 1)
+            ->assertJsonPath('viewer_has_reacted', true);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$commentId}/reactions", [])
+            ->assertOk()
+            ->assertJsonPath('reaction_count', 0)
+            ->assertJsonPath('viewer_has_reacted', false);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$commentId}/reactions", [])
+            ->assertOk();
+        DB::table('comment_reactions')->insert([
+            'comment_id' => $commentId,
+            'user_id' => $member->id,
+            'emoji' => "\u{1F44D}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk()
+            ->assertJsonPath('data.0.first_comment.reaction_count', 2)
+            ->assertJsonPath('data.0.first_comment.viewer_has_reacted', true);
+
+        $this->assertDatabaseCount('comment_reactions', 2);
+    }
+
+    public function test_verified_reviewer_can_react_on_their_share_document(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $comment = $thread->comments()->create([
+            'author_id' => $author->id,
+            'body_md' => 'Reviewer can react',
+        ]);
+        $reviewer = $this->registerUser('reviewer@example.com');
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->postJson("/api/v1/comments/{$comment->id}/reactions", [])
+            ->assertOk()
+            ->assertJsonPath('reaction_count', 1)
+            ->assertJsonPath('viewer_has_reacted', true);
+    }
+
+    public function test_thread_list_reaction_counts_do_not_query_per_comment(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        for ($threadNumber = 1; $threadNumber <= 6; $threadNumber++) {
+            $thread = Thread::create([
+                'document_id' => $document->id,
+                'type' => 'document',
+                'status' => 'open',
+                'created_by' => $author->id,
+            ]);
+
+            for ($commentNumber = 1; $commentNumber <= 4; $commentNumber++) {
+                $comment = $thread->comments()->create([
+                    'author_id' => $author->id,
+                    'body_md' => "Comment {$threadNumber}.{$commentNumber}",
+                ]);
+                DB::table('comment_reactions')->insert([
+                    'comment_id' => $comment->id,
+                    'user_id' => $member->id,
+                    'emoji' => "\u{1F44D}",
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
+            ->assertOk()
+            ->assertJsonCount(6, 'data')
+            ->assertJsonPath('data.0.first_comment.reaction_count', 1);
+
+        $reactionQueries = collect($queries)
+            ->filter(fn (string $sql) => str_contains($sql, 'comment_reactions'))
+            ->count();
+
+        $this->assertLessThanOrEqual(
+            1,
+            $reactionQueries,
+            'Thread listing should hydrate reaction counts in bulk, not per comment.',
+        );
+    }
+
     public function test_thread_write_endpoint_is_rate_limited(): void
     {
         [$author, $document] = $this->readyDocument();
@@ -1525,5 +1736,14 @@ class ThreadCommentTest extends TestCase
             email: $email,
             password: 'correct-horse-battery',
         );
+    }
+
+    private function verifyParticipant(Share $share, User $user): ShareParticipant
+    {
+        return ShareParticipant::create([
+            'share_id' => $share->id,
+            'user_id' => $user->id,
+            'verified_at' => now(),
+        ]);
     }
 }

@@ -100,6 +100,12 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Mention autocomplete is a read, but it can disclose audience shape if
+        // hammered. Keep it per authenticated user and separate from writes.
+        RateLimiter::for('mentions', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
         // The public share read faces the open internet, so it is per-IP (SPEC
         // 10.2, 13): a leaked or brute-forced token can't be probed at speed, and
         // one visitor refreshing a doc can't be starved by another.

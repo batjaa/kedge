@@ -2,7 +2,7 @@
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
-import type { ReviewThread, SuggestionStatus, ThreadAnchorPayload, ThreadComment, ThreadPage, ThreadStatus } from './thread-types';
+import type { MentionCandidate, ReviewThread, SuggestionStatus, ThreadAnchorPayload, ThreadComment, ThreadPage, ThreadStatus } from './thread-types';
 
 export type CreateThreadInput =
   | {
@@ -54,6 +54,10 @@ export type DeleteCommentOutcome =
   | { ok: true }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
 
+export type ReactionOutcome =
+  | { ok: true; comment: ThreadComment }
+  | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
+
 type MutationMethod = 'POST' | 'PATCH' | 'DELETE';
 
 function send(method: MutationMethod, path: string, body?: Record<string, unknown>): Promise<Response> {
@@ -91,6 +95,27 @@ export async function listThreads(documentId: number, page = 1): Promise<ThreadP
   }
 
   return (await res.json()) as ThreadPage;
+}
+
+export async function listMentionSuggestions(
+  documentId: number,
+  query: string,
+  signal?: AbortSignal,
+): Promise<MentionCandidate[]> {
+  const params = new URLSearchParams();
+  if (query.trim() !== '') params.set('q', query.trim());
+
+  const res = await fetch(`${publicApiBaseUrl}/api/v1/documents/${documentId}/mention-suggestions?${params}`, {
+    credentials: 'include',
+    headers: { accept: 'application/json' },
+    cache: 'no-store',
+    signal,
+  });
+
+  if (!res.ok) return [];
+
+  const body = (await res.json()) as { data?: MentionCandidate[] };
+  return body.data ?? [];
 }
 
 export async function createThread(
@@ -264,4 +289,23 @@ export async function deleteComment(commentId: number): Promise<DeleteCommentOut
   }
 
   return { ok: false, kind: 'error', message: 'Could not delete this comment. Please try again.' };
+}
+
+export async function toggleCommentReaction(commentId: number): Promise<ReactionOutcome> {
+  const res = await mutate('POST', `/api/v1/comments/${commentId}/reactions`);
+
+  if (res.ok) {
+    return { ok: true, comment: (await res.json()) as ThreadComment };
+  }
+
+  if (res.status === 422) {
+    const data = (await res.json().catch(() => null)) as { message?: string } | null;
+    return { ok: false, kind: 'validation', message: data?.message ?? 'Could not update this reaction.' };
+  }
+
+  if (res.status === 429) {
+    return { ok: false, kind: 'rate-limited', message: 'Too many updates. Wait a minute, then try again.' };
+  }
+
+  return { ok: false, kind: 'error', message: 'Could not update this reaction. Please try again.' };
 }

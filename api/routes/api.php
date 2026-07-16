@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
+use App\Http\Controllers\Api\V1\CommentReactionController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\MentionSuggestionController;
 use App\Http\Controllers\Api\V1\ReviewerMagicLinkController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
@@ -118,6 +120,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/documents/{document}/threads', [ThreadController::class, 'index'])
             ->name('api.v1.documents.threads.index');
 
+        Route::get('/documents/{document}/mention-suggestions', [MentionSuggestionController::class, 'index'])
+            ->middleware('throttle:mentions')
+            ->name('api.v1.documents.mention-suggestions.index');
+
         Route::middleware('throttle:shares')->group(function () {
             Route::post('/documents/{document}/shares', [ShareController::class, 'store'])
                 ->name('api.v1.documents.shares.store');
@@ -145,6 +151,9 @@ Route::prefix('v1')->group(function () {
             Route::delete('/comments/{comment}', [ThreadCommentController::class, 'destroy'])
                 ->withTrashed()
                 ->name('api.v1.comments.destroy');
+            Route::post('/comments/{comment}/reactions', [CommentReactionController::class, 'store'])
+                ->withTrashed()
+                ->name('api.v1.comments.reactions.store');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.

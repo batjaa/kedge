@@ -47,4 +47,20 @@ describe('renderCommentMarkdown', () => {
     expect(rendered).not.toContain('KrokiDiagram');
     expect(rendered).not.toContain('graph TD');
   });
+
+  test('renders mention tokens as inert styled text', () => {
+    const rendered = html('Please ask [@Alice Reviewer](mention:42).');
+
+    expect(rendered).toContain('data-mention-id="42"');
+    expect(rendered).toContain('@Alice Reviewer');
+    expect(rendered).not.toContain('href="mention:42"');
+  });
+
+  test('does not turn crafted mention labels into markup', () => {
+    const rendered = html('Hi [@<img src=x onerror=alert(1)>](mention:7)');
+
+    expect(rendered).toContain('data-mention-id="7"');
+    expect(rendered).not.toContain('<img');
+    expect(rendered).not.toContain('onerror');
+  });
 });

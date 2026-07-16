@@ -45,6 +45,9 @@ class CommentResource extends JsonResource
             'can_delete' => $capabilities->canDelete($this->resource),
             'can_fork' => $capabilities->canFork($this->resource),
             'can_resolve_suggestion' => $capabilities->canResolveSuggestion($this->resource),
+            'can_react' => $capabilities->canReact($this->resource),
+            'reaction_count' => (int) ($this->reaction_count ?? 0),
+            'viewer_has_reacted' => (bool) ($this->viewer_has_reacted ?? false),
             'created_at' => $this->created_at,
         ];
     }

@@ -63,6 +63,11 @@ final class CommentCapabilities
             && $this->viewerOwnsDocument();
     }
 
+    public function canReact(Comment $comment): bool
+    {
+        return $this->viewerId !== null && ! $comment->trashed();
+    }
+
     private function isViewer(mixed $userId): bool
     {
         return $this->viewerId !== null && $userId !== null && (int) $userId === $this->viewerId;

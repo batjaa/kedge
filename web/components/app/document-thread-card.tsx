@@ -27,6 +27,7 @@ export function ThreadCard({
   onEditComment,
   onDeleteComment,
   onSetSuggestionStatus,
+  onToggleReaction,
 }: {
   thread: ReviewThread;
   active: boolean;
@@ -43,6 +44,7 @@ export function ThreadCard({
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
+  onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
 }) {
   const comments = thread.comments && thread.comments.length > 0
     ? thread.comments
@@ -60,6 +62,7 @@ export function ThreadCard({
   const edit = useCommentEditState(onEditComment, setMessage);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [suggestionBusyId, setSuggestionBusyId] = useState<number | null>(null);
+  const [reactionBusyId, setReactionBusyId] = useState<number | null>(null);
 
   async function changeStatus(status: ThreadStatus) {
     setMessage(null);
@@ -89,6 +92,14 @@ export function ThreadCard({
     setSuggestionBusyId(comment.id);
     const error = await onSetSuggestionStatus(comment, status);
     setSuggestionBusyId(null);
+    if (error) setMessage(error);
+  }
+
+  async function toggleReaction(comment: ThreadComment) {
+    setMessage(null);
+    setReactionBusyId(comment.id);
+    const error = await onToggleReaction(comment);
+    setReactionBusyId(null);
     if (error) setMessage(error);
   }
 
@@ -171,7 +182,9 @@ export function ThreadCard({
               onDelete={() => void remove(comment)}
               anchorExact={thread.anchor?.exact ?? null}
               suggestionBusy={suggestionBusyId === comment.id}
+              reactionBusy={reactionBusyId === comment.id}
               onSetSuggestionStatus={(status) => void setSuggestionStatus(comment, status)}
+              onToggleReaction={() => void toggleReaction(comment)}
             />
           ))}
         </div>

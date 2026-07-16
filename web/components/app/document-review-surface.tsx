@@ -19,6 +19,7 @@ import {
   forkComment,
   listThreads,
   replyToThread,
+  toggleCommentReaction,
   updateSuggestionStatus,
   updateThreadStatus,
   type ReplyToThreadInput,
@@ -462,6 +463,16 @@ export function DocumentReviewSurface({
     return null;
   }
 
+  async function toggleReaction(comment: ThreadComment): Promise<string | null> {
+    const outcome = await toggleCommentReaction(comment.id);
+    if (!outcome.ok) return outcome.message;
+
+    await refreshLoadedThreads();
+    setActiveThreadId(comment.thread_id);
+
+    return null;
+  }
+
   function focusThread(thread: ReviewThread) {
     setActiveThreadId(thread.id);
     setHoveredThreadId(null);
@@ -531,6 +542,7 @@ export function DocumentReviewSurface({
           onEditComment={edit}
           onDeleteComment={remove}
           onSetSuggestionStatus={setSuggestionStatus}
+          onToggleReaction={toggleReaction}
         />
       </div>
 
@@ -558,9 +570,11 @@ export function DocumentReviewSurface({
         onEditComment={edit}
         onDeleteComment={remove}
         onSetSuggestionStatus={setSuggestionStatus}
+        onToggleReaction={toggleReaction}
       />
 
       <DocumentCommentComposer
+        documentId={documentId}
         composer={composer}
         commentType={composerCommentType}
         body={composerDraft.body}

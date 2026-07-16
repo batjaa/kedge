@@ -42,4 +42,11 @@ class CommentPolicy
 
         return $this->authorOf($user, $comment->thread->document);
     }
+
+    public function react(User $user, Comment $comment): bool
+    {
+        $comment->loadMissing('thread.document');
+
+        return $this->canViewThreads($user, $comment->thread->document);
+    }
 }

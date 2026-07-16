@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, GitFork, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, GitFork, Pencil, RotateCcw, ThumbsUp, Trash2, X } from 'lucide-react';
 import { AgentBadge, SuggestionStatusBadge } from './document-thread-badges';
 import { IconButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
 import { cn } from '@/lib/cn';
@@ -54,6 +54,7 @@ export function CommentRow({
   deleting,
   anchorExact,
   suggestionBusy,
+  reactionBusy,
   onStartEdit,
   onCancelEdit,
   onEditBodyChange,
@@ -61,6 +62,7 @@ export function CommentRow({
   onFork,
   onDelete,
   onSetSuggestionStatus,
+  onToggleReaction,
 }: {
   comment: ThreadComment;
   isReply: boolean;
@@ -70,6 +72,7 @@ export function CommentRow({
   deleting: boolean;
   anchorExact: string | null;
   suggestionBusy: boolean;
+  reactionBusy: boolean;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onEditBodyChange: (body: string) => void;
@@ -77,6 +80,7 @@ export function CommentRow({
   onFork: () => void;
   onDelete: () => void;
   onSetSuggestionStatus: (status: SuggestionStatus) => void;
+  onToggleReaction: () => void;
 }) {
   const author = comment.author?.name ?? 'Reviewer';
   const controls = commentControlsFor(comment, isReply);
@@ -142,6 +146,14 @@ export function CommentRow({
               onSetStatus={onSetSuggestionStatus}
             />
           ) : null}
+          {comment.can_react ? (
+            <ReactionButton
+              count={comment.reaction_count}
+              active={comment.viewer_has_reacted}
+              busy={reactionBusy}
+              onToggle={onToggleReaction}
+            />
+          ) : null}
           {controls.edit ? (
             <IconButton title="Edit comment" onClick={onStartEdit}>
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -160,6 +172,38 @@ export function CommentRow({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ReactionButton({
+  count,
+  active,
+  busy,
+  onToggle,
+}: {
+  count: number;
+  active: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={active ? 'Remove reaction' : 'React'}
+      aria-label={active ? 'Remove reaction' : 'React'}
+      aria-pressed={active}
+      disabled={busy}
+      onClick={onToggle}
+      className={cn(
+        'inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] ring-1 ring-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50',
+        active
+          ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-400/30 dark:text-emerald-300'
+          : 'text-zinc-500 ring-zinc-900/10 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:ring-white/10 dark:hover:bg-white/5 dark:hover:text-white',
+      )}
+    >
+      <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+      <span>{count}</span>
+    </button>
   );
 }
 

@@ -8,6 +8,7 @@ use App\Enums\SuggestionStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -32,6 +33,20 @@ class Comment extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    /** @return BelongsToMany<User, $this> */
+    public function mentionedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'comment_mentions');
+    }
+
+    /** @return BelongsToMany<User, $this> */
+    public function reactingUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'comment_reactions')
+            ->withPivot('emoji')
+            ->withTimestamps();
     }
 
     protected function casts(): array

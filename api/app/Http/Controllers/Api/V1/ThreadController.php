@@ -24,7 +24,7 @@ class ThreadController extends Controller
         $this->authorize('viewAny', [Thread::class, $document]);
 
         return ThreadResource::collection(
-            $this->threads->listForDocument($document, (int) $request->integer('per_page', 20)),
+            $this->threads->listForDocument($document, (int) $request->integer('per_page', 20), $request->user()),
         );
     }
 

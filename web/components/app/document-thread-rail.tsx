@@ -30,6 +30,7 @@ export function DocumentThreadRail({
   onEditComment,
   onDeleteComment,
   onSetSuggestionStatus,
+  onToggleReaction,
 }: {
   threads: ReviewThread[];
   page: number;
@@ -50,6 +51,7 @@ export function DocumentThreadRail({
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
+  onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
 }) {
   const [cardHeights, setCardHeights] = useState<Record<number, number>>({});
   const [footerHeight, setFooterHeight] = useState(128);
@@ -107,6 +109,7 @@ export function DocumentThreadRail({
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
                 onSetSuggestionStatus={onSetSuggestionStatus}
+                onToggleReaction={onToggleReaction}
               />
             </MeasuredThreadCard>
           );

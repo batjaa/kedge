@@ -4,6 +4,7 @@ import remarkRehype from 'remark-rehype';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import type { Nodes } from 'hast';
 import type { Root } from 'mdast';
+import { visit } from 'unist-util-visit';
 import { createRemarkProcessor } from './pipeline';
 import { sanitizeUrls } from './sanitize-urls';
 
@@ -19,6 +20,7 @@ const processor = createRemarkProcessor()
   // No diagram transform, no MDX components, and no dangerous HTML. Fences stay
   // ordinary code blocks; raw HTML nodes are dropped by remark-rehype.
   .use(remarkRehype)
+  .use(renderMentionLinks)
   .use(sanitizeUrls);
 
 export function renderCommentMarkdown(markdown: string): ReactNode {
@@ -30,4 +32,50 @@ export function renderCommentMarkdown(markdown: string): ReactNode {
     jsxs,
     components: { pre: CommentPre },
   });
+}
+
+function renderMentionLinks() {
+  return (tree: Nodes) => {
+    visit(tree, 'element', (node) => {
+      if (node.tagName !== 'a') return;
+
+      const href = node.properties?.href;
+      if (typeof href !== 'string') return;
+
+      const match = href.match(/^mention:(\d+)$/);
+      if (!match) return;
+
+      const label = textContent(node).trim();
+      node.tagName = 'span';
+      node.properties = {
+        className: [
+          'inline-flex',
+          'items-center',
+          'rounded-lg',
+          'bg-emerald-500/10',
+          'px-1.5',
+          'py-0.5',
+          'font-mono',
+          'text-[11px]',
+          'font-semibold',
+          'text-emerald-700',
+          'ring-1',
+          'ring-inset',
+          'ring-emerald-400/30',
+          'dark:text-emerald-300',
+        ],
+        dataMentionId: match[1],
+      };
+      node.children = [{ type: 'text', value: label.startsWith('@') ? label : `@${label || 'mention'}` }];
+    });
+  };
+}
+
+function textContent(node: Nodes): string {
+  if (node.type === 'text') return node.value;
+  if ('children' in node && Array.isArray(node.children)) {
+    return node.children.map((child) => textContent(child as Nodes)).join('');
+  }
+
+  return '';
 }

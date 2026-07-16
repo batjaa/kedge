@@ -2,6 +2,7 @@ import { Children, isValidElement, type ReactElement, type ReactNode } from 'rea
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentCommentComposer, type ComposerState } from '@/components/app/document-comment-composer';
+import { MentionTextarea } from '@/components/app/mention-textarea';
 import { postDocumentComposerDraft, postReplyComposerDraft } from '@/lib/comment-composer-actions';
 import { createCommentForkGuard } from '@/lib/comment-fork-guard';
 import {
@@ -40,6 +41,7 @@ describe('document comment composer regressions', () => {
   it('disables the whole suggestion composer while submitting', () => {
     const html = renderToStaticMarkup(
       <DocumentCommentComposer
+        documentId={67}
         composer={inlineComposer()}
         commentType="suggestion"
         body="Keep this note"
@@ -76,7 +78,7 @@ describe('document comment composer regressions', () => {
     });
 
     buttonByText(element, 'Comment').props.onClick();
-    textareaByPlaceholder(element, 'Add a note').props.onChange({ target: { value: 'late body' } });
+    mentionTextareaByPlaceholder(element, 'Add a note').props.onChange('late body');
     textareaByPlaceholder(element, 'Replacement text').props.onChange({ target: { value: 'late replacement' } });
 
     expect(onMode).not.toHaveBeenCalled();
@@ -104,6 +106,7 @@ describe('document comment composer regressions', () => {
 
       return (
         <DocumentCommentComposer
+          documentId={67}
           composer={inlineComposer()}
           commentType={draft.mode}
           body={draft.body}
@@ -298,6 +301,7 @@ function clickComposerButton(
 
 function renderedComposer(overrides: Partial<Parameters<typeof DocumentCommentComposer>[0]>): ReactElement {
   const node = DocumentCommentComposer({
+    documentId: 67,
     composer: { open: true, stage: 'panel', mode: 'document', anchor: null, failure: null, x: 0, y: 0 },
     commentType: 'comment',
     body: '',
@@ -371,6 +375,18 @@ function textareaByPlaceholder(root: ReactElement, placeholder: string): ReactEl
   return textarea as ReactElement<{ onChange: (event: { target: { value: string } }) => void }>;
 }
 
+function mentionTextareaByPlaceholder(root: ReactElement, placeholder: string): ReactElement<{
+  onChange: (value: string) => void;
+}> {
+  const textarea = findElement(
+    root,
+    (element) => element.type === MentionTextarea && element.props.placeholder === placeholder,
+  );
+  if (!textarea) throw new Error(`Mention textarea "${placeholder}" not found`);
+
+  return textarea as ReactElement<{ onChange: (value: string) => void }>;
+}
+
 function findElement(
   node: ReactNode,
   predicate: (element: ReactElement<Record<string, unknown>>) => boolean,
@@ -378,7 +394,7 @@ function findElement(
   if (!isValidElement(node)) return null;
   const element = node as ReactElement<Record<string, unknown>>;
   if (predicate(element)) return element;
-  if (typeof element.type === 'function') {
+  if (typeof element.type === 'function' && element.type !== MentionTextarea) {
     const rendered = (element.type as (props: Record<string, unknown>) => ReactNode)(element.props);
     const result = findElement(rendered, predicate);
     if (result) return result;

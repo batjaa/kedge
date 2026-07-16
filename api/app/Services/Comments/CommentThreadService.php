@@ -35,10 +35,21 @@ class CommentThreadService
 
     private const IDEMPOTENCY_SCOPE_THREAD = 'thread';
 
+    private readonly AuditLogger $audit;
+
+    private readonly TextProjector $projector;
+
+    private readonly CommentMentionService $mentions;
+
     public function __construct(
-        private readonly AuditLogger $audit,
-        private readonly TextProjector $projector,
-    ) {}
+        AuditLogger $audit,
+        TextProjector $projector,
+        ?CommentMentionService $mentions = null,
+    ) {
+        $this->audit = $audit;
+        $this->projector = $projector;
+        $this->mentions = $mentions ?? app(CommentMentionService::class);
+    }
 
     protected function auditLogger(): AuditLogger
     {
@@ -58,7 +69,7 @@ class CommentThreadService
             self::IDEMPOTENCY_SCOPE_DOCUMENT,
             (int) $document->id,
         )) {
-            return [$this->loadThreadForResource($existing->thread), 200];
+            return [$this->loadThreadForResource($existing->thread, $author), 200];
         }
 
         $type = ThreadType::from((string) $data['type']);
@@ -92,6 +103,7 @@ class CommentThreadService
                     self::IDEMPOTENCY_SCOPE_DOCUMENT,
                     (int) $document->id,
                 ));
+                $this->mentions->syncForComment($comment, $document, $author);
 
                 if ($anchor !== null) {
                     $thread->anchors()->create(AnchorAttributes::fromCapture($anchor, $version));
@@ -108,13 +120,13 @@ class CommentThreadService
                 (int) $document->id,
             );
 
-            return [$this->loadThreadForResource($existing->thread), 200];
+            return [$this->loadThreadForResource($existing->thread, $author), 200];
         }
 
         $this->recordEvent('thread.created', $document, $author, $thread, $ip);
         $this->recordEvent('comment.created', $document, $author, $comment, $ip);
 
-        return [$this->loadThreadForResource($thread), 201];
+        return [$this->loadThreadForResource($thread, $author), 201];
     }
 
     /**
@@ -130,7 +142,7 @@ class CommentThreadService
             self::IDEMPOTENCY_SCOPE_THREAD,
             (int) $thread->id,
         )) {
-            return [$existing->load('author'), 200];
+            return [$this->loadCommentForResource($existing, $author), 200];
         }
 
         $thread->loadMissing('document');
@@ -138,14 +150,19 @@ class CommentThreadService
         $this->commentableVersion($thread->document);
 
         try {
-            $comment = DB::transaction(fn () => $thread->comments()->create($this->commentAttributes(
-                $author,
-                $type,
-                $data,
-                $idempotencyKey,
-                self::IDEMPOTENCY_SCOPE_THREAD,
-                (int) $thread->id,
-            )));
+            $comment = DB::transaction(function () use ($thread, $author, $type, $data, $idempotencyKey) {
+                $comment = $thread->comments()->create($this->commentAttributes(
+                    $author,
+                    $type,
+                    $data,
+                    $idempotencyKey,
+                    self::IDEMPOTENCY_SCOPE_THREAD,
+                    (int) $thread->id,
+                ));
+                $this->mentions->syncForComment($comment, $thread->document, $author);
+
+                return $comment;
+            });
         } catch (QueryException $e) {
             $existing = $this->idempotentCommentAfterDuplicate(
                 $e,
@@ -155,12 +172,12 @@ class CommentThreadService
                 (int) $thread->id,
             );
 
-            return [$existing->load('author'), 200];
+            return [$this->loadCommentForResource($existing, $author), 200];
         }
 
         $this->recordEvent('comment.created', $thread->document, $author, $comment, $ip);
 
-        return [$comment->load('author'), 201];
+        return [$this->loadCommentForResource($comment, $author), 201];
     }
 
     /**
@@ -203,7 +220,7 @@ class CommentThreadService
         $thread->loadMissing('document.workspace');
 
         if ($thread->status === $status) {
-            return $this->loadThreadForResource($thread);
+            return $this->loadThreadForResource($thread, $actor);
         }
 
         $thread->forceFill(['status' => $status])->save();
@@ -215,7 +232,7 @@ class CommentThreadService
             $this->recordEvent('thread.reopened', $thread->document, $actor, $thread, $ip);
         }
 
-        return $this->loadThreadForResource($thread);
+        return $this->loadThreadForResource($thread, $actor);
     }
 
     /**
@@ -225,7 +242,7 @@ class CommentThreadService
      *
      * @return LengthAwarePaginator<int, Thread>
      */
-    public function listForDocument(Document $document, int $perPage): LengthAwarePaginator
+    public function listForDocument(Document $document, int $perPage, ?User $viewer = null): LengthAwarePaginator
     {
         $perPage = min(max($perPage, 1), 50);
 
@@ -265,7 +282,7 @@ class CommentThreadService
 
             return $thread;
         });
-        $this->hydrateCommentsForThreads($threads, $document);
+        $this->hydrateCommentsForThreads($threads, $document, $viewer);
 
         return $paginator;
     }
@@ -433,7 +450,7 @@ class CommentThreadService
         return true;
     }
 
-    public function loadThreadForResource(Thread $thread): Thread
+    public function loadThreadForResource(Thread $thread, ?User $viewer = null): Thread
     {
         $thread->load([
             'document.workspace',
@@ -441,6 +458,7 @@ class CommentThreadService
             'comments' => fn ($query) => $query->with('author')->orderBy('id'),
         ]);
         $thread->comments->each(fn (Comment $comment) => $comment->setRelation('thread', $thread));
+        $this->applyReactionAttributes($thread->comments, $viewer);
 
         $firstComment = $thread->comments->sortBy('id')->first();
         if ($firstComment) {
@@ -464,18 +482,49 @@ class CommentThreadService
         return $thread;
     }
 
-    private function hydrateCommentsForThreads($threads, Document $document): void
+    public function loadCommentForResource(Comment $comment, ?User $viewer = null): Comment
+    {
+        $comment->load(['author', 'thread.document']);
+        $this->applyReactionAttributes(collect([$comment]), $viewer);
+
+        return $comment;
+    }
+
+    private function hydrateCommentsForThreads($threads, Document $document, ?User $viewer): void
     {
         $threadIds = $threads->pluck('id')->filter()->values();
         if ($threadIds->isEmpty()) {
             return;
         }
 
-        $commentsByThread = Comment::withTrashed()
+        $reactionStats = DB::table('comment_reactions')
+            ->select('comment_id')
+            ->selectRaw('COUNT(*) as reaction_count')
+            ->where('emoji', CommentReactionService::THUMBS_UP)
+            ->groupBy('comment_id');
+
+        $commentsQuery = Comment::withTrashed()
             ->whereIn('thread_id', $threadIds)
+            ->leftJoinSub($reactionStats, 'reaction_stats', 'reaction_stats.comment_id', '=', 'comments.id')
+            ->select('comments.*')
+            ->addSelect('reaction_stats.reaction_count as reaction_count')
             ->with('author')
-            ->orderBy('id')
-            ->get()
+            ->orderBy('comments.id');
+
+        if ($viewer instanceof User) {
+            $viewerReactions = DB::table('comment_reactions')
+                ->select('comment_id')
+                ->where('user_id', $viewer->id)
+                ->where('emoji', CommentReactionService::THUMBS_UP);
+
+            $commentsQuery
+                ->leftJoinSub($viewerReactions, 'viewer_reactions', 'viewer_reactions.comment_id', '=', 'comments.id')
+                ->selectRaw('CASE WHEN viewer_reactions.comment_id IS NULL THEN 0 ELSE 1 END as viewer_has_reacted');
+        } else {
+            $commentsQuery->selectRaw('0 as viewer_has_reacted');
+        }
+
+        $commentsByThread = $commentsQuery->get()
             ->groupBy('thread_id');
         $commentThreadMap = $commentsByThread
             ->flatten(1)
@@ -523,6 +572,35 @@ class CommentThreadService
         }
 
         return $thread;
+    }
+
+    private function applyReactionAttributes($comments, ?User $viewer): void
+    {
+        $commentIds = $comments->pluck('id')->filter()->values();
+        if ($commentIds->isEmpty()) {
+            return;
+        }
+
+        $counts = DB::table('comment_reactions')
+            ->select('comment_id')
+            ->selectRaw('COUNT(*) as reaction_count')
+            ->whereIn('comment_id', $commentIds)
+            ->where('emoji', CommentReactionService::THUMBS_UP)
+            ->groupBy('comment_id')
+            ->pluck('reaction_count', 'comment_id');
+        $viewerReacted = $viewer instanceof User
+            ? DB::table('comment_reactions')
+                ->whereIn('comment_id', $commentIds)
+                ->where('user_id', $viewer->id)
+                ->where('emoji', CommentReactionService::THUMBS_UP)
+                ->pluck('comment_id')
+                ->mapWithKeys(fn (mixed $id) => [(int) $id => true])
+            : collect();
+
+        $comments->each(function (Comment $comment) use ($counts, $viewerReacted): void {
+            $comment->setAttribute('reaction_count', (int) ($counts[$comment->id] ?? 0));
+            $comment->setAttribute('viewer_has_reacted', (bool) ($viewerReacted[(int) $comment->id] ?? false));
+        });
     }
 
     private function reject(string $code, string $message, string $field = 'anchor'): never
