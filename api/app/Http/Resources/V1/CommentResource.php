@@ -3,10 +3,8 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\Comment;
-use App\Models\Thread;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Gate;
 
 /** @mixin Comment */
 class CommentResource extends JsonResource
@@ -26,7 +24,7 @@ class CommentResource extends JsonResource
     public function toArray(Request $request): array
     {
         $isDeleted = $this->trashed();
-        $gate = $request->user() ? Gate::forUser($request->user()) : null;
+        $capabilities = CommentCapabilities::for($request, $this->resource);
 
         return [
             'id' => $this->id,
@@ -43,9 +41,9 @@ class CommentResource extends JsonResource
             'edited_at' => $this->edited_at,
             'is_deleted' => $isDeleted,
             'deleted_at' => $this->deleted_at,
-            'can_edit' => $gate?->allows('updateComment', [Thread::class, $this->resource]) ?? false,
-            'can_delete' => $gate?->allows('deleteComment', [Thread::class, $this->resource]) ?? false,
-            'can_fork' => $gate?->allows('forkComment', [Thread::class, $this->resource]) ?? false,
+            'can_edit' => $capabilities->canEdit($this->resource),
+            'can_delete' => $capabilities->canDelete($this->resource),
+            'can_fork' => $capabilities->canFork($this->resource),
             'created_at' => $this->created_at,
         ];
     }

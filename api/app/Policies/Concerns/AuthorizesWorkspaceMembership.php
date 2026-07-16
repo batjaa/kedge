@@ -17,8 +17,7 @@ trait AuthorizesWorkspaceMembership
 
     protected function authorOf(User $user, Document $document): bool
     {
-        return $document->created_by !== null
-            && (int) $document->created_by === (int) $user->id;
+        return $this->ownedBy($user, $document->created_by);
     }
 
     protected function ownerOf(User $user, Document $document): bool
@@ -27,5 +26,10 @@ trait AuthorizesWorkspaceMembership
             ->whereKey($document->workspace_id)
             ->wherePivot('role', WorkspaceRole::Owner->value)
             ->exists();
+    }
+
+    protected function ownedBy(User $user, mixed $userId): bool
+    {
+        return $userId !== null && (int) $userId === (int) $user->id;
     }
 }

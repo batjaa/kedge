@@ -204,7 +204,9 @@ class AuthorizationMatrixTest extends TestCase
         $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
 
         $this->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/fork")
+            ->postJson("/api/v1/comments/{$reply->id}/fork", [
+                'idempotency_key' => "fork-{$role}",
+            ])
             ->assertStatus($expected);
     }
 

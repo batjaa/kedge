@@ -2,7 +2,7 @@
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
-import type { ReviewThread, ThreadAnchorPayload, ThreadComment, ThreadPage } from './thread-types';
+import type { ReviewThread, ThreadAnchorPayload, ThreadComment, ThreadPage, ThreadStatus } from './thread-types';
 
 export type CreateThreadInput =
   | {
@@ -119,7 +119,7 @@ export async function replyToThread(threadId: number, body: string, idempotencyK
 
 export async function updateThreadStatus(
   threadId: number,
-  status: 'open' | 'resolved',
+  status: ThreadStatus,
 ): Promise<ThreadMutationOutcome> {
   const res = await mutate('PATCH', `/api/v1/threads/${threadId}`, { status });
 
@@ -142,10 +142,8 @@ export async function updateThreadStatus(
 export async function forkComment(
   commentId: number,
   idempotencyKey: string,
-  title?: string,
 ): Promise<ThreadMutationOutcome> {
   const body: Record<string, unknown> = { idempotency_key: idempotencyKey };
-  if (title?.trim()) body.title = title.trim();
 
   const res = await mutate('POST', `/api/v1/comments/${commentId}/fork`, body);
 

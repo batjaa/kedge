@@ -50,7 +50,6 @@ class ThreadResource extends JsonResource
             'comments' => CommentResource::collection($this->whenLoaded('comments')),
             'can_resolve' => $canTriage && $this->status->value === 'open',
             'can_reopen' => $canTriage && $this->status->value === 'resolved',
-            'can_fork' => $canTriage,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

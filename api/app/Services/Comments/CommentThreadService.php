@@ -2,7 +2,6 @@
 
 namespace App\Services\Comments;
 
-use App\Enums\AnchorState;
 use App\Enums\CommentClient;
 use App\Enums\CommentType;
 use App\Enums\DocumentStatus;
@@ -23,22 +22,27 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Thread write/read coordinator. This is intentionally still one service for M2's
- * tracer path, but #62/#63 should move new suggestion/reply workflows into focused
- * collaborators before this grows another large branch.
+ * Thread write/read coordinator for creation, replies, status changes, and the
+ * rail list. Comment moderation lives in CommentModerationService.
  */
 class CommentThreadService
 {
+    use RecordsCommentEvents;
+    use ResolvesIdempotentComments;
+
     private const IDEMPOTENCY_SCOPE_DOCUMENT = 'document';
 
     private const IDEMPOTENCY_SCOPE_THREAD = 'thread';
-
-    private const IDEMPOTENCY_SCOPE_FORK = 'fork-comment';
 
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly TextProjector $projector,
     ) {}
+
+    protected function auditLogger(): AuditLogger
+    {
+        return $this->audit;
+    }
 
     /**
      * @param  array<string, mixed>  $data
@@ -89,17 +93,7 @@ class CommentThreadService
                 ]);
 
                 if ($anchor !== null) {
-                    $thread->anchors()->create([
-                        'document_version_id' => $version->id,
-                        'exact' => $anchor['exact'],
-                        'prefix' => $anchor['prefix'],
-                        'suffix' => $anchor['suffix'],
-                        'start' => $anchor['start'],
-                        'end' => $anchor['end'],
-                        'heading_path' => $anchor['heading_path'],
-                        'projection_version' => $anchor['projection_version'],
-                        'state' => AnchorState::Anchored,
-                    ]);
+                    $thread->anchors()->create(AnchorAttributes::fromCapture($anchor, $version));
                 }
 
                 return [$thread, $comment];
@@ -116,8 +110,8 @@ class CommentThreadService
             return [$this->loadThreadForResource($existing->thread), 200];
         }
 
-        $this->recordThreadCreated($document, $author, $thread, $ip);
-        $this->recordCommentCreated($document, $author, $comment, $ip);
+        $this->recordEvent('thread.created', $document, $author, $thread, $ip);
+        $this->recordEvent('comment.created', $document, $author, $comment, $ip);
 
         return [$this->loadThreadForResource($thread), 201];
     }
@@ -163,7 +157,7 @@ class CommentThreadService
             return [$existing->load('author'), 200];
         }
 
-        $this->recordCommentCreated($thread->document, $author, $comment, $ip);
+        $this->recordEvent('comment.created', $thread->document, $author, $comment, $ip);
 
         return [$comment->load('author'), 201];
     }
@@ -180,141 +174,18 @@ class CommentThreadService
         $thread->refresh();
 
         if ($status === ThreadStatus::Resolved) {
-            $this->recordThreadResolved($thread->document, $actor, $thread, $ip);
+            $this->recordEvent('thread.resolved', $thread->document, $actor, $thread, $ip);
         } else {
-            $this->recordThreadReopened($thread->document, $actor, $thread, $ip);
+            $this->recordEvent('thread.reopened', $thread->document, $actor, $thread, $ip);
         }
 
         return $this->loadThreadForResource($thread);
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @return array{Thread, int}
-     */
-    public function fork(Comment $comment, User $actor, array $data, ?string $ip): array
-    {
-        $comment->loadMissing(['thread.document.workspace', 'thread.anchors']);
-        $sourceThread = $comment->thread;
-        $sourceThread->loadMissing(['comments' => fn ($query) => $query->orderBy('id')]);
-
-        if ((int) $sourceThread->comments->sortBy('id')->first()?->id === (int) $comment->id) {
-            $this->reject('comment_not_reply', 'Only replies can be forked into a new thread.', 'comment');
-        }
-
-        $idempotencyKey = (string) ($data['idempotency_key'] ?? '');
-        if ($existing = $this->idempotentComment(
-            $actor,
-            $idempotencyKey,
-            self::IDEMPOTENCY_SCOPE_FORK,
-            (int) $comment->id,
-        )) {
-            return [$this->loadThreadForResource($existing->thread), 200];
-        }
-
-        try {
-            [$thread, $openingComment] = DB::transaction(function () use ($comment, $actor, $sourceThread, $idempotencyKey) {
-                $thread = Thread::create([
-                    'document_id' => $sourceThread->document_id,
-                    'type' => $sourceThread->type,
-                    'status' => ThreadStatus::Open,
-                    'forked_from_comment_id' => $comment->id,
-                    'created_by' => $actor->id,
-                ]);
-
-                $openingComment = $thread->comments()->create([
-                    'author_id' => $comment->author_id,
-                    'type' => $comment->type,
-                    'body_md' => $comment->trashed() ? '' : $comment->body_md,
-                    'proposed_text' => $comment->trashed() ? null : $comment->proposed_text,
-                    'suggestion_status' => $comment->trashed() ? null : $comment->suggestion_status,
-                    'client' => $comment->client,
-                    'edited_at' => $comment->edited_at,
-                    'idempotency_key' => $idempotencyKey === '' ? null : $idempotencyKey,
-                    'idempotency_scope' => $idempotencyKey === '' ? null : self::IDEMPOTENCY_SCOPE_FORK,
-                    'idempotency_scope_id' => $idempotencyKey === '' ? null : $comment->id,
-                ]);
-
-                if ($comment->trashed()) {
-                    $openingComment->forceFill(['deleted_at' => $comment->deleted_at ?? now()])->save();
-                }
-
-                foreach ($sourceThread->anchors as $anchor) {
-                    $thread->anchors()->create([
-                        'document_version_id' => $anchor->document_version_id,
-                        'exact' => $anchor->exact,
-                        'prefix' => $anchor->prefix,
-                        'suffix' => $anchor->suffix,
-                        'start' => $anchor->start,
-                        'end' => $anchor->end,
-                        'heading_path' => $anchor->heading_path,
-                        'projection_version' => $anchor->projection_version,
-                        'state' => $anchor->state,
-                    ]);
-                }
-
-                return [$thread, $openingComment];
-            });
-        } catch (QueryException $e) {
-            $existing = $this->idempotentCommentAfterDuplicate(
-                $e,
-                $actor,
-                $idempotencyKey,
-                self::IDEMPOTENCY_SCOPE_FORK,
-                (int) $comment->id,
-            );
-
-            return [$this->loadThreadForResource($existing->thread), 200];
-        }
-
-        $this->recordThreadForked($sourceThread->document, $actor, $thread, $comment, $ip, (string) ($data['title'] ?? ''));
-
-        return [$this->loadThreadForResource($thread), 201];
-    }
-
-    public function updateComment(Comment $comment, User $actor, string $body, ?string $ip): Comment
-    {
-        $comment->loadMissing('thread.document.workspace');
-
-        if ($comment->trashed()) {
-            $this->reject('comment_deleted', 'Deleted comments cannot be edited.', 'comment');
-        }
-
-        $comment->forceFill([
-            'body_md' => $body,
-            'edited_at' => now(),
-        ])->save();
-
-        $this->recordCommentEdited($comment->thread->document, $actor, $comment, $ip);
-
-        $comment->refresh()->load('author');
-
-        return $comment;
-    }
-
-    public function deleteComment(Comment $comment, User $actor, ?string $ip): void
-    {
-        $comment->loadMissing('thread.document.workspace');
-
-        if ($comment->trashed()) {
-            return;
-        }
-
-        // Keep the row as a tombstone so reply order and fork links stay navigable.
-        $comment->forceFill([
-            'body_md' => '',
-            'proposed_text' => null,
-            'suggestion_status' => null,
-        ])->save();
-        $comment->delete();
-
-        $this->recordCommentDeleted($comment->thread->document, $actor, $comment, $ip);
-    }
-
-    /**
-     * Rail read: one position-ordered aggregate query over threads, anchors, the
-     * first comment, count, latest activity, and first author. Pagination remains
-     * database-level; there are no per-thread lookups.
+     * Rail read: one position-ordered aggregate query over threads, anchors,
+     * count, and latest activity. Comments and fork counts are bulk-hydrated
+     * once after pagination so soft-deleted comments stay coherent.
      *
      * @return LengthAwarePaginator<int, Thread>
      */
@@ -328,24 +199,9 @@ class CommentThreadService
             ->selectRaw('MAX(created_at) as latest_activity_at')
             ->groupBy('thread_id');
 
-        $firstCommentIds = DB::table('comments')
-            ->select('thread_id')
-            ->selectRaw('MIN(id) as first_comment_id')
-            ->groupBy('thread_id');
-
-        $forkStats = DB::table('threads as forked_threads')
-            ->join('comments as source_comments', 'source_comments.id', '=', 'forked_threads.forked_from_comment_id')
-            ->select('source_comments.thread_id')
-            ->selectRaw('COUNT(*) as forked_into_count')
-            ->groupBy('source_comments.thread_id');
-
         $query = Thread::query()
             ->leftJoin('anchors as rail_anchors', 'rail_anchors.thread_id', '=', 'threads.id')
             ->leftJoinSub($stats, 'comment_stats', 'comment_stats.thread_id', '=', 'threads.id')
-            ->leftJoinSub($firstCommentIds, 'first_comment_ids', 'first_comment_ids.thread_id', '=', 'threads.id')
-            ->leftJoinSub($forkStats, 'fork_stats', 'fork_stats.thread_id', '=', 'threads.id')
-            ->leftJoin('comments as first_comments', 'first_comments.id', '=', 'first_comment_ids.first_comment_id')
-            ->leftJoin('users as first_authors', 'first_authors.id', '=', 'first_comments.author_id')
             ->where('threads.document_id', $document->id)
             ->select('threads.*')
             ->addSelect([
@@ -361,18 +217,6 @@ class CommentThreadService
                 'rail_anchors.state as rail_anchor_state',
                 'comment_stats.comments_count as comments_count',
                 'comment_stats.latest_activity_at as latest_activity_at',
-                'first_comments.id as first_comment_id',
-                'first_comments.author_id as first_comment_author_id',
-                'first_comments.type as first_comment_type',
-                'first_comments.body_md as first_comment_body_md',
-                'first_comments.proposed_text as first_comment_proposed_text',
-                'first_comments.suggestion_status as first_comment_suggestion_status',
-                'first_comments.client as first_comment_client',
-                'first_comments.edited_at as first_comment_edited_at',
-                'first_comments.deleted_at as first_comment_deleted_at',
-                'first_comments.created_at as first_comment_created_at',
-                'first_authors.name as first_author_name',
-                'fork_stats.forked_into_count as forked_into_count',
             ])
             ->orderByRaw('case when threads.type = ? then 0 else 1 end', [ThreadType::Document->value])
             ->orderBy('rail_anchors.start')
@@ -493,18 +337,7 @@ class CommentThreadService
 
     protected function idempotentComment(User $author, mixed $key, string $scope, int $scopeId): ?Comment
     {
-        if (! is_string($key) || $key === '') {
-            return null;
-        }
-
-        return Comment::query()
-            ->withTrashed()
-            ->where('author_id', $author->id)
-            ->where('idempotency_key', $key)
-            ->where('idempotency_scope', $scope)
-            ->where('idempotency_scope_id', $scopeId)
-            ->with(['author', 'thread'])
-            ->first();
+        return $this->idempotentCommentByAuthorId((int) $author->id, $key, $scope, $scopeId);
     }
 
     private function idempotentCommentAfterDuplicate(
@@ -514,26 +347,13 @@ class CommentThreadService
         string $scope,
         int $scopeId,
     ): Comment {
-        if (! $this->isDuplicateIdempotencyException($exception)) {
-            throw $exception;
-        }
-
-        $existing = $this->idempotentComment($author, $key, $scope, $scopeId);
-        if ($existing === null) {
-            throw $exception;
-        }
-
-        return $existing;
-    }
-
-    private function isDuplicateIdempotencyException(QueryException $exception): bool
-    {
-        $code = (string) $exception->getCode();
-        $message = $exception->getMessage();
-
-        return in_array($code, ['23000', '23505'], true)
-            || str_contains($message, 'comments_author_idempotency_scope_unique')
-            || (str_contains($message, 'comments') && str_contains($message, 'idempotency'));
+        return $this->idempotentCommentAfterDuplicateByAuthorId(
+            $exception,
+            (int) $author->id,
+            $key,
+            $scope,
+            $scopeId,
+        );
     }
 
     /**
@@ -577,7 +397,7 @@ class CommentThreadService
         return true;
     }
 
-    private function loadThreadForResource(Thread $thread): Thread
+    public function loadThreadForResource(Thread $thread): Thread
     {
         $thread->load([
             'document.workspace',
@@ -666,129 +486,7 @@ class CommentThreadService
             $thread->setRelation('railAnchor', $anchor);
         }
 
-        if ($thread->first_comment_id !== null) {
-            $comment = new Comment;
-            $comment->setRawAttributes([
-                'id' => $thread->first_comment_id,
-                'thread_id' => $thread->id,
-                'author_id' => $thread->first_comment_author_id,
-                'type' => $thread->first_comment_type,
-                'body_md' => $thread->first_comment_body_md,
-                'proposed_text' => $thread->first_comment_proposed_text,
-                'suggestion_status' => $thread->first_comment_suggestion_status,
-                'client' => $thread->first_comment_client,
-                'edited_at' => $thread->first_comment_edited_at,
-                'deleted_at' => $thread->first_comment_deleted_at,
-                'created_at' => $thread->first_comment_created_at,
-            ], true);
-
-            $author = new User;
-            $author->setRawAttributes([
-                'id' => $thread->first_comment_author_id,
-                'name' => $thread->first_author_name,
-            ], true);
-            $comment->setRelation('author', $author);
-            $thread->setRelation('firstComment', $comment);
-        }
-
         return $thread;
-    }
-
-    private function recordThreadCreated(Document $document, User $author, Thread $thread, ?string $ip): void
-    {
-        Log::info('thread.created', [
-            'document_id' => $document->id,
-            'thread_id' => $thread->id,
-            'user_id' => $author->id,
-        ]);
-
-        $this->audit->record($document->workspace, $author, 'thread.created', $thread, ip: $ip);
-    }
-
-    private function recordCommentCreated(Document $document, User $author, Comment $comment, ?string $ip): void
-    {
-        Log::info('comment.created', [
-            'document_id' => $document->id,
-            'thread_id' => $comment->thread_id,
-            'comment_id' => $comment->id,
-            'user_id' => $author->id,
-        ]);
-
-        $this->audit->record($document->workspace, $author, 'comment.created', $comment, ip: $ip);
-    }
-
-    private function recordThreadResolved(Document $document, User $actor, Thread $thread, ?string $ip): void
-    {
-        Log::info('thread.resolved', [
-            'document_id' => $document->id,
-            'thread_id' => $thread->id,
-            'user_id' => $actor->id,
-        ]);
-
-        $this->audit->record($document->workspace, $actor, 'thread.resolved', $thread, ip: $ip);
-    }
-
-    private function recordThreadReopened(Document $document, User $actor, Thread $thread, ?string $ip): void
-    {
-        Log::info('thread.reopened', [
-            'document_id' => $document->id,
-            'thread_id' => $thread->id,
-            'user_id' => $actor->id,
-        ]);
-
-        $this->audit->record($document->workspace, $actor, 'thread.reopened', $thread, ip: $ip);
-    }
-
-    private function recordThreadForked(
-        Document $document,
-        User $actor,
-        Thread $thread,
-        Comment $sourceComment,
-        ?string $ip,
-        string $title,
-    ): void {
-        Log::info('thread.forked', [
-            'document_id' => $document->id,
-            'thread_id' => $thread->id,
-            'source_thread_id' => $sourceComment->thread_id,
-            'source_comment_id' => $sourceComment->id,
-            'user_id' => $actor->id,
-        ]);
-
-        $meta = [
-            'source_thread_id' => $sourceComment->thread_id,
-            'source_comment_id' => $sourceComment->id,
-        ];
-
-        if ($title !== '') {
-            $meta['title'] = $title;
-        }
-
-        $this->audit->record($document->workspace, $actor, 'thread.forked', $thread, $meta, ip: $ip);
-    }
-
-    private function recordCommentEdited(Document $document, User $actor, Comment $comment, ?string $ip): void
-    {
-        Log::info('comment.edited', [
-            'document_id' => $document->id,
-            'thread_id' => $comment->thread_id,
-            'comment_id' => $comment->id,
-            'user_id' => $actor->id,
-        ]);
-
-        $this->audit->record($document->workspace, $actor, 'comment.edited', $comment, ip: $ip);
-    }
-
-    private function recordCommentDeleted(Document $document, User $actor, Comment $comment, ?string $ip): void
-    {
-        Log::info('comment.deleted', [
-            'document_id' => $document->id,
-            'thread_id' => $comment->thread_id,
-            'comment_id' => $comment->id,
-            'user_id' => $actor->id,
-        ]);
-
-        $this->audit->record($document->workspace, $actor, 'comment.deleted', $comment, ip: $ip);
     }
 
     private function reject(string $code, string $message, string $field = 'anchor'): never

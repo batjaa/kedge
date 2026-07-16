@@ -107,8 +107,7 @@ function ThreadCard({
   const [message, setMessage] = useState<string | null>(null);
   const [replying, setReplying] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editBody, setEditBody] = useState('');
+  const edit = useCommentEditState(onEditComment, setMessage);
   const [forkingId, setForkingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -140,19 +139,6 @@ function ThreadCard({
     const error = await onForkComment(thread, comment);
     setForkingId(null);
     if (error) setMessage(error);
-  }
-
-  async function saveEdit(comment: ThreadComment) {
-    const trimmed = editBody.trim();
-    if (!trimmed) return;
-    setMessage(null);
-    const error = await onEditComment(comment, trimmed);
-    if (error) {
-      setMessage(error);
-      return;
-    }
-    setEditingId(null);
-    setEditBody('');
   }
 
   async function remove(comment: ThreadComment) {
@@ -219,20 +205,14 @@ function ThreadCard({
             key={comment.id}
             comment={comment}
             isReply={firstCommentId !== comment.id}
-            editing={editingId === comment.id}
-            editBody={editBody}
+            editing={edit.isEditing(comment)}
+            editBody={edit.body}
             forking={forkingId === comment.id}
             deleting={deletingId === comment.id}
-            onStartEdit={() => {
-              setEditingId(comment.id);
-              setEditBody(comment.body_md ?? '');
-            }}
-            onCancelEdit={() => {
-              setEditingId(null);
-              setEditBody('');
-            }}
-            onEditBodyChange={setEditBody}
-            onSaveEdit={() => void saveEdit(comment)}
+            onStartEdit={() => edit.start(comment)}
+            onCancelEdit={edit.cancel}
+            onEditBodyChange={edit.setBody}
+            onSaveEdit={() => void edit.save(comment)}
             onFork={() => void fork(comment)}
             onDelete={() => void remove(comment)}
           />
@@ -264,6 +244,40 @@ function ThreadCard({
       {message ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{message}</p> : null}
     </article>
   );
+}
+
+function useCommentEditState(
+  onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>,
+  setMessage: (message: string | null) => void,
+) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [body, setBody] = useState('');
+
+  return {
+    body,
+    setBody,
+    isEditing: (comment: ThreadComment) => editingId === comment.id,
+    start: (comment: ThreadComment) => {
+      setEditingId(comment.id);
+      setBody(comment.body_md ?? '');
+    },
+    cancel: () => {
+      setEditingId(null);
+      setBody('');
+    },
+    save: async (comment: ThreadComment) => {
+      const trimmed = body.trim();
+      if (!trimmed) return;
+      setMessage(null);
+      const error = await onEditComment(comment, trimmed);
+      if (error) {
+        setMessage(error);
+        return;
+      }
+      setEditingId(null);
+      setBody('');
+    },
+  };
 }
 
 function CommentRow({

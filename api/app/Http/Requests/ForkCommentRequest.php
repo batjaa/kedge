@@ -23,8 +23,8 @@ class ForkCommentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'idempotency_key' => ['sometimes', 'nullable', 'string', 'max:128'],
+            'title' => ['prohibited'],
+            'idempotency_key' => ['required', 'string', 'max:128'],
         ];
     }
 }

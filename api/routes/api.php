@@ -124,6 +124,7 @@ Route::prefix('v1')->group(function () {
                 ->withTrashed()
                 ->name('api.v1.comments.fork');
             Route::patch('/comments/{comment}', [ThreadCommentController::class, 'update'])
+                ->withTrashed()
                 ->name('api.v1.comments.update');
             Route::delete('/comments/{comment}', [ThreadCommentController::class, 'destroy'])
                 ->withTrashed()
