@@ -141,3 +141,7 @@
 
 - ✅ **A PR is a candidate version of existing documents, never a separate document** — [ADR 0001](adr/0001-pr-is-a-candidate-version.md). Decided ahead of M3 so the version-lineage schema is designed as lineage-with-candidates from the start. SPEC untouched (no v1 scope change); amend SPEC §7/§16 when M3 is specced.
 - ✅ **Organization language pinned in CONTEXT.md** (new root glossary, via /domain-modeling): **Project** = free container in a workspace (post-v1); **Source** = where content comes from — a repo is a source, never the container; issues/external links attach as **References**, never import. Roadmap fog carries the post-v1 scheduling.
+
+## Known debt (added at M2 eng review, 2026-07-15)
+
+- Rail virtualization: anchor-aligned thread cards render unvirtualized; past ~200 threads the DOM cost hits the same wall as the re-anchor matcher budget (existing debt line). Revisit when a real document gets that busy. (M)
