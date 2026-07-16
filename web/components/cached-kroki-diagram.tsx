@@ -16,6 +16,8 @@ import { DiagramSkeleton, DiagramSourceError } from '@/components/diagram-states
 // component (components/kroki-diagram) because it renders at build, where the API
 // isn't up; both share the DiagramFigure presentation and click-to-zoom.
 
+type ProjectionAttrs = { [key: `data-${string}`]: string | undefined };
+
 /**
  * Resolve one diagram to its rendered node. Exported for the fixture suite so a
  * diagram can be tested without a Suspense/streaming renderer: await it, then
@@ -24,15 +26,24 @@ import { DiagramSkeleton, DiagramSourceError } from '@/components/diagram-states
 export async function resolveDiagram({
   engine,
   source,
+  projectionAttrs = {},
 }: {
   engine: string;
   source: string;
+  projectionAttrs?: ProjectionAttrs;
 }): Promise<ReactElement> {
   const result = await fetchDiagramUrl(engine, source);
   if (!result.ok || !result.url) {
-    return <DiagramSourceError engine={engine} source={source} errorDetail={result.errorDetail} />;
+    return (
+      <DiagramSourceError
+        engine={engine}
+        source={source}
+        errorDetail={result.errorDetail}
+        {...projectionAttrs}
+      />
+    );
   }
-  return <DiagramFigure engine={engine} src={result.url} />;
+  return <DiagramFigure engine={engine} src={result.url} {...projectionAttrs} />;
 }
 
 /**
@@ -40,10 +51,14 @@ export async function resolveDiagram({
  * wrapped in a Suspense boundary so each diagram streams its own loading skeleton
  * while the API round-trip is in flight, rather than blocking the whole document.
  */
-export function CachedKrokiDiagram({ engine, source }: { engine: string; source: string }) {
+export function CachedKrokiDiagram({
+  engine,
+  source,
+  ...projectionAttrs
+}: { engine: string; source: string } & ProjectionAttrs) {
   return (
-    <Suspense fallback={<DiagramSkeleton engine={engine} />}>
-      {resolveDiagram({ engine, source })}
+    <Suspense fallback={<DiagramSkeleton engine={engine} {...projectionAttrs} />}>
+      {resolveDiagram({ engine, source, projectionAttrs })}
     </Suspense>
   );
 }

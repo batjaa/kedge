@@ -8,8 +8,15 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import type { PluggableList } from 'unified';
 import { remarkDiagrams } from './remark-diagrams';
 import { remarkMdxHarden } from './remark-mdx-harden';
+import {
+  PROJECTION_FILE_DATA_KEY,
+  type ProjectionResult,
+  project,
+  remarkProjectionAnnotations,
+} from './projection';
 import { IMPORTED_MDX_COMPONENTS } from '@/components/imported-mdx';
 import { renderMarkdown } from './render-markdown';
 
@@ -30,7 +37,19 @@ type MdxContent = ComponentType<{ components?: MDXComponents }>;
 // Plugin order matters: diagrams convert fences to <KrokiDiagram> (an allowlisted
 // component) BEFORE the harden pass runs, so they survive; harden runs last so it
 // is the final word on what compiles.
-const REMARK_PLUGINS = [remarkFrontmatter, remarkGfm, remarkDiagrams, remarkMdxHarden];
+const BASE_REMARK_PLUGINS = [
+  remarkFrontmatter,
+  remarkGfm,
+  remarkDiagrams,
+  remarkMdxHarden,
+] satisfies PluggableList;
+
+function remarkPluginsForProjection(annotate: boolean): PluggableList {
+  return [
+    ...BASE_REMARK_PLUGINS,
+    [remarkProjectionAnnotations, { annotate }],
+  ] satisfies PluggableList;
+}
 
 /**
  * Compile untrusted MDX to a JS module body string. Throws MdxRejectedError (a
@@ -42,7 +61,7 @@ async function compileToSource(content: string): Promise<string> {
     outputFormat: 'function-body',
     // No rehype-sanitize: it drops mdxJsx nodes wholesale (incl. our allowlisted
     // components). The tight schema is enforced in remark-mdx-harden instead.
-    remarkPlugins: REMARK_PLUGINS,
+    remarkPlugins: remarkPluginsForProjection(true),
   });
   return String(file);
 }
@@ -71,9 +90,9 @@ async function runSource(source: string): Promise<MdxContent> {
 //        happens once per version per HOST, not once per process. Any disk error
 //        falls through to a recompile; the disk never holds failures.
 //
-// The key is sha256(content). A document's content_hash IS sha256 of the same
-// normalized bytes, so passing the hash and deriving it here are equivalent —
-// deriving it keeps this module self-contained and removes a mismatch mode.
+// The key is sha256(cache-version + content). The version salt invalidates old
+// compiled JSX when render-only transforms change without changing document
+// bytes.
 
 type Outcome =
   | { ok: true; Content: MdxContent }
@@ -83,9 +102,10 @@ const L1_MAX = Number(process.env.MDX_CACHE_MAX ?? 128);
 const l1 = new Map<string, Promise<Outcome>>();
 
 const L2_DIR = process.env.MDX_CACHE_DIR ?? join(tmpdir(), 'kedge-mdx-cache');
+const MDX_COMPILE_CACHE_VERSION = 'projection-annotations-v1';
 
 function cacheKey(content: string): string {
-  return createHash('sha256').update(content).digest('hex');
+  return createHash('sha256').update(MDX_COMPILE_CACHE_VERSION).update('\0').update(content).digest('hex');
 }
 
 function l1Get(key: string): Promise<Outcome> | undefined {
@@ -152,14 +172,45 @@ function getCompiled(content: string): Promise<Outcome> {
 
 /**
  * Attempt a full hardened compile of `content` and report whether it is valid
- * MDX (SPEC §5.4 / §6.1). Called by the projection endpoint so the API can store
- * `mdx_ok` on the version. Warms the compile cache as a side effect, so the
+ * MDX (SPEC §5.4 / §6.1). Warms the compile cache as a side effect, so the
  * eventual render of the same content is a cache hit. Never throws.
  */
 export async function validateMdx(content: string): Promise<{ ok: boolean; warnings: string[] }> {
   const outcome = await getCompiled(content);
   if (outcome.ok) return { ok: true, warnings: [] };
   return { ok: false, warnings: [`MDX failed to compile: ${outcome.reason}`] };
+}
+
+function projectionFromFile(file: { data?: Record<string, unknown> }): ProjectionResult | null {
+  const projection = file.data?.[PROJECTION_FILE_DATA_KEY];
+  return projection && typeof projection === 'object' && 'plainText' in projection
+    ? (projection as ProjectionResult)
+    : null;
+}
+
+/**
+ * Project valid MDX through the same hardened remark stack the successful render
+ * path compiles. Invalid MDX deliberately falls back to the plain-markdown
+ * projection because the page will render through that fallback too.
+ */
+export async function projectMdx(content: string): Promise<ProjectionResult> {
+  try {
+    const file = await compile(content, {
+      outputFormat: 'function-body',
+      remarkPlugins: remarkPluginsForProjection(false),
+    });
+    return projectionFromFile(file) ?? project(content);
+  } catch (error) {
+    const fallback = project(content);
+    return {
+      ...fallback,
+      mdxOk: false,
+      warnings: [
+        ...fallback.warnings,
+        `MDX failed to compile: ${error instanceof Error ? error.message : String(error)}`,
+      ],
+    };
+  }
 }
 
 /**

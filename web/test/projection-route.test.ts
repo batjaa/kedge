@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { POST } from '../app/internal/projection/route';
+import { componentToken } from '../lib/projection';
 
 // The internal projection endpoint's mdx_ok contract (SPEC §5.4 / §6.1). The API
 // import job POSTs normalized content + format here; the response's mdx_ok is
@@ -33,6 +34,11 @@ describe('projection endpoint mdx_ok (SPEC §5.4)', () => {
   it('reports mdx_ok=true for valid MDX', async () => {
     const { json } = await call({ content: '<Callout>ok</Callout>\n\n# Doc', format: 'mdx' });
     expect(json.mdx_ok).toBe(true);
+  });
+
+  it('projects valid MDX components as atomic placeholder tokens', async () => {
+    const { json } = await call({ content: '<Callout>ok</Callout>\n\n# Doc', format: 'mdx' });
+    expect(json.plain_text).toBe(`${componentToken('Callout')}\n\nDoc`);
   });
 
   it('reports mdx_ok=true for markdown regardless of MDX-looking text', async () => {

@@ -94,7 +94,7 @@ describe('inline code is untouched by the block-code panel', () => {
       (await renderMarkdown('A paragraph with `inline` code in it.')) as ReactElement,
     );
 
-    expect(html).toContain('<code>inline</code>');
+    expect(html).toMatch(/<code\b[^>]*>inline<\/code>/);
     expect(html).not.toContain('<pre');
     expect(html).not.toContain('not-prose');
   });

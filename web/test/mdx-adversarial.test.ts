@@ -175,8 +175,8 @@ describe('MDX adversarial suite (SPEC §18.3)', () => {
     it('renders standard markdown with no JSX', async () => {
       const { markup, ok } = await html('# Title\n\nA paragraph with `code` and a [link](https://ex.com).');
       expect(ok).toBe(true);
-      expect(markup).toContain('<h1>Title</h1>');
-      expect(markup).toContain('<code>code</code>');
+      expect(markup).toMatch(/<h1\b[^>]*>Title<\/h1>/);
+      expect(markup).toMatch(/<code\b[^>]*>code<\/code>/);
       expect(markup).toContain('href="https://ex.com"');
     });
   });

@@ -113,7 +113,7 @@ export function remarkDiagramsHast() {
         children: [],
         data: {
           hName: 'kroki-diagram',
-          hProperties: { engine, source: node.value },
+          hProperties: { ...(node.data?.hProperties ?? {}), engine, source: node.value },
           hChildren: [],
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

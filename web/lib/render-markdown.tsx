@@ -4,7 +4,9 @@ import remarkRehype from 'remark-rehype';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit } from 'unist-util-visit';
 import type { Nodes } from 'hast';
+import type { Root } from 'mdast';
 import { createRemarkProcessor } from './pipeline';
+import { projectMdast } from './projection';
 import { remarkDiagramsHast } from './remark-diagrams';
 import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
 import { CodeBlock } from '@/components/code-block';
@@ -77,7 +79,9 @@ const processor = createRemarkProcessor()
  * the module header for the guarantees.
  */
 export async function renderMarkdown(markdown: string): Promise<ReactNode> {
-  const tree = (await processor.run(processor.parse(markdown))) as Nodes;
+  const mdast = processor.parse(markdown) as Root;
+  projectMdast(mdast, { annotate: true });
+  const tree = (await processor.run(mdast)) as Nodes;
   return toJsxRuntime(tree, {
     Fragment,
     jsx,
