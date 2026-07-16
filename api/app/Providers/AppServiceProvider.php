@@ -12,6 +12,7 @@ use App\Services\Import\Connectors\GithubPublicConnector;
 use App\Services\Import\Connectors\RawUrlConnector;
 use App\Services\Import\Connectors\UploadConnector;
 use App\Services\SystemWorkspace;
+use App\Support\EmailDigest;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -110,9 +111,13 @@ class AppServiceProvider extends ServiceProvider
             $email = Str::lower(trim((string) $request->input('email', '')));
 
             return [
-                Limit::perMinute(5)->by('reviewer-email:'.hash('sha256', $email)),
+                Limit::perMinute(5)->by('reviewer-email:'.EmailDigest::for($email)),
                 Limit::perMinute(20)->by('reviewer-ip:'.$request->ip()),
             ];
+        });
+
+        RateLimiter::for('reviewer-verification', function (Request $request) {
+            return Limit::perMinute(20)->by('reviewer-verify-ip:'.$request->ip());
         });
 
         // Instant demo mode is an unauthenticated, public-internet abuse surface

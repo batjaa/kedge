@@ -20,6 +20,7 @@ class ReviewerMagicLinkMail extends Mailable
     public function __construct(
         public readonly string $magicLinkUrl,
         public readonly string $documentTitle,
+        public readonly string $inviterName,
         public readonly Carbon $expiresAt,
     ) {}
 
@@ -43,6 +44,7 @@ class ReviewerMagicLinkMail extends Mailable
             with: [
                 'magicLinkUrl' => $this->magicLinkUrl,
                 'documentTitle' => $this->documentTitle,
+                'inviterName' => $this->inviterName,
                 'expiresAt' => $this->expiresAt,
             ],
         );

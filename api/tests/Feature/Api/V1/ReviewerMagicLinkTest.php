@@ -3,13 +3,16 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Mail\ReviewerMagicLinkMail;
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Share;
+use App\Models\ShareMagicLinkCompletion;
 use App\Models\Thread;
 use App\Models\User;
 use App\Services\RegistrationService;
 use App\Services\Sharing\ReviewerMagicLinkService;
+use App\Support\EmailDigest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -115,6 +118,7 @@ class ReviewerMagicLinkTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
         $this->assertNull($user->password);
+        $this->assertNull($user->github_id);
         $this->assertFalse($user->workspaces()->exists(), 'Reviewer users are not workspace members.');
         $this->assertNotNull($user->email_verified_at);
         $this->assertDatabaseHas('share_participants', [
@@ -131,7 +135,104 @@ class ReviewerMagicLinkTest extends TestCase
             ->assertOk()
             ->assertJsonPath('reviewer.verified', true)
             ->assertJsonPath('document_id', $document->id)
+            ->assertJsonMissingPath('source_url')
             ->assertJsonPath('current_version.plain_text', $document->currentVersion->plain_text);
+
+        $this->fromWebApp()
+            ->getJson('/api/v1/me')
+            ->assertOk()
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonPath('workspace', null);
+    }
+
+    public function test_verify_get_only_mints_completion_token_and_does_not_authenticate_or_consume(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        $url = $this->issueMagicLink($token, 'prefetch@example.com');
+
+        $completionToken = $this->beginCompletion($url, $token);
+
+        $this->assertGuest();
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseMissing('share_participants', ['share_id' => $share->id]);
+        $this->assertDatabaseHas('share_magic_links', [
+            'share_id' => $share->id,
+            'used_at' => null,
+        ]);
+        $this->assertDatabaseHas('share_magic_link_completions', [
+            'token_hash' => ShareMagicLinkCompletion::hashToken($completionToken),
+            'used_at' => null,
+        ]);
+    }
+
+    public function test_completion_post_rejects_non_stateful_cross_site_requests(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        $completionToken = $this->beginCompletion($this->issueMagicLink($token, 'csrf@example.com'), $token);
+
+        $this->withHeader('Origin', 'https://evil.example')
+            ->postJson("/api/v1/shared/{$token}/verify/complete", [
+                'completion_token' => $completionToken,
+            ])->assertStatus(419);
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('share_participants', ['share_id' => $share->id]);
+    }
+
+    public function test_magic_link_for_existing_password_account_requires_sign_in_without_logging_in(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        $existing = User::factory()->create(['email' => 'credentialed@example.com']);
+        $completionToken = $this->beginCompletion($this->issueMagicLink($token, 'credentialed@example.com'), $token);
+
+        $this->completeMagicLink($token, $completionToken)
+            ->assertStatus(409)
+            ->assertJsonPath('status', 'account_required');
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('share_participants', [
+            'share_id' => $share->id,
+            'user_id' => $existing->id,
+        ]);
+    }
+
+    public function test_magic_link_for_existing_workspace_member_requires_sign_in_without_logging_in(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        app(RegistrationService::class)->register(
+            name: 'Workspace Member',
+            email: 'member-reviewer@example.com',
+            password: null,
+        );
+        $completionToken = $this->beginCompletion($this->issueMagicLink($token, 'member-reviewer@example.com'), $token);
+
+        $this->completeMagicLink($token, $completionToken)
+            ->assertStatus(409)
+            ->assertJsonPath('status', 'account_required');
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('share_participants', ['share_id' => $share->id]);
+    }
+
+    public function test_magic_link_for_existing_github_account_requires_sign_in_without_logging_in(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        $existing = User::factory()->create([
+            'email' => 'github-reviewer@example.com',
+            'password' => null,
+            'github_id' => 'gh-123',
+        ]);
+        $completionToken = $this->beginCompletion($this->issueMagicLink($token, 'github-reviewer@example.com'), $token);
+
+        $this->completeMagicLink($token, $completionToken)
+            ->assertStatus(409)
+            ->assertJsonPath('status', 'account_required');
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('share_participants', [
+            'share_id' => $share->id,
+            'user_id' => $existing->id,
+        ]);
     }
 
     public function test_expired_reused_and_tampered_magic_links_are_rejected(): void
@@ -148,9 +249,9 @@ class ReviewerMagicLinkTest extends TestCase
 
         [, , $usedShare, $usedToken] = $this->sharedDocument();
         $usedUrl = $this->issueMagicLink($usedToken, 'used@example.com');
-        $this->fromWebApp()
-            ->get($this->pathFromUrl($usedUrl))
-            ->assertRedirect(config('kedge.frontend_url')."/shared/{$usedToken}?verified=1");
+        $this->completeMagicLink($usedToken, $this->beginCompletion($usedUrl, $usedToken))
+            ->assertOk()
+            ->assertJsonPath('status', 'verified');
         $this->fromWebApp()
             ->get($this->pathFromUrl($usedUrl))
             ->assertRedirect(config('kedge.frontend_url')."/shared/{$usedToken}?verify=used");
@@ -171,7 +272,8 @@ class ReviewerMagicLinkTest extends TestCase
 
         $this->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}")
-            ->assertOk();
+            ->assertForbidden()
+            ->assertJsonMissingPath('source_url');
 
         $thread = $this->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/threads", [
@@ -283,6 +385,110 @@ class ReviewerMagicLinkTest extends TestCase
         $this->fromWebApp()
             ->postJson('/api/v1/documents', ['content' => '# Not allowed'])
             ->assertForbidden();
+    }
+
+    public function test_revoked_share_between_get_and_completion_fails_without_login_or_participant(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        $completionToken = $this->beginCompletion($this->issueMagicLink($token, 'late-revoke@example.com'), $token);
+
+        $share->forceFill(['revoked_at' => now()])->save();
+
+        $this->completeMagicLink($token, $completionToken)
+            ->assertStatus(410)
+            ->assertJsonPath('reason', 'revoked');
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('share_participants', ['share_id' => $share->id]);
+    }
+
+    public function test_revoked_share_cuts_off_already_verified_reviewer_access(): void
+    {
+        [, $document, $share, $token] = $this->sharedDocument();
+        $this->verifyReviewer($share, $token, 'active-until-revoked@example.com');
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Before revoke',
+                'idempotency_key' => 'before-revoke',
+            ])
+            ->assertCreated();
+
+        $share->forceFill(['revoked_at' => now()])->save();
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertForbidden();
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'After revoke',
+                'idempotency_key' => 'after-revoke',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_multiple_valid_completions_for_same_new_email_converge_without_duplicates(): void
+    {
+        [, , $share, $token] = $this->sharedDocument();
+        $first = $this->beginCompletion($this->issueMagicLink($token, 'race@example.com'), $token);
+        $second = $this->beginCompletion($this->issueMagicLink($token, 'race@example.com'), $token);
+
+        $this->completeMagicLink($token, $first)->assertOk();
+        $this->completeMagicLink($token, $second)->assertOk();
+
+        $user = User::query()->where('email', 'race@example.com')->sole();
+        $this->assertDatabaseCount('share_participants', 1);
+        $this->assertDatabaseHas('share_participants', [
+            'share_id' => $share->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function test_magic_link_audit_uses_keyed_email_hmac_not_bare_sha256(): void
+    {
+        [, , , $token] = $this->sharedDocument();
+        Mail::fake();
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/shared/{$token}/verify-email", ['email' => 'Digest@Test.Example'])
+            ->assertStatus(202);
+
+        $audit = AuditLog::query()->where('action', 'magiclink.sent')->sole();
+
+        $this->assertSame(EmailDigest::for('digest@test.example'), $audit->meta['email_hash']);
+        $this->assertNotSame(hash('sha256', 'digest@test.example'), $audit->meta['email_hash']);
+    }
+
+    public function test_verify_get_and_completion_post_are_throttled_per_ip(): void
+    {
+        [, , , $token] = $this->sharedDocument();
+        $url = $this->issueMagicLink($token, 'throttle@example.com');
+
+        for ($i = 0; $i < 20; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '10.67.0.1'])
+                ->fromWebApp()
+                ->get($this->pathFromUrl($url))
+                ->assertRedirect();
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.67.0.1'])
+            ->fromWebApp()
+            ->get($this->pathFromUrl($url))
+            ->assertTooManyRequests();
+
+        for ($i = 0; $i < 20; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '10.68.0.1'])
+                ->fromWebApp()
+                ->postJson("/api/v1/shared/{$token}/verify/complete", ['completion_token' => 'invalid-'.$i])
+                ->assertStatus(422);
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.68.0.1'])
+            ->fromWebApp()
+            ->postJson("/api/v1/shared/{$token}/verify/complete", ['completion_token' => 'invalid-final'])
+            ->assertTooManyRequests();
     }
 
     public function test_demo_document_rejects_threads_until_claimed_even_for_verified_reviewer(): void
@@ -409,10 +615,11 @@ class ReviewerMagicLinkTest extends TestCase
     private function verifyReviewer(Share $share, string $token, string $email): User
     {
         $url = $this->issueMagicLink($token, $email);
+        $completionToken = $this->beginCompletion($url, $token);
 
-        $this->fromWebApp()
-            ->get($this->pathFromUrl($url))
-            ->assertRedirect(config('kedge.frontend_url')."/shared/{$token}?verified=1");
+        $this->completeMagicLink($token, $completionToken)
+            ->assertOk()
+            ->assertJsonPath('status', 'verified');
 
         $user = User::query()->where('email', $email)->firstOrFail();
         $this->assertDatabaseHas('share_participants', [
@@ -421,6 +628,29 @@ class ReviewerMagicLinkTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function beginCompletion(string $url, string $token): string
+    {
+        $response = $this->fromWebApp()
+            ->get($this->pathFromUrl($url))
+            ->assertRedirect();
+
+        $location = (string) $response->headers->get('Location');
+        $this->assertStringStartsWith(config('kedge.frontend_url')."/shared/{$token}?verify_complete=", $location);
+
+        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        $this->assertIsString($query['verify_complete'] ?? null);
+
+        return $query['verify_complete'];
+    }
+
+    private function completeMagicLink(string $token, string $completionToken)
+    {
+        return $this->fromWebApp()
+            ->postJson("/api/v1/shared/{$token}/verify/complete", [
+                'completion_token' => $completionToken,
+            ]);
     }
 
     private function pathFromUrl(string $url): string

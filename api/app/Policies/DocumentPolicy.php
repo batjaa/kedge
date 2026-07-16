@@ -9,7 +9,9 @@ use App\Policies\Concerns\AuthorizesWorkspaceMembership;
 /**
  * Documents are reachable only within their workspace (SPEC 13, user story 21):
  * an id in a URL is never an access path. Every document route authorizes
- * through here — no inline ownership checks in controllers.
+ * through here — no inline ownership checks in controllers. The full document
+ * resource includes private provenance and import lifecycle fields, so share
+ * reviewers must use the lean /shared/{token} surface instead.
  */
 class DocumentPolicy
 {
@@ -20,7 +22,7 @@ class DocumentPolicy
      */
     public function view(User $user, Document $document): bool
     {
-        return $this->canReadAndComment($user, $document);
+        return $this->memberOf($user, $document);
     }
 
     /**

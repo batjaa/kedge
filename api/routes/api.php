@@ -61,9 +61,12 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.shared.verify-email');
     });
 
-    Route::get('/shared/{token}/verify/{verification}/{verificationToken}', [ReviewerMagicLinkController::class, 'verify'])
-        ->middleware('web')
-        ->name('api.v1.shared.verify');
+    Route::middleware('throttle:reviewer-verification')->group(function () {
+        Route::get('/shared/{token}/verify/{magicLink}/{magicLinkToken}', [ReviewerMagicLinkController::class, 'verify'])
+            ->name('api.v1.shared.verify');
+        Route::post('/shared/{token}/verify/complete', [ReviewerMagicLinkController::class, 'complete'])
+            ->name('api.v1.shared.verify.complete');
+    });
 
     Route::middleware('throttle:shared-read')->group(function () {
         Route::get('/shared/{token}', [SharedDocumentController::class, 'show'])

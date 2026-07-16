@@ -5,20 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['share_id', 'email', 'token_hash', 'expires_at', 'used_at'])]
-class ShareMagicLink extends Model
+#[Fillable(['share_magic_link_id', 'token_hash', 'expires_at', 'used_at'])]
+class ShareMagicLinkCompletion extends Model
 {
-    public function share(): BelongsTo
+    public function magicLink(): BelongsTo
     {
-        return $this->belongsTo(Share::class);
-    }
-
-    /** @return HasMany<ShareMagicLinkCompletion, $this> */
-    public function completions(): HasMany
-    {
-        return $this->hasMany(ShareMagicLinkCompletion::class);
+        return $this->belongsTo(ShareMagicLink::class, 'share_magic_link_id');
     }
 
     public static function hashToken(string $token): string

@@ -6,7 +6,11 @@ import { DocumentReviewSurface } from '@/components/app/document-review-surface'
 import { SharedLinkGone } from '@/components/shared/shared-link-gone';
 import { ClaimCta } from '@/components/shared/claim-cta';
 import { SharedDocumentPoller } from '@/components/shared/shared-document-poller';
-import { ReviewerVerification, type VerifyReturnState } from '@/components/shared/reviewer-verification';
+import { ReviewerVerification } from '@/components/shared/reviewer-verification';
+import {
+  REVIEWER_VERIFICATION_STATUS,
+  type VerifyReturnState,
+} from '@/lib/reviewer-verification-status';
 
 // The public, read-only share surface (SPEC 10.2, ticket #24). Anonymous — no
 // auth, no session — rendering the doc through the SAME DocumentBody as the
@@ -27,7 +31,7 @@ export default async function SharedDocumentPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ verified?: string; verify?: string }>;
+  searchParams: Promise<{ verified?: string; verify?: string; verify_complete?: string }>;
 }) {
   const { token } = await params;
   const query = await searchParams;
@@ -93,7 +97,13 @@ export default async function SharedDocumentPage({
               mdxOk={doc.current_version.mdx_ok}
               content={doc.current_version.content}
             />
-            {!isDemo ? <ReviewerVerification token={token} returnState={verifyState} /> : null}
+            {!isDemo ? (
+              <ReviewerVerification
+                token={token}
+                returnState={verifyState}
+                completionToken={query.verify_complete ?? null}
+              />
+            ) : null}
           </>
         )
       ) : doc.status === 'importing' && isDemo ? (
@@ -112,7 +122,12 @@ export default async function SharedDocumentPage({
 }
 
 function verifyReturnState(value: string | undefined): VerifyReturnState | null {
-  return value === 'expired' || value === 'used' || value === 'invalid' ? value : null;
+  return value === REVIEWER_VERIFICATION_STATUS.expired
+    || value === REVIEWER_VERIFICATION_STATUS.used
+    || value === REVIEWER_VERIFICATION_STATUS.invalid
+    || value === REVIEWER_VERIFICATION_STATUS.accountRequired
+    ? value
+    : null;
 }
 
 function ReviewStatePanel({ message }: { message: string }) {

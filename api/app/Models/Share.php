@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ShareVisibility;
 use Database\Factories\ShareFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -67,6 +68,16 @@ class Share extends Model
     public static function hashToken(string $token): string
     {
         return hash('sha256', $token);
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('revoked_at')
+            ->where(function (Builder $query): void {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
     }
 
     public function isRevoked(): bool

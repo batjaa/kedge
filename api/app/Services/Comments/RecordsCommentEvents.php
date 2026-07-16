@@ -20,17 +20,22 @@ trait RecordsCommentEvents
     protected function recordEvent(
         string $name,
         Document $document,
-        User $actor,
+        ?User $actor,
         Model $subject,
         ?string $ip,
         array $meta = [],
+        string $level = 'info',
     ): void {
-        Log::info($name, [
+        $context = [
             'document_id' => $document->id,
             ...$this->subjectLogContext($subject),
             ...$meta,
-            'user_id' => $actor->id,
-        ]);
+            'user_id' => $actor?->id,
+        ];
+
+        $level === 'warning'
+            ? Log::warning($name, $context)
+            : Log::info($name, $context);
 
         $this->auditLogger()->record($document->workspace, $actor, $name, $subject, $meta, ip: $ip);
     }

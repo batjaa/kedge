@@ -148,3 +148,13 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 ## Known debt (added at M2 eng review, 2026-07-15)
 
 - Rail virtualization: anchor-aligned thread cards render unvirtualized; past ~200 threads the DOM cost hits the same wall as the re-anchor matcher budget (existing debt line). Revisit when a real document gets that busy. (M)
+
+## Open TODOs (from M2 #64 magic-link review, 2026-07-16)
+
+- [ ] **Per-share `allow_anonymous` toggle** — SPEC §16 lists `allow_anonymous` on the `shares` entity and §10.2 promises "anonymous commenting off by default with a per-share toggle." The column was never added (M1) and #64 shipped magic-link-required only. Add the column + the anonymous-comment path behind it when a real need appears; magic-link-required is the safe default meanwhile. (S)
+- [ ] **Passwordless-reviewer ↔ real-account reconciliation** — a reviewer shadow user (passwordless, non-member) created before signup now upgrades in place on `/register` (#64 fix C1). Revisit when a password-reset/claim flow lands (none exists yet) so a reviewer can also claim their shadow account via reset, not only fresh registration. (S)
+
+## Decision log (M2 #64 reviewer identity, 2026-07-16)
+
+- ✅ **Reviewer identity is a distinct, share-scoped principal** — a passwordless, non-member User bound to one Share via `share_participants`; magic links NEVER authenticate a credentialed or workspace-member account (that path requires normal sign-in). Terms added to CONTEXT.md (Reviewer, Share Participant).
+- ✅ **Magic-link verify is two-step** — a safe/idempotent GET validates the signed link and hands a short-lived completion token to the web app, which completes login via a same-origin XSRF-protected POST in the Sanctum stateful session. This is what makes the reviewer session work over real HTTP while closing login-CSRF and mail-scanner-prefetch (the GET consumes nothing; the POST is single-use). Caught by curl smoke; the definitive regression is the #68 e2e.

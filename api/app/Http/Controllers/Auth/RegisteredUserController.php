@@ -18,7 +18,7 @@ class RegisteredUserController extends Controller
     {
         $user = $registration->register(
             name: $request->validated('name'),
-            email: $request->validated('email'),
+            email: $request->normalizedEmail(),
             password: $request->validated('password'),
             ip: $request->ip(),
         );

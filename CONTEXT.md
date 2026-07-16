@@ -69,6 +69,18 @@ An unguessable, revocable link granting read-only access to one document. The
 token is shown once; possession of it grants exactly that document.
 _Avoid_: public link, invite
 
+**Reviewer**:
+Someone who reviews a shared document without a full account — a passwordless,
+non-member identity, verified by magic link and bound to one Share. Reviews
+(reads, comments, suggests) exactly that document, nothing else.
+_Avoid_: guest, member (a Reviewer is neither)
+
+**Share Participant**:
+The binding that makes a Reviewer's capability real: a verified (Reviewer, Share)
+pair. Every reviewer action resolves through a participant row on an active
+(non-revoked, non-expired) share — distinct from Workspace membership.
+_Avoid_: member, collaborator
+
 **Demo Document**:
 An anonymously imported document living in the reserved system workspace with
 an expiry, viewable through its share, claimable into a real workspace

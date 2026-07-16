@@ -51,6 +51,13 @@ class User extends Authenticatable
         return $this->hasMany(ShareParticipant::class);
     }
 
+    public function isPureReviewer(): bool
+    {
+        return $this->password === null
+            && $this->github_id === null
+            && ! $this->workspaces()->exists();
+    }
+
     /**
      * Get the attributes that should be cast.
      *

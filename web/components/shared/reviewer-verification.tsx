@@ -1,32 +1,58 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Mail, Send } from 'lucide-react';
-import { requestReviewerMagicLink } from '@/lib/reviewer-identity-client';
-
-export type VerifyReturnState = 'expired' | 'used' | 'invalid';
-
-const RETURN_COPY: Record<VerifyReturnState, string> = {
-  expired: 'That verification link expired. Request a fresh link to continue commenting.',
-  used: 'That verification link was already used. Request a fresh link if this browser is not verified.',
-  invalid: 'That verification link could not be verified. Request a fresh link to continue commenting.',
-};
+import { useRouter } from 'next/navigation';
+import {
+  completeReviewerMagicLink,
+  requestReviewerMagicLink,
+  RETURN_COPY,
+} from '@/lib/reviewer-identity-client';
+import type { VerifyReturnState } from '@/lib/reviewer-verification-status';
 
 export function ReviewerVerification({
   token,
   returnState,
+  completionToken,
 }: {
   token: string;
   returnState?: VerifyReturnState | null;
+  completionToken?: string | null;
 }) {
+  const router = useRouter();
+  const completionStarted = useRef(false);
   const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [state, setState] = useState<'idle' | 'completing' | 'sending' | 'sent' | 'failed'>(
+    completionToken ? 'completing' : 'idle',
+  );
   const [message, setMessage] = useState<string | null>(returnState ? RETURN_COPY[returnState] : null);
+
+  useEffect(() => {
+    if (!completionToken || completionStarted.current) return;
+    completionStarted.current = true;
+
+    async function complete() {
+      setState('completing');
+      setMessage('Verifying your email...');
+      const outcome = await completeReviewerMagicLink(token, completionToken!);
+
+      if (outcome.ok) {
+        router.replace(`/shared/${encodeURIComponent(token)}?verified=1`);
+        router.refresh();
+        return;
+      }
+
+      setState('failed');
+      setMessage(outcome.message);
+    }
+
+    void complete();
+  }, [completionToken, router, token]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = email.trim();
-    if (!trimmed || state === 'sending') return;
+    if (!trimmed || state === 'sending' || state === 'completing') return;
 
     setState('sending');
     setMessage(null);
@@ -63,11 +89,11 @@ export function ReviewerVerification({
             />
             <button
               type="submit"
-              disabled={state === 'sending' || email.trim() === ''}
+              disabled={state === 'sending' || state === 'completing' || email.trim() === ''}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
             >
               <Send className="h-3.5 w-3.5" aria-hidden="true" />
-              {state === 'sending' ? 'Sending' : state === 'sent' ? 'Sent' : 'Send link'}
+              {state === 'completing' ? 'Verifying' : state === 'sending' ? 'Sending' : state === 'sent' ? 'Sent' : 'Send link'}
             </button>
           </form>
           {message ? (
