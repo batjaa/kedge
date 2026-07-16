@@ -116,6 +116,7 @@ export function CommentRow({
               onChange={(event) => onEditBodyChange(event.target.value)}
               rows={3}
               className={TEXTAREA_CLASS_NAME}
+              aria-label="Edit comment body"
             />
             <div className="mt-2 flex justify-end gap-1.5">
               <IconButton title="Cancel edit" onClick={onCancelEdit}>

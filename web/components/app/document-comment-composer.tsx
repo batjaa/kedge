@@ -78,8 +78,12 @@ export function DocumentCommentComposer({
 
   return (
     <div
-      className="fixed z-50 w-[min(360px,calc(100vw-2rem))] rounded-lg bg-white p-3 shadow-xl ring-1 ring-zinc-900/10 dark:bg-zinc-950 dark:ring-white/10"
-      style={{ left: composer.x, top: composer.y, transform: 'translateX(-50%)' }}
+      className="fixed z-50 max-h-[calc(100vh-2rem)] w-[min(360px,calc(100vw-2rem))] overflow-y-auto rounded-lg bg-white p-3 shadow-xl ring-1 ring-zinc-900/10 dark:bg-zinc-950 dark:ring-white/10"
+      style={{
+        left: composer.x,
+        top: `clamp(1rem, ${composer.y}px, calc(100vh - 30rem))`,
+        transform: 'translateX(-50%)',
+      }}
     >
       {composer.failure ? (
         <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 ring-1 ring-inset ring-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
@@ -108,6 +112,7 @@ export function DocumentCommentComposer({
             rows={4}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Replacement text"
+            aria-label="Suggested replacement"
             disabled={submitting}
           />
           {suggestionUnchanged ? (
@@ -122,6 +127,7 @@ export function DocumentCommentComposer({
             rows={2}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Add a note"
+            ariaLabel="Suggestion note"
             disabled={submitting}
           />
         </div>
@@ -135,6 +141,7 @@ export function DocumentCommentComposer({
           rows={4}
           className={TEXTAREA_CLASS_NAME}
           placeholder="Write a comment"
+          ariaLabel="Inline comment"
           disabled={submitting}
         />
       )}
@@ -153,6 +160,7 @@ export function DocumentCommentComposer({
           onClick={onSubmit}
           disabled={submitDisabled}
           aria-busy={submitting}
+          aria-label={isSuggestion ? 'Submit suggestion' : 'Post comment'}
           className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />

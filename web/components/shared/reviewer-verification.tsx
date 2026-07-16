@@ -85,6 +85,7 @@ export function ReviewerVerification({
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
               placeholder="you@example.com"
+              aria-label="Reviewer email"
               className="min-w-0 flex-1 rounded-lg border-0 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-zinc-950 dark:text-white dark:ring-zinc-700"
             />
             <button

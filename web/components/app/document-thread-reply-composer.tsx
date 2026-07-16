@@ -119,6 +119,7 @@ export function ReplyComposer({
             rows={3}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Replacement text"
+            aria-label="Reply suggested replacement"
             disabled={replying}
           />
           {suggestionUnchanged ? (
@@ -133,6 +134,7 @@ export function ReplyComposer({
             rows={2}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Add a note"
+            ariaLabel="Reply suggestion note"
             disabled={replying}
           />
         </div>
@@ -146,6 +148,7 @@ export function ReplyComposer({
           rows={2}
           className={TEXTAREA_CLASS_NAME}
           placeholder="Reply"
+          ariaLabel="Reply"
           disabled={replying}
         />
       )}
@@ -162,6 +165,7 @@ export function ReplyComposer({
           type="button"
           onClick={() => void submitReply()}
           disabled={submitDisabled}
+          aria-label={isSuggestion ? 'Submit suggestion reply' : 'Post reply'}
           className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />

@@ -103,6 +103,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
         <select
           value={expiryDays ?? ''}
           onChange={(e) => setExpiryDays(e.target.value === '' ? null : Number(e.target.value))}
+          aria-label="Share expiry"
           className="rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10"
         >
           {EXPIRY_OPTIONS.map((opt) => (

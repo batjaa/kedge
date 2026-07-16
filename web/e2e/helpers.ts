@@ -1,4 +1,5 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { latestReviewerMagicLinkUrl } from './mailbox';
 
 // Shared journey steps for the coverage pack (#39). Every spec registers its OWN
 // unique user and creates its OWN documents through these helpers — no fixture
@@ -102,4 +103,144 @@ export async function importDocumentFromUrl(page: Page, url: string): Promise<nu
  */
 export function documentTitle(page: Page, title: string) {
   return page.getByRole('heading', { name: title }).first();
+}
+
+/** Create a share link from the authenticated document page and return its one-time URL. */
+export async function createShareLink(page: Page, expiryLabel = 'Expires in 7 days'): Promise<string> {
+  await page.getByRole('heading', { name: 'Share links' }).scrollIntoViewIfNeeded();
+  await page.getByLabel('Share expiry', { exact: true }).selectOption({ label: expiryLabel });
+  await page.getByRole('button', { name: 'Create share link', exact: true }).click();
+
+  await expect(page.getByText('it is shown only once', { exact: false })).toBeVisible();
+  const shareUrl = await page.locator('input[readonly]').inputValue();
+  expect(shareUrl).toMatch(/\/shared\/[A-Za-z0-9_-]{32,}$/);
+
+  return shareUrl;
+}
+
+/**
+ * Drive the reviewer identity flow through the actual browser:
+ * share page → request email → read log-mailbox link → GET signed API link →
+ * web share page auto-completes via POST and lands verified.
+ */
+export async function verifyReviewerByMagicLink(
+  page: Page,
+  shareUrl: string,
+  email: string,
+  title: string,
+): Promise<void> {
+  await page.goto(shareUrl);
+  await expect(page.getByRole('heading', { name: title }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Verify your email to comment' })).toBeVisible();
+
+  await page.getByLabel('Reviewer email', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Send link', exact: true }).click();
+  await expect(
+    page.getByText('Check your email for a link to continue reviewing.'),
+  ).toBeVisible();
+
+  const magicLinkUrl = await latestReviewerMagicLinkUrl({ email });
+  await page.goto(magicLinkUrl);
+
+  await expect(page).toHaveURL(/\/shared\/[A-Za-z0-9_-]+\?verified=1$/, { timeout: 30_000 });
+  await expect(
+    page.getByText('Email verified. You can comment on this document now.'),
+  ).toBeVisible();
+  await expect(page.getByText('Shared document · verified reviewer')).toBeVisible();
+  await expect(page.getByRole('heading', { name: title }).first()).toBeVisible();
+}
+
+/** Programmatically select exact rendered prose so the browser Selection API drives anchor capture. */
+export async function selectDocumentText(page: Page, exact: string, occurrence = 0): Promise<void> {
+  const result = await page.evaluate(
+    async ({ exact, occurrence }) => {
+      const root = document.querySelector<HTMLElement>('article.prose');
+      if (!root) return { ok: false, reason: 'article.prose not found' };
+
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let seen = 0;
+      let target: Text | null = null;
+      let offset = -1;
+
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text;
+        const value = node.nodeValue ?? '';
+        const foundAt = value.indexOf(exact);
+        if (foundAt === -1) continue;
+
+        if (seen === occurrence) {
+          target = node;
+          offset = foundAt;
+          break;
+        }
+        seen += 1;
+      }
+
+      if (!target || offset < 0) {
+        return { ok: false, reason: `text not found: ${exact}` };
+      }
+
+      const range = document.createRange();
+      range.setStart(target, offset);
+      range.setEnd(target, offset + exact.length);
+
+      const selection = window.getSelection();
+      if (!selection) return { ok: false, reason: 'Selection API unavailable' };
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      target.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+
+      const rect = range.getBoundingClientRect();
+      root.dispatchEvent(new MouseEvent('mouseup', {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+      }));
+
+      return { ok: true };
+    },
+    { exact, occurrence },
+  );
+
+  if (!result.ok) {
+    throw new Error(result.reason);
+  }
+
+  await expect(page.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
+}
+
+export async function openInlineComposerForText(page: Page, exact: string): Promise<void> {
+  await selectDocumentText(page, exact);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await expect(page.getByLabel('Inline comment', { exact: true })).toBeVisible();
+}
+
+export async function postInlineComment(page: Page, exact: string, body: string): Promise<void> {
+  await openInlineComposerForText(page, exact);
+  await page.getByLabel('Inline comment', { exact: true }).fill(body);
+  await page.getByRole('button', { name: 'Post comment', exact: true }).click();
+  await expect(threadRail(page).getByText(body, { exact: true })).toBeVisible();
+}
+
+export async function proposeSuggestion(
+  page: Page,
+  exact: string,
+  proposedText: string,
+  note: string,
+): Promise<void> {
+  await openInlineComposerForText(page, exact);
+  await page.getByRole('button', { name: 'Suggest', exact: true }).click();
+  await page.getByLabel('Suggested replacement', { exact: true }).fill(proposedText);
+  await page.getByLabel('Suggestion note', { exact: true }).fill(note);
+  await page.getByRole('button', { name: 'Submit suggestion', exact: true }).click();
+
+  const rail = threadRail(page);
+  await expect(rail.getByText(note, { exact: true })).toBeVisible();
+  await expect(rail.getByText(proposedText, { exact: true })).toBeVisible();
+}
+
+export function threadRail(page: Page): Locator {
+  return page.getByRole('complementary', { name: 'Thread rail' });
 }

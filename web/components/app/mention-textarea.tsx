@@ -12,6 +12,7 @@ export function MentionTextarea({
   rows,
   className,
   placeholder,
+  ariaLabel,
   disabled = false,
 }: {
   documentId: number;
@@ -20,6 +21,7 @@ export function MentionTextarea({
   rows: number;
   className: string;
   placeholder: string;
+  ariaLabel?: string;
   disabled?: boolean;
 }) {
   const listboxId = useId();
@@ -104,6 +106,7 @@ export function MentionTextarea({
         className={className}
         placeholder={placeholder}
         disabled={disabled}
+        aria-label={ariaLabel ?? placeholder}
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
