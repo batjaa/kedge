@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Integration;
 use App\Models\Share;
+use App\Models\Thread;
 use App\Models\User;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -105,6 +107,59 @@ class AuthorizationMatrixTest extends TestCase
         $this->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/shares")
             ->assertStatus($expectedStatus);
+    }
+
+    /**
+     * Comment threads are document-scoped. The authenticated author can create
+     * and list; a member of another workspace and a guest cannot traverse ids.
+     */
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_create_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Author comment',
+            ])
+            ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_list_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_reply_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/comments", [
+                'body' => 'Reply',
+                'idempotency_key' => "reply-{$role}",
+            ])
+            ->assertStatus($expected);
     }
 
     #[DataProvider('documentRoleMatrix')]
@@ -257,6 +312,22 @@ class AuthorizationMatrixTest extends TestCase
         $factory = Document::factory()->for($owner->personalWorkspace(), 'workspace');
         $document = ($failed ? $factory->failed() : $factory->ready())
             ->create(['created_by' => $owner->id]);
+
+        if (! $failed) {
+            $content = "# Auth Matrix\n\nText to anchor.";
+            $version = DocumentVersion::factory()
+                ->for($document)
+                ->create([
+                    'content_raw' => $content,
+                    'content_normalized' => $content,
+                    'content_hash' => hash('sha256', $content),
+                    'plain_text' => 'Text to anchor.',
+                    'projection_version' => '2',
+                ]);
+
+            $document->forceFill(['current_version_id' => $version->id])->save();
+            $document->setRelation('currentVersion', $version);
+        }
 
         return [$owner, $document];
     }

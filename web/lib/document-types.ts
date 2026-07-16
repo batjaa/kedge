@@ -26,6 +26,12 @@ export interface DocumentVersion {
   /** What didn't survive normalization; always present, empty when clean. */
   import_warnings: ImportWarning[];
   /**
+   * Authenticated document reads include the stored projection substrate for
+   * anchor capture. Public share reads omit these fields.
+   */
+  plain_text?: string | null;
+  projection_version?: string | null;
+  /**
    * Whether this version's MDX compiled (SPEC §6.1). `null` for non-MDX formats
    * (not applicable); `false` routes the doc to the plain-markdown fallback +
    * banner. Set by the projection endpoint's real compile validation (#20).

@@ -38,6 +38,24 @@ class DocumentPolicy
     }
 
     /**
+     * Read a document's review rail. Same workspace boundary as reading the
+     * document itself; share-scoped reviewers arrive in a later M2 ticket.
+     */
+    public function viewThreads(User $user, Document $document): bool
+    {
+        return $this->memberOf($user, $document);
+    }
+
+    /**
+     * Start a thread on a document. Ready/demo preconditions are business state
+     * checked by the comments service; identity stays here.
+     */
+    public function createThread(User $user, Document $document): bool
+    {
+        return $this->memberOf($user, $document);
+    }
+
+    /**
      * Claim a demo document into your own workspace (SPEC §10.3, #25). Deliberately
      * NOT a membership check — the whole point is that the doc is *not* yours yet:
      * it lives in the reserved system workspace. Only a demo doc is claimable, so

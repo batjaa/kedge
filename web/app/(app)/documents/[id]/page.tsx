@@ -7,6 +7,7 @@ import { DocumentClaim } from '@/components/app/document-claim';
 import { ImportFailed } from '@/components/app/import-failed';
 import { DocumentShares } from '@/components/app/document-shares';
 import { ImportWarnings } from '@/components/app/import-warnings';
+import { DocumentReviewSurface } from '@/components/app/document-review-surface';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
@@ -88,11 +89,17 @@ export default async function DocumentPage({
           <ImportWarnings
             warnings={document.current_version.import_warnings ?? []}
           />
-          <DocumentBody
-            format={document.format}
-            mdxOk={document.current_version.mdx_ok}
-            content={document.current_version.content}
-          />
+          <DocumentReviewSurface
+            documentId={document.id}
+            plainText={document.current_version.plain_text ?? null}
+            projectionVersion={document.current_version.projection_version ?? null}
+          >
+            <DocumentBody
+              format={document.format}
+              mdxOk={document.current_version.mdx_ok}
+              content={document.current_version.content}
+            />
+          </DocumentReviewSurface>
         </>
       ) : null}
 

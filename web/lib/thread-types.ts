@@ -1,0 +1,77 @@
+// Hand-written mirror of the API's thread/comment payloads. OpenAPI/TS codegen
+// is accepted debt; keep in sync with api/app/Http/Resources/V1/*Thread*.
+
+export type ThreadType = 'inline' | 'document';
+export type ThreadStatus = 'open' | 'resolved';
+export type CommentType = 'comment' | 'suggestion';
+export type CommentClient = 'web' | 'mcp';
+export type AnchorState = 'anchored' | 'relocated' | 'orphaned';
+
+export interface ThreadAuthor {
+  id: number;
+  name: string;
+}
+
+export interface ThreadAnchor {
+  id: number;
+  document_version_id: number;
+  exact: string;
+  prefix: string | null;
+  suffix: string | null;
+  start: number;
+  end: number;
+  heading_path: string[];
+  projection_version: string;
+  state: AnchorState;
+}
+
+export interface ThreadComment {
+  id: number;
+  thread_id: number;
+  author?: ThreadAuthor;
+  type: CommentType;
+  body_md: string;
+  proposed_text: string | null;
+  suggestion_status: 'pending' | 'accepted' | 'declined' | null;
+  client: CommentClient;
+  edited_at: string | null;
+  created_at: string | null;
+}
+
+export interface ReviewThread {
+  id: number;
+  document_id: number;
+  type: ThreadType;
+  status: ThreadStatus;
+  forked_from_comment_id: number | null;
+  created_by: number;
+  comment_count: number;
+  latest_activity_at: string | null;
+  anchor: ThreadAnchor | null;
+  first_comment: ThreadComment | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ThreadPage {
+  data: ReviewThread[];
+  links?: {
+    next?: string | null;
+  };
+  meta?: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+export interface ThreadAnchorPayload {
+  exact: string;
+  prefix: string;
+  suffix: string;
+  start: number;
+  end: number;
+  heading_path: string[];
+  projection_version: string;
+}

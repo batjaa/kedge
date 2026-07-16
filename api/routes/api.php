@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
+use App\Http\Controllers\Api\V1\ThreadCommentController;
+use App\Http\Controllers\Api\V1\ThreadController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
@@ -100,12 +102,22 @@ Route::prefix('v1')->group(function () {
         Route::get('/documents/{document}/shares', [ShareController::class, 'index'])
             ->name('api.v1.documents.shares.index');
 
+        Route::get('/documents/{document}/threads', [ThreadController::class, 'index'])
+            ->name('api.v1.documents.threads.index');
+
         Route::middleware('throttle:shares')->group(function () {
             Route::post('/documents/{document}/shares', [ShareController::class, 'store'])
                 ->name('api.v1.documents.shares.store');
             Route::delete('/documents/{document}/shares/{share}', [ShareController::class, 'destroy'])
                 ->scopeBindings()
                 ->name('api.v1.documents.shares.destroy');
+        });
+
+        Route::middleware('throttle:comments')->group(function () {
+            Route::post('/documents/{document}/threads', [ThreadController::class, 'store'])
+                ->name('api.v1.documents.threads.store');
+            Route::post('/threads/{thread}/comments', [ThreadCommentController::class, 'store'])
+                ->name('api.v1.threads.comments.store');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.
