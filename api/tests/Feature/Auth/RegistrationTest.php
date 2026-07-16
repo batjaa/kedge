@@ -113,6 +113,37 @@ class RegistrationTest extends TestCase
         $this->assertDatabaseCount('workspaces', 0);
     }
 
+    public function test_registration_upgrades_passwordless_non_member_reviewer_shadow_user(): void
+    {
+        $shadow = User::factory()->create([
+            'name' => 'Ada Reviewer',
+            'email' => 'ada@example.com',
+            'github_id' => null,
+            'password' => null,
+            'email_verified_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->postJson('/register', $this->payload);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('user.id', $shadow->id)
+            ->assertJsonPath('user.name', 'Ada Lovelace');
+
+        $this->assertAuthenticatedAs($shadow->fresh());
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('workspaces', 1);
+
+        $shadow->refresh();
+        $this->assertNotNull($shadow->password);
+        $this->assertNotNull($shadow->email_verified_at);
+
+        $this->assertDatabaseHas('workspace_members', [
+            'user_id' => $shadow->id,
+            'role' => WorkspaceRole::Owner->value,
+        ]);
+    }
+
     public function test_registration_rejects_invalid_payloads(): void
     {
         $this->postJson('/register', [

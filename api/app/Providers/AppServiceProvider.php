@@ -12,10 +12,12 @@ use App\Services\Import\Connectors\GithubPublicConnector;
 use App\Services\Import\Connectors\RawUrlConnector;
 use App\Services\Import\Connectors\UploadConnector;
 use App\Services\SystemWorkspace;
+use App\Support\EmailDigest;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -92,11 +94,36 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(15)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Comment writes (start a thread + reply). Per authenticated user — reads
+        // stay free, and retries are additionally deduped by idempotency key.
+        RateLimiter::for('comments', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
+        });
+
+        // Mention autocomplete is a read, but it can disclose audience shape if
+        // hammered. Keep it per authenticated user and separate from writes.
+        RateLimiter::for('mentions', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
         // The public share read faces the open internet, so it is per-IP (SPEC
         // 10.2, 13): a leaked or brute-forced token can't be probed at speed, and
         // one visitor refreshing a doc can't be starved by another.
         RateLimiter::for('shared-read', function (Request $request) {
             return Limit::perMinute(60)->by($request->ip());
+        });
+
+        RateLimiter::for('reviewer-magic-link', function (Request $request) {
+            $email = Str::lower(trim((string) $request->input('email', '')));
+
+            return [
+                Limit::perMinute(5)->by('reviewer-email:'.EmailDigest::for($email)),
+                Limit::perMinute(20)->by('reviewer-ip:'.$request->ip()),
+            ];
+        });
+
+        RateLimiter::for('reviewer-verification', function (Request $request) {
+            return Limit::perMinute(20)->by('reviewer-verify-ip:'.$request->ip());
         });
 
         // Instant demo mode is an unauthenticated, public-internet abuse surface

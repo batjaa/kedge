@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "Before ",
+    "prefix": "",
+    "suffix": "⟦image⟧ after.",
+    "start": 0,
+    "end": 7,
+    "heading_path": [],
+    "projection_version": 60
+  }
+}

@@ -84,6 +84,12 @@ class Document extends Model
         return $this->hasMany(Share::class);
     }
 
+    /** @return HasMany<Thread, $this> */
+    public function threads(): HasMany
+    {
+        return $this->hasMany(Thread::class);
+    }
+
     /**
      * The version currently rendered. Not a FK (the constraint would be circular
      * with document_versions.document_id) — just a pointer resolved by id.

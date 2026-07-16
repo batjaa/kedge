@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Creates an account and its silently-provisioned personal workspace
@@ -36,13 +37,34 @@ class RegistrationService
         ?string $githubId = null,
     ): User {
         return DB::transaction(function () use ($name, $email, $password, $avatarUrl, $ip, $githubId): User {
-            $user = User::create([
-                'name' => $name,
-                'email' => $email,
-                'password' => $password,
-                'avatar_url' => $avatarUrl,
-                'github_id' => $githubId,
-            ]);
+            $user = User::query()
+                ->where('email', $email)
+                ->lockForUpdate()
+                ->first();
+
+            if ($user instanceof User) {
+                if (! $user->isPureReviewer()) {
+                    throw ValidationException::withMessages([
+                        'email' => 'An account with this email already exists.',
+                    ]);
+                }
+
+                $user->forceFill([
+                    'name' => $name,
+                    'password' => $password,
+                    'avatar_url' => $avatarUrl ?? $user->avatar_url,
+                    'github_id' => $githubId,
+                    'email_verified_at' => now(),
+                ])->save();
+            } else {
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'password' => $password,
+                    'avatar_url' => $avatarUrl,
+                    'github_id' => $githubId,
+                ]);
+            }
 
             $workspace = Workspace::create([
                 'name' => $name,

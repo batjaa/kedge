@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * An immutable content snapshot of a document (SPEC 16, 5.2). Created once per
@@ -26,6 +27,12 @@ class DocumentVersion extends Model
     public function document(): BelongsTo
     {
         return $this->belongsTo(Document::class);
+    }
+
+    /** @return HasMany<Anchor, $this> */
+    public function anchors(): HasMany
+    {
+        return $this->hasMany(Anchor::class);
     }
 
     /**

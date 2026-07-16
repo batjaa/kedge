@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { projectionRootProps } from '@/components/projection-attrs';
+import type { ProjectionAttrs } from '@/lib/projection';
 
 // The presentational shell for a rendered diagram (SPEC §6.2), shared by both
 // diagram surfaces: the API-mediated component for imported docs (src = a cached
@@ -13,7 +15,15 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 // The <img> itself renders server-side, so a reader with JS disabled still sees
 // the diagram — only the zoom affordance needs hydration.
 
-export function DiagramFigure({ engine, src }: { engine: string; src: string }) {
+export function DiagramFigure({
+  engine,
+  src,
+  projectionAttrs,
+}: {
+  engine: string;
+  src: string;
+  projectionAttrs?: ProjectionAttrs;
+}) {
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -42,7 +52,11 @@ export function DiagramFigure({ engine, src }: { engine: string; src: string }) 
   }, [open, close]);
 
   return (
-    <figure className="not-prose my-6 overflow-hidden rounded-2xl ring-1 ring-zinc-900/10 dark:ring-white/10">
+    <figure
+      {...projectionRootProps(projectionAttrs, {
+        className: 'not-prose my-6 overflow-hidden rounded-2xl ring-1 ring-zinc-900/10 dark:ring-white/10',
+      })}
+    >
       {/* Diagrams render on a light surface in both themes for legibility. The
           whole panel is the zoom trigger — a button, so it is keyboard- and
           screen-reader-reachable (DESIGN.md focus rule). */}

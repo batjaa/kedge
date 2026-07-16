@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "\n\n",
+    "prefix": "First paragraph.",
+    "suffix": "Second paragraph.",
+    "start": 16,
+    "end": 18,
+    "heading_path": [],
+    "projection_version": 60
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "projectionVersion": 60,
+  "plainText": "Before ⟦image⟧ after.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "p",
+        "attrs": [
+          { "name": "data-prange", "value": "0:21" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Before " },
+          {
+            "tagName": "span",
+            "attrs": [
+              { "name": "data-prange", "value": "7:14" },
+              { "name": "data-patomic", "value": "true" }
+            ],
+            "childNodes": [
+              { "nodeName": "#text", "value": "rendered image" }
+            ]
+          },
+          { "nodeName": "#text", "value": " after." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 1, 0], "offset": 1 },
+    "end": { "path": [0, 1, 0], "offset": 3 }
+  }
+}

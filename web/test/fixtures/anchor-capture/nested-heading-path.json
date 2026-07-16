@@ -1,0 +1,40 @@
+{
+  "projectionVersion": 60,
+  "plainText": "Product Plan\n\nAnchoring\n\nCapture this sentence.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "h1",
+        "attrs": [
+          { "name": "data-prange", "value": "0:12" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Product Plan" }
+        ]
+      },
+      {
+        "tagName": "h2",
+        "attrs": [
+          { "name": "data-prange", "value": "14:23" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Anchoring" }
+        ]
+      },
+      {
+        "tagName": "p",
+        "attrs": [
+          { "name": "data-prange", "value": "25:47" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Capture this sentence." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [2, 0], "offset": 8 },
+    "end": { "path": [2, 0], "offset": 12 }
+  }
+}

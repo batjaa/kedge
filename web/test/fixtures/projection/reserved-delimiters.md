@@ -1,0 +1,5 @@
+# Reserved delimiters
+
+Literal placeholder brackets like ⟦ and ⟧ are stripped from prose before render.
+
+Inline code strips them too: `token = "⟦image⟧"`.

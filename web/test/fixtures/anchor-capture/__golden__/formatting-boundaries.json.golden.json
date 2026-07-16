@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "old emph li",
+    "prefix": "This b",
+    "suffix": "nk text.",
+    "start": 6,
+    "end": 17,
+    "heading_path": [],
+    "projection_version": 60
+  }
+}

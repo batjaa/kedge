@@ -84,6 +84,8 @@ export APP_ENV=e2e
   echo "MAIL_MAILER=log"
   echo "QUEUE_CONNECTION=sync"
   echo "CACHE_STORE=array"
+  echo "LOG_CHANNEL=single"
+  echo "MAIL_LOG_CHANNEL=single"
   echo "PROJECTION_URL=http://127.0.0.1:${WEB_PORT:-3000}"
   echo "KROKI_URL=${KROKI_URL:-https://kroki.io}"
   echo "FETCH_ALLOW_HOSTS=127.0.0.1"
@@ -100,6 +102,11 @@ php artisan migrate --force
 # storage/app/public. The symlink is not committed, so a fresh checkout (CI)
 # needs it created before the first diagram renders. Idempotent.
 php artisan storage:link --force
+
+# The M2 reviewer journey reads the log-driver mailbox from this known file.
+# Keep it bounded for a fresh e2e boot; reused local servers still work because
+# each spec filters by a unique recipient email.
+: >"${API_DIR}/storage/logs/laravel.log"
 
 # --no-reload: no file watcher (deterministic) and a single served process.
 exec php artisan serve --host=127.0.0.1 --port="${PORT}" --no-reload

@@ -67,6 +67,22 @@ class ShareLinkTest extends TestCase
         $response->assertJsonMissingPath('id');
     }
 
+    public function test_signed_in_share_reader_does_not_receive_projection_substrate(): void
+    {
+        [$owner, $document] = $this->ownedDocument(content: "# Shared Spec\n\nRead me anonymously.\n");
+        $document->currentVersion->forceFill([
+            'plain_text' => 'Shared Spec'.PHP_EOL.PHP_EOL.'Read me anonymously.',
+            'projection_version' => '2',
+        ])->save();
+        $token = $this->issueToken($document);
+
+        $this->actingAs($owner)->fromWebApp()
+            ->getJson("/api/v1/shared/{$token}")
+            ->assertOk()
+            ->assertJsonMissingPath('current_version.plain_text')
+            ->assertJsonMissingPath('current_version.projection_version');
+    }
+
     public function test_revoked_share_reads_as_gone(): void
     {
         [$owner, $document] = $this->ownedDocument();

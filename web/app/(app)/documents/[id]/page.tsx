@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDocument } from '@/lib/documents';
 import { DocumentBody } from '@/components/app/document-body';
@@ -7,6 +6,8 @@ import { DocumentClaim } from '@/components/app/document-claim';
 import { ImportFailed } from '@/components/app/import-failed';
 import { DocumentShares } from '@/components/app/document-shares';
 import { ImportWarnings } from '@/components/app/import-warnings';
+import { DocumentReviewSurface } from '@/components/app/document-review-surface';
+import { DocumentStaticHeader } from '@/components/app/document-static-header';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
@@ -56,24 +57,18 @@ export default async function DocumentPage({
     );
   }
 
+  const showStaticHeader = document.status !== 'ready';
+
   return (
     <div>
-      <div className="mb-6">
-        <Link
-          href="/"
-          className="text-sm text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
-        >
-          ← Review queue
-        </Link>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          {document.title}
-        </h1>
-        {document.source_url ? (
-          <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-500">
-            {document.source_url}
-          </p>
-        ) : null}
-      </div>
+      {showStaticHeader ? (
+        <DocumentStaticHeader
+          title={document.title}
+          sourceUrl={document.source_url}
+          backHref="/"
+          backLabel="← Review queue"
+        />
+      ) : null}
 
       {document.status === 'importing' ? (
         <DocumentPoller id={document.id} />
@@ -88,11 +83,25 @@ export default async function DocumentPage({
           <ImportWarnings
             warnings={document.current_version.import_warnings ?? []}
           />
-          <DocumentBody
-            format={document.format}
-            mdxOk={document.current_version.mdx_ok}
-            content={document.current_version.content}
-          />
+          <DocumentReviewSurface
+            documentId={document.id}
+            title={document.title}
+            surfaceLabel="Authenticated document"
+            sourceUrl={document.source_url}
+            lifecycleStatus={document.lifecycle_status}
+            versionLabel={`v${document.current_version.id}`}
+            syncedAt={document.current_version.synced_at}
+            backHref="/"
+            backLabel="← Review queue"
+            plainText={document.current_version.plain_text ?? null}
+            projectionVersion={document.current_version.projection_version ?? null}
+          >
+            <DocumentBody
+              format={document.format}
+              mdxOk={document.current_version.mdx_ok}
+              content={document.current_version.content}
+            />
+          </DocumentReviewSurface>
         </>
       ) : null}
 

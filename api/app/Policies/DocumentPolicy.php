@@ -4,14 +4,19 @@ namespace App\Policies;
 
 use App\Models\Document;
 use App\Models\User;
+use App\Policies\Concerns\AuthorizesWorkspaceMembership;
 
 /**
  * Documents are reachable only within their workspace (SPEC 13, user story 21):
  * an id in a URL is never an access path. Every document route authorizes
- * through here — no inline ownership checks in controllers.
+ * through here — no inline ownership checks in controllers. The full document
+ * resource includes private provenance and import lifecycle fields, so share
+ * reviewers must use the lean /shared/{token} surface instead.
  */
 class DocumentPolicy
 {
+    use AuthorizesWorkspaceMembership;
+
     /**
      * Read the document (poll status, render). Workspace members only.
      */
@@ -26,7 +31,7 @@ class DocumentPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return $this->hasPersonalWorkspace($user);
     }
 
     /**
@@ -46,13 +51,7 @@ class DocumentPolicy
      */
     public function claim(User $user, Document $document): bool
     {
-        return $document->isDemo();
-    }
-
-    private function memberOf(User $user, Document $document): bool
-    {
-        return $user->workspaces()
-            ->whereKey($document->workspace_id)
-            ->exists();
+        return $document->isDemo()
+            && $this->hasPersonalWorkspace($user);
     }
 }

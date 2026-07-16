@@ -53,6 +53,11 @@ export interface SharedDocument {
   claimable: boolean;
   document_id?: number;
   expires_at?: string | null;
+  reviewer: {
+    verified: boolean;
+    name?: string | null;
+    email?: string | null;
+  };
 }
 
 /** Why a share link is no longer active — drives the friendly "gone" page. */

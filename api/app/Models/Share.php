@@ -5,9 +5,11 @@ namespace App\Models;
 use App\Enums\ShareVisibility;
 use Database\Factories\ShareFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A revocable, unguessable read-only link to a document (SPEC 10.2). The token
@@ -46,6 +48,18 @@ class Share extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** @return HasMany<ShareParticipant, $this> */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(ShareParticipant::class);
+    }
+
+    /** @return HasMany<ShareMagicLink, $this> */
+    public function magicLinks(): HasMany
+    {
+        return $this->hasMany(ShareMagicLink::class);
+    }
+
     /**
      * The digest stored in `token_hash` for a plaintext token. sha256 gives a
      * fixed-length key, so resolution is one indexed lookup with no timing signal
@@ -54,6 +68,16 @@ class Share extends Model
     public static function hashToken(string $token): string
     {
         return hash('sha256', $token);
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('revoked_at')
+            ->where(function (Builder $query): void {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
     }
 
     public function isRevoked(): bool

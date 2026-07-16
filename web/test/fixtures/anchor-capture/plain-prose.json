@@ -1,0 +1,22 @@
+{
+  "projectionVersion": 60,
+  "plainText": "Alpha beta gamma delta.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "p",
+        "attrs": [
+          { "name": "data-prange", "value": "0:23" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Alpha beta gamma delta." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 0], "offset": 6 },
+    "end": { "path": [0, 0], "offset": 16 }
+  }
+}

@@ -1,10 +1,17 @@
 import { createMDX } from 'fumadocs-mdx/next';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const withMDX = createMDX();
+const webRoot = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
+  turbopack: {
+    // Root inference can escape the monorepo; pin it to this app.
+    root: webRoot,
+  },
   async headers() {
     return [
       {

@@ -1,0 +1,31 @@
+{
+  "projectionVersion": 60,
+  "plainText": "First paragraph.\n\nSecond paragraph.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "p",
+        "attrs": [
+          { "name": "data-prange", "value": "0:16" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "First paragraph." }
+        ]
+      },
+      {
+        "tagName": "p",
+        "attrs": [
+          { "name": "data-prange", "value": "18:35" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Second paragraph." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 0], "offset": 16 },
+    "end": { "path": [1, 0], "offset": 0 }
+  }
+}

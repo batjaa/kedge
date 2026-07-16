@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { fetchDiagramUrl } from '@/lib/diagram-client';
 import { DiagramFigure } from '@/components/diagram-figure';
 import { DiagramSkeleton, DiagramSourceError } from '@/components/diagram-states';
+import type { ProjectionAttrs } from '@/lib/projection';
 
 // The diagram component for IMPORTED documents (SPEC §6.2). Bound to the JSX name
 // `KrokiDiagram` in the imported-MDX allowlist and to `kroki-diagram` in the
@@ -24,15 +25,24 @@ import { DiagramSkeleton, DiagramSourceError } from '@/components/diagram-states
 export async function resolveDiagram({
   engine,
   source,
+  projectionAttrs = {},
 }: {
   engine: string;
   source: string;
+  projectionAttrs?: ProjectionAttrs;
 }): Promise<ReactElement> {
   const result = await fetchDiagramUrl(engine, source);
   if (!result.ok || !result.url) {
-    return <DiagramSourceError engine={engine} source={source} errorDetail={result.errorDetail} />;
+    return (
+      <DiagramSourceError
+        engine={engine}
+        source={source}
+        errorDetail={result.errorDetail}
+        projectionAttrs={projectionAttrs}
+      />
+    );
   }
-  return <DiagramFigure engine={engine} src={result.url} />;
+  return <DiagramFigure engine={engine} src={result.url} projectionAttrs={projectionAttrs} />;
 }
 
 /**
@@ -40,10 +50,18 @@ export async function resolveDiagram({
  * wrapped in a Suspense boundary so each diagram streams its own loading skeleton
  * while the API round-trip is in flight, rather than blocking the whole document.
  */
-export function CachedKrokiDiagram({ engine, source }: { engine: string; source: string }) {
+export function CachedKrokiDiagram({
+  engine,
+  source,
+  projectionAttrs,
+}: {
+  engine: string;
+  source: string;
+  projectionAttrs?: ProjectionAttrs;
+}) {
   return (
-    <Suspense fallback={<DiagramSkeleton engine={engine} />}>
-      {resolveDiagram({ engine, source })}
+    <Suspense fallback={<DiagramSkeleton engine={engine} projectionAttrs={projectionAttrs} />}>
+      {resolveDiagram({ engine, source, projectionAttrs })}
     </Suspense>
   );
 }

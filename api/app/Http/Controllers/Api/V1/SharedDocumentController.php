@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\SharedDocumentResource;
+use App\Models\Share;
+use App\Models\ShareParticipant;
 use App\Services\Sharing\ShareLinkService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * The public, read-only share surface (SPEC 10.2): `GET /api/v1/shared/{token}`.
@@ -29,7 +32,7 @@ class SharedDocumentController extends Controller
         private readonly ShareLinkService $links,
     ) {}
 
-    public function show(string $token): JsonResponse
+    public function show(Request $request, string $token): JsonResponse
     {
         $share = $this->links->resolve($token);
 
@@ -47,7 +50,10 @@ class SharedDocumentController extends Controller
         $document = $share->document;
         $document->load('currentVersion');
 
+        $participant = $this->verifiedParticipant($request, $share);
+
         return SharedDocumentResource::make($document)
+            ->withReviewer($participant)
             ->response()
             ->header('X-Robots-Tag', 'noindex, nofollow');
     }
@@ -61,5 +67,19 @@ class SharedDocumentController extends Controller
         return response()
             ->json(['error' => 'share_gone', 'reason' => $reason], 410)
             ->header('X-Robots-Tag', 'noindex, nofollow');
+    }
+
+    private function verifiedParticipant(Request $request, Share $share): ?ShareParticipant
+    {
+        $user = $request->user();
+        if ($user === null) {
+            return null;
+        }
+
+        return $share->participants()
+            ->where('user_id', $user->id)
+            ->whereNotNull('verified_at')
+            ->with('user')
+            ->first();
     }
 }

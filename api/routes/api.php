@@ -1,13 +1,18 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
+use App\Http\Controllers\Api\V1\CommentReactionController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\MentionSuggestionController;
+use App\Http\Controllers\Api\V1\ReviewerMagicLinkController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
+use App\Http\Controllers\Api\V1\ThreadCommentController;
+use App\Http\Controllers\Api\V1\ThreadController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
@@ -53,6 +58,18 @@ Route::prefix('v1')->group(function () {
     // Public read-only share surface (SPEC 10.2). No auth — the token is the
     // capability. Per-IP limiter because it faces the open internet; a valid
     // token grants exactly this doc and nothing else (no session, no id path).
+    Route::middleware('throttle:reviewer-magic-link')->group(function () {
+        Route::post('/shared/{token}/verify-email', [ReviewerMagicLinkController::class, 'store'])
+            ->name('api.v1.shared.verify-email');
+    });
+
+    Route::middleware('throttle:reviewer-verification')->group(function () {
+        Route::get('/shared/{token}/verify/{magicLink}/{magicLinkToken}', [ReviewerMagicLinkController::class, 'verify'])
+            ->name('api.v1.shared.verify');
+        Route::post('/shared/{token}/verify/complete', [ReviewerMagicLinkController::class, 'complete'])
+            ->name('api.v1.shared.verify.complete');
+    });
+
     Route::middleware('throttle:shared-read')->group(function () {
         Route::get('/shared/{token}', [SharedDocumentController::class, 'show'])
             ->name('api.v1.shared.show');
@@ -100,12 +117,43 @@ Route::prefix('v1')->group(function () {
         Route::get('/documents/{document}/shares', [ShareController::class, 'index'])
             ->name('api.v1.documents.shares.index');
 
+        Route::get('/documents/{document}/threads', [ThreadController::class, 'index'])
+            ->name('api.v1.documents.threads.index');
+
+        Route::get('/documents/{document}/mention-suggestions', [MentionSuggestionController::class, 'index'])
+            ->middleware('throttle:mentions')
+            ->name('api.v1.documents.mention-suggestions.index');
+
         Route::middleware('throttle:shares')->group(function () {
             Route::post('/documents/{document}/shares', [ShareController::class, 'store'])
                 ->name('api.v1.documents.shares.store');
             Route::delete('/documents/{document}/shares/{share}', [ShareController::class, 'destroy'])
                 ->scopeBindings()
                 ->name('api.v1.documents.shares.destroy');
+        });
+
+        Route::middleware('throttle:comments')->group(function () {
+            Route::post('/documents/{document}/threads', [ThreadController::class, 'store'])
+                ->name('api.v1.documents.threads.store');
+            Route::patch('/threads/{thread}', [ThreadController::class, 'update'])
+                ->name('api.v1.threads.update');
+            Route::post('/threads/{thread}/comments', [ThreadCommentController::class, 'store'])
+                ->name('api.v1.threads.comments.store');
+            Route::post('/comments/{comment}/fork', [ThreadCommentController::class, 'fork'])
+                ->withTrashed()
+                ->name('api.v1.comments.fork');
+            Route::patch('/comments/{comment}/suggestion', [ThreadCommentController::class, 'updateSuggestion'])
+                ->withTrashed()
+                ->name('api.v1.comments.suggestion.update');
+            Route::patch('/comments/{comment}', [ThreadCommentController::class, 'update'])
+                ->withTrashed()
+                ->name('api.v1.comments.update');
+            Route::delete('/comments/{comment}', [ThreadCommentController::class, 'destroy'])
+                ->withTrashed()
+                ->name('api.v1.comments.destroy');
+            Route::post('/comments/{comment}/reactions', [CommentReactionController::class, 'store'])
+                ->withTrashed()
+                ->name('api.v1.comments.reactions.store');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.

@@ -4,6 +4,7 @@
 // read here; only the readable XSRF-TOKEN cookie is echoed back on mutations.
 
 import { publicApiBaseUrl } from './config';
+import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
 import type { CreatedShare, Share, ShareList } from './share-types';
 
 export type CreateShareOutcome =
@@ -12,32 +13,18 @@ export type CreateShareOutcome =
 
 export type RevokeShareOutcome = { ok: true; share: Share } | { ok: false; message: string };
 
-function readCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-/** Prime the XSRF-TOKEN + session cookies before a credentialed mutation. */
-async function csrf(): Promise<void> {
-  await fetch(`${publicApiBaseUrl}/sanctum/csrf-cookie`, {
-    method: 'GET',
-    credentials: 'include',
-  });
-}
-
 function send(
   method: 'POST' | 'DELETE',
   path: string,
   body?: Record<string, unknown>,
 ): Promise<Response> {
-  const token = readCookie('XSRF-TOKEN');
   return fetch(`${publicApiBaseUrl}${path}`, {
     method,
     credentials: 'include',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
-      ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+      ...xsrfHeader(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -48,12 +35,12 @@ async function mutate(
   path: string,
   body?: Record<string, unknown>,
 ): Promise<Response> {
-  await csrf();
+  await ensureCsrfCookie();
   let res = await send(method, path, body);
 
   // 419 = stale/absent CSRF token. Refresh once and retry before giving up.
   if (res.status === 419) {
-    await csrf();
+    await refreshCsrfCookie();
     res = await send(method, path, body);
   }
 

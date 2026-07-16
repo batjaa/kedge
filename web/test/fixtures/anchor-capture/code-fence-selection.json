@@ -1,0 +1,22 @@
+{
+  "projectionVersion": 60,
+  "plainText": "const answer = 42;\nreturn answer;",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "code",
+        "attrs": [
+          { "name": "data-prange", "value": "0:33" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "const answer = 42;\nreturn answer;" }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 0], "offset": 19 },
+    "end": { "path": [0, 0], "offset": 32 }
+  }
+}

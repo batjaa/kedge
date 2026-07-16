@@ -1,9 +1,17 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { getSharedDocument } from '@/lib/shared-document';
 import { DocumentBody } from '@/components/app/document-body';
+import { DocumentReviewSurface } from '@/components/app/document-review-surface';
+import { DocumentStaticHeader } from '@/components/app/document-static-header';
 import { SharedLinkGone } from '@/components/shared/shared-link-gone';
 import { ClaimCta } from '@/components/shared/claim-cta';
 import { SharedDocumentPoller } from '@/components/shared/shared-document-poller';
+import { ReviewerVerification } from '@/components/shared/reviewer-verification';
+import {
+  REVIEWER_VERIFICATION_STATUS,
+  type VerifyReturnState,
+} from '@/lib/reviewer-verification-status';
 
 // The public, read-only share surface (SPEC 10.2, ticket #24). Anonymous — no
 // auth, no session — rendering the doc through the SAME DocumentBody as the
@@ -21,11 +29,14 @@ export const metadata: Metadata = {
 
 export default async function SharedDocumentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ verified?: string; verify?: string; verify_complete?: string }>;
 }) {
   const { token } = await params;
-  const result = await getSharedDocument(token);
+  const query = await searchParams;
+  const result = await getSharedDocument(token, await headers());
 
   if (result.kind === 'gone') {
     return <SharedLinkGone reason={result.reason} />;
@@ -48,24 +59,58 @@ export default async function SharedDocumentPage({
   // A demo doc (SPEC §10.3, #25) advertises itself as claimable and carries its
   // id; that's the whole difference from an ordinary share on this surface.
   const isDemo = doc.claimable === true && typeof doc.document_id === 'number';
+  const verifiedReviewer = doc.reviewer.verified === true && typeof doc.document_id === 'number';
+  const verifyState = verifyReturnState(query.verify);
+  const showShareHeader = !verifiedReviewer || doc.status !== 'ready';
 
   return (
     <div>
-      <header className="mb-8 border-b border-zinc-900/10 pb-6 dark:border-white/10">
-        <p className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-          {isDemo ? 'Demo document' : 'Shared document · read-only'}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          {doc.title}
-        </h1>
-      </header>
+      {showShareHeader ? (
+        <DocumentStaticHeader
+          title={doc.title}
+          eyebrow={isDemo ? 'Demo document' : verifiedReviewer ? 'Shared document · verified reviewer' : 'Shared document · read-only'}
+          bordered
+        />
+      ) : null}
 
       {doc.status === 'ready' && doc.current_version ? (
-        <DocumentBody
-          format={doc.format}
-          mdxOk={doc.current_version.mdx_ok}
-          content={doc.current_version.content}
-        />
+        verifiedReviewer ? (
+          <>
+            {query.verified === '1' ? (
+              <ReviewStatePanel message="Email verified. You can comment on this document now." />
+            ) : null}
+            <DocumentReviewSurface
+              documentId={doc.document_id!}
+              title={doc.title}
+              surfaceLabel="Shared document · verified reviewer"
+              versionLabel={`v${doc.current_version.id}`}
+              syncedAt={doc.current_version.synced_at}
+              plainText={doc.current_version.plain_text ?? null}
+              projectionVersion={doc.current_version.projection_version ?? null}
+            >
+              <DocumentBody
+                format={doc.format}
+                mdxOk={doc.current_version.mdx_ok}
+                content={doc.current_version.content}
+              />
+            </DocumentReviewSurface>
+          </>
+        ) : (
+          <>
+            <DocumentBody
+              format={doc.format}
+              mdxOk={doc.current_version.mdx_ok}
+              content={doc.current_version.content}
+            />
+            {!isDemo ? (
+              <ReviewerVerification
+                token={token}
+                returnState={verifyState}
+                completionToken={query.verify_complete ?? null}
+              />
+            ) : null}
+          </>
+        )
       ) : doc.status === 'importing' && isDemo ? (
         // A freshly-pasted demo doc: poll the public surface and reveal the
         // render the moment it lands, without asking the visitor to refresh.
@@ -77,6 +122,23 @@ export default async function SharedDocumentPage({
       )}
 
       {isDemo ? <ClaimCta documentId={doc.document_id!} /> : null}
+    </div>
+  );
+}
+
+function verifyReturnState(value: string | undefined): VerifyReturnState | null {
+  return value === REVIEWER_VERIFICATION_STATUS.expired
+    || value === REVIEWER_VERIFICATION_STATUS.used
+    || value === REVIEWER_VERIFICATION_STATUS.invalid
+    || value === REVIEWER_VERIFICATION_STATUS.accountRequired
+    ? value
+    : null;
+}
+
+function ReviewStatePanel({ message }: { message: string }) {
+  return (
+    <div className="mb-5 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900 ring-1 ring-emerald-600/15 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/20">
+      {message}
     </div>
   );
 }

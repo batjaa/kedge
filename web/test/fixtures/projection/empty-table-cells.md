@@ -1,0 +1,7 @@
+# Empty table cells
+
+| Left | Middle | Right |
+|---|---|---|
+| a | | c |
+| | | |
+| x | y | z |

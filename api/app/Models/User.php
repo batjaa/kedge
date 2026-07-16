@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -42,6 +43,19 @@ class User extends Authenticatable
             ->wherePivot('role', WorkspaceRole::Owner->value)
             ->orderBy('workspaces.id')
             ->first();
+    }
+
+    /** @return HasMany<ShareParticipant, $this> */
+    public function shareParticipations(): HasMany
+    {
+        return $this->hasMany(ShareParticipant::class);
+    }
+
+    public function isPureReviewer(): bool
+    {
+        return $this->password === null
+            && $this->github_id === null
+            && ! $this->workspaces()->exists();
     }
 
     /**

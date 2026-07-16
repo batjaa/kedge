@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\Document;
+use App\Models\ShareParticipant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,10 +26,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class SharedDocumentResource extends JsonResource
 {
+    private ?ShareParticipant $reviewer = null;
+
     /**
      * @var string|null
      */
     public static $wrap = null;
+
+    public function withReviewer(?ShareParticipant $reviewer): self
+    {
+        $this->reviewer = $reviewer;
+
+        return $this;
+    }
 
     /**
      * @return array<string, mixed>
@@ -36,6 +46,7 @@ class SharedDocumentResource extends JsonResource
     public function toArray(Request $request): array
     {
         $isDemo = $this->resource->isDemo();
+        $isVerifiedReviewer = $this->reviewer instanceof ShareParticipant;
 
         return [
             'title' => $this->title,
@@ -44,15 +55,31 @@ class SharedDocumentResource extends JsonResource
             'current_version' => $this->whenLoaded(
                 'currentVersion',
                 fn () => $this->currentVersion
-                    ? DocumentVersionResource::make($this->currentVersion)
+                    ? $this->versionResource($isVerifiedReviewer)
                     : null,
             ),
             // Claim affordance — present only for a demo doc. `document_id` and
             // `expires_at` appear solely when claimable, so an ordinary share
             // still leaks no internal id.
             'claimable' => $isDemo,
-            'document_id' => $this->when($isDemo, fn () => $this->id),
+            'document_id' => $this->when($isDemo || $isVerifiedReviewer, fn () => $this->id),
             'expires_at' => $this->when($isDemo, fn () => $this->expires_at?->toIso8601String()),
+            'reviewer' => $isVerifiedReviewer
+                ? [
+                    'verified' => true,
+                    'name' => $this->reviewer->user?->name,
+                    'email' => $this->reviewer->user?->email,
+                ]
+                : ['verified' => false],
         ];
+    }
+
+    private function versionResource(bool $includeProjectionSubstrate): DocumentVersionResource
+    {
+        $resource = DocumentVersionResource::make($this->currentVersion);
+
+        return $includeProjectionSubstrate
+            ? $resource->withProjectionSubstrate()
+            : $resource;
     }
 }

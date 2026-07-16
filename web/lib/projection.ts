@@ -1,6 +1,11 @@
-import type { Nodes, PhrasingContent } from 'mdast';
+import type { Nodes, PhrasingContent, Root } from 'mdast';
 import { parseToMdast } from './pipeline';
 import { diagramEngineFor } from './remark-diagrams';
+import {
+  isComponentName,
+  isMdxJsxElement,
+  type MdxJsxElement,
+} from './remark-mdx-harden';
 
 // Text projection — the anchor substrate (SPEC §5.4). Walks the SAME mdast the
 // renderer derives its page from (lib/pipeline.ts) down to the plain text a
@@ -15,7 +20,15 @@ import { diagramEngineFor } from './remark-diagrams';
 // --update-golden; see lib/__tests__/projection.golden.test.ts). A silent change
 // would reinterpret every stored offset and move real comments; the version +
 // the failing corpus are the guardrail that makes such a change deliberate.
-export const PROJECTION_VERSION = 1;
+//
+// v2 (2026-07-16):
+//   - GFM table empty cells emit no projection text and no annotation. A row made
+//     only of empty cells therefore disappears; a row like `a | | c` projects as
+//     `a c`, not the v1 `a  c`.
+//   - `format=mdx` projection is taken from the same hardened MDX compile tree
+//     the renderer uses, so allowlisted/unsupported components project to stable
+//     `⟦component:Name⟧` tokens instead of being parsed as plain markdown.
+export const PROJECTION_VERSION = 2;
 
 // ── Placeholder tokens ───────────────────────────────────────────────────────
 // Non-text blocks (images, diagram fences, and — forward-compat — MDX/JSX
@@ -57,10 +70,28 @@ export interface ProjectionResult {
   mdxOk: boolean;
   /** Projection-level observations (e.g. reserved delimiters stripped). */
   warnings: string[];
+  /** Render-time ranges that mirror `plainText` offsets. */
+  annotations: ProjectionAnnotation[];
 }
+
+export interface ProjectionAnnotation {
+  start: number;
+  end: number;
+  atomic: boolean;
+}
+
+export type ProjectionAttrs = { [key: `data-${string}`]: string | undefined };
 
 interface Ctx {
   stripped: number;
+  annotate: boolean;
+  annotations: ProjectionAnnotation[];
+}
+
+interface Piece {
+  text: string;
+  atomic?: boolean;
+  apply(base: number, ctx: Ctx): void;
 }
 
 /** Remove reserved token delimiters from literal text so tokens stay unambiguous. */
@@ -74,71 +105,230 @@ function clean(value: string, ctx: Ctx): string {
   return out;
 }
 
-/** Concatenate the text of a run of inline (phrasing) nodes. */
-function inline(nodes: PhrasingContent[] | undefined, ctx: Ctx): string {
-  if (!nodes) return '';
-  let out = '';
-  for (const node of nodes) out += inlineNode(node, ctx);
-  return out;
+function cleanNodeValue(node: { value: string }, ctx: Ctx): string {
+  const cleaned = clean(node.value, ctx);
+  if (ctx.annotate && cleaned !== node.value) node.value = cleaned;
+  return cleaned;
 }
 
-function inlineNode(node: PhrasingContent, ctx: Ctx): string {
+export const PROJECTION_RANGE_ATTR = 'data-prange';
+export const PROJECTION_ATOMIC_ATTR = 'data-patomic';
+
+// Capture reads `data-prange="start:end"` from rendered imported-doc elements.
+// `data-patomic="true"` marks placeholder-token spans (image/diagram/component)
+// as unspannable: the token occupies the annotated range, but selections must
+// not descend into the rendered node.
+export function projectionDataAttributes(annotation: ProjectionAnnotation): Record<string, string> {
+  const attrs: Record<string, string> = {
+    [PROJECTION_RANGE_ATTR]: `${annotation.start}:${annotation.end}`,
+  };
+  if (annotation.atomic) attrs[PROJECTION_ATOMIC_ATTR] = 'true';
+  return attrs;
+}
+
+function literal(text: string): Piece {
+  return { text, apply: () => {} };
+}
+
+function marked(
+  node: Nodes | PhrasingContent,
+  piece: Piece,
+  opts: { atomic?: boolean } = {},
+): Piece {
+  return {
+    text: piece.text,
+    atomic: opts.atomic === true || piece.atomic === true,
+    apply(base, ctx) {
+      if (piece.text === '') return;
+      // If this wrapper covers exactly one atomic child (for example a paragraph
+      // containing only an image, or a link whose only child is an image), the
+      // wrapper inherits atomicity. Capture then treats every annotated ancestor
+      // for that range as opaque and never descends into the placeholder token.
+      const atomic = opts.atomic === true || piece.atomic === true;
+      const annotation: ProjectionAnnotation = {
+        start: base,
+        end: base + piece.text.length,
+        atomic,
+      };
+      ctx.annotations.push(annotation);
+      if (ctx.annotate) annotateNode(node, annotation);
+      piece.apply(base, ctx);
+    },
+  };
+}
+
+function atomicToken(node: Nodes | PhrasingContent, text: string): Piece {
+  return marked(node, { ...literal(text), atomic: true }, { atomic: true });
+}
+
+function concat(parts: Piece[], sep: string): Piece {
+  const nonEmpty = parts.filter((part) => part.text !== '');
+  return {
+    text: nonEmpty.map((part) => part.text).join(sep),
+    atomic: nonEmpty.length === 1 && nonEmpty[0].atomic === true,
+    apply(base, ctx) {
+      let offset = base;
+      for (const [index, part] of nonEmpty.entries()) {
+        if (index > 0) offset += sep.length;
+        part.apply(offset, ctx);
+        offset += part.text.length;
+      }
+    },
+  };
+}
+
+function annotateNode(node: Nodes | PhrasingContent, annotation: ProjectionAnnotation): void {
+  const attrs = projectionDataAttributes(annotation);
+  const dataNode = node as { data?: { hProperties?: Record<string, unknown> } };
+  dataNode.data ??= {};
+  // For fenced `code` nodes, mdast-util-to-hast attaches hProperties to the
+  // inner <code> element. CodeBlock's <pre> wrapper stays children-only.
+  dataNode.data.hProperties = { ...(dataNode.data.hProperties ?? {}), ...attrs };
+
+  if (!isMdxJsxElement(node)) return;
+  const jsxNode = node as MdxJsxElement;
+  const existing = Array.isArray(jsxNode.attributes) ? jsxNode.attributes : [];
+  const names = new Set(Object.keys(attrs));
+  jsxNode.attributes = [
+    ...existing.filter((attr) => {
+      return !(attr.type === 'mdxJsxAttribute' && typeof attr.name === 'string' && names.has(attr.name));
+    }),
+    ...Object.entries(attrs).map(([name, value]) => ({
+      type: 'mdxJsxAttribute' as const,
+      name,
+      value,
+    })),
+  ];
+}
+
+function jsxAttr(node: MdxJsxElement, name: string): unknown {
+  return node.attributes?.find((attr) => attr.type === 'mdxJsxAttribute' && attr.name === name)?.value;
+}
+
+function mdxChildren(node: MdxJsxElement, ctx: Ctx): Piece {
+  return node.type === 'mdxJsxTextElement'
+    ? inline((node.children ?? []) as PhrasingContent[], ctx)
+    : blocks((node.children ?? []) as Nodes[], '\n\n', ctx);
+}
+
+function mdxJsx(node: MdxJsxElement, ctx: Ctx): Piece {
+  const name = node.name;
+  if (name == null) return mdxChildren(node, ctx);
+
+  if (name === 'KrokiDiagram') {
+    const engine = String(jsxAttr(node, 'engine') ?? 'unknown');
+    const text = diagramToken(engine);
+    return atomicToken(node as unknown as Nodes, text);
+  }
+
+  if (name === 'UnsupportedComponent') {
+    const original = String(jsxAttr(node, 'name') ?? 'unknown');
+    const text = componentToken(original);
+    return atomicToken(node as unknown as Nodes, text);
+  }
+
+  if (isComponentName(name)) {
+    const text = componentToken(name);
+    return atomicToken(node as unknown as Nodes, text);
+  }
+
+  if (name === 'img') {
+    const text = imageToken();
+    return atomicToken(node as unknown as Nodes, text);
+  }
+
+  return mdxChildren(node, ctx);
+}
+
+function mdxLiteralExpression(node: { data?: { estree?: unknown }; value?: unknown }, ctx: Ctx): Piece {
+  const body = (node.data?.estree as { body?: Array<{ expression?: { value?: unknown } }> } | undefined)?.body;
+  if (body?.length === 1 && 'value' in (body[0].expression ?? {})) {
+    const value = body[0].expression?.value;
+    return literal(value == null || typeof value === 'boolean' ? '' : clean(String(value), ctx));
+  }
+  return literal('');
+}
+
+/** Concatenate the text of a run of inline (phrasing) nodes. */
+function inline(nodes: PhrasingContent[] | undefined, ctx: Ctx): Piece {
+  if (!nodes) return literal('');
+  return concat(nodes.map((node) => inlineNode(node, ctx)), '');
+}
+
+function inlineNode(node: PhrasingContent, ctx: Ctx): Piece {
+  if (isMdxJsxElement(node)) return mdxJsx(node, ctx);
+
+  const kind = node.type as string;
+  if (kind === 'mdxTextExpression') {
+    return mdxLiteralExpression(node as unknown as { data?: { estree?: unknown }; value?: unknown }, ctx);
+  }
+
   switch (node.type) {
     case 'text':
+      return literal(cleanNodeValue(node, ctx));
     case 'inlineCode':
-      return clean(node.value, ctx);
+      return marked(node, literal(cleanNodeValue(node, ctx)));
     case 'break':
-      return '\n';
+      return literal('\n');
     case 'image':
-    case 'imageReference':
-      return imageToken();
+    case 'imageReference': {
+      const text = imageToken();
+      return atomicToken(node, text);
+    }
     case 'emphasis':
     case 'strong':
     case 'delete':
     case 'link':
     case 'linkReference':
-      return inline(node.children, ctx);
+      return marked(node, inline(node.children, ctx));
     // Raw inline HTML is dropped (render runs without allowDangerousHtml, so it
     // never reaches the page either); footnote refs carry no reading-flow text.
     case 'html':
     case 'footnoteReference':
-      return '';
+      return literal('');
     default:
-      return '';
+      return literal('');
   }
 }
 
 /** Project one block-level node to text, or '' for structural/metadata blocks. */
-function block(node: Nodes, ctx: Ctx): string {
+function block(node: Nodes, ctx: Ctx): Piece {
   // Forward-compat: an MDX/JSX element (once #20 swaps in the MDX parser) is a
   // non-text block → one component placeholder, whatever its children.
+  if (isMdxJsxElement(node)) return mdxJsx(node, ctx);
+
   const kind = node.type as string;
-  if (kind === 'mdxJsxFlowElement' || kind === 'mdxJsxTextElement') {
-    const name = (node as { name?: string | null }).name ?? 'unknown';
-    return componentToken(name);
+  if (kind === 'mdxFlowExpression') {
+    return mdxLiteralExpression(node as unknown as { data?: { estree?: unknown }; value?: unknown }, ctx);
   }
 
   switch (node.type) {
     case 'heading':
     case 'paragraph':
-      return inline(node.children, ctx);
+      return marked(node, inline(node.children, ctx));
     case 'blockquote':
       return blocks(node.children, '\n\n', ctx);
     case 'list':
-      return node.children.map((item) => block(item, ctx)).filter(Boolean).join('\n');
+      return concat(node.children.map((item) => block(item, ctx)), '\n');
     case 'listItem':
       return blocks(node.children, '\n', ctx);
     case 'code': {
       const engine = diagramEngineFor(node.lang);
       // Prose code stays anchorable text; a diagram fence collapses to a token.
-      return engine ? diagramToken(engine) : clean(node.value, ctx);
+      if (engine) return atomicToken(node, diagramToken(engine));
+      return marked(node, literal(cleanNodeValue(node, ctx)));
     }
     case 'table':
-      return node.children
-        .map((row) => row.children.map((cell) => inline(cell.children, ctx)).join(' '))
-        .join('\n');
-    case 'image':
-      return imageToken();
+      return concat(
+        // Empty cells intentionally emit no text and no annotation in v2: there
+        // is no rendered glyph to anchor, and concat() drops empty pieces.
+        node.children.map((row) => concat(row.children.map((cell) => marked(cell, inline(cell.children, ctx))), ' ')),
+        '\n',
+      );
+    case 'image': {
+      const text = imageToken();
+      return atomicToken(node, text);
+    }
     // Structural or metadata blocks carry no anchor text: a raw-HTML block is
     // dropped (matches render), a rule/frontmatter/link-definition never renders.
     case 'html':
@@ -146,31 +336,25 @@ function block(node: Nodes, ctx: Ctx): string {
     case 'yaml':
     case 'definition':
     case 'footnoteDefinition':
-      return '';
+      return literal('');
     default:
-      return 'children' in node ? blocks(node.children as Nodes[], '\n\n', ctx) : '';
+      return 'children' in node ? blocks(node.children as Nodes[], '\n\n', ctx) : literal('');
   }
 }
 
 /** Project a run of block nodes, dropping empties, joined by `sep`. */
-function blocks(nodes: Nodes[], sep: string, ctx: Ctx): string {
-  const parts: string[] = [];
-  for (const node of nodes) {
-    const text = block(node, ctx);
-    if (text !== '') parts.push(text);
-  }
-  return parts.join(sep);
+function blocks(nodes: Nodes[], sep: string, ctx: Ctx): Piece {
+  return concat(nodes.map((node) => block(node, ctx)), sep);
 }
 
 /**
- * Project normalized markdown/MDX source to its plain-text anchor substrate.
- * Deterministic and total: given the same source it returns byte-identical
- * output, and it never throws on well-formed markdown.
+ * Project an already-parsed mdast tree to its plain-text anchor substrate.
  */
-export function project(source: string): ProjectionResult {
-  const tree = parseToMdast(source);
-  const ctx: Ctx = { stripped: 0 };
-  const plainText = blocks(tree.children, '\n\n', ctx);
+function projectMdastInternal(tree: Root, annotate: boolean): ProjectionResult {
+  const ctx: Ctx = { stripped: 0, annotate, annotations: [] };
+  const piece = blocks(tree.children, '\n\n', ctx);
+  piece.apply(0, ctx);
+  const plainText = piece.text;
 
   const warnings: string[] = [];
   if (ctx.stripped > 0) {
@@ -184,5 +368,37 @@ export function project(source: string): ProjectionResult {
     projectionVersion: PROJECTION_VERSION,
     mdxOk: true,
     warnings,
+    annotations: ctx.annotations,
+  };
+}
+
+export function projectMdast(tree: Root): ProjectionResult {
+  return projectMdastInternal(tree, false);
+}
+
+/**
+ * Project and annotate the mdast tree the renderer is about to consume.
+ * This mutates visible literal values only to remove reserved token delimiters,
+ * so DOM text and projected text stay byte-aligned.
+ */
+export function annotateProjection(tree: Root): ProjectionResult {
+  return projectMdastInternal(tree, true);
+}
+
+/**
+ * Project normalized markdown/MDX source to its plain-text anchor substrate.
+ * Deterministic and total: given the same source it returns byte-identical
+ * output, and it never throws on well-formed markdown.
+ */
+export function project(source: string): ProjectionResult {
+  const tree = parseToMdast(source);
+  return projectMdast(tree);
+}
+
+export const PROJECTION_FILE_DATA_KEY = 'kedgeProjection';
+
+export function remarkProjectionAnnotations() {
+  return (tree: Root, file: { data: Record<string, unknown> }) => {
+    file.data[PROJECTION_FILE_DATA_KEY] = annotateProjection(tree);
   };
 }

@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "this",
+    "prefix": "Product Plan\n\nAnchoring\n\nCapture ",
+    "suffix": " sentence.",
+    "start": 33,
+    "end": 37,
+    "heading_path": [
+      "Product Plan",
+      "Anchoring"
+    ],
+    "projection_version": 60
+  }
+}

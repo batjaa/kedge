@@ -10,11 +10,16 @@ export type SharedReadResult =
   | { kind: 'gone'; reason: ShareGoneReason }
   | { kind: 'error' };
 
-export async function getSharedDocument(token: string): Promise<SharedReadResult> {
+export async function getSharedDocument(token: string, incoming?: Headers): Promise<SharedReadResult> {
+  const requestHeaders: HeadersInit = {
+    accept: 'application/json',
+    ...forwardedSessionHeaders(incoming),
+  };
+
   try {
     const res = await fetch(
       `${apiBaseUrl}/api/v1/shared/${encodeURIComponent(token)}`,
-      { headers: { accept: 'application/json' }, cache: 'no-store' },
+      { headers: requestHeaders, cache: 'no-store' },
     );
 
     if (res.status === 200) {
@@ -33,4 +38,26 @@ export async function getSharedDocument(token: string): Promise<SharedReadResult
     // API unreachable — surface as a soft error, never a raw crash.
     return { kind: 'error' };
   }
+}
+
+function forwardedSessionHeaders(incoming?: Headers): Record<string, string> {
+  if (!incoming) return {};
+
+  const cookie = incoming.get('cookie') ?? '';
+  if (!cookie.includes('=')) return {};
+
+  return {
+    cookie,
+    ...statefulOriginHeaders(incoming),
+  };
+}
+
+function statefulOriginHeaders(incoming: Headers): Record<string, string> {
+  const host = incoming.get('x-forwarded-host') ?? incoming.get('host');
+  if (!host) return {};
+
+  const proto = incoming.get('x-forwarded-proto') ?? 'http';
+  const origin = `${proto}://${host}`;
+
+  return { origin, referer: `${origin}/` };
 }

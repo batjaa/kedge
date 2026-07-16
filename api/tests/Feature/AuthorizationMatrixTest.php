@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Comment;
 use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Integration;
 use App\Models\Share;
+use App\Models\Thread;
 use App\Models\User;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,6 +107,174 @@ class AuthorizationMatrixTest extends TestCase
 
         $this->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/shares")
+            ->assertStatus($expectedStatus);
+    }
+
+    /**
+     * Comment threads are document-scoped. The authenticated author can create
+     * and list; a member of another workspace and a guest cannot traverse ids.
+     */
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_create_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Author comment',
+                'idempotency_key' => "thread-{$role}",
+            ])
+            ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_list_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_reply_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/comments", [
+                'body' => 'Reply',
+                'idempotency_key' => "reply-{$role}",
+            ])
+            ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_thread_status_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'resolved'])
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_comment_fork_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $thread->comments()->create([
+            'author_id' => $owner->id,
+            'body_md' => 'Parent',
+        ]);
+        $reply = $thread->comments()->create([
+            'author_id' => $owner->id,
+            'body_md' => 'Reply',
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->id}/fork", [
+                'idempotency_key' => "fork-{$role}",
+            ])
+            ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_comment_edit_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $comment = $thread->comments()->create([
+            'author_id' => $owner->id,
+            'body_md' => 'Original',
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->patchJson("/api/v1/comments/{$comment->id}", ['body' => 'Edited'])
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_comment_delete_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $comment = $thread->comments()->create([
+            'author_id' => $owner->id,
+            'body_md' => 'Original',
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 204 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->deleteJson("/api/v1/comments/{$comment->id}")
+            ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_suggestion_transition_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $comment = $thread->comments()->create([
+            'author_id' => $owner->id,
+            'type' => 'suggestion',
+            'body_md' => '',
+            'proposed_text' => 'Replacement',
+            'suggestion_status' => 'pending',
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->patchJson("/api/v1/comments/{$comment->id}/suggestion", ['status' => 'accepted'])
             ->assertStatus($expectedStatus);
     }
 
@@ -257,6 +428,22 @@ class AuthorizationMatrixTest extends TestCase
         $factory = Document::factory()->for($owner->personalWorkspace(), 'workspace');
         $document = ($failed ? $factory->failed() : $factory->ready())
             ->create(['created_by' => $owner->id]);
+
+        if (! $failed) {
+            $content = "# Auth Matrix\n\nText to anchor.";
+            $version = DocumentVersion::factory()
+                ->for($document)
+                ->create([
+                    'content_raw' => $content,
+                    'content_normalized' => $content,
+                    'content_hash' => hash('sha256', $content),
+                    'plain_text' => 'Text to anchor.',
+                    'projection_version' => '2',
+                ]);
+
+            $document->forceFill(['current_version_id' => $version->id])->save();
+            $document->setRelation('currentVersion', $version);
+        }
 
         return [$owner, $document];
     }
