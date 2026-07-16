@@ -3,12 +3,12 @@ import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { createHash } from 'node:crypto';
 import remarkRehype from 'remark-rehype';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import { visit } from 'unist-util-visit';
 import type { Nodes } from 'hast';
 import type { Root } from 'mdast';
 import { createRemarkProcessor } from './pipeline';
 import { remarkProjectionAnnotations } from './projection';
 import { remarkDiagramsHast } from './remark-diagrams';
+import { sanitizeUrls } from './sanitize-urls';
 import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
 import { CodeBlock } from '@/components/code-block';
 import { withProjectionAttrs } from '@/components/projection-attrs';
@@ -41,32 +41,9 @@ import { withProjectionAttrs } from '@/components/projection-attrs';
 // inline-code pill so a multi-line fence reads as one surface, not per-line
 // fragments; see components/code-block.tsx.
 
-const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 const MARKDOWN_RENDER_CACHE_VERSION = 'projection-v2-render-v1';
 const MARKDOWN_RENDER_L1_MAX = Number(process.env.MARKDOWN_RENDER_CACHE_MAX ?? 128);
 const markdownRenderL1 = new Map<string, Promise<ReactNode>>();
-
-function isSafeUrl(value: unknown): boolean {
-  const raw = String(value).trim();
-  const match = raw.match(SCHEME);
-  // No scheme → relative or in-page anchor, always safe. Otherwise allowlist.
-  return !match || SAFE_SCHEMES.has(match[0].toLowerCase());
-}
-
-function sanitizeUrls() {
-  return (tree: Nodes) => {
-    visit(tree, 'element', (node) => {
-      const props = node.properties;
-      if (!props) return;
-      for (const attr of ['href', 'src'] as const) {
-        if (props[attr] != null && !isSafeUrl(props[attr])) {
-          delete props[attr];
-        }
-      }
-    });
-  };
-}
 
 // Extends the shared remark parser (lib/pipeline.ts) — the same mdast the
 // projection walks (SPEC §5.4) — with the render-only hast half. Rendering and

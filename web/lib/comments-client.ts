@@ -1,6 +1,7 @@
 'use client';
 
 import { publicApiBaseUrl } from './config';
+import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
 import type { ReviewThread, ThreadAnchorPayload, ThreadComment, ThreadPage } from './thread-types';
 
 export type CreateThreadInput =
@@ -8,13 +9,13 @@ export type CreateThreadInput =
       type: 'inline';
       body: string;
       anchor: ThreadAnchorPayload;
-      idempotency_key?: string;
+      idempotency_key: string;
     }
   | {
       type: 'document';
       body: string;
       failed_capture?: boolean;
-      idempotency_key?: string;
+      idempotency_key: string;
     };
 
 export type CreateThreadOutcome =
@@ -25,37 +26,24 @@ export type ReplyOutcome =
   | { ok: true; comment: ThreadComment }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
 
-function readCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-async function csrf(): Promise<void> {
-  await fetch(`${publicApiBaseUrl}/sanctum/csrf-cookie`, {
-    method: 'GET',
-    credentials: 'include',
-  });
-}
-
 function send(method: 'POST', path: string, body: Record<string, unknown>): Promise<Response> {
-  const token = readCookie('XSRF-TOKEN');
   return fetch(`${publicApiBaseUrl}${path}`, {
     method,
     credentials: 'include',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
-      ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+      ...xsrfHeader(),
     },
     body: JSON.stringify(body),
   });
 }
 
 async function mutate(path: string, body: Record<string, unknown>): Promise<Response> {
-  await csrf();
+  await ensureCsrfCookie();
   let res = await send('POST', path, body);
   if (res.status === 419) {
-    await csrf();
+    await refreshCsrfCookie();
     res = await send('POST', path, body);
   }
   return res;

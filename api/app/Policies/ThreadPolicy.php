@@ -2,15 +2,29 @@
 
 namespace App\Policies;
 
+use App\Models\Document;
 use App\Models\Thread;
 use App\Models\User;
+use App\Policies\Concerns\AuthorizesWorkspaceMembership;
 
 class ThreadPolicy
 {
+    use AuthorizesWorkspaceMembership;
+
+    public function viewAny(User $user, Document $document): bool
+    {
+        return $this->memberOf($user, $document);
+    }
+
+    public function create(User $user, Document $document): bool
+    {
+        return $this->memberOf($user, $document);
+    }
+
     public function reply(User $user, Thread $thread): bool
     {
-        return $user->workspaces()
-            ->whereKey($thread->document->workspace_id)
-            ->exists();
+        $thread->loadMissing('document');
+
+        return $this->memberOf($user, $thread->document);
     }
 }

@@ -3,9 +3,13 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\WorkspaceRole;
+use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
+use App\Services\AuditLogger;
+use App\Services\Comments\CommentThreadService;
+use App\Services\Import\TextProjector;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -25,6 +29,7 @@ class ThreadCommentTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'inline',
                 'body' => 'Inline comment',
+                'idempotency_key' => 'inline-first',
                 'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'Second target', '2'),
             ]);
 
@@ -37,6 +42,7 @@ class ThreadCommentTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'document',
                 'body' => 'Whole document comment',
+                'idempotency_key' => 'document-first',
             ]);
 
         $documentLevel->assertCreated()
@@ -68,31 +74,10 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('anchors', 1);
     }
 
-    public function test_inline_anchor_exact_mismatch_is_rejected_with_a_clear_code(): void
-    {
-        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
-        $this->fakeProjection($document->currentVersion->plain_text, '2');
-
-        $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/documents/{$document->id}/threads", [
-                'type' => 'inline',
-                'body' => 'Broken anchor',
-                'anchor' => [
-                    ...$this->anchorFor($document->currentVersion->plain_text, 'target', '2'),
-                    'exact' => 'different',
-                ],
-            ])
-            ->assertUnprocessable()
-            ->assertJsonPath('code', 'anchor_exact_mismatch');
-
-        $this->assertDatabaseCount('threads', 0);
-    }
-
-    public function test_stale_projection_self_heals_before_anchor_validation(): void
+    public function test_divergent_inline_anchor_fails_after_reprojection_with_reselect_code(): void
     {
         [$author, $document] = $this->readyDocument(
-            content: '# Doc',
-            plainText: 'Alpha old text',
+            plainText: 'Alpha target text',
             projectionVersion: '1',
         );
         $this->fakeProjection('Alpha fresh text', '2');
@@ -100,18 +85,179 @@ class ThreadCommentTest extends TestCase
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'inline',
-                'body' => 'Fresh anchor',
-                'anchor' => $this->anchorFor('Alpha fresh text', 'fresh', '1'),
+                'body' => 'Broken anchor',
+                'idempotency_key' => 'broken-anchor',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'target', '1'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'anchor_document_changed');
+
+        $this->assertDatabaseCount('threads', 0);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/projection'));
+    }
+
+    public function test_truly_stale_projection_self_heals_and_stamps_the_refreshed_version(): void
+    {
+        [$author, $document] = $this->readyDocument(
+            content: '# Doc',
+            plainText: 'Alpha target text',
+            projectionVersion: '1',
+        );
+        $this->fakeProjection('Alpha target text', '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Stale anchor',
+                'idempotency_key' => 'stale-anchor',
+                'anchor' => $this->anchorFor('Alpha target text', 'target', '1'),
             ])
             ->assertCreated()
-            ->assertJsonPath('anchor.exact', 'fresh')
+            ->assertJsonPath('anchor.exact', 'target')
             ->assertJsonPath('anchor.projection_version', '2');
 
         $document->currentVersion->refresh();
-        $this->assertSame('Alpha fresh text', $document->currentVersion->plain_text);
+        $this->assertSame('Alpha target text', $document->currentVersion->plain_text);
         $this->assertSame('2', $document->currentVersion->projection_version);
-        $this->assertDatabaseHas('anchors', ['exact' => 'fresh', 'projection_version' => '2']);
+        $this->assertDatabaseHas('anchors', ['exact' => 'target', 'projection_version' => '2']);
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/projection'));
+    }
+
+    public function test_same_thread_idempotency_key_on_different_documents_creates_distinct_comments(): void
+    {
+        [$author, $documentA] = $this->readyDocument();
+        [, $documentB] = $this->readyDocument(
+            content: "# Other\n\nBeta target text",
+            plainText: 'Beta target text',
+            author: $author,
+        );
+
+        $first = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$documentA->id}/threads", [
+                'type' => 'document',
+                'body' => 'Doc A',
+                'idempotency_key' => 'same-document-key',
+            ])
+            ->assertCreated();
+
+        $second = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$documentB->id}/threads", [
+                'type' => 'document',
+                'body' => 'Doc B',
+                'idempotency_key' => 'same-document-key',
+            ])
+            ->assertCreated();
+
+        $this->assertNotSame($first->json('id'), $second->json('id'));
+        $this->assertDatabaseCount('threads', 2);
+        $this->assertDatabaseCount('comments', 2);
+    }
+
+    public function test_same_reply_idempotency_key_on_different_threads_creates_distinct_replies(): void
+    {
+        [$author, $document] = $this->readyDocument();
+
+        $threadA = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Parent A',
+                'idempotency_key' => 'parent-a',
+            ])
+            ->assertCreated();
+
+        $threadB = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Parent B',
+                'idempotency_key' => 'parent-b',
+            ])
+            ->assertCreated();
+
+        $replyA = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$threadA->json('id')}/comments", [
+                'body' => 'Reply A',
+                'idempotency_key' => 'same-reply-key',
+            ])
+            ->assertCreated();
+
+        $replyB = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$threadB->json('id')}/comments", [
+                'body' => 'Reply B',
+                'idempotency_key' => 'same-reply-key',
+            ])
+            ->assertCreated();
+
+        $this->assertNotSame($replyA->json('id'), $replyB->json('id'));
+        $this->assertDatabaseCount('comments', 4);
+    }
+
+    public function test_duplicate_thread_create_that_races_the_unique_constraint_returns_the_original(): void
+    {
+        [$author, $document] = $this->readyDocument();
+
+        $first = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Original',
+                'idempotency_key' => 'race-key',
+            ])
+            ->assertCreated();
+
+        $this->app->bind(CommentThreadService::class, fn ($app) => new class($app->make(AuditLogger::class), $app->make(TextProjector::class)) extends CommentThreadService
+        {
+            private int $lookups = 0;
+
+            protected function idempotentComment(User $author, mixed $key, string $scope, int $scopeId): ?Comment
+            {
+                $this->lookups++;
+
+                if ($this->lookups === 1) {
+                    return null;
+                }
+
+                return parent::idempotentComment($author, $key, $scope, $scopeId);
+            }
+        });
+
+        $retry = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Duplicate',
+                'idempotency_key' => 'race-key',
+            ])
+            ->assertOk();
+
+        $this->assertSame($first->json('id'), $retry->json('id'));
+        $this->assertDatabaseCount('threads', 1);
+        $this->assertDatabaseCount('comments', 1);
+    }
+
+    public function test_thread_rail_keeps_anchor_from_the_creation_version_after_reimport(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+        $versionOne = $document->currentVersion;
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Inline on V1',
+                'idempotency_key' => 'v1-inline',
+                'anchor' => $this->anchorFor($versionOne->plain_text, 'target', '2'),
+            ])
+            ->assertCreated();
+
+        $this->attachVersion(
+            $document,
+            content: "# Doc\n\nReplacement body",
+            plainText: 'Replacement body',
+            projectionVersion: '2',
+        );
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk()
+            ->assertJsonPath('data.0.anchor.exact', 'target')
+            ->assertJsonPath('data.0.anchor.document_version_id', $versionOne->id);
     }
 
     public function test_reply_idempotency_key_returns_the_original_comment(): void
@@ -122,6 +268,7 @@ class ThreadCommentTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'document',
                 'body' => 'Parent',
+                'idempotency_key' => 'reply-parent',
             ])
             ->assertCreated();
 
@@ -154,6 +301,7 @@ class ThreadCommentTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'document',
                 'body' => 'No owner yet',
+                'idempotency_key' => 'demo-unclaimed',
             ])
             ->assertUnprocessable()
             ->assertJsonPath('code', 'demo_document_unclaimed');
@@ -183,6 +331,7 @@ class ThreadCommentTest extends TestCase
                 ->postJson("/api/v1/documents/{$document->id}/threads", [
                     'type' => 'document',
                     'body' => "Thread {$i}",
+                    'idempotency_key' => "thread-{$i}",
                 ])
                 ->assertCreated();
         }
@@ -203,8 +352,9 @@ class ThreadCommentTest extends TestCase
         string $content = "# Doc\n\nAlpha target text",
         string $plainText = 'Alpha target text',
         string $projectionVersion = '2',
+        ?User $author = null,
     ): array {
-        $author = $this->registerUser();
+        $author ??= $this->registerUser();
         $document = Document::factory()
             ->for($author->personalWorkspace(), 'workspace')
             ->ready()

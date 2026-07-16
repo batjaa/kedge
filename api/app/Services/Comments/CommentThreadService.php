@@ -16,13 +16,23 @@ use App\Models\Thread;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Import\TextProjector;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Thread write/read coordinator. This is intentionally still one service for M2's
+ * tracer path, but #62/#63 should move new suggestion/reply workflows into focused
+ * collaborators before this grows another large branch.
+ */
 class CommentThreadService
 {
+    private const IDEMPOTENCY_SCOPE_DOCUMENT = 'document';
+
+    private const IDEMPOTENCY_SCOPE_THREAD = 'thread';
+
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly TextProjector $projector,
@@ -34,13 +44,18 @@ class CommentThreadService
      */
     public function create(Document $document, User $author, array $data, ?string $ip): array
     {
-        if ($existing = $this->idempotentComment($author, $data['idempotency_key'] ?? null)) {
+        $idempotencyKey = (string) $data['idempotency_key'];
+        if ($existing = $this->idempotentComment(
+            $author,
+            $idempotencyKey,
+            self::IDEMPOTENCY_SCOPE_DOCUMENT,
+            (int) $document->id,
+        )) {
             return [$this->loadThreadForResource($existing->thread), 200];
         }
 
-        $document->loadMissing(['workspace', 'currentVersion']);
-        $version = $this->commentableVersion($document);
         $type = ThreadType::from((string) $data['type']);
+        $version = $this->commentableVersion($document, includePlainText: $type === ThreadType::Inline);
         $anchor = $type === ThreadType::Inline
             ? $this->validatedAnchor($document, $version, (array) $data['anchor'])
             : null;
@@ -52,38 +67,52 @@ class CommentThreadService
             ]);
         }
 
-        [$thread, $comment] = DB::transaction(function () use ($document, $author, $data, $type, $anchor, $version) {
-            $thread = Thread::create([
-                'document_id' => $document->id,
-                'type' => $type,
-                'status' => ThreadStatus::Open,
-                'created_by' => $author->id,
-            ]);
-
-            $comment = $thread->comments()->create([
-                'author_id' => $author->id,
-                'type' => CommentType::Comment,
-                'body_md' => (string) $data['body'],
-                'client' => CommentClient::Web,
-                'idempotency_key' => $data['idempotency_key'] ?? null,
-            ]);
-
-            if ($anchor !== null) {
-                $thread->anchors()->create([
-                    'document_version_id' => $version->id,
-                    'exact' => $anchor['exact'],
-                    'prefix' => $anchor['prefix'],
-                    'suffix' => $anchor['suffix'],
-                    'start' => $anchor['start'],
-                    'end' => $anchor['end'],
-                    'heading_path' => $anchor['heading_path'],
-                    'projection_version' => $anchor['projection_version'],
-                    'state' => AnchorState::Anchored,
+        try {
+            [$thread, $comment] = DB::transaction(function () use ($document, $author, $data, $type, $anchor, $version, $idempotencyKey) {
+                $thread = Thread::create([
+                    'document_id' => $document->id,
+                    'type' => $type,
+                    'status' => ThreadStatus::Open,
+                    'created_by' => $author->id,
                 ]);
-            }
 
-            return [$thread, $comment];
-        });
+                $comment = $thread->comments()->create([
+                    'author_id' => $author->id,
+                    'type' => CommentType::Comment,
+                    'body_md' => (string) $data['body'],
+                    'client' => CommentClient::Web,
+                    'idempotency_key' => $idempotencyKey,
+                    'idempotency_scope' => self::IDEMPOTENCY_SCOPE_DOCUMENT,
+                    'idempotency_scope_id' => $document->id,
+                ]);
+
+                if ($anchor !== null) {
+                    $thread->anchors()->create([
+                        'document_version_id' => $version->id,
+                        'exact' => $anchor['exact'],
+                        'prefix' => $anchor['prefix'],
+                        'suffix' => $anchor['suffix'],
+                        'start' => $anchor['start'],
+                        'end' => $anchor['end'],
+                        'heading_path' => $anchor['heading_path'],
+                        'projection_version' => $anchor['projection_version'],
+                        'state' => AnchorState::Anchored,
+                    ]);
+                }
+
+                return [$thread, $comment];
+            });
+        } catch (QueryException $e) {
+            $existing = $this->idempotentCommentAfterDuplicate(
+                $e,
+                $author,
+                $idempotencyKey,
+                self::IDEMPOTENCY_SCOPE_DOCUMENT,
+                (int) $document->id,
+            );
+
+            return [$this->loadThreadForResource($existing->thread), 200];
+        }
 
         $this->recordThreadCreated($document, $author, $thread, $ip);
         $this->recordCommentCreated($document, $author, $comment, $ip);
@@ -97,20 +126,40 @@ class CommentThreadService
      */
     public function reply(Thread $thread, User $author, array $data, ?string $ip): array
     {
-        if ($existing = $this->idempotentComment($author, $data['idempotency_key'])) {
+        $idempotencyKey = (string) $data['idempotency_key'];
+        if ($existing = $this->idempotentComment(
+            $author,
+            $idempotencyKey,
+            self::IDEMPOTENCY_SCOPE_THREAD,
+            (int) $thread->id,
+        )) {
             return [$existing->load('author'), 200];
         }
 
-        $thread->loadMissing('document.workspace');
+        $thread->loadMissing('document');
         $this->commentableVersion($thread->document);
 
-        $comment = DB::transaction(fn () => $thread->comments()->create([
-            'author_id' => $author->id,
-            'type' => CommentType::Comment,
-            'body_md' => (string) $data['body'],
-            'client' => CommentClient::Web,
-            'idempotency_key' => $data['idempotency_key'],
-        ]));
+        try {
+            $comment = DB::transaction(fn () => $thread->comments()->create([
+                'author_id' => $author->id,
+                'type' => CommentType::Comment,
+                'body_md' => (string) $data['body'],
+                'client' => CommentClient::Web,
+                'idempotency_key' => $idempotencyKey,
+                'idempotency_scope' => self::IDEMPOTENCY_SCOPE_THREAD,
+                'idempotency_scope_id' => $thread->id,
+            ]));
+        } catch (QueryException $e) {
+            $existing = $this->idempotentCommentAfterDuplicate(
+                $e,
+                $author,
+                $idempotencyKey,
+                self::IDEMPOTENCY_SCOPE_THREAD,
+                (int) $thread->id,
+            );
+
+            return [$existing->load('author'), 200];
+        }
 
         $this->recordCommentCreated($thread->document, $author, $comment, $ip);
 
@@ -126,8 +175,6 @@ class CommentThreadService
      */
     public function listForDocument(Document $document, int $perPage): LengthAwarePaginator
     {
-        $document->loadMissing('currentVersion');
-        $versionId = $document->current_version_id;
         $perPage = min(max($perPage, 1), 50);
 
         $stats = DB::table('comments')
@@ -142,10 +189,7 @@ class CommentThreadService
             ->groupBy('thread_id');
 
         $query = Thread::query()
-            ->leftJoin('anchors as rail_anchors', function ($join) use ($versionId): void {
-                $join->on('rail_anchors.thread_id', '=', 'threads.id')
-                    ->where('rail_anchors.document_version_id', '=', $versionId);
-            })
+            ->leftJoin('anchors as rail_anchors', 'rail_anchors.thread_id', '=', 'threads.id')
             ->leftJoinSub($stats, 'comment_stats', 'comment_stats.thread_id', '=', 'threads.id')
             ->leftJoinSub($firstCommentIds, 'first_comment_ids', 'first_comment_ids.thread_id', '=', 'threads.id')
             ->leftJoin('comments as first_comments', 'first_comments.id', '=', 'first_comment_ids.first_comment_id')
@@ -186,13 +230,24 @@ class CommentThreadService
         return $paginator;
     }
 
-    private function commentableVersion(Document $document): DocumentVersion
+    private function commentableVersion(Document $document, bool $includePlainText = false): DocumentVersion
     {
         if ($document->isDemo()) {
             $this->reject('demo_document_unclaimed', 'Demo documents must be claimed before they can receive comments.', 'document');
         }
 
-        if ($document->status !== DocumentStatus::Ready || ! $document->currentVersion) {
+        if ($document->status !== DocumentStatus::Ready || $document->current_version_id === null) {
+            $this->reject('document_not_ready', 'Only ready documents can receive comments.', 'document');
+        }
+
+        $this->loadCurrentVersion(
+            $document,
+            $includePlainText
+                ? ['id', 'plain_text', 'projection_version']
+                : ['id'],
+        );
+
+        if (! $document->currentVersion) {
             $this->reject('document_not_ready', 'Only ready documents can receive comments.', 'document');
         }
 
@@ -209,33 +264,19 @@ class CommentThreadService
             $version = $this->refreshProjection($document, $version);
         }
 
-        $anchorProjectionVersion = (string) $anchor['projection_version'];
-        if ($anchorProjectionVersion !== (string) $version->projection_version) {
-            $version = $this->refreshProjection($document, $version);
+        $matchesStored = $this->anchorExactMatches($version, $anchor);
+        $needsFreshProjection = ! $matchesStored || ! $this->projectionIsCurrent($version);
 
-            if ($anchorProjectionVersion !== (string) $version->projection_version) {
-                $this->reject(
-                    'anchor_projection_version_mismatch',
-                    'The selected text was captured against a different projection version.',
-                );
-            }
+        if ($needsFreshProjection) {
+            $version = $this->refreshProjection($document, $version);
         }
 
         if (! $this->anchorExactMatches($version, $anchor)) {
-            $previousPlainText = $version->plain_text;
-            $previousProjectionVersion = $version->projection_version;
-            $version = $this->refreshProjection($document, $version);
-
-            $selfHealed = $version->plain_text !== $previousPlainText
-                || $version->projection_version !== $previousProjectionVersion;
-
-            if (! $selfHealed || ! $this->anchorExactMatches($version, $anchor)) {
-                $this->reject(
-                    'anchor_exact_mismatch',
-                    'The selected text no longer matches the document projection.',
-                    'anchor.exact',
-                );
-            }
+            $this->reject(
+                'anchor_document_changed',
+                'The document changed since this text was selected. Re-select the text and try again.',
+                'anchor.exact',
+            );
         }
 
         return [
@@ -251,13 +292,17 @@ class CommentThreadService
 
     private function anchorExactMatches(DocumentVersion $version, array $anchor): bool
     {
+        if ($version->plain_text === null) {
+            return false;
+        }
+
         $plainText = (string) $version->plain_text;
         $start = (int) $anchor['start'];
         $end = (int) $anchor['end'];
         $length = mb_strlen($plainText, 'UTF-8');
 
         if ($start < 0 || $end <= $start || $end > $length) {
-            $this->reject('anchor_offsets_invalid', 'The selected text offsets are outside the document projection.');
+            return false;
         }
 
         return mb_substr($plainText, $start, $end - $start, 'UTF-8') === (string) $anchor['exact'];
@@ -265,17 +310,28 @@ class CommentThreadService
 
     private function refreshProjection(Document $document, DocumentVersion $version): DocumentVersion
     {
-        $projection = $this->projector->project($version->content_normalized, $document->format);
+        $content = DocumentVersion::query()
+            ->whereKey($version->id)
+            ->value('content_normalized');
+
+        $projection = $this->projector->project((string) $content, $document->format);
 
         $version->forceFill([
             'plain_text' => $projection->plainText,
             'projection_version' => $projection->projectionVersion,
         ])->save();
 
-        return $version->refresh();
+        return $version;
     }
 
-    private function idempotentComment(User $author, mixed $key): ?Comment
+    private function projectionIsCurrent(DocumentVersion $version): bool
+    {
+        $currentVersion = (string) config('kedge.projection.current_version', '');
+
+        return $currentVersion === '' || (string) $version->projection_version === $currentVersion;
+    }
+
+    protected function idempotentComment(User $author, mixed $key, string $scope, int $scopeId): ?Comment
     {
         if (! is_string($key) || $key === '') {
             return null;
@@ -284,8 +340,80 @@ class CommentThreadService
         return Comment::query()
             ->where('author_id', $author->id)
             ->where('idempotency_key', $key)
-            ->with(['author', 'thread.document.currentVersion'])
+            ->where('idempotency_scope', $scope)
+            ->where('idempotency_scope_id', $scopeId)
+            ->with(['author', 'thread'])
             ->first();
+    }
+
+    private function idempotentCommentAfterDuplicate(
+        QueryException $exception,
+        User $author,
+        string $key,
+        string $scope,
+        int $scopeId,
+    ): Comment {
+        if (! $this->isDuplicateIdempotencyException($exception)) {
+            throw $exception;
+        }
+
+        $existing = $this->idempotentComment($author, $key, $scope, $scopeId);
+        if ($existing === null) {
+            throw $exception;
+        }
+
+        return $existing;
+    }
+
+    private function isDuplicateIdempotencyException(QueryException $exception): bool
+    {
+        $code = (string) $exception->getCode();
+        $message = $exception->getMessage();
+
+        return in_array($code, ['23000', '23505'], true)
+            || str_contains($message, 'comments_author_idempotency_scope_unique')
+            || (str_contains($message, 'comments') && str_contains($message, 'idempotency'));
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    private function loadCurrentVersion(Document $document, array $columns): void
+    {
+        $columns = array_values(array_unique(['id', ...$columns]));
+        if ($this->currentVersionHasColumns($document, $columns)) {
+            return;
+        }
+
+        $document->unsetRelation('currentVersion');
+        $document->load([
+            'currentVersion' => fn ($query) => $query->select($columns),
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    private function currentVersionHasColumns(Document $document, array $columns): bool
+    {
+        if (! $document->relationLoaded('currentVersion')) {
+            return false;
+        }
+
+        $version = $document->getRelation('currentVersion');
+        if (! $version instanceof DocumentVersion) {
+            return false;
+        }
+
+        $attributes = $version->getAttributes();
+
+        foreach ($columns as $column) {
+            if (! array_key_exists($column, $attributes)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function loadThreadForResource(Thread $thread): Thread

@@ -95,6 +95,7 @@ return [
         'url' => rtrim((string) env('PROJECTION_URL', 'http://localhost:3000'), '/'),
         'secret' => env('PROJECTION_SHARED_SECRET', 'dev-projection-secret'),
         'timeout' => (float) env('PROJECTION_TIMEOUT', 10),
+        'current_version' => (string) env('PROJECTION_VERSION', '2'),
     ],
 
     /*

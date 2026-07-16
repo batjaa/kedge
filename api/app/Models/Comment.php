@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'thread_id', 'author_id', 'type', 'body_md', 'proposed_text',
     'suggestion_status', 'client', 'edited_at', 'idempotency_key',
+    'idempotency_scope', 'idempotency_scope_id',
 ])]
 class Comment extends Model
 {

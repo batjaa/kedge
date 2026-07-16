@@ -21,10 +21,17 @@ return new class extends Migration
             $table->string('suggestion_status')->nullable();
             $table->string('client')->default('web');
             $table->string('idempotency_key')->nullable();
+            $table->string('idempotency_scope')->nullable();
+            $table->unsignedBigInteger('idempotency_scope_id')->nullable();
             $table->timestamp('edited_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['author_id', 'idempotency_key']);
+            $table->unique([
+                'author_id',
+                'idempotency_scope',
+                'idempotency_scope_id',
+                'idempotency_key',
+            ], 'comments_author_idempotency_scope_unique');
         });
 
         Schema::table('threads', function (Blueprint $table) {

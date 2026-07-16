@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreThreadRequest;
 use App\Http\Resources\V1\ThreadResource;
 use App\Models\Document;
+use App\Models\Thread;
 use App\Services\Comments\CommentThreadService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -18,7 +19,7 @@ class ThreadController extends Controller
 
     public function index(Request $request, Document $document): AnonymousResourceCollection
     {
-        $this->authorize('viewThreads', $document);
+        $this->authorize('viewAny', [Thread::class, $document]);
 
         return ThreadResource::collection(
             $this->threads->listForDocument($document, (int) $request->integer('per_page', 20)),
@@ -27,7 +28,7 @@ class ThreadController extends Controller
 
     public function store(StoreThreadRequest $request, Document $document)
     {
-        $this->authorize('createThread', $document);
+        $this->authorize('create', [Thread::class, $document]);
 
         [$thread, $status] = $this->threads->create(
             $document,

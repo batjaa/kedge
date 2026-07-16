@@ -4,6 +4,7 @@
 // never read here; only the readable XSRF-TOKEN cookie is echoed back).
 
 import { publicApiBaseUrl } from './config';
+import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
 import type { Document } from './document-types';
 import type { ValidationErrorBody } from './auth-types';
 
@@ -13,30 +14,14 @@ export type ImportOutcome =
   | { ok: false; kind: 'rate-limited'; message: string }
   | { ok: false; kind: 'error'; message: string };
 
-function readCookie(name: string): string | null {
-  const match = document.cookie.match(
-    new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'),
-  );
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-/** Prime the XSRF-TOKEN + session cookies before a credentialed mutation. */
-async function csrf(): Promise<void> {
-  await fetch(`${publicApiBaseUrl}/sanctum/csrf-cookie`, {
-    method: 'GET',
-    credentials: 'include',
-  });
-}
-
 function post(path: string, body?: Record<string, unknown>): Promise<Response> {
-  const token = readCookie('XSRF-TOKEN');
   return fetch(`${publicApiBaseUrl}${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
-      ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+      ...xsrfHeader(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -46,12 +31,12 @@ async function mutate(
   path: string,
   body?: Record<string, unknown>,
 ): Promise<ImportOutcome> {
-  await csrf();
+  await ensureCsrfCookie();
   let res = await post(path, body);
 
   // 419 = stale/absent CSRF token. Refresh once and retry before giving up.
   if (res.status === 419) {
-    await csrf();
+    await refreshCsrfCookie();
     res = await post(path, body);
   }
 

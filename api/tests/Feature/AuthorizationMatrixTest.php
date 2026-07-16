@@ -125,6 +125,7 @@ class AuthorizationMatrixTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/threads", [
                 'type' => 'document',
                 'body' => 'Author comment',
+                'idempotency_key' => "thread-{$role}",
             ])
             ->assertStatus($expected);
     }

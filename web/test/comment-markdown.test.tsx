@@ -7,14 +7,22 @@ function html(markdown: string): string {
 }
 
 describe('renderCommentMarkdown', () => {
-  test('drops raw html and scripts', () => {
+  test('drops raw html tags without turning them into executable elements', () => {
     const rendered = html('Hello <script>alert(1)</script><img src=x onerror=alert(2)> world');
 
     expect(rendered).toContain('Hello');
     expect(rendered).toContain('world');
     expect(rendered).not.toContain('<script');
     expect(rendered).not.toContain('<img');
-    expect(rendered).not.toContain('alert');
+    expect(rendered).not.toContain('onerror');
+  });
+
+  test('does not truncate prose after an unclosed script mention', () => {
+    const rendered = html('check the <script> loader, thanks!');
+
+    expect(rendered).toContain('check the');
+    expect(rendered).toContain('loader, thanks!');
+    expect(rendered).not.toContain('<script');
   });
 
   test('sanitizes unsafe links', () => {

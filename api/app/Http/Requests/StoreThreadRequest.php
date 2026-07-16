@@ -28,7 +28,7 @@ class StoreThreadRequest extends FormRequest
         return [
             'type' => ['required', Rule::enum(ThreadType::class)],
             'body' => ['required', 'string', 'max:20000'],
-            'idempotency_key' => ['nullable', 'string', 'max:128'],
+            'idempotency_key' => ['required', 'string', 'max:128'],
             'failed_capture' => ['sometimes', 'boolean'],
             'anchor' => ['nullable', 'array'],
             'anchor.exact' => ['required_with:anchor', 'string', 'max:20000'],

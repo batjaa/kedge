@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Document;
 use App\Models\User;
+use App\Policies\Concerns\AuthorizesWorkspaceMembership;
 
 /**
  * Documents are reachable only within their workspace (SPEC 13, user story 21):
@@ -12,6 +13,8 @@ use App\Models\User;
  */
 class DocumentPolicy
 {
+    use AuthorizesWorkspaceMembership;
+
     /**
      * Read the document (poll status, render). Workspace members only.
      */
@@ -38,24 +41,6 @@ class DocumentPolicy
     }
 
     /**
-     * Read a document's review rail. Same workspace boundary as reading the
-     * document itself; share-scoped reviewers arrive in a later M2 ticket.
-     */
-    public function viewThreads(User $user, Document $document): bool
-    {
-        return $this->memberOf($user, $document);
-    }
-
-    /**
-     * Start a thread on a document. Ready/demo preconditions are business state
-     * checked by the comments service; identity stays here.
-     */
-    public function createThread(User $user, Document $document): bool
-    {
-        return $this->memberOf($user, $document);
-    }
-
-    /**
      * Claim a demo document into your own workspace (SPEC §10.3, #25). Deliberately
      * NOT a membership check — the whole point is that the doc is *not* yours yet:
      * it lives in the reserved system workspace. Only a demo doc is claimable, so
@@ -65,12 +50,5 @@ class DocumentPolicy
     public function claim(User $user, Document $document): bool
     {
         return $document->isDemo();
-    }
-
-    private function memberOf(User $user, Document $document): bool
-    {
-        return $user->workspaces()
-            ->whereKey($document->workspace_id)
-            ->exists();
     }
 }

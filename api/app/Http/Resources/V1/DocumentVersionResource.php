@@ -20,6 +20,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class DocumentVersionResource extends JsonResource
 {
+    private bool $includeProjectionSubstrate = false;
+
+    public function withProjectionSubstrate(): self
+    {
+        $this->includeProjectionSubstrate = true;
+
+        return $this;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -30,8 +39,8 @@ class DocumentVersionResource extends JsonResource
             'content_hash' => $this->content_hash,
             'content' => $this->content_normalized,
             'import_warnings' => $this->import_warnings ?? [],
-            'plain_text' => $this->when($request->user() !== null, $this->plain_text),
-            'projection_version' => $this->when($request->user() !== null, $this->projection_version),
+            'plain_text' => $this->when($this->includeProjectionSubstrate, $this->plain_text),
+            'projection_version' => $this->when($this->includeProjectionSubstrate, $this->projection_version),
             'mdx_ok' => $this->mdx_ok,
             'source_version' => $this->source_version,
             'synced_at' => $this->synced_at,
