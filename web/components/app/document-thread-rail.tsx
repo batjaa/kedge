@@ -3,7 +3,8 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { Check, GitFork, Pencil, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { renderCommentMarkdown } from '@/lib/render-comment-markdown';
-import type { ReviewThread, ThreadAnchor, ThreadComment, ThreadStatus } from '@/lib/thread-types';
+import { SuggestionDiff } from '@/lib/suggestion-diff';
+import type { ReviewThread, SuggestionStatus, ThreadAnchor, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 export function DocumentThreadRail({
   threads,
@@ -19,6 +20,7 @@ export function DocumentThreadRail({
   onForkComment,
   onEditComment,
   onDeleteComment,
+  onSetSuggestionStatus,
 }: {
   threads: ReviewThread[];
   page: number;
@@ -33,6 +35,7 @@ export function DocumentThreadRail({
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
+  onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
 }) {
   return (
     <aside className="space-y-3 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto" data-review-rail>
@@ -53,6 +56,7 @@ export function DocumentThreadRail({
           onForkComment={onForkComment}
           onEditComment={onEditComment}
           onDeleteComment={onDeleteComment}
+          onSetSuggestionStatus={onSetSuggestionStatus}
         />
       ))}
       {threads.length === 0 ? (
@@ -84,6 +88,7 @@ function ThreadCard({
   onForkComment,
   onEditComment,
   onDeleteComment,
+  onSetSuggestionStatus,
 }: {
   thread: ReviewThread;
   active: boolean;
@@ -95,6 +100,7 @@ function ThreadCard({
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
+  onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
 }) {
   const author = thread.first_comment?.author?.name ?? 'Reviewer';
   const comments = thread.comments && thread.comments.length > 0
@@ -110,6 +116,7 @@ function ThreadCard({
   const edit = useCommentEditState(onEditComment, setMessage);
   const [forkingId, setForkingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [suggestionBusyId, setSuggestionBusyId] = useState<number | null>(null);
 
   async function changeStatus(status: ThreadStatus) {
     setMessage(null);
@@ -146,6 +153,14 @@ function ThreadCard({
     setDeletingId(comment.id);
     const error = await onDeleteComment(comment);
     setDeletingId(null);
+    if (error) setMessage(error);
+  }
+
+  async function setSuggestionStatus(comment: ThreadComment, status: SuggestionStatus) {
+    setMessage(null);
+    setSuggestionBusyId(comment.id);
+    const error = await onSetSuggestionStatus(comment, status);
+    setSuggestionBusyId(null);
     if (error) setMessage(error);
   }
 
@@ -215,6 +230,9 @@ function ThreadCard({
             onSaveEdit={() => void edit.save(comment)}
             onFork={() => void fork(comment)}
             onDelete={() => void remove(comment)}
+            anchorExact={thread.anchor?.exact ?? null}
+            suggestionBusy={suggestionBusyId === comment.id}
+            onSetSuggestionStatus={(status) => void setSuggestionStatus(comment, status)}
           />
         ))}
       </div>
@@ -287,12 +305,15 @@ function CommentRow({
   editBody,
   forking,
   deleting,
+  anchorExact,
+  suggestionBusy,
   onStartEdit,
   onCancelEdit,
   onEditBodyChange,
   onSaveEdit,
   onFork,
   onDelete,
+  onSetSuggestionStatus,
 }: {
   comment: ThreadComment;
   isReply: boolean;
@@ -300,18 +321,23 @@ function CommentRow({
   editBody: string;
   forking: boolean;
   deleting: boolean;
+  anchorExact: string | null;
+  suggestionBusy: boolean;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onEditBodyChange: (body: string) => void;
   onSaveEdit: () => void;
   onFork: () => void;
   onDelete: () => void;
+  onSetSuggestionStatus: (status: SuggestionStatus) => void;
 }) {
   const author = comment.author?.name ?? 'Reviewer';
   const body = useMemo(
     () => comment.is_deleted ? null : renderCommentMarkdown(comment.body_md ?? ''),
     [comment.body_md, comment.is_deleted],
   );
+  const hasBody = !comment.is_deleted && (comment.body_md ?? '').trim() !== '';
+  const isSuggestion = comment.type === 'suggestion' && !comment.is_deleted;
 
   return (
     <div className="py-3 first:pt-0 last:pb-0">
@@ -323,6 +349,7 @@ function CommentRow({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{author}</span>
             {comment.edited_at && !comment.is_deleted ? <span className="text-[10px] text-zinc-400">edited</span> : null}
+            {isSuggestion && comment.suggestion_status ? <SuggestionStatusBadge status={comment.suggestion_status} /> : null}
             <span className="ml-auto text-[10px] text-zinc-400">{relativeTime(comment.created_at)}</span>
           </div>
           {editing ? (
@@ -345,11 +372,25 @@ function CommentRow({
           ) : comment.is_deleted ? (
             <p className="mt-1 text-sm italic leading-6 text-zinc-500 dark:text-zinc-500">comment deleted</p>
           ) : (
-            <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{body}</div>
+            <>
+              {isSuggestion ? (
+                <SuggestionDiff before={anchorExact ?? ''} after={comment.proposed_text ?? ''} />
+              ) : null}
+              {hasBody ? (
+                <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{body}</div>
+              ) : null}
+            </>
           )}
         </div>
         {!editing ? (
           <div className="flex shrink-0 items-center gap-1">
+            {isSuggestion && comment.can_resolve_suggestion ? (
+              <SuggestionActions
+                status={comment.suggestion_status}
+                busy={suggestionBusy}
+                onSetStatus={onSetSuggestionStatus}
+              />
+            ) : null}
             {comment.can_edit && !comment.is_deleted ? (
               <IconButton title="Edit comment" onClick={onStartEdit}>
                 <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -397,10 +438,56 @@ function IconButton({
   );
 }
 
+function SuggestionActions({
+  status,
+  busy,
+  onSetStatus,
+}: {
+  status: SuggestionStatus | null;
+  busy: boolean;
+  onSetStatus: (status: SuggestionStatus) => void;
+}) {
+  if (status === null) return null;
+
+  return (
+    <>
+      {status !== 'accepted' ? (
+        <IconButton title="Accept suggestion" disabled={busy} onClick={() => onSetStatus('accepted')}>
+          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+        </IconButton>
+      ) : null}
+      {status !== 'declined' ? (
+        <IconButton title="Decline suggestion" disabled={busy} onClick={() => onSetStatus('declined')}>
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </IconButton>
+      ) : null}
+      {status !== 'pending' ? (
+        <IconButton title="Reopen suggestion" disabled={busy} onClick={() => onSetStatus('pending')}>
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+        </IconButton>
+      ) : null}
+    </>
+  );
+}
+
 function StatusBadge({ status }: { status: ThreadStatus }) {
   const classes = status === 'resolved'
     ? 'text-zinc-600 ring-zinc-400/30 dark:text-zinc-300 dark:ring-zinc-500/30'
     : 'text-emerald-700 ring-emerald-500/25 dark:text-emerald-300';
+
+  return (
+    <span className={`rounded-md px-1.5 py-0.5 font-mono text-[9px] uppercase ring-1 ring-inset ${classes}`}>
+      {status}
+    </span>
+  );
+}
+
+function SuggestionStatusBadge({ status }: { status: SuggestionStatus }) {
+  const classes = {
+    pending: 'text-zinc-600 ring-zinc-400/30 dark:text-zinc-300 dark:ring-zinc-500/30',
+    accepted: 'text-emerald-700 ring-emerald-500/25 dark:text-emerald-300',
+    declined: 'text-rose-700 ring-rose-500/25 dark:text-rose-300',
+  }[status];
 
   return (
     <span className={`rounded-md px-1.5 py-0.5 font-mono text-[9px] uppercase ring-1 ring-inset ${classes}`}>

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\WorkspaceRole;
 use App\Models\Comment;
@@ -11,6 +12,7 @@ use App\Models\Thread;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\AuditLogger;
+use App\Services\Comments\CommentModerationService;
 use App\Services\Comments\CommentThreadService;
 use App\Services\Import\TextProjector;
 use App\Services\RegistrationService;
@@ -77,6 +79,276 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('threads', 2);
         $this->assertDatabaseCount('comments', 3);
         $this->assertDatabaseCount('anchors', 1);
+    }
+
+    public function test_reviewer_can_create_inline_suggestion_and_reply_suggestion_pending(): void
+    {
+        [$author, $document] = $this->readyDocument(
+            plainText: "Intro\n\nFirst target paragraph.\n\nSecond target paragraph.",
+        );
+        $reviewer = User::factory()->create(['email' => 'reviewer@example.com']);
+        $reviewer->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = $this->actingAs($reviewer)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'comment_type' => 'suggestion',
+                'body' => 'This reads tighter.',
+                'proposed_text' => 'Second target paragraph, revised.',
+                'idempotency_key' => 'inline-suggestion-first',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'Second target paragraph.', '2'),
+            ]);
+
+        $thread->assertCreated()
+            ->assertJsonPath('type', 'inline')
+            ->assertJsonPath('anchor.exact', 'Second target paragraph.')
+            ->assertJsonPath('first_comment.type', 'suggestion')
+            ->assertJsonPath('first_comment.body_md', 'This reads tighter.')
+            ->assertJsonPath('first_comment.proposed_text', 'Second target paragraph, revised.')
+            ->assertJsonPath('first_comment.suggestion_status', 'pending')
+            ->assertJsonPath('first_comment.can_resolve_suggestion', false);
+
+        $reply = $this->actingAs($reviewer)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'type' => 'suggestion',
+                'proposed_text' => 'Second target paragraph, revised again.',
+                'idempotency_key' => 'inline-suggestion-reply',
+            ]);
+
+        $reply->assertCreated()
+            ->assertJsonPath('type', 'suggestion')
+            ->assertJsonPath('body_md', '')
+            ->assertJsonPath('proposed_text', 'Second target paragraph, revised again.')
+            ->assertJsonPath('suggestion_status', 'pending');
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $thread->json('first_comment.id'),
+            'type' => 'suggestion',
+            'proposed_text' => 'Second target paragraph, revised.',
+            'suggestion_status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('comments', [
+            'id' => $reply->json('id'),
+            'type' => 'suggestion',
+            'body_md' => '',
+            'proposed_text' => 'Second target paragraph, revised again.',
+            'suggestion_status' => 'pending',
+        ]);
+    }
+
+    public function test_suggestion_payload_validation_and_inline_only_rule(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+
+        $inlineThread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Parent',
+                'idempotency_key' => 'suggestion-validation-parent',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'target', '2'),
+            ])
+            ->assertCreated();
+
+        $documentThread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Document parent',
+                'idempotency_key' => 'suggestion-validation-doc-parent',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$inlineThread->json('id')}/comments", [
+                'type' => 'suggestion',
+                'idempotency_key' => 'suggestion-missing-text',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['proposed_text']);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$inlineThread->json('id')}/comments", [
+                'body' => 'Plain reply',
+                'proposed_text' => 'Forbidden replacement',
+                'idempotency_key' => 'comment-forbidden-proposed-text',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['proposed_text']);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'comment_type' => 'suggestion',
+                'proposed_text' => 'No anchor exists.',
+                'idempotency_key' => 'document-suggestion-rejected',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'suggestion_requires_inline_thread');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$documentThread->json('id')}/comments", [
+                'type' => 'suggestion',
+                'proposed_text' => 'No anchor exists.',
+                'idempotency_key' => 'document-reply-suggestion-rejected',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'suggestion_requires_inline_thread');
+    }
+
+    public function test_document_author_can_accept_decline_and_reopen_suggestion_idempotently(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+        $reviewer = User::factory()->create(['email' => 'reviewer@example.com']);
+        $reviewer->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $proposedText = "Alpha target text\nwith verbatim replacement.";
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $reviewer->id,
+        ]);
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'target', '2');
+        $thread->anchors()->create([
+            'document_version_id' => $document->currentVersion->id,
+            ...$anchor,
+        ]);
+        $suggestion = $thread->comments()->create([
+            'author_id' => $reviewer->id,
+            'type' => 'suggestion',
+            'body_md' => 'Please use this wording.',
+            'proposed_text' => $proposedText,
+            'suggestion_status' => 'pending',
+        ]);
+        $commentId = $suggestion->id;
+        Log::spy();
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$commentId}/suggestion", ['status' => 'accepted'])
+            ->assertOk()
+            ->assertJsonPath('suggestion_status', 'accepted')
+            ->assertJsonPath('proposed_text', $proposedText)
+            ->assertJsonPath('can_resolve_suggestion', true);
+
+        $acceptedAuditCount = DB::table('audit_logs')->where('action', 'suggestion.accepted')->count();
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$commentId}/suggestion", ['status' => 'accepted'])
+            ->assertOk()
+            ->assertJsonPath('suggestion_status', 'accepted');
+
+        $this->assertSame(
+            $acceptedAuditCount,
+            DB::table('audit_logs')->where('action', 'suggestion.accepted')->count(),
+        );
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$commentId}/suggestion", ['status' => 'declined'])
+            ->assertOk()
+            ->assertJsonPath('suggestion_status', 'declined');
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$commentId}/suggestion", ['status' => 'pending'])
+            ->assertOk()
+            ->assertJsonPath('suggestion_status', 'pending');
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $commentId,
+            'type' => 'suggestion',
+            'proposed_text' => $proposedText,
+            'suggestion_status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.accepted', 'subject_id' => $commentId]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.declined', 'subject_id' => $commentId]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.reopened', 'subject_id' => $commentId]);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'suggestion.accepted'
+            && $context['comment_id'] === $commentId
+            && $context['user_id'] === $author->id);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'suggestion.declined'
+            && $context['comment_id'] === $commentId
+            && $context['user_id'] === $author->id);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'suggestion.reopened'
+            && $context['comment_id'] === $commentId
+            && $context['user_id'] === $author->id);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk()
+            ->assertJsonPath('data.0.first_comment.proposed_text', $proposedText)
+            ->assertJsonPath('data.0.first_comment.can_resolve_suggestion', true);
+    }
+
+    public function test_non_authors_cannot_transition_suggestion_status(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+        $threadCreator = User::factory()->create(['email' => 'creator@example.com']);
+        $suggestionAuthor = User::factory()->create(['email' => 'suggestion-author@example.com']);
+        $randomMember = User::factory()->create(['email' => 'random@example.com']);
+
+        foreach ([$threadCreator, $suggestionAuthor, $randomMember] as $user) {
+            $user->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        }
+
+        $thread = $this->actingAs($threadCreator)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Parent',
+                'idempotency_key' => 'suggestion-auth-parent',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'target', '2'),
+            ])
+            ->assertCreated();
+
+        $suggestion = $this->actingAs($suggestionAuthor)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'type' => 'suggestion',
+                'proposed_text' => 'replacement',
+                'idempotency_key' => 'suggestion-auth-reply',
+            ])
+            ->assertCreated();
+
+        foreach ([$suggestionAuthor, $threadCreator, $randomMember] as $user) {
+            $this->actingAs($user)->fromWebApp()
+                ->patchJson("/api/v1/comments/{$suggestion->json('id')}/suggestion", ['status' => 'accepted'])
+                ->assertForbidden();
+        }
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $suggestion->json('id'),
+            'suggestion_status' => 'pending',
+        ]);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'suggestion.accepted']);
+        $this->assertSame($author->id, $document->created_by);
+    }
+
+    public function test_concurrent_suggestion_flips_preserve_history_and_last_author_action_wins(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $suggestion = $thread->comments()->create([
+            'author_id' => $author->id,
+            'type' => 'suggestion',
+            'body_md' => '',
+            'proposed_text' => 'replacement',
+            'suggestion_status' => 'pending',
+        ]);
+
+        $acceptSnapshot = Comment::query()->findOrFail($suggestion->id);
+        $declineSnapshot = Comment::query()->findOrFail($suggestion->id);
+        $service = app(CommentModerationService::class);
+
+        $service->updateSuggestionStatus($acceptSnapshot, $author, SuggestionStatus::Accepted, null);
+        $service->updateSuggestionStatus($declineSnapshot, $author, SuggestionStatus::Declined, null);
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $suggestion->id,
+            'suggestion_status' => 'declined',
+        ]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.accepted', 'subject_id' => $suggestion->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'suggestion.declined', 'subject_id' => $suggestion->id]);
     }
 
     public function test_divergent_inline_anchor_fails_after_reprojection_with_reselect_code(): void

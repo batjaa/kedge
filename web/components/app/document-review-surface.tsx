@@ -5,12 +5,14 @@ import { DocumentCommentComposer, type ComposerState } from './document-comment-
 import { DocumentThreadRail } from './document-thread-rail';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
 import {
+  createSuggestionThread,
   createThread,
   deleteComment,
   editComment,
   forkComment,
   listThreads,
   replyToThread,
+  updateSuggestionStatus,
   updateThreadStatus,
 } from '@/lib/comments-client';
 import {
@@ -18,7 +20,7 @@ import {
   firstAnchorHighlightForThread,
   threadIdsFromAttribute,
 } from '@/lib/anchor-highlight-dom';
-import type { ReviewThread, ThreadComment, ThreadStatus } from '@/lib/thread-types';
+import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 export function DocumentReviewSurface({
   documentId,
@@ -38,6 +40,7 @@ export function DocumentReviewSurface({
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [composer, setComposer] = useState<ComposerState>({ open: false });
   const [body, setBody] = useState('');
+  const [proposedText, setProposedText] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const numericProjectionVersion = projectionVersion == null ? NaN : Number(projectionVersion);
   const canCapture = plainText != null && Number.isFinite(numericProjectionVersion);
@@ -114,25 +117,40 @@ export function DocumentReviewSurface({
     };
 
     if (result.ok) {
-      setComposer({ ...base, mode: 'inline', anchor: result.selector, failure: null });
+      setProposedText(result.selector.exact);
+      setComposer({ ...base, mode: 'inline', commentType: 'comment', anchor: result.selector, failure: null });
     } else {
       console.warn('anchor capture failed', result);
-      setComposer({ ...base, mode: 'document', anchor: null, failure: result });
+      setProposedText('');
+      setComposer({ ...base, mode: 'document', commentType: 'comment', anchor: null, failure: result });
     }
   }
 
   async function submit() {
-    if (!composer.open || body.trim() === '') return;
+    if (!composer.open) return;
+    const isSuggestion = composer.mode === 'inline' && composer.anchor != null && composer.commentType === 'suggestion';
+    if (isSuggestion ? proposedText.trim() === '' : body.trim() === '') return;
     setMessage(null);
 
-    const outcome = composer.mode === 'inline' && composer.anchor
+    const anchor = composer.mode === 'inline' && composer.anchor
+      ? {
+          ...composer.anchor,
+          projection_version: String(composer.anchor.projection_version),
+        }
+      : null;
+
+    const outcome = isSuggestion && anchor
+      ? await createSuggestionThread(documentId, {
+          body: body.trim() === '' ? undefined : body,
+          proposed_text: proposedText,
+          anchor,
+          idempotency_key: composer.idempotencyKey,
+        })
+      : composer.mode === 'inline' && anchor
       ? await createThread(documentId, {
           type: 'inline',
           body,
-          anchor: {
-            ...composer.anchor,
-            projection_version: String(composer.anchor.projection_version),
-          },
+          anchor,
           idempotency_key: composer.idempotencyKey,
         })
       : await createThread(documentId, {
@@ -148,6 +166,7 @@ export function DocumentReviewSurface({
     }
 
     setBody('');
+    setProposedText('');
     setComposer({ open: false });
     window.getSelection()?.removeAllRanges();
     await reloadThreads(1);
@@ -160,6 +179,16 @@ export function DocumentReviewSurface({
 
     await reloadThreads(1);
     setActiveThreadId(outcome.thread.id);
+
+    return null;
+  }
+
+  async function setSuggestionStatus(comment: ThreadComment, status: SuggestionStatus): Promise<string | null> {
+    const outcome = await updateSuggestionStatus(comment.id, status);
+    if (!outcome.ok) return outcome.message;
+
+    await reloadThreads(1);
+    setActiveThreadId(comment.thread_id);
 
     return null;
   }
@@ -237,14 +266,27 @@ export function DocumentReviewSurface({
         onForkComment={fork}
         onEditComment={edit}
         onDeleteComment={remove}
+        onSetSuggestionStatus={setSuggestionStatus}
       />
 
       <DocumentCommentComposer
         composer={composer}
         body={body}
+        proposedText={proposedText}
         message={message}
         onBodyChange={setBody}
-        onClose={() => setComposer({ open: false })}
+        onProposedTextChange={setProposedText}
+        onCommentTypeChange={(commentType) => {
+          if (!composer.open) return;
+          if (commentType === 'suggestion' && proposedText === '' && composer.anchor) {
+            setProposedText(composer.anchor.exact);
+          }
+          setComposer({ ...composer, commentType });
+        }}
+        onClose={() => {
+          setComposer({ open: false });
+          setProposedText('');
+        }}
         onOpenPanel={() => {
           if (composer.open) setComposer({ ...composer, stage: 'panel' });
         }}

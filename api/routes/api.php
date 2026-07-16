@@ -123,6 +123,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/comments/{comment}/fork', [ThreadCommentController::class, 'fork'])
                 ->withTrashed()
                 ->name('api.v1.comments.fork');
+            Route::patch('/comments/{comment}/suggestion', [ThreadCommentController::class, 'updateSuggestion'])
+                ->withTrashed()
+                ->name('api.v1.comments.suggestion.update');
             Route::patch('/comments/{comment}', [ThreadCommentController::class, 'update'])
                 ->withTrashed()
                 ->name('api.v1.comments.update');

@@ -5,6 +5,7 @@ namespace App\Services\Comments;
 use App\Enums\CommentClient;
 use App\Enums\CommentType;
 use App\Enums\DocumentStatus;
+use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\ThreadType;
 use App\Models\Anchor;
@@ -61,6 +62,8 @@ class CommentThreadService
         }
 
         $type = ThreadType::from((string) $data['type']);
+        $commentType = CommentType::from((string) ($data['comment_type'] ?? CommentType::Comment->value));
+        $this->rejectSuggestionOnDocumentThread($type, $commentType);
         $version = $this->commentableVersion($document, includePlainText: $type === ThreadType::Inline);
         $anchor = $type === ThreadType::Inline
             ? $this->validatedAnchor($document, $version, (array) $data['anchor'])
@@ -74,7 +77,7 @@ class CommentThreadService
         }
 
         try {
-            [$thread, $comment] = DB::transaction(function () use ($document, $author, $data, $type, $anchor, $version, $idempotencyKey) {
+            [$thread, $comment] = DB::transaction(function () use ($document, $author, $data, $type, $commentType, $anchor, $version, $idempotencyKey) {
                 $thread = Thread::create([
                     'document_id' => $document->id,
                     'type' => $type,
@@ -82,15 +85,14 @@ class CommentThreadService
                     'created_by' => $author->id,
                 ]);
 
-                $comment = $thread->comments()->create([
-                    'author_id' => $author->id,
-                    'type' => CommentType::Comment,
-                    'body_md' => (string) $data['body'],
-                    'client' => CommentClient::Web,
-                    'idempotency_key' => $idempotencyKey,
-                    'idempotency_scope' => self::IDEMPOTENCY_SCOPE_DOCUMENT,
-                    'idempotency_scope_id' => $document->id,
-                ]);
+                $comment = $thread->comments()->create($this->commentAttributes(
+                    $author,
+                    $commentType,
+                    $data,
+                    $idempotencyKey,
+                    self::IDEMPOTENCY_SCOPE_DOCUMENT,
+                    (int) $document->id,
+                ));
 
                 if ($anchor !== null) {
                     $thread->anchors()->create(AnchorAttributes::fromCapture($anchor, $version));
@@ -133,18 +135,19 @@ class CommentThreadService
         }
 
         $thread->loadMissing('document');
+        $type = CommentType::from((string) ($data['type'] ?? CommentType::Comment->value));
+        $this->rejectSuggestionOnDocumentThread($thread->type, $type);
         $this->commentableVersion($thread->document);
 
         try {
-            $comment = DB::transaction(fn () => $thread->comments()->create([
-                'author_id' => $author->id,
-                'type' => CommentType::Comment,
-                'body_md' => (string) $data['body'],
-                'client' => CommentClient::Web,
-                'idempotency_key' => $idempotencyKey,
-                'idempotency_scope' => self::IDEMPOTENCY_SCOPE_THREAD,
-                'idempotency_scope_id' => $thread->id,
-            ]));
+            $comment = DB::transaction(fn () => $thread->comments()->create($this->commentAttributes(
+                $author,
+                $type,
+                $data,
+                $idempotencyKey,
+                self::IDEMPOTENCY_SCOPE_THREAD,
+                (int) $thread->id,
+            )));
         } catch (QueryException $e) {
             $existing = $this->idempotentCommentAfterDuplicate(
                 $e,
@@ -160,6 +163,42 @@ class CommentThreadService
         $this->recordEvent('comment.created', $thread->document, $author, $comment, $ip);
 
         return [$comment->load('author'), 201];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function commentAttributes(
+        User $author,
+        CommentType $type,
+        array $data,
+        string $idempotencyKey,
+        string $scope,
+        int $scopeId,
+    ): array {
+        return [
+            'author_id' => $author->id,
+            'type' => $type,
+            'body_md' => (string) ($data['body'] ?? ''),
+            'proposed_text' => $type === CommentType::Suggestion ? (string) $data['proposed_text'] : null,
+            'suggestion_status' => $type === CommentType::Suggestion ? SuggestionStatus::Pending : null,
+            'client' => CommentClient::Web,
+            'idempotency_key' => $idempotencyKey,
+            'idempotency_scope' => $scope,
+            'idempotency_scope_id' => $scopeId,
+        ];
+    }
+
+    private function rejectSuggestionOnDocumentThread(ThreadType $threadType, CommentType $commentType): void
+    {
+        if ($threadType === ThreadType::Document && $commentType === CommentType::Suggestion) {
+            $this->reject(
+                'suggestion_requires_inline_thread',
+                'Suggested edits can only be posted on inline threads with an anchored selection.',
+                'type',
+            );
+        }
     }
 
     public function updateStatus(Thread $thread, User $actor, ThreadStatus $status, ?string $ip): Thread

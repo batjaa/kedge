@@ -2,12 +2,21 @@
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
-import type { ReviewThread, ThreadAnchorPayload, ThreadComment, ThreadPage, ThreadStatus } from './thread-types';
+import type { ReviewThread, SuggestionStatus, ThreadAnchorPayload, ThreadComment, ThreadPage, ThreadStatus } from './thread-types';
 
 export type CreateThreadInput =
   | {
       type: 'inline';
       body: string;
+      anchor: ThreadAnchorPayload;
+      idempotency_key: string;
+      comment_type?: 'comment';
+    }
+  | {
+      type: 'inline';
+      comment_type: 'suggestion';
+      body?: string;
+      proposed_text: string;
       anchor: ThreadAnchorPayload;
       idempotency_key: string;
     }
@@ -23,6 +32,10 @@ export type CreateThreadOutcome =
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
 
 export type ReplyOutcome =
+  | { ok: true; comment: ThreadComment }
+  | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
+
+export type SuggestionMutationOutcome =
   | { ok: true; comment: ThreadComment }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };
 
@@ -95,6 +108,25 @@ export async function createThread(
   return { ok: false, kind: 'error', message: 'Could not save this comment. Please try again.' };
 }
 
+export async function createSuggestionThread(
+  documentId: number,
+  input: {
+    body?: string;
+    proposed_text: string;
+    anchor: ThreadAnchorPayload;
+    idempotency_key: string;
+  },
+): Promise<CreateThreadOutcome> {
+  return createThread(documentId, {
+    type: 'inline',
+    comment_type: 'suggestion',
+    body: input.body,
+    proposed_text: input.proposed_text,
+    anchor: input.anchor,
+    idempotency_key: input.idempotency_key,
+  });
+}
+
 export async function replyToThread(threadId: number, body: string, idempotencyKey: string): Promise<ReplyOutcome> {
   const res = await mutate('POST', `/api/v1/threads/${threadId}/comments`, {
     body,
@@ -115,6 +147,28 @@ export async function replyToThread(threadId: number, body: string, idempotencyK
   }
 
   return { ok: false, kind: 'error', message: 'Could not save this reply. Please try again.' };
+}
+
+export async function updateSuggestionStatus(
+  commentId: number,
+  status: SuggestionStatus,
+): Promise<SuggestionMutationOutcome> {
+  const res = await mutate('PATCH', `/api/v1/comments/${commentId}/suggestion`, { status });
+
+  if (res.ok) {
+    return { ok: true, comment: (await res.json()) as ThreadComment };
+  }
+
+  if (res.status === 422) {
+    const data = (await res.json().catch(() => null)) as { message?: string } | null;
+    return { ok: false, kind: 'validation', message: data?.message ?? 'Could not update this suggestion.' };
+  }
+
+  if (res.status === 429) {
+    return { ok: false, kind: 'rate-limited', message: 'Too many updates. Wait a minute, then try again.' };
+  }
+
+  return { ok: false, kind: 'error', message: 'Could not update this suggestion. Please try again.' };
 }
 
 export async function updateThreadStatus(

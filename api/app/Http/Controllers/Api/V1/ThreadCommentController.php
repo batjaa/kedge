@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\SuggestionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ForkCommentRequest;
 use App\Http\Requests\StoreThreadCommentRequest;
 use App\Http\Requests\UpdateCommentRequest;
+use App\Http\Requests\UpdateSuggestionStatusRequest;
 use App\Http\Resources\V1\CommentResource;
 use App\Http\Resources\V1\ThreadResource;
 use App\Models\Comment;
@@ -61,6 +63,20 @@ class ThreadCommentController extends Controller
             $comment,
             $request->user(),
             (string) $request->validated('body'),
+            $request->ip(),
+        );
+
+        return CommentResource::make($comment);
+    }
+
+    public function updateSuggestion(UpdateSuggestionStatusRequest $request, Comment $comment)
+    {
+        $this->authorize('resolveSuggestion', $comment);
+
+        $comment = $this->moderation->updateSuggestionStatus(
+            $comment,
+            $request->user(),
+            SuggestionStatus::from((string) $request->validated('status')),
             $request->ip(),
         );
 

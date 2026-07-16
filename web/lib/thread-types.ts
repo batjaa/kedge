@@ -5,6 +5,7 @@ export type ThreadType = 'inline' | 'document';
 export type ThreadStatus = 'open' | 'resolved';
 export type CommentType = 'comment' | 'suggestion';
 export type CommentClient = 'web' | 'mcp';
+export type SuggestionStatus = 'pending' | 'accepted' | 'declined';
 export type AnchorState = 'anchored' | 'relocated' | 'orphaned';
 
 export interface ThreadAuthor {
@@ -32,7 +33,7 @@ export interface ThreadComment {
   type: CommentType;
   body_md: string | null;
   proposed_text: string | null;
-  suggestion_status: 'pending' | 'accepted' | 'declined' | null;
+  suggestion_status: SuggestionStatus | null;
   client: CommentClient;
   edited_at: string | null;
   is_deleted: boolean;
@@ -40,6 +41,7 @@ export interface ThreadComment {
   can_edit: boolean;
   can_delete: boolean;
   can_fork: boolean;
+  can_resolve_suggestion: boolean;
   created_at: string | null;
 }
 

@@ -255,6 +255,30 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     #[DataProvider('documentRoleMatrix')]
+    public function test_suggestion_transition_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $owner->id,
+        ]);
+        $comment = $thread->comments()->create([
+            'author_id' => $owner->id,
+            'type' => 'suggestion',
+            'body_md' => '',
+            'proposed_text' => 'Replacement',
+            'suggestion_status' => 'pending',
+        ]);
+        $this->actAsDocumentRole($role, $owner);
+
+        $this->fromWebApp()
+            ->patchJson("/api/v1/comments/{$comment->id}/suggestion", ['status' => 'accepted'])
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
     public function test_share_create_authorization(string $role, int $expectedStatus): void
     {
         [$owner, $document] = $this->ownedDocument();

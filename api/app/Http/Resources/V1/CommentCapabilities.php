@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Enums\CommentType;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\Thread;
@@ -53,6 +54,13 @@ final class CommentCapabilities
         $thread = self::threadFor($comment);
 
         return $this->viewerOwnsDocument() || ($thread instanceof Thread && $this->isViewer($thread->created_by));
+    }
+
+    public function canResolveSuggestion(Comment $comment): bool
+    {
+        return $comment->type === CommentType::Suggestion
+            && ! $comment->trashed()
+            && $this->viewerOwnsDocument();
     }
 
     private function isViewer(mixed $userId): bool

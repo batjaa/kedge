@@ -2,6 +2,8 @@
 
 namespace App\Services\Comments;
 
+use App\Enums\CommentType;
+use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Models\Comment;
 use App\Models\Thread;
@@ -155,6 +157,50 @@ class CommentModerationService
         $comment->delete();
 
         $this->recordEvent('comment.deleted', $comment->thread->document, $actor, $comment, $ip);
+    }
+
+    public function updateSuggestionStatus(Comment $comment, User $actor, SuggestionStatus $status, ?string $ip): Comment
+    {
+        $comment->refresh();
+        $comment->loadMissing('thread.document.workspace');
+
+        if ($comment->trashed()) {
+            $this->reject('comment_deleted', 'Deleted comments cannot be triaged as suggestions.', 'comment');
+        }
+
+        if ($comment->type !== CommentType::Suggestion) {
+            $this->reject('comment_not_suggestion', 'Only suggested edits have a suggestion status.', 'comment');
+        }
+
+        $previousStatus = $comment->suggestion_status;
+        if ($previousStatus === $status) {
+            return $comment->load('author');
+        }
+
+        $comment->forceFill(['suggestion_status' => $status])->save();
+
+        $this->recordEvent(
+            $this->suggestionEventName($status),
+            $comment->thread->document,
+            $actor,
+            $comment,
+            $ip,
+            [
+                'previous_status' => $previousStatus?->value,
+                'status' => $status->value,
+            ],
+        );
+
+        return $comment->refresh()->load('author');
+    }
+
+    private function suggestionEventName(SuggestionStatus $status): string
+    {
+        return match ($status) {
+            SuggestionStatus::Accepted => 'suggestion.accepted',
+            SuggestionStatus::Declined => 'suggestion.declined',
+            SuggestionStatus::Pending => 'suggestion.reopened',
+        };
     }
 
     private function reject(string $code, string $message, string $field = 'anchor'): never

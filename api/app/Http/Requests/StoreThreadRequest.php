@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\CommentType;
 use App\Enums\ThreadType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -27,7 +28,9 @@ class StoreThreadRequest extends FormRequest
     {
         return [
             'type' => ['required', Rule::enum(ThreadType::class)],
-            'body' => ['required', 'string', 'max:20000'],
+            'comment_type' => ['sometimes', Rule::enum(CommentType::class)],
+            'body' => ['sometimes', 'string', 'max:20000'],
+            'proposed_text' => ['sometimes', 'string', 'max:20000'],
             'idempotency_key' => ['required', 'string', 'max:128'],
             'failed_capture' => ['sometimes', 'boolean'],
             'anchor' => ['nullable', 'array'],
@@ -48,6 +51,23 @@ class StoreThreadRequest extends FormRequest
             function (Validator $validator): void {
                 if ($this->input('type') === ThreadType::Inline->value && ! is_array($this->input('anchor'))) {
                     $validator->errors()->add('anchor', 'Inline threads require an anchor selector.');
+                }
+
+                $commentType = $this->input('comment_type', CommentType::Comment->value);
+                if ($commentType === CommentType::Suggestion->value) {
+                    if (trim((string) $this->input('proposed_text', '')) === '') {
+                        $validator->errors()->add('proposed_text', 'Suggested edits require proposed replacement text.');
+                    }
+
+                    return;
+                }
+
+                if (trim((string) $this->input('body', '')) === '') {
+                    $validator->errors()->add('body', 'Comments require a body.');
+                }
+
+                if ($this->has('proposed_text')) {
+                    $validator->errors()->add('proposed_text', 'Plain comments cannot include proposed replacement text.');
                 }
             },
         ];

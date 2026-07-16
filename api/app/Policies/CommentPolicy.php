@@ -33,4 +33,11 @@ class CommentPolicy
         return $this->ownedBy($user, $comment->author_id)
             || $this->authorOf($user, $comment->thread->document);
     }
+
+    public function resolveSuggestion(User $user, Comment $comment): bool
+    {
+        $comment->loadMissing('thread.document');
+
+        return $this->authorOf($user, $comment->thread->document);
+    }
 }
