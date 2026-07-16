@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "reason": "endpoint_inside_atomic",
+  "detail": "Selection endpoint is inside atomic projection range 7:14."
+}

@@ -1,0 +1,44 @@
+{
+  "projectionVersion": 60,
+  "plainText": "This bold emph link text.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "p",
+        "projectionRange": { "start": 0, "end": 25 },
+        "childNodes": [
+          { "nodeName": "#text", "value": "This " },
+          {
+            "tagName": "strong",
+            "projectionRange": { "start": 5, "end": 9 },
+            "childNodes": [
+              { "nodeName": "#text", "value": "bold" }
+            ]
+          },
+          { "nodeName": "#text", "value": " " },
+          {
+            "tagName": "em",
+            "projectionRange": { "start": 10, "end": 14 },
+            "childNodes": [
+              { "nodeName": "#text", "value": "emph" }
+            ]
+          },
+          { "nodeName": "#text", "value": " " },
+          {
+            "tagName": "a",
+            "projectionRange": { "start": 15, "end": 19 },
+            "childNodes": [
+              { "nodeName": "#text", "value": "link" }
+            ]
+          },
+          { "nodeName": "#text", "value": " text." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 1, 0], "offset": 1 },
+    "end": { "path": [0, 5, 0], "offset": 2 }
+  }
+}

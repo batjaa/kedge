@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "beta gamma",
+    "prefix": "Alpha ",
+    "suffix": " delta.",
+    "start": 6,
+    "end": 16,
+    "heading_path": [],
+    "projection_version": 60
+  }
+}

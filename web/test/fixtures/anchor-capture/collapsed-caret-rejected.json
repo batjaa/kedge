@@ -1,0 +1,20 @@
+{
+  "projectionVersion": 60,
+  "plainText": "Caret only.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "p",
+        "projectionRange": { "start": 0, "end": 11 },
+        "childNodes": [
+          { "nodeName": "#text", "value": "Caret only." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 0], "offset": 5 },
+    "end": { "path": [0, 0], "offset": 5 }
+  }
+}

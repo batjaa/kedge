@@ -8,23 +8,39 @@ export interface ProjectionDomAttribute {
   value: string;
 }
 
+export interface ProjectionTextRange {
+  start: number;
+  end: number;
+}
+
 export interface ProjectionDomNode {
   nodeName?: string;
   tagName?: string;
   value?: string;
+  text?: string;
   attrs?: ProjectionDomAttribute[];
+  projectionRange?: ProjectionTextRange | null;
+  projectionAtomic?: boolean;
+  headingLevel?: number;
   childNodes?: ProjectionDomNode[];
 }
 
-function isElement(node: ProjectionDomNode): boolean {
+export interface ProjectionRenderedChildText {
+  child: ProjectionDomNode;
+  text: string;
+  start: number;
+  end: number;
+}
+
+export function isProjectionElementNode(node: ProjectionDomNode): boolean {
   return typeof node.tagName === 'string';
 }
 
-function isText(node: ProjectionDomNode): boolean {
+export function isProjectionTextNode(node: ProjectionDomNode): boolean {
   return node.nodeName === '#text';
 }
 
-function children(node: ProjectionDomNode): ProjectionDomNode[] {
+export function projectionNodeChildren(node: ProjectionDomNode): ProjectionDomNode[] {
   return node.childNodes ?? [];
 }
 
@@ -32,12 +48,33 @@ function attr(node: ProjectionDomNode, name: string): string | undefined {
   return node.attrs?.find((entry) => entry.name === name)?.value;
 }
 
-function range(node: ProjectionDomNode): [number, number] | null {
+export function projectionNodeRange(node: ProjectionDomNode): ProjectionTextRange | null {
+  if (node.projectionRange) return node.projectionRange;
   const raw = attr(node, PROJECTION_RANGE_ATTR);
   if (!raw) return null;
   const match = /^(\d+):(\d+)$/.exec(raw);
   if (!match) return null;
-  return [Number(match[1]), Number(match[2])];
+  return { start: Number(match[1]), end: Number(match[2]) };
+}
+
+export function projectionNodeIsAtomic(node: ProjectionDomNode): boolean {
+  return node.projectionAtomic === true || attr(node, PROJECTION_ATOMIC_ATTR) === 'true';
+}
+
+export function projectionNodeHeadingLevel(node: ProjectionDomNode): number | null {
+  if (typeof node.headingLevel === 'number') return node.headingLevel;
+  const tagName = node.tagName?.toLowerCase();
+  if (!tagName) return null;
+  const match = /^h([1-6])$/.exec(tagName);
+  return match ? Number(match[1]) : null;
+}
+
+export function projectionNodeTextValue(node: ProjectionDomNode): string {
+  return node.value ?? node.text ?? '';
+}
+
+export function projectionNodeTagName(node: ProjectionDomNode): string | undefined {
+  return node.tagName?.toLowerCase();
 }
 
 /**
@@ -53,28 +90,40 @@ function range(node: ProjectionDomNode): [number, number] | null {
  *   for the node's range and does not inspect children.
  */
 export function renderedProjectionText(node: ProjectionDomNode, projection: string): string {
-  if (isText(node)) return node.value ?? '';
-  if (!isElement(node)) {
-    return children(node).map((child) => renderedProjectionText(child, projection)).join('');
+  if (isProjectionTextNode(node)) return projectionNodeTextValue(node);
+  if (!isProjectionElementNode(node)) {
+    return projectionNodeChildren(node).map((child) => renderedProjectionText(child, projection)).join('');
   }
 
-  const annotatedRange = range(node);
-  if (attr(node, PROJECTION_ATOMIC_ATTR) === 'true' && annotatedRange) {
-    return projection.slice(annotatedRange[0], annotatedRange[1]);
+  const annotatedRange = projectionNodeRange(node);
+  if (projectionNodeIsAtomic(node) && annotatedRange) {
+    return projection.slice(annotatedRange.start, annotatedRange.end);
   }
-  if (node.tagName === 'br') return '\n';
+  if (projectionNodeTagName(node) === 'br') return '\n';
 
-  const parts: string[] = [];
+  const text = renderedProjectionChildTexts(node, projection)
+    .map((part) => part.text)
+    .join('');
+  return projectionNodeTagName(node) === 'pre' || projectionNodeTagName(node) === 'code'
+    ? text.replace(/\n$/, '')
+    : text;
+}
+
+export function renderedProjectionChildTexts(
+  node: ProjectionDomNode,
+  projection: string,
+): ProjectionRenderedChildText[] {
+  const parts: ProjectionRenderedChildText[] = [];
   let previousWasBreak = false;
-  for (const child of children(node)) {
+  let offset = 0;
+  for (const child of projectionNodeChildren(node)) {
     let text = renderedProjectionText(child, projection);
-    if (previousWasBreak && isText(child) && text.startsWith('\n')) {
+    if (previousWasBreak && isProjectionTextNode(child) && text.startsWith('\n')) {
       text = text.slice(1);
     }
-    parts.push(text);
-    previousWasBreak = isElement(child) && child.tagName === 'br';
+    parts.push({ child, text, start: offset, end: offset + text.length });
+    offset += text.length;
+    previousWasBreak = isProjectionElementNode(child) && projectionNodeTagName(child) === 'br';
   }
-
-  const text = parts.join('');
-  return node.tagName === 'pre' || node.tagName === 'code' ? text.replace(/\n$/, '') : text;
+  return parts;
 }

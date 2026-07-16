@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "return answer",
+    "prefix": "const answer = 42;\n",
+    "suffix": ";",
+    "start": 19,
+    "end": 32,
+    "heading_path": [],
+    "projection_version": 60
+  }
+}

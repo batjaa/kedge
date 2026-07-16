@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "reason": "selection_crosses_atomic",
+  "detail": "Selection crosses atomic projection range 7:14."
+}
