@@ -6,5 +6,7 @@ whose visible text is anchor text but whose URL is not.
 
 ![standalone image](https://example.test/standalone.png)
 
+[![linked image](https://example.test/linked.png)](https://kedge.review/linked-image)
+
 Text after the standalone image stays anchorable, and its offsets are stable
 because the image collapses to a fixed-width placeholder token.

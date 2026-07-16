@@ -11,9 +11,9 @@ import {
 // placeholder is, that offsets survive around one, that frontmatter never leaks
 // into the anchor substrate.
 describe('projection contract (SPEC §5.4)', () => {
-  it('starts at projection_version 1 and reports it', () => {
-    expect(PROJECTION_VERSION).toBe(1);
-    expect(project('# Hi').projectionVersion).toBe(1);
+  it('reports projection_version 2', () => {
+    expect(PROJECTION_VERSION).toBe(2);
+    expect(project('# Hi').projectionVersion).toBe(2);
   });
 
   it('drops YAML frontmatter from the anchor substrate', () => {
@@ -60,6 +60,18 @@ describe('projection contract (SPEC §5.4)', () => {
     const { plainText, warnings } = project('Prose with ⟦ and ⟧ literals.');
     expect(plainText).toBe('Prose with  and  literals.');
     expect(warnings).toHaveLength(1);
+  });
+
+  it('emits no text or annotation for empty table cells', () => {
+    const result = project('| A | B | C |\n|---|---|---|\n| a | | c |\n| | | |\n');
+    expect(result.plainText).toBe('A B C\na c');
+    expect(result.annotations.map((item) => result.plainText.slice(item.start, item.end))).toEqual([
+      'A',
+      'B',
+      'C',
+      'a',
+      'c',
+    ]);
   });
 
   it('is deterministic — identical source projects byte-identically', () => {

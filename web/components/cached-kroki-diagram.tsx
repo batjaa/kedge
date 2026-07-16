@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { fetchDiagramUrl } from '@/lib/diagram-client';
 import { DiagramFigure } from '@/components/diagram-figure';
 import { DiagramSkeleton, DiagramSourceError } from '@/components/diagram-states';
+import type { ProjectionAttrs } from '@/lib/projection';
 
 // The diagram component for IMPORTED documents (SPEC §6.2). Bound to the JSX name
 // `KrokiDiagram` in the imported-MDX allowlist and to `kroki-diagram` in the
@@ -15,8 +16,6 @@ import { DiagramSkeleton, DiagramSourceError } from '@/components/diagram-states
 // crashes (hard rule #2). The dogfood /docs surface keeps its own build-time
 // component (components/kroki-diagram) because it renders at build, where the API
 // isn't up; both share the DiagramFigure presentation and click-to-zoom.
-
-type ProjectionAttrs = { [key: `data-${string}`]: string | undefined };
 
 /**
  * Resolve one diagram to its rendered node. Exported for the fixture suite so a
@@ -39,11 +38,11 @@ export async function resolveDiagram({
         engine={engine}
         source={source}
         errorDetail={result.errorDetail}
-        {...projectionAttrs}
+        projectionAttrs={projectionAttrs}
       />
     );
   }
-  return <DiagramFigure engine={engine} src={result.url} {...projectionAttrs} />;
+  return <DiagramFigure engine={engine} src={result.url} projectionAttrs={projectionAttrs} />;
 }
 
 /**
@@ -54,10 +53,14 @@ export async function resolveDiagram({
 export function CachedKrokiDiagram({
   engine,
   source,
-  ...projectionAttrs
-}: { engine: string; source: string } & ProjectionAttrs) {
+  projectionAttrs,
+}: {
+  engine: string;
+  source: string;
+  projectionAttrs?: ProjectionAttrs;
+}) {
   return (
-    <Suspense fallback={<DiagramSkeleton engine={engine} {...projectionAttrs} />}>
+    <Suspense fallback={<DiagramSkeleton engine={engine} projectionAttrs={projectionAttrs} />}>
       {resolveDiagram({ engine, source, projectionAttrs })}
     </Suspense>
   );

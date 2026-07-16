@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef } from 'react';
+import type { ReactNode } from 'react';
 
 // The dark code panel for fenced code blocks in IMPORTED documents (issue #48).
 //
@@ -30,16 +30,9 @@ import type { ComponentPropsWithoutRef } from 'react';
 // rewrites them to <kroki-diagram>/<KrokiDiagram> upstream, so KrokiDiagram
 // rendering is untouched. Server component, no client JS, no webfonts.
 
-export function CodeBlock({
-  children,
-  className: _className,
-  ...props
-}: ComponentPropsWithoutRef<'pre'>) {
+export function CodeBlock({ children }: { children?: ReactNode }) {
   return (
-    <pre
-      {...props}
-      className="not-prose my-6 overflow-x-auto rounded-2xl bg-zinc-900 p-4 font-mono text-xs leading-relaxed text-zinc-300 ring-1 ring-inset ring-white/10 shadow-md dark:bg-white/[.03]"
-    >
+    <pre className="not-prose my-6 overflow-x-auto rounded-2xl bg-zinc-900 p-4 font-mono text-xs leading-relaxed text-zinc-300 ring-1 ring-inset ring-white/10 shadow-md dark:bg-white/[.03]">
       {children}
     </pre>
   );

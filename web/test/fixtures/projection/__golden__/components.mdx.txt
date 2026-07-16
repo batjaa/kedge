@@ -1,0 +1,7 @@
+Component projection
+
+Before the component.
+
+⟦component:Note⟧
+
+After the component.

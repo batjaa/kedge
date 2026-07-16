@@ -27,10 +27,12 @@ import { renderMarkdown } from './render-markdown';
 // sanitize raw HTML). The compiled artifact is cached by content hash so a
 // version compiles once, not once per request.
 //
-// The SAME compile is the MDX validator: lib/projection walks the mdast for the
-// anchor substrate, and this module attempts the full compile to decide mdx_ok.
-// A rejection or a syntax error is not an exception the page must handle — it is
-// simply mdx_ok=false, which routes the doc to the plain-markdown fallback.
+// The SAME compile+run outcome is the MDX validator and projection source:
+// lib/projection records the anchor substrate in file.data during the compile
+// tree walk, then run() proves the compiled module can evaluate. A rejection,
+// syntax error, or run-time module error is not an exception the page must handle
+// — it is simply mdx_ok=false, which routes the doc to the plain-markdown
+// fallback and stores that fallback's matching projection.
 
 type MdxContent = ComponentType<{ components?: MDXComponents }>;
 
@@ -44,29 +46,27 @@ const BASE_REMARK_PLUGINS = [
   remarkMdxHarden,
 ] satisfies PluggableList;
 
-function remarkPluginsForProjection(annotate: boolean): PluggableList {
-  return [
-    ...BASE_REMARK_PLUGINS,
-    [remarkProjectionAnnotations, { annotate }],
-  ] satisfies PluggableList;
-}
+const COMPILE_REMARK_PLUGINS = [
+  ...BASE_REMARK_PLUGINS,
+  remarkProjectionAnnotations,
+] satisfies PluggableList;
 
 /**
  * Compile untrusted MDX to a JS module body string. Throws MdxRejectedError (a
  * rejected construct) or a compile error (bad syntax) — both mean "not valid
  * MDX", handled by the callers as mdx_ok=false.
  */
-async function compileToSource(content: string): Promise<string> {
+async function compileToArtifact(content: string): Promise<{ source: string; projection: ProjectionResult }> {
   const file = await compile(content, {
     outputFormat: 'function-body',
     // No rehype-sanitize: it drops mdxJsx nodes wholesale (incl. our allowlisted
     // components). The tight schema is enforced in remark-mdx-harden instead.
-    remarkPlugins: remarkPluginsForProjection(true),
+    remarkPlugins: COMPILE_REMARK_PLUGINS,
   });
-  return String(file);
+  return { source: String(file), projection: projectionFromFile(file) ?? project(content) };
 }
 
-async function runSource(source: string): Promise<MdxContent> {
+async function defaultRunSource(source: string): Promise<MdxContent> {
   const mod = await run(source, {
     Fragment,
     jsx,
@@ -75,6 +75,8 @@ async function runSource(source: string): Promise<MdxContent> {
   } as Parameters<typeof run>[1]);
   return mod.default as MdxContent;
 }
+
+let runSource = defaultRunSource;
 
 // ── Compile cache ────────────────────────────────────────────────────────────
 // Two layers, justified by Next's process model:
@@ -94,30 +96,39 @@ async function runSource(source: string): Promise<MdxContent> {
 // compiled JSX when render-only transforms change without changing document
 // bytes.
 
-type Outcome =
-  | { ok: true; Content: MdxContent }
-  | { ok: false; reason: string };
+export type MdxCompileOutcome =
+  | { ok: true; Content: MdxContent; projection: ProjectionResult }
+  | { ok: false; reason: string; projection: ProjectionResult };
 
 const L1_MAX = Number(process.env.MDX_CACHE_MAX ?? 128);
-const l1 = new Map<string, Promise<Outcome>>();
+const l1 = new Map<string, Promise<MdxCompileOutcome>>();
 
 const L2_DIR = process.env.MDX_CACHE_DIR ?? join(tmpdir(), 'kedge-mdx-cache');
-const MDX_COMPILE_CACHE_VERSION = 'projection-annotations-v1';
+const MDX_COMPILE_CACHE_VERSION = 'projection-v2-compile-run-v1';
+
+const mdxCacheStats = {
+  l1Hits: 0,
+  produceCalls: 0,
+  compileCalls: 0,
+  diskHits: 0,
+  runCalls: 0,
+};
 
 function cacheKey(content: string): string {
   return createHash('sha256').update(MDX_COMPILE_CACHE_VERSION).update('\0').update(content).digest('hex');
 }
 
-function l1Get(key: string): Promise<Outcome> | undefined {
+function l1Get(key: string): Promise<MdxCompileOutcome> | undefined {
   const hit = l1.get(key);
   if (hit) {
+    mdxCacheStats.l1Hits++;
     l1.delete(key); // refresh recency
     l1.set(key, hit);
   }
   return hit;
 }
 
-function l1Set(key: string, value: Promise<Outcome>): void {
+function l1Set(key: string, value: Promise<MdxCompileOutcome>): void {
   l1.set(key, value);
   while (l1.size > L1_MAX) {
     const oldest = l1.keys().next().value;
@@ -130,55 +141,82 @@ function diskPath(key: string): string {
   return join(L2_DIR, `${key}.js`);
 }
 
-function diskRead(key: string): string | null {
+function projectionDiskPath(key: string): string {
+  return join(L2_DIR, `${key}.projection.json`);
+}
+
+function isProjectionResult(value: unknown): value is ProjectionResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as ProjectionResult).plainText === 'string' &&
+    typeof (value as ProjectionResult).projectionVersion === 'number' &&
+    typeof (value as ProjectionResult).mdxOk === 'boolean' &&
+    Array.isArray((value as ProjectionResult).warnings) &&
+    Array.isArray((value as ProjectionResult).annotations)
+  );
+}
+
+function diskRead(key: string): { source: string; projection: ProjectionResult } | null {
   try {
-    return readFileSync(diskPath(key), 'utf8');
+    const source = readFileSync(diskPath(key), 'utf8');
+    const projection = JSON.parse(readFileSync(projectionDiskPath(key), 'utf8')) as unknown;
+    if (!isProjectionResult(projection)) return null;
+    return { source, projection };
   } catch {
     return null;
   }
 }
 
-function diskWrite(key: string, source: string): void {
+function diskWrite(key: string, source: string, projection: ProjectionResult): void {
   try {
     mkdirSync(L2_DIR, { recursive: true });
     writeFileSync(diskPath(key), source, 'utf8');
+    writeFileSync(projectionDiskPath(key), JSON.stringify(projection), 'utf8');
   } catch {
     // Best-effort: a read-only or full disk must not break rendering.
   }
 }
 
-async function produce(content: string, key: string): Promise<Outcome> {
+function fallbackProjection(content: string, reason: string): ProjectionResult {
+  const fallback = project(content);
+  return {
+    ...fallback,
+    mdxOk: false,
+    warnings: [
+      ...fallback.warnings,
+      `MDX failed to compile or run: ${reason}`,
+    ],
+  };
+}
+
+async function produce(content: string, key: string): Promise<MdxCompileOutcome> {
+  mdxCacheStats.produceCalls++;
   try {
-    let source = diskRead(key);
-    if (source === null) {
-      source = await compileToSource(content); // the expensive step
-      diskWrite(key, source);
+    let artifact = diskRead(key);
+    if (artifact === null) {
+      mdxCacheStats.compileCalls++;
+      artifact = await compileToArtifact(content); // the expensive step
+      diskWrite(key, artifact.source, artifact.projection);
+    } else {
+      mdxCacheStats.diskHits++;
     }
-    const Content = await runSource(source);
-    return { ok: true, Content };
+    mdxCacheStats.runCalls++;
+    const Content = await runSource(artifact.source);
+    return { ok: true, Content, projection: artifact.projection };
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    const reason = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason, projection: fallbackProjection(content, reason) };
   }
 }
 
-function getCompiled(content: string): Promise<Outcome> {
+export function getCompiled(content: string): Promise<MdxCompileOutcome> {
   const key = cacheKey(content);
   const cached = l1Get(key);
   if (cached) return cached;
   const pending = produce(content, key);
   l1Set(key, pending);
   return pending;
-}
-
-/**
- * Attempt a full hardened compile of `content` and report whether it is valid
- * MDX (SPEC §5.4 / §6.1). Warms the compile cache as a side effect, so the
- * eventual render of the same content is a cache hit. Never throws.
- */
-export async function validateMdx(content: string): Promise<{ ok: boolean; warnings: string[] }> {
-  const outcome = await getCompiled(content);
-  if (outcome.ok) return { ok: true, warnings: [] };
-  return { ok: false, warnings: [`MDX failed to compile: ${outcome.reason}`] };
 }
 
 function projectionFromFile(file: { data?: Record<string, unknown> }): ProjectionResult | null {
@@ -194,23 +232,7 @@ function projectionFromFile(file: { data?: Record<string, unknown> }): Projectio
  * projection because the page will render through that fallback too.
  */
 export async function projectMdx(content: string): Promise<ProjectionResult> {
-  try {
-    const file = await compile(content, {
-      outputFormat: 'function-body',
-      remarkPlugins: remarkPluginsForProjection(false),
-    });
-    return projectionFromFile(file) ?? project(content);
-  } catch (error) {
-    const fallback = project(content);
-    return {
-      ...fallback,
-      mdxOk: false,
-      warnings: [
-        ...fallback.warnings,
-        `MDX failed to compile: ${error instanceof Error ? error.message : String(error)}`,
-      ],
-    };
-  }
+  return (await getCompiled(content)).projection;
 }
 
 /**
@@ -226,4 +248,21 @@ export async function renderMdx(content: string): Promise<{ node: ReactNode; ok:
   }
   const { Content } = outcome;
   return { node: <Content components={IMPORTED_MDX_COMPONENTS} />, ok: true };
+}
+
+export function __getMdxCacheStatsForTest() {
+  return { ...mdxCacheStats, l1Size: l1.size };
+}
+
+export function __clearMdxCacheForTest() {
+  l1.clear();
+  for (const key of Object.keys(mdxCacheStats) as Array<keyof typeof mdxCacheStats>) {
+    mdxCacheStats[key] = 0;
+  }
+}
+
+export function __setMdxRunSourceForTest(
+  runner: ((source: string) => Promise<MdxContent>) | null,
+) {
+  runSource = runner ?? defaultRunSource;
 }

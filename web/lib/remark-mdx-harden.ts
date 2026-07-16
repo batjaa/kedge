@@ -73,7 +73,7 @@ function allowedAttrsFor(tag: string): Set<string> {
 
 // A JSX name is a component when it is capitalized or member-access (Foo.Bar);
 // lowercase bare names are intrinsic HTML elements (div, span, script, …).
-function isComponentName(name: string): boolean {
+export function isComponentName(name: string): boolean {
   return /^[A-Z]/.test(name) || name.includes('.');
 }
 
@@ -112,17 +112,22 @@ function isLiteralExpression(node: EstreeCarrier): boolean {
   return typeof node.value === 'string' ? node.value.trim() === '' : node.value == null;
 }
 
-interface JsxAttribute {
+export interface MdxJsxAttribute {
   type: string;
   name?: string;
   value?: unknown;
 }
 
-interface JsxElement {
+export interface MdxJsxElement {
   type: 'mdxJsxFlowElement' | 'mdxJsxTextElement';
   name?: string | null;
-  attributes?: JsxAttribute[];
+  attributes?: MdxJsxAttribute[];
   children?: unknown[];
+}
+
+export function isMdxJsxElement(node: unknown): node is MdxJsxElement {
+  const type = (node as { type?: unknown }).type;
+  return type === 'mdxJsxFlowElement' || type === 'mdxJsxTextElement';
 }
 
 /**
@@ -133,12 +138,12 @@ interface JsxElement {
  * outright; for intrinsics we additionally drop attributes outside the tight
  * schema and neutralize unsafe URL schemes.
  */
-function sanitizeAttributes(node: JsxElement, isComponent: boolean): void {
+function sanitizeAttributes(node: MdxJsxElement, isComponent: boolean): void {
   const attrs = node.attributes;
   if (!Array.isArray(attrs)) return;
 
   const allowed = isComponent ? null : allowedAttrsFor(node.name as string);
-  const kept: JsxAttribute[] = [];
+  const kept: MdxJsxAttribute[] = [];
 
   for (const attr of attrs) {
     // Spread attribute `{...props}` — never literal, always rejected.
@@ -177,7 +182,7 @@ function sanitizeAttributes(node: JsxElement, isComponent: boolean): void {
   node.attributes = kept;
 }
 
-function unsupportedNode(name: string, flow: boolean): JsxElement {
+function unsupportedNode(name: string, flow: boolean): MdxJsxElement {
   return {
     type: flow ? 'mdxJsxFlowElement' : 'mdxJsxTextElement',
     name: UNSUPPORTED_COMPONENT,
@@ -205,8 +210,8 @@ export function remarkMdxHarden() {
       }
 
       // 3. JSX elements — allowlist components, sanitize intrinsic HTML.
-      if (type === 'mdxJsxFlowElement' || type === 'mdxJsxTextElement') {
-        const el = node as unknown as JsxElement;
+      if (isMdxJsxElement(node)) {
+        const el = node;
         const name = el.name;
 
         // A fragment (<>…</>) has no name — harmless wrapper, keep its children.

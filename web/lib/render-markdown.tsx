@@ -1,15 +1,17 @@
 import type { ReactNode } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
+import { createHash } from 'node:crypto';
 import remarkRehype from 'remark-rehype';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit } from 'unist-util-visit';
 import type { Nodes } from 'hast';
 import type { Root } from 'mdast';
 import { createRemarkProcessor } from './pipeline';
-import { projectMdast } from './projection';
+import { remarkProjectionAnnotations } from './projection';
 import { remarkDiagramsHast } from './remark-diagrams';
 import { CachedKrokiDiagram } from '@/components/cached-kroki-diagram';
 import { CodeBlock } from '@/components/code-block';
+import { withProjectionAttrs } from '@/components/projection-attrs';
 
 // Markdown renderer for imported documents — the safe, markdown-level path used
 // for `.md`/`.html` docs and as the plain-markdown fallback when an `.mdx`
@@ -41,6 +43,9 @@ import { CodeBlock } from '@/components/code-block';
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+const MARKDOWN_RENDER_CACHE_VERSION = 'projection-v2-render-v1';
+const MARKDOWN_RENDER_L1_MAX = Number(process.env.MARKDOWN_RENDER_CACHE_MAX ?? 128);
+const markdownRenderL1 = new Map<string, Promise<ReactNode>>();
 
 function isSafeUrl(value: unknown): boolean {
   const raw = String(value).trim();
@@ -67,6 +72,7 @@ function sanitizeUrls() {
 // projection walks (SPEC §5.4) — with the render-only hast half. Rendering and
 // projection therefore agree, by construction, on where every block begins.
 const processor = createRemarkProcessor()
+  .use(remarkProjectionAnnotations)
   // Retarget diagram fences to <kroki-diagram> before remark-rehype builds hast,
   // so they carry engine + source into the render below (unknown fences untouched).
   .use(remarkDiagramsHast)
@@ -74,13 +80,39 @@ const processor = createRemarkProcessor()
   .use(remarkRehype)
   .use(sanitizeUrls);
 
-/**
- * Render untrusted markdown to React nodes. Safe against script injection; see
- * the module header for the guarantees.
- */
-export async function renderMarkdown(markdown: string): Promise<ReactNode> {
+const MARKDOWN_COMPONENTS = {
+  'kroki-diagram': withProjectionAttrs(CachedKrokiDiagram),
+  pre: CodeBlock,
+};
+
+function markdownCacheKey(markdown: string): string {
+  return createHash('sha256')
+    .update(MARKDOWN_RENDER_CACHE_VERSION)
+    .update('\0')
+    .update(markdown)
+    .digest('hex');
+}
+
+function l1Get(key: string): Promise<ReactNode> | undefined {
+  const hit = markdownRenderL1.get(key);
+  if (hit) {
+    markdownRenderL1.delete(key);
+    markdownRenderL1.set(key, hit);
+  }
+  return hit;
+}
+
+function l1Set(key: string, value: Promise<ReactNode>): void {
+  markdownRenderL1.set(key, value);
+  while (markdownRenderL1.size > MARKDOWN_RENDER_L1_MAX) {
+    const oldest = markdownRenderL1.keys().next().value;
+    if (oldest === undefined) break;
+    markdownRenderL1.delete(oldest);
+  }
+}
+
+async function renderMarkdownUncached(markdown: string): Promise<ReactNode> {
   const mdast = processor.parse(markdown) as Root;
-  projectMdast(mdast, { annotate: true });
   const tree = (await processor.run(mdast)) as Nodes;
   return toJsxRuntime(tree, {
     Fragment,
@@ -90,6 +122,19 @@ export async function renderMarkdown(markdown: string): Promise<ReactNode> {
     // intrinsic we restyle: a fenced block's <pre> renders as the dark CodeBlock
     // panel (issue #48). Everything else is standard markdown hast rendered by
     // the runtime directly.
-    components: { 'kroki-diagram': CachedKrokiDiagram, pre: CodeBlock },
+    components: MARKDOWN_COMPONENTS,
   });
+}
+
+/**
+ * Render untrusted markdown to React nodes. Safe against script injection; see
+ * the module header for the guarantees.
+ */
+export async function renderMarkdown(markdown: string): Promise<ReactNode> {
+  const key = markdownCacheKey(markdown);
+  const cached = l1Get(key);
+  if (cached) return cached;
+  const pending = renderMarkdownUncached(markdown);
+  l1Set(key, pending);
+  return pending;
 }

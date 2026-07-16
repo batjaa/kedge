@@ -1,5 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5';
@@ -14,16 +13,20 @@ import {
   project,
   type ProjectionResult,
 } from '../lib/projection';
+import { renderedProjectionText } from '../lib/rendered-projection-text';
+import { projectionFixtures } from './projection-fixtures';
 
-const FIXTURES = join(import.meta.dirname, 'fixtures', 'projection');
-
-const inputs = readdirSync(FIXTURES)
-  .filter((name) => /\.(md|mdx)$/.test(name))
-  .sort();
+// Render-time projection annotation corpus. The `.annotations.txt` goldens pin
+// emitted ranges in DOM order:
+//
+//     npm run test:update            # rewrites plain_text and annotation dumps
+//
+// A range change without an intentional golden update means capture would bind
+// comments to different DOM nodes even if the round-trip invariant still passed.
+const inputs = projectionFixtures();
 
 type Node = DefaultTreeAdapterMap['node'];
 type Element = DefaultTreeAdapterMap['element'];
-type TextNode = DefaultTreeAdapterMap['textNode'];
 type ParentNode = DefaultTreeAdapterMap['parentNode'];
 
 function fakeDiagramApi() {
@@ -38,10 +41,6 @@ function fakeDiagramApi() {
 
 function isElement(node: Node): node is Element {
   return 'tagName' in node;
-}
-
-function isText(node: Node): node is TextNode {
-  return node.nodeName === '#text';
 }
 
 function children(node: Node): Node[] {
@@ -66,27 +65,15 @@ function collectAnnotated(node: Node, out: Element[] = []): Element[] {
   return out;
 }
 
-function renderedProjectionText(node: Node, projection: string): string {
-  if (isText(node)) return node.value;
-  if (!isElement(node)) return children(node).map((child) => renderedProjectionText(child, projection)).join('');
-
-  const annotatedRange = range(node);
-  if (attr(node, PROJECTION_ATOMIC_ATTR) === 'true' && annotatedRange) {
-    return projection.slice(annotatedRange[0], annotatedRange[1]);
-  }
-  if (node.tagName === 'br') return '\n';
-  const parts: string[] = [];
-  let previousWasBreak = false;
-  for (const child of children(node)) {
-    let text = renderedProjectionText(child, projection);
-    if (previousWasBreak && isText(child) && text.startsWith('\n')) {
-      text = text.slice(1);
-    }
-    parts.push(text);
-    previousWasBreak = isElement(child) && child.tagName === 'br';
-  }
-  const text = parts.join('');
-  return node.tagName === 'pre' || node.tagName === 'code' ? text.replace(/\n$/, '') : text;
+function annotationDump(markup: string): string {
+  const fragment = parseFragment(markup) as Node;
+  return collectAnnotated(fragment)
+    .map((node) => {
+      const [start, end] = range(node)!;
+      const atomic = attr(node, PROJECTION_ATOMIC_ATTR) === 'true';
+      return `${start}:${end}:${atomic}`;
+    })
+    .join('\n');
 }
 
 function assertAnnotationsRoundTrip(markup: string, result: ProjectionResult) {
@@ -120,24 +107,23 @@ afterEach(() => {
 });
 
 describe('render-time projection annotations', () => {
-  for (const file of inputs) {
-    it(`round-trips markdown annotations for ${file}`, async () => {
+  for (const fixture of inputs) {
+    it(`pins and round-trips annotations for ${fixture.file}`, async () => {
       fakeDiagramApi();
-      const source = readFileSync(join(FIXTURES, file), 'utf8');
-      const result = project(source);
-      const markup = renderToStaticMarkup((await renderMarkdown(source)) as ReactElement);
+      const source = readFileSync(fixture.sourcePath, 'utf8');
+      const result =
+        fixture.format === 'mdx' ? await projectMdx(source) : project(source);
+      let markup: string;
+      if (fixture.format === 'mdx') {
+        const { node, ok } = await renderMdx(source);
+        expect(ok).toBe(true);
+        markup = renderToStaticMarkup(node);
+      } else {
+        markup = renderToStaticMarkup((await renderMarkdown(source)) as ReactElement);
+      }
 
+      await expect(annotationDump(markup)).toMatchFileSnapshot(fixture.annotationsGoldenPath);
       assertAnnotationsRoundTrip(markup, result);
-    });
-
-    it(`round-trips hardened MDX annotations for ${file}`, async () => {
-      fakeDiagramApi();
-      const source = readFileSync(join(FIXTURES, file), 'utf8');
-      const result = await projectMdx(source);
-      const { node, ok } = await renderMdx(source);
-
-      expect(ok).toBe(true);
-      assertAnnotationsRoundTrip(renderToStaticMarkup(node), result);
     });
   }
 

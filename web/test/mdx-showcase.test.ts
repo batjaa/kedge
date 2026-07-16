@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { validateMdx, renderMdx } from '../lib/mdx';
+import { projectMdx, renderMdx } from '../lib/mdx';
 
 // Fixture-level demo of the `.mdx` render path (SPEC §6.1). A realistic imported
 // MDX document — the kind an author pastes a raw URL to — flows end to end
@@ -13,7 +13,7 @@ const SHOWCASE = readFileSync(join(import.meta.dirname, 'fixtures', 'mdx', 'show
 
 describe('imported .mdx showcase renders through the hardened path', () => {
   it('compiles cleanly (mdx_ok = true)', async () => {
-    expect((await validateMdx(SHOWCASE)).ok).toBe(true);
+    expect((await projectMdx(SHOWCASE)).mdxOk).toBe(true);
   });
 
   it('renders the whole document safely', async () => {
@@ -43,7 +43,7 @@ describe('imported .mdx showcase renders through the hardened path', () => {
 
 describe('diagram fences and unknown languages never crash the MDX compile', () => {
   it('compiles a Kroki diagram fence (→ allowlisted KrokiDiagram)', async () => {
-    expect((await validateMdx('```mermaid\ngraph TD\nA-->B\n```')).ok).toBe(true);
+    expect((await projectMdx('```mermaid\ngraph TD\nA-->B\n```')).mdxOk).toBe(true);
   });
 
   it('compiles an unknown fence language (→ plain code)', async () => {

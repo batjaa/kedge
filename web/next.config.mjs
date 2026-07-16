@@ -9,6 +9,7 @@ const webRoot = dirname(fileURLToPath(import.meta.url));
 const config = {
   reactStrictMode: true,
   turbopack: {
+    // Root inference can escape the monorepo; pin it to this app.
     root: webRoot,
   },
   async headers() {

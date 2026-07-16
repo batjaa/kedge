@@ -1,6 +1,11 @@
 import type { Nodes, PhrasingContent, Root } from 'mdast';
 import { parseToMdast } from './pipeline';
 import { diagramEngineFor } from './remark-diagrams';
+import {
+  isComponentName,
+  isMdxJsxElement,
+  type MdxJsxElement,
+} from './remark-mdx-harden';
 
 // Text projection — the anchor substrate (SPEC §5.4). Walks the SAME mdast the
 // renderer derives its page from (lib/pipeline.ts) down to the plain text a
@@ -15,7 +20,15 @@ import { diagramEngineFor } from './remark-diagrams';
 // --update-golden; see lib/__tests__/projection.golden.test.ts). A silent change
 // would reinterpret every stored offset and move real comments; the version +
 // the failing corpus are the guardrail that makes such a change deliberate.
-export const PROJECTION_VERSION = 1;
+//
+// v2 (2026-07-16):
+//   - GFM table empty cells emit no projection text and no annotation. A row made
+//     only of empty cells therefore disappears; a row like `a | | c` projects as
+//     `a c`, not the v1 `a  c`.
+//   - `format=mdx` projection is taken from the same hardened MDX compile tree
+//     the renderer uses, so allowlisted/unsupported components project to stable
+//     `⟦component:Name⟧` tokens instead of being parsed as plain markdown.
+export const PROJECTION_VERSION = 2;
 
 // ── Placeholder tokens ───────────────────────────────────────────────────────
 // Non-text blocks (images, diagram fences, and — forward-compat — MDX/JSX
@@ -65,8 +78,9 @@ export interface ProjectionAnnotation {
   start: number;
   end: number;
   atomic: boolean;
-  token?: string;
 }
+
+export type ProjectionAttrs = { [key: `data-${string}`]: string | undefined };
 
 interface Ctx {
   stripped: number;
@@ -76,6 +90,7 @@ interface Ctx {
 
 interface Piece {
   text: string;
+  atomic?: boolean;
   apply(base: number, ctx: Ctx): void;
 }
 
@@ -88,6 +103,12 @@ function clean(value: string, ctx: Ctx): string {
   });
   ctx.stripped += stripped;
   return out;
+}
+
+function cleanNodeValue(node: { value: string }, ctx: Ctx): string {
+  const cleaned = clean(node.value, ctx);
+  if (ctx.annotate && cleaned !== node.value) node.value = cleaned;
+  return cleaned;
 }
 
 export const PROJECTION_RANGE_ATTR = 'data-prange';
@@ -112,17 +133,22 @@ function literal(text: string): Piece {
 function marked(
   node: Nodes | PhrasingContent,
   piece: Piece,
-  opts: { atomic?: boolean; token?: string } = {},
+  opts: { atomic?: boolean } = {},
 ): Piece {
   return {
     text: piece.text,
+    atomic: opts.atomic === true || piece.atomic === true,
     apply(base, ctx) {
       if (piece.text === '') return;
+      // If this wrapper covers exactly one atomic child (for example a paragraph
+      // containing only an image, or a link whose only child is an image), the
+      // wrapper inherits atomicity. Capture then treats every annotated ancestor
+      // for that range as opaque and never descends into the placeholder token.
+      const atomic = opts.atomic === true || piece.atomic === true;
       const annotation: ProjectionAnnotation = {
         start: base,
         end: base + piece.text.length,
-        atomic: opts.atomic === true,
-        token: opts.token,
+        atomic,
       };
       ctx.annotations.push(annotation);
       if (ctx.annotate) annotateNode(node, annotation);
@@ -131,10 +157,15 @@ function marked(
   };
 }
 
+function atomicToken(node: Nodes | PhrasingContent, text: string): Piece {
+  return marked(node, { ...literal(text), atomic: true }, { atomic: true });
+}
+
 function concat(parts: Piece[], sep: string): Piece {
   const nonEmpty = parts.filter((part) => part.text !== '');
   return {
     text: nonEmpty.map((part) => part.text).join(sep),
+    atomic: nonEmpty.length === 1 && nonEmpty[0].atomic === true,
     apply(base, ctx) {
       let offset = base;
       for (const [index, part] of nonEmpty.entries()) {
@@ -150,6 +181,8 @@ function annotateNode(node: Nodes | PhrasingContent, annotation: ProjectionAnnot
   const attrs = projectionDataAttributes(annotation);
   const dataNode = node as { data?: { hProperties?: Record<string, unknown> } };
   dataNode.data ??= {};
+  // For fenced `code` nodes, mdast-util-to-hast attaches hProperties to the
+  // inner <code> element. CodeBlock's <pre> wrapper stays children-only.
   dataNode.data.hProperties = { ...(dataNode.data.hProperties ?? {}), ...attrs };
 
   if (!isMdxJsxElement(node)) return;
@@ -168,30 +201,8 @@ function annotateNode(node: Nodes | PhrasingContent, annotation: ProjectionAnnot
   ];
 }
 
-interface MdxJsxAttribute {
-  type: 'mdxJsxAttribute';
-  name?: string;
-  value?: unknown;
-}
-
-interface MdxJsxElement {
-  type: 'mdxJsxFlowElement' | 'mdxJsxTextElement';
-  name?: string | null;
-  attributes?: MdxJsxAttribute[];
-  children?: unknown[];
-}
-
-function isMdxJsxElement(node: unknown): node is MdxJsxElement {
-  const type = (node as { type?: unknown }).type;
-  return type === 'mdxJsxFlowElement' || type === 'mdxJsxTextElement';
-}
-
 function jsxAttr(node: MdxJsxElement, name: string): unknown {
   return node.attributes?.find((attr) => attr.type === 'mdxJsxAttribute' && attr.name === name)?.value;
-}
-
-function isComponentName(name: string): boolean {
-  return /^[A-Z]/.test(name) || name.includes('.');
 }
 
 function mdxChildren(node: MdxJsxElement, ctx: Ctx): Piece {
@@ -207,23 +218,23 @@ function mdxJsx(node: MdxJsxElement, ctx: Ctx): Piece {
   if (name === 'KrokiDiagram') {
     const engine = String(jsxAttr(node, 'engine') ?? 'unknown');
     const text = diagramToken(engine);
-    return marked(node as unknown as Nodes, literal(text), { atomic: true, token: text });
+    return atomicToken(node as unknown as Nodes, text);
   }
 
   if (name === 'UnsupportedComponent') {
     const original = String(jsxAttr(node, 'name') ?? 'unknown');
     const text = componentToken(original);
-    return marked(node as unknown as Nodes, literal(text), { atomic: true, token: text });
+    return atomicToken(node as unknown as Nodes, text);
   }
 
   if (isComponentName(name)) {
     const text = componentToken(name);
-    return marked(node as unknown as Nodes, literal(text), { atomic: true, token: text });
+    return atomicToken(node as unknown as Nodes, text);
   }
 
   if (name === 'img') {
     const text = imageToken();
-    return marked(node as unknown as Nodes, literal(text), { atomic: true, token: text });
+    return atomicToken(node as unknown as Nodes, text);
   }
 
   return mdxChildren(node, ctx);
@@ -254,15 +265,15 @@ function inlineNode(node: PhrasingContent, ctx: Ctx): Piece {
 
   switch (node.type) {
     case 'text':
-      return literal(clean(node.value, ctx));
+      return literal(cleanNodeValue(node, ctx));
     case 'inlineCode':
-      return marked(node, literal(clean(node.value, ctx)));
+      return marked(node, literal(cleanNodeValue(node, ctx)));
     case 'break':
       return literal('\n');
     case 'image':
     case 'imageReference': {
       const text = imageToken();
-      return marked(node, literal(text), { atomic: true, token: text });
+      return atomicToken(node, text);
     }
     case 'emphasis':
     case 'strong':
@@ -304,20 +315,19 @@ function block(node: Nodes, ctx: Ctx): Piece {
     case 'code': {
       const engine = diagramEngineFor(node.lang);
       // Prose code stays anchorable text; a diagram fence collapses to a token.
-      const text = engine ? diagramToken(engine) : clean(node.value, ctx);
-      return marked(node, literal(text), {
-        atomic: engine !== null,
-        token: engine ? text : undefined,
-      });
+      if (engine) return atomicToken(node, diagramToken(engine));
+      return marked(node, literal(cleanNodeValue(node, ctx)));
     }
     case 'table':
       return concat(
+        // Empty cells intentionally emit no text and no annotation in v2: there
+        // is no rendered glyph to anchor, and concat() drops empty pieces.
         node.children.map((row) => concat(row.children.map((cell) => marked(cell, inline(cell.children, ctx))), ' ')),
         '\n',
       );
     case 'image': {
       const text = imageToken();
-      return marked(node, literal(text), { atomic: true, token: text });
+      return atomicToken(node, text);
     }
     // Structural or metadata blocks carry no anchor text: a raw-HTML block is
     // dropped (matches render), a rule/frontmatter/link-definition never renders.
@@ -339,11 +349,9 @@ function blocks(nodes: Nodes[], sep: string, ctx: Ctx): Piece {
 
 /**
  * Project an already-parsed mdast tree to its plain-text anchor substrate.
- * With `annotate: true`, the same walk also emits render-time data attributes
- * onto the mdast nodes that become DOM elements.
  */
-export function projectMdast(tree: Root, options: { annotate?: boolean } = {}): ProjectionResult {
-  const ctx: Ctx = { stripped: 0, annotate: options.annotate === true, annotations: [] };
+function projectMdastInternal(tree: Root, annotate: boolean): ProjectionResult {
+  const ctx: Ctx = { stripped: 0, annotate, annotations: [] };
   const piece = blocks(tree.children, '\n\n', ctx);
   piece.apply(0, ctx);
   const plainText = piece.text;
@@ -364,6 +372,19 @@ export function projectMdast(tree: Root, options: { annotate?: boolean } = {}): 
   };
 }
 
+export function projectMdast(tree: Root): ProjectionResult {
+  return projectMdastInternal(tree, false);
+}
+
+/**
+ * Project and annotate the mdast tree the renderer is about to consume.
+ * This mutates visible literal values only to remove reserved token delimiters,
+ * so DOM text and projected text stay byte-aligned.
+ */
+export function annotateProjection(tree: Root): ProjectionResult {
+  return projectMdastInternal(tree, true);
+}
+
 /**
  * Project normalized markdown/MDX source to its plain-text anchor substrate.
  * Deterministic and total: given the same source it returns byte-identical
@@ -376,10 +397,8 @@ export function project(source: string): ProjectionResult {
 
 export const PROJECTION_FILE_DATA_KEY = 'kedgeProjection';
 
-export function remarkProjectionAnnotations(options: { annotate?: boolean } = {}) {
+export function remarkProjectionAnnotations() {
   return (tree: Root, file: { data: Record<string, unknown> }) => {
-    file.data[PROJECTION_FILE_DATA_KEY] = projectMdast(tree, {
-      annotate: options.annotate === true,
-    });
+    file.data[PROJECTION_FILE_DATA_KEY] = annotateProjection(tree);
   };
 }

@@ -1,0 +1,11 @@
+0:16:false
+18:156:false
+38:45:true
+65:76:false
+84:100:false
+158:165:true
+158:165:true
+167:174:true
+167:174:true
+167:174:true
+176:316:false
