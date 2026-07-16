@@ -36,7 +36,7 @@ export function ThreadCard({
   onHoverThread: (thread: ReviewThread) => void;
   onLeaveThread: () => void;
   onSetThreadStatus: (thread: ReviewThread, status: ThreadStatus) => Promise<string | null>;
-  onReply: (thread: ReviewThread, input: ReplyToThreadInput) => Promise<string | null>;
+  onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
   onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;

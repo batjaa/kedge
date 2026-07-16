@@ -19,7 +19,6 @@ export type ComposerState =
       failure: AnchorCaptureFailure | null;
       x: number;
       y: number;
-      idempotencyKey: string;
     };
 
 export function DocumentCommentComposer({
@@ -27,6 +26,7 @@ export function DocumentCommentComposer({
   body,
   proposedText,
   message,
+  submitting,
   onBodyChange,
   onProposedTextChange,
   onCommentTypeChange,
@@ -38,6 +38,7 @@ export function DocumentCommentComposer({
   body: string;
   proposedText: string;
   message: string | null;
+  submitting: boolean;
   onBodyChange: (body: string) => void;
   onProposedTextChange: (proposedText: string) => void;
   onCommentTypeChange: (type: ComposerCommentType) => void;
@@ -49,7 +50,8 @@ export function DocumentCommentComposer({
   const canSuggest = composer.mode === 'inline' && composer.anchor != null && composer.failure == null;
   const isSuggestion = canSuggest && composer.commentType === 'suggestion';
   const suggestionUnchanged = isSuggestion && proposedText.trim() === composer.anchor?.exact.trim();
-  const submitDisabled = isSuggestion ? proposedText.trim() === '' || suggestionUnchanged : body.trim() === '';
+  const submitDisabled = submitting
+    || (isSuggestion ? proposedText.trim() === '' || suggestionUnchanged : body.trim() === '');
 
   if (composer.stage === 'affordance') {
     return (
@@ -121,7 +123,8 @@ export function DocumentCommentComposer({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
+          disabled={submitting}
+          className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/5"
         >
           Cancel
         </button>
@@ -129,6 +132,7 @@ export function DocumentCommentComposer({
           type="button"
           onClick={onSubmit}
           disabled={submitDisabled}
+          aria-busy={submitting}
           className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />

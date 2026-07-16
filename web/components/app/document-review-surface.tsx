@@ -26,6 +26,11 @@ import {
   threadIdsFromAttribute,
 } from '@/lib/anchor-highlight-dom';
 import {
+  commentDraftContextKey,
+  newCommentDraftIdempotencyKey,
+  useCommentDraft,
+} from '@/lib/comment-draft';
+import {
   activeHeadingIdForScroll,
   deriveTocEntriesFromHeadings,
   type HeadingPosition,
@@ -77,9 +82,9 @@ export function DocumentReviewSurface({
   const [anchorPositions, setAnchorPositions] = useState<Record<number, number>>({});
   const [documentHeight, setDocumentHeight] = useState(320);
   const [composer, setComposer] = useState<ComposerState>({ open: false });
-  const [body, setBody] = useState('');
-  const [proposedText, setProposedText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const submittingRef = useRef(false);
   const loadedPageRef = useRef(1);
   const numericProjectionVersion = projectionVersion == null ? NaN : Number(projectionVersion);
   const canCapture = plainText != null && Number.isFinite(numericProjectionVersion);
@@ -88,6 +93,23 @@ export function DocumentReviewSurface({
   const selectedMobileThread = useMemo(() => {
     return mobileThreadId === null ? null : threads.find((thread) => thread.id === mobileThreadId) ?? null;
   }, [mobileThreadId, threads]);
+  const composerDraftContextKey = useMemo(() => {
+    if (!composer.open) return null;
+
+    return commentDraftContextKey({
+      documentId,
+      target: composer.mode === 'inline' && composer.anchor
+        ? { type: 'anchor', anchor: composer.anchor }
+        : { type: 'document' },
+      mode: composer.commentType,
+    });
+  }, [composer, documentId]);
+  const composerInitialProposedText = composer.open && composer.mode === 'inline' && composer.anchor
+    ? composer.anchor.exact
+    : '';
+  const composerDraft = useCommentDraft(composerDraftContextKey, {
+    initialProposedText: composerInitialProposedText,
+  });
 
   const reloadThreads = useCallback(async (targetPage = 1) => {
     const firstPage = await listThreads(documentId, 1);
@@ -283,22 +305,21 @@ export function DocumentReviewSurface({
       stage: 'affordance' as const,
       x: Math.min(window.innerWidth - 180, Math.max(16, rect.left + rect.width / 2)),
       y: Math.max(16, rect.top - 44),
-      idempotencyKey: newIdempotencyKey(),
     };
 
     if (result.ok) {
-      setProposedText(result.selector.exact);
       setComposer({ ...base, mode: 'inline', commentType: 'comment', anchor: result.selector, failure: null });
     } else {
       console.warn('anchor capture failed', result);
-      setProposedText('');
       setComposer({ ...base, mode: 'document', commentType: 'comment', anchor: null, failure: result });
     }
   }
 
   async function submit() {
-    if (!composer.open) return;
+    if (!composer.open || submittingRef.current) return;
     const isSuggestion = composer.mode === 'inline' && composer.anchor != null && composer.commentType === 'suggestion';
+    const body = composerDraft.body;
+    const proposedText = composerDraft.proposedText;
     const trimmedProposedText = proposedText.trim();
     const suggestionUnchanged = isSuggestion && trimmedProposedText === composer.anchor?.exact.trim();
     if (isSuggestion ? trimmedProposedText === '' || suggestionUnchanged : body.trim() === '') {
@@ -307,46 +328,52 @@ export function DocumentReviewSurface({
       return;
     }
     setMessage(null);
+    submittingRef.current = true;
+    setSubmitting(true);
 
-    const anchor = composer.mode === 'inline' && composer.anchor
-      ? {
-          ...composer.anchor,
-          projection_version: String(composer.anchor.projection_version),
-        }
-      : null;
+    try {
+      const anchor = composer.mode === 'inline' && composer.anchor
+        ? {
+            ...composer.anchor,
+            projection_version: String(composer.anchor.projection_version),
+          }
+        : null;
 
-    const outcome = isSuggestion && anchor
-      ? await createSuggestionThread(documentId, {
-          body: body.trim() === '' ? undefined : body,
-          proposed_text: trimmedProposedText,
-          anchor,
-          idempotency_key: composer.idempotencyKey,
-        })
-      : composer.mode === 'inline' && anchor
-        ? await createThread(documentId, {
-            type: 'inline',
-            body,
+      const outcome = isSuggestion && anchor
+        ? await createSuggestionThread(documentId, {
+            body: body.trim() === '' ? undefined : body,
+            proposed_text: trimmedProposedText,
             anchor,
-            idempotency_key: composer.idempotencyKey,
+            idempotency_key: composerDraft.idempotencyKey,
           })
-        : await createThread(documentId, {
-            type: 'document',
-            body,
-            failed_capture: composer.failure != null,
-            idempotency_key: composer.idempotencyKey,
-          });
+        : composer.mode === 'inline' && anchor
+          ? await createThread(documentId, {
+              type: 'inline',
+              body,
+              anchor,
+              idempotency_key: composerDraft.idempotencyKey,
+            })
+          : await createThread(documentId, {
+              type: 'document',
+              body,
+              failed_capture: composer.failure != null,
+              idempotency_key: composerDraft.idempotencyKey,
+            });
 
-    if (!outcome.ok) {
-      setMessage(outcome.message);
-      return;
+      if (!outcome.ok) {
+        setMessage(outcome.message);
+        return;
+      }
+
+      composerDraft.clear();
+      setComposer({ open: false });
+      window.getSelection()?.removeAllRanges();
+      await refreshLoadedThreads();
+      setActiveThreadId(outcome.thread.id);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-
-    setBody('');
-    setProposedText('');
-    setComposer({ open: false });
-    window.getSelection()?.removeAllRanges();
-    await refreshLoadedThreads();
-    setActiveThreadId(outcome.thread.id);
   }
 
   async function setThreadStatus(thread: ReviewThread, status: ThreadStatus): Promise<string | null> {
@@ -369,8 +396,12 @@ export function DocumentReviewSurface({
     return null;
   }
 
-  async function reply(thread: ReviewThread, input: ReplyToThreadInput): Promise<string | null> {
-    const outcome = await replyToThread(thread.id, input, newIdempotencyKey());
+  async function reply(
+    thread: ReviewThread,
+    input: ReplyToThreadInput,
+    idempotencyKey: string,
+  ): Promise<string | null> {
+    const outcome = await replyToThread(thread.id, input, idempotencyKey);
     if (!outcome.ok) return outcome.message;
 
     await refreshLoadedThreads();
@@ -380,7 +411,7 @@ export function DocumentReviewSurface({
   }
 
   async function fork(_thread: ReviewThread, comment: ThreadComment): Promise<string | null> {
-    const outcome = await forkComment(comment.id, newIdempotencyKey());
+    const outcome = await forkComment(comment.id, newCommentDraftIdempotencyKey());
     if (!outcome.ok) return outcome.message;
 
     await refreshLoadedThreads();
@@ -507,21 +538,20 @@ export function DocumentReviewSurface({
 
       <DocumentCommentComposer
         composer={composer}
-        body={body}
-        proposedText={proposedText}
+        body={composerDraft.body}
+        proposedText={composerDraft.proposedText}
         message={message}
-        onBodyChange={setBody}
-        onProposedTextChange={setProposedText}
+        submitting={submitting}
+        onBodyChange={composerDraft.setBody}
+        onProposedTextChange={composerDraft.setProposedText}
         onCommentTypeChange={(commentType) => {
           if (!composer.open) return;
-          if (commentType === 'suggestion' && proposedText === '' && composer.anchor) {
-            setProposedText(composer.anchor.exact);
-          }
           setComposer({ ...composer, commentType });
         }}
         onClose={() => {
+          composerDraft.clear();
           setComposer({ open: false });
-          setProposedText('');
+          setMessage(null);
         }}
         onOpenPanel={() => {
           if (composer.open) setComposer({ ...composer, stage: 'panel' });
@@ -595,8 +625,4 @@ function firstThreadIdFromTarget(target: EventTarget | null): number | null {
     : null;
   const id = threadIdsFromAttribute(element?.dataset.kedgeThreadIds)[0];
   return id ? Number(id) : null;
-}
-
-function newIdempotencyKey(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

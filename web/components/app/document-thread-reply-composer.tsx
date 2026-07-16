@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
 import { ModeButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
+import { commentDraftContextKey, useCommentDraft, type CommentDraftMode } from '@/lib/comment-draft';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
 import type { ReviewThread } from '@/lib/thread-types';
 
@@ -12,39 +13,59 @@ export function ReplyComposer({
   onMessage,
 }: {
   thread: ReviewThread;
-  onReply: (thread: ReviewThread, input: ReplyToThreadInput) => Promise<string | null>;
+  onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onMessage: (message: string | null) => void;
 }) {
-  const [replyBody, setReplyBody] = useState('');
   const [replying, setReplying] = useState(false);
-  const [replyType, setReplyType] = useState<'comment' | 'suggestion'>('comment');
-  const [proposedText, setProposedText] = useState(thread.anchor?.exact ?? '');
+  const replyingRef = useRef(false);
+  const [replyType, setReplyType] = useState<CommentDraftMode>('comment');
   const canSuggest = thread.type === 'inline' && thread.anchor !== null;
-  const isSuggestion = canSuggest && replyType === 'suggestion';
+  const draftMode = canSuggest ? replyType : 'comment';
+  const isSuggestion = draftMode === 'suggestion';
+  const draft = useCommentDraft(
+    commentDraftContextKey({
+      documentId: thread.document_id,
+      target: { type: 'thread', threadId: thread.id },
+      mode: draftMode,
+    }),
+    { initialProposedText: isSuggestion ? thread.anchor?.exact ?? '' : '' },
+  );
+  const replyBody = draft.body;
+  const proposedText = draft.proposedText;
   const trimmedProposedText = proposedText.trim();
   const suggestionUnchanged = isSuggestion && trimmedProposedText === thread.anchor?.exact.trim();
   const submitDisabled = replying
     || (isSuggestion ? trimmedProposedText === '' || suggestionUnchanged : replyBody.trim() === '');
 
   async function submitReply() {
-    if (submitDisabled) return;
+    if (submitDisabled || replyingRef.current) return;
     onMessage(null);
+    replyingRef.current = true;
     setReplying(true);
-    const error = isSuggestion
-      ? await onReply(thread, {
-          comment_type: 'suggestion',
-          body: replyBody.trim() === '' ? undefined : replyBody.trim(),
-          proposed_text: trimmedProposedText,
-        })
-      : await onReply(thread, { body: replyBody.trim() });
-    setReplying(false);
-    if (error) {
-      onMessage(error);
-      return;
+    try {
+      const error = isSuggestion
+        ? await onReply(thread, {
+            comment_type: 'suggestion',
+            body: replyBody.trim() === '' ? undefined : replyBody.trim(),
+            proposed_text: trimmedProposedText,
+          }, draft.idempotencyKey)
+        : await onReply(thread, { body: replyBody.trim() }, draft.idempotencyKey);
+      if (error) {
+        onMessage(error);
+        return;
+      }
+      draft.clear();
+      setReplyType('comment');
+    } finally {
+      replyingRef.current = false;
+      setReplying(false);
     }
-    setReplyBody('');
-    setProposedText(thread.anchor?.exact ?? '');
-    setReplyType('comment');
+  }
+
+  function cancelDraft() {
+    if (replying) return;
+    draft.clear();
+    onMessage(null);
   }
 
   return (
@@ -60,10 +81,7 @@ export function ReplyComposer({
           </ModeButton>
           <ModeButton
             active={isSuggestion}
-            onClick={() => {
-              setReplyType('suggestion');
-              if (proposedText === '') setProposedText(thread.anchor?.exact ?? '');
-            }}
+            onClick={() => setReplyType('suggestion')}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             Suggest
@@ -74,7 +92,7 @@ export function ReplyComposer({
         <div className="space-y-2">
           <textarea
             value={proposedText}
-            onChange={(event) => setProposedText(event.target.value)}
+            onChange={(event) => draft.setProposedText(event.target.value)}
             rows={3}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Replacement text"
@@ -84,7 +102,7 @@ export function ReplyComposer({
           ) : null}
           <textarea
             value={replyBody}
-            onChange={(event) => setReplyBody(event.target.value)}
+            onChange={(event) => draft.setBody(event.target.value)}
             rows={2}
             className={TEXTAREA_CLASS_NAME}
             placeholder="Add a note"
@@ -93,13 +111,21 @@ export function ReplyComposer({
       ) : (
         <textarea
           value={replyBody}
-          onChange={(event) => setReplyBody(event.target.value)}
+          onChange={(event) => draft.setBody(event.target.value)}
           rows={2}
           className={TEXTAREA_CLASS_NAME}
           placeholder="Reply"
         />
       )}
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={cancelDraft}
+          disabled={replying}
+          className="rounded-full px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/5"
+        >
+          Cancel
+        </button>
         <button
           type="button"
           onClick={() => void submitReply()}
