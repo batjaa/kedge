@@ -7,6 +7,7 @@ use App\Models\Comment;
 use App\Models\Thread;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Gate;
 
 /** @mixin Thread */
 class ThreadResource extends JsonResource
@@ -27,6 +28,8 @@ class ThreadResource extends JsonResource
     {
         $anchor = $this->railAnchor();
         $firstComment = $this->resourceFirstComment();
+        $gate = $request->user() ? Gate::forUser($request->user()) : null;
+        $canTriage = $gate?->allows('triage', $this->resource) ?? false;
 
         return [
             'id' => $this->id,
@@ -34,6 +37,8 @@ class ThreadResource extends JsonResource
             'type' => $this->type->value,
             'status' => $this->status->value,
             'forked_from_comment_id' => $this->forked_from_comment_id,
+            'forked_into_count' => $this->forkedIntoCount(),
+            'forked_into' => $this->forkedIntoReferences(),
             'created_by' => $this->created_by,
             'comment_count' => (int) ($this->comments_count
                 ?? ($this->relationLoaded('comments') ? $this->comments->count() : 0)),
@@ -42,6 +47,10 @@ class ThreadResource extends JsonResource
                 ?? $this->updated_at,
             'anchor' => $anchor ? AnchorResource::make($anchor) : null,
             'first_comment' => $firstComment ? CommentResource::make($firstComment) : null,
+            'comments' => CommentResource::collection($this->whenLoaded('comments')),
+            'can_resolve' => $canTriage && $this->status->value === 'open',
+            'can_reopen' => $canTriage && $this->status->value === 'resolved',
+            'can_fork' => $canTriage,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
@@ -71,5 +80,34 @@ class ThreadResource extends JsonResource
         }
 
         return null;
+    }
+
+    private function forkedIntoCount(): int
+    {
+        if ($this->relationLoaded('forkedIntoThreads')) {
+            return $this->forkedIntoThreads->count();
+        }
+
+        return (int) ($this->forked_into_count ?? 0);
+    }
+
+    /**
+     * @return list<array{thread_id: int, forked_from_comment_id: int|null}>
+     */
+    private function forkedIntoReferences(): array
+    {
+        if (! $this->relationLoaded('forkedIntoThreads')) {
+            return [];
+        }
+
+        return $this->forkedIntoThreads
+            ->map(fn (Thread $thread) => [
+                'thread_id' => (int) $thread->id,
+                'forked_from_comment_id' => $thread->forked_from_comment_id === null
+                    ? null
+                    : (int) $thread->forked_from_comment_id,
+            ])
+            ->values()
+            ->all();
     }
 }

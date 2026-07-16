@@ -4,13 +4,21 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import { DocumentThreadRail } from './document-thread-rail';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
-import { createThread, listThreads } from '@/lib/comments-client';
+import {
+  createThread,
+  deleteComment,
+  editComment,
+  forkComment,
+  listThreads,
+  replyToThread,
+  updateThreadStatus,
+} from '@/lib/comments-client';
 import {
   decorateAnchorHighlights,
   firstAnchorHighlightForThread,
   threadIdsFromAttribute,
 } from '@/lib/anchor-highlight-dom';
-import type { ReviewThread } from '@/lib/thread-types';
+import type { ReviewThread, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 export function DocumentReviewSurface({
   documentId,
@@ -146,6 +154,56 @@ export function DocumentReviewSurface({
     setActiveThreadId(outcome.thread.id);
   }
 
+  async function setThreadStatus(thread: ReviewThread, status: ThreadStatus): Promise<string | null> {
+    const outcome = await updateThreadStatus(thread.id, status);
+    if (!outcome.ok) return outcome.message;
+
+    await reloadThreads(1);
+    setActiveThreadId(outcome.thread.id);
+
+    return null;
+  }
+
+  async function reply(thread: ReviewThread, replyBody: string): Promise<string | null> {
+    const outcome = await replyToThread(thread.id, replyBody, newIdempotencyKey());
+    if (!outcome.ok) return outcome.message;
+
+    await reloadThreads(1);
+    setActiveThreadId(thread.id);
+
+    return null;
+  }
+
+  async function fork(_thread: ReviewThread, comment: ThreadComment): Promise<string | null> {
+    const outcome = await forkComment(comment.id, newIdempotencyKey());
+    if (!outcome.ok) return outcome.message;
+
+    await reloadThreads(1);
+    setActiveThreadId(outcome.thread.id);
+
+    return null;
+  }
+
+  async function edit(comment: ThreadComment, nextBody: string): Promise<string | null> {
+    const outcome = await editComment(comment.id, nextBody);
+    if (!outcome.ok) return outcome.message;
+
+    await reloadThreads(1);
+    setActiveThreadId(comment.thread_id);
+
+    return null;
+  }
+
+  async function remove(comment: ThreadComment): Promise<string | null> {
+    const outcome = await deleteComment(comment.id);
+    if (!outcome.ok) return outcome.message;
+
+    await reloadThreads(1);
+    setActiveThreadId(comment.thread_id);
+
+    return null;
+  }
+
   function focusThread(thread: ReviewThread) {
     setActiveThreadId(thread.id);
     const root = rootRef.current;
@@ -174,6 +232,11 @@ export function DocumentReviewSurface({
         onHoverThread={(thread) => setActiveThreadId(thread.id)}
         onLeaveThread={() => setActiveThreadId(null)}
         onLoadMore={() => void reloadThreads(page + 1)}
+        onSetThreadStatus={setThreadStatus}
+        onReply={reply}
+        onForkComment={fork}
+        onEditComment={edit}
+        onDeleteComment={remove}
       />
 
       <DocumentCommentComposer

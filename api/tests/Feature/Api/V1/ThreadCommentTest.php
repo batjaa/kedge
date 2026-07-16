@@ -6,6 +6,7 @@ use App\Enums\WorkspaceRole;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Thread;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Comments\CommentThreadService;
@@ -13,6 +14,7 @@ use App\Services\Import\TextProjector;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class ThreadCommentTest extends TestCase
@@ -288,6 +290,355 @@ class ThreadCommentTest extends TestCase
 
         $this->assertSame($first->json('id'), $retry->json('id'));
         $this->assertDatabaseCount('comments', 2);
+    }
+
+    public function test_document_author_can_resolve_and_reopen_threads_idempotently(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $creator = User::factory()->create(['email' => 'creator@example.com']);
+        $creator->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $creator->id,
+        ]);
+        $thread->comments()->create([
+            'author_id' => $creator->id,
+            'body_md' => 'Thread opener',
+        ]);
+
+        Log::spy();
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'resolved'])
+            ->assertOk()
+            ->assertJsonPath('status', 'resolved');
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'resolved'])
+            ->assertOk()
+            ->assertJsonPath('status', 'resolved');
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'open'])
+            ->assertOk()
+            ->assertJsonPath('status', 'open');
+
+        $this->assertDatabaseHas('audit_logs', ['action' => 'thread.resolved']);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'thread.reopened']);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'thread.resolved'
+            && $context['thread_id'] === $thread->id
+            && $context['user_id'] === $author->id);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'thread.reopened'
+            && $context['thread_id'] === $thread->id
+            && $context['user_id'] === $author->id);
+    }
+
+    public function test_thread_creator_can_resolve_and_reopen_threads(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $creator = User::factory()->create(['email' => 'creator@example.com']);
+        $creator->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $creator->id,
+        ]);
+
+        $this->actingAs($creator)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'resolved'])
+            ->assertOk()
+            ->assertJsonPath('status', 'resolved');
+
+        $this->actingAs($creator)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'open'])
+            ->assertOk()
+            ->assertJsonPath('status', 'open');
+
+        $this->assertDatabaseHas('audit_logs', ['action' => 'thread.resolved', 'user_id' => $creator->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'thread.reopened', 'user_id' => $creator->id]);
+        $this->assertSame($author->id, $document->created_by);
+    }
+
+    public function test_random_workspace_member_cannot_resolve_threads(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $creator = User::factory()->create(['email' => 'creator@example.com']);
+        $creator->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $randomMember = User::factory()->create(['email' => 'random@example.com']);
+        $randomMember->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $creator->id,
+        ]);
+
+        $this->actingAs($randomMember)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'resolved'])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('threads', ['id' => $thread->id, 'status' => 'open']);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'thread.resolved']);
+        $this->assertSame($author->id, $document->created_by);
+    }
+
+    public function test_guest_cannot_resolve_threads(): void
+    {
+        [, $document] = $this->readyDocument();
+        $creator = User::factory()->create(['email' => 'creator@example.com']);
+        $creator->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $creator->id,
+        ]);
+
+        $this->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->id}", ['status' => 'resolved'])
+            ->assertUnauthorized();
+
+        $this->assertDatabaseHas('threads', ['id' => $thread->id, 'status' => 'open']);
+    }
+
+    public function test_replying_to_resolved_thread_does_not_reopen_it(): void
+    {
+        [$author, $document] = $this->readyDocument();
+
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Parent',
+                'idempotency_key' => 'resolved-parent',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/threads/{$thread->json('id')}", ['status' => 'resolved'])
+            ->assertOk();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'body' => 'Reply while resolved',
+                'idempotency_key' => 'resolved-reply',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('body_md', 'Reply while resolved');
+
+        $this->assertDatabaseHas('threads', ['id' => $thread->json('id'), 'status' => 'resolved']);
+    }
+
+    public function test_fork_inherits_anchor_links_threads_and_can_fork_a_deleted_reply(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Parent',
+                'idempotency_key' => 'fork-parent',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'target', '2'),
+            ])
+            ->assertCreated();
+
+        $reply = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'body' => 'Fork me',
+                'idempotency_key' => 'fork-reply',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($author)->fromWebApp()
+            ->deleteJson("/api/v1/comments/{$reply->json('id')}")
+            ->assertNoContent();
+
+        Log::spy();
+
+        $fork = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", ['title' => 'Side topic'])
+            ->assertCreated()
+            ->assertJsonPath('status', 'open')
+            ->assertJsonPath('forked_from_comment_id', $reply->json('id'))
+            ->assertJsonPath('anchor.exact', 'target')
+            ->assertJsonPath('first_comment.is_deleted', true)
+            ->assertJsonPath('first_comment.body_md', null);
+
+        $this->assertNotSame($thread->json('id'), $fork->json('id'));
+        $this->assertDatabaseHas('threads', [
+            'id' => $fork->json('id'),
+            'forked_from_comment_id' => $reply->json('id'),
+            'status' => 'open',
+        ]);
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $fork->json('id'),
+            'document_version_id' => $document->currentVersion->id,
+            'exact' => 'target',
+        ]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'thread.forked']);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'thread.forked'
+            && $context['source_comment_id'] === $reply->json('id')
+            && $context['thread_id'] === $fork->json('id'));
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk()
+            ->assertJsonPath('data.0.forked_into_count', 1)
+            ->assertJsonPath('data.0.forked_into.0.thread_id', $fork->json('id'))
+            ->assertJsonPath('data.1.forked_from_comment_id', $reply->json('id'));
+    }
+
+    public function test_edit_own_comment_sets_edited_at(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $reply = $thread->comments()->create([
+            'author_id' => $member->id,
+            'body_md' => 'Original reply',
+        ]);
+
+        Log::spy();
+
+        $this->actingAs($member)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$reply->id}", ['body' => 'Edited reply'])
+            ->assertOk()
+            ->assertJsonPath('body_md', 'Edited reply')
+            ->assertJsonPath('is_deleted', false)
+            ->assertJsonPath('edited_at', fn ($value) => is_string($value));
+
+        $this->assertDatabaseHas('comments', ['id' => $reply->id, 'body_md' => 'Edited reply']);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'comment.edited']);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'comment.edited'
+            && $context['comment_id'] === $reply->id
+            && $context['user_id'] === $member->id);
+    }
+
+    public function test_editing_another_comment_is_forbidden(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $reply = $thread->comments()->create([
+            'author_id' => $member->id,
+            'body_md' => 'Original reply',
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$reply->id}", ['body' => 'Author edit'])
+            ->assertForbidden();
+    }
+
+    public function test_delete_own_comment_leaves_tombstone_in_thread_list(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $ownReply = $thread->comments()->create([
+            'author_id' => $member->id,
+            'body_md' => 'Delete myself',
+        ]);
+
+        Log::spy();
+
+        $this->actingAs($member)->fromWebApp()
+            ->deleteJson("/api/v1/comments/{$ownReply->id}")
+            ->assertNoContent();
+
+        $list = $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk();
+
+        $this->assertTrue(collect($list->json('data.0.comments'))->contains(fn (array $comment) => $comment['id'] === $ownReply->id
+            && $comment['is_deleted'] === true
+            && $comment['body_md'] === null));
+        $this->assertSoftDeleted('comments', ['id' => $ownReply->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'comment.deleted']);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'comment.deleted'
+            && $context['comment_id'] === $ownReply->id
+            && $context['user_id'] === $member->id);
+    }
+
+    public function test_document_author_can_moderate_other_comments(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $moderatedReply = $thread->comments()->create([
+            'author_id' => $member->id,
+            'body_md' => 'Moderate me',
+        ]);
+
+        Log::spy();
+
+        $this->actingAs($author)->fromWebApp()
+            ->deleteJson("/api/v1/comments/{$moderatedReply->id}")
+            ->assertNoContent();
+
+        $this->assertSoftDeleted('comments', ['id' => $moderatedReply->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'comment.deleted', 'user_id' => $author->id]);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'comment.deleted'
+            && $context['comment_id'] === $moderatedReply->id
+            && $context['user_id'] === $author->id);
+    }
+
+    public function test_other_member_cannot_delete_someone_elses_comment(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $member = User::factory()->create(['email' => 'member@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $otherMember = User::factory()->create(['email' => 'other-member@example.com']);
+        $otherMember->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $reply = $thread->comments()->create([
+            'author_id' => $member->id,
+            'body_md' => 'Not yours',
+        ]);
+
+        $this->actingAs($otherMember)->fromWebApp()
+            ->deleteJson("/api/v1/comments/{$reply->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('comments', ['id' => $reply->id, 'deleted_at' => null]);
     }
 
     public function test_demo_document_rejects_thread_creation_until_claimed(): void

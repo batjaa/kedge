@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\ThreadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreThreadRequest;
+use App\Http\Requests\UpdateThreadStatusRequest;
 use App\Http\Resources\V1\ThreadResource;
 use App\Models\Document;
 use App\Models\Thread;
@@ -40,5 +42,19 @@ class ThreadController extends Controller
         return ThreadResource::make($thread)
             ->response()
             ->setStatusCode($status);
+    }
+
+    public function update(UpdateThreadStatusRequest $request, Thread $thread)
+    {
+        $this->authorize('triage', $thread);
+
+        $thread = $this->threads->updateStatus(
+            $thread,
+            $request->user(),
+            ThreadStatus::from((string) $request->validated('status')),
+            $request->ip(),
+        );
+
+        return ThreadResource::make($thread);
     }
 }

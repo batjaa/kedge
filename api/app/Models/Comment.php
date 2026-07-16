@@ -8,6 +8,7 @@ use App\Enums\SuggestionStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'thread_id', 'author_id', 'type', 'body_md', 'proposed_text',
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class Comment extends Model
 {
+    use SoftDeletes;
+
     protected $attributes = [
         'type' => 'comment',
         'client' => 'web',
@@ -38,6 +41,7 @@ class Comment extends Model
             'suggestion_status' => SuggestionStatus::class,
             'client' => CommentClient::class,
             'edited_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
     }
 }

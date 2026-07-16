@@ -116,8 +116,18 @@ Route::prefix('v1')->group(function () {
         Route::middleware('throttle:comments')->group(function () {
             Route::post('/documents/{document}/threads', [ThreadController::class, 'store'])
                 ->name('api.v1.documents.threads.store');
+            Route::patch('/threads/{thread}', [ThreadController::class, 'update'])
+                ->name('api.v1.threads.update');
             Route::post('/threads/{thread}/comments', [ThreadCommentController::class, 'store'])
                 ->name('api.v1.threads.comments.store');
+            Route::post('/comments/{comment}/fork', [ThreadCommentController::class, 'fork'])
+                ->withTrashed()
+                ->name('api.v1.comments.fork');
+            Route::patch('/comments/{comment}', [ThreadCommentController::class, 'update'])
+                ->name('api.v1.comments.update');
+            Route::delete('/comments/{comment}', [ThreadCommentController::class, 'destroy'])
+                ->withTrashed()
+                ->name('api.v1.comments.destroy');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.

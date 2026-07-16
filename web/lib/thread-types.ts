@@ -30,12 +30,22 @@ export interface ThreadComment {
   thread_id: number;
   author?: ThreadAuthor;
   type: CommentType;
-  body_md: string;
+  body_md: string | null;
   proposed_text: string | null;
   suggestion_status: 'pending' | 'accepted' | 'declined' | null;
   client: CommentClient;
   edited_at: string | null;
+  is_deleted: boolean;
+  deleted_at: string | null;
+  can_edit: boolean;
+  can_delete: boolean;
+  can_fork: boolean;
   created_at: string | null;
+}
+
+export interface ForkedIntoReference {
+  thread_id: number;
+  forked_from_comment_id: number | null;
 }
 
 export interface ReviewThread {
@@ -44,11 +54,17 @@ export interface ReviewThread {
   type: ThreadType;
   status: ThreadStatus;
   forked_from_comment_id: number | null;
+  forked_into_count: number;
+  forked_into: ForkedIntoReference[];
   created_by: number;
   comment_count: number;
   latest_activity_at: string | null;
   anchor: ThreadAnchor | null;
   first_comment: ThreadComment | null;
+  comments?: ThreadComment[];
+  can_resolve: boolean;
+  can_reopen: boolean;
+  can_fork: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
