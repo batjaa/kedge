@@ -16,6 +16,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -103,6 +104,15 @@ class AppServiceProvider extends ServiceProvider
         // one visitor refreshing a doc can't be starved by another.
         RateLimiter::for('shared-read', function (Request $request) {
             return Limit::perMinute(60)->by($request->ip());
+        });
+
+        RateLimiter::for('reviewer-magic-link', function (Request $request) {
+            $email = Str::lower(trim((string) $request->input('email', '')));
+
+            return [
+                Limit::perMinute(5)->by('reviewer-email:'.hash('sha256', $email)),
+                Limit::perMinute(20)->by('reviewer-ip:'.$request->ip()),
+            ];
         });
 
         // Instant demo mode is an unauthenticated, public-internet abuse surface

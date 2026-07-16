@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\ReviewerMagicLinkController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
 use App\Http\Controllers\Api\V1\ThreadCommentController;
@@ -55,6 +56,15 @@ Route::prefix('v1')->group(function () {
     // Public read-only share surface (SPEC 10.2). No auth — the token is the
     // capability. Per-IP limiter because it faces the open internet; a valid
     // token grants exactly this doc and nothing else (no session, no id path).
+    Route::middleware('throttle:reviewer-magic-link')->group(function () {
+        Route::post('/shared/{token}/verify-email', [ReviewerMagicLinkController::class, 'store'])
+            ->name('api.v1.shared.verify-email');
+    });
+
+    Route::get('/shared/{token}/verify/{verification}/{verificationToken}', [ReviewerMagicLinkController::class, 'verify'])
+        ->middleware('web')
+        ->name('api.v1.shared.verify');
+
     Route::middleware('throttle:shared-read')->group(function () {
         Route::get('/shared/{token}', [SharedDocumentController::class, 'show'])
             ->name('api.v1.shared.show');

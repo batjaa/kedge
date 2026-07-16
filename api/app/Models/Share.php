@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A revocable, unguessable read-only link to a document (SPEC 10.2). The token
@@ -44,6 +45,18 @@ class Share extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** @return HasMany<ShareParticipant, $this> */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(ShareParticipant::class);
+    }
+
+    /** @return HasMany<ShareMagicLink, $this> */
+    public function magicLinks(): HasMany
+    {
+        return $this->hasMany(ShareMagicLink::class);
     }
 
     /**

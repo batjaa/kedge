@@ -15,14 +15,14 @@ class CommentPolicy
         $comment->loadMissing('thread.document');
 
         return $this->authorOf($user, $comment->thread->document)
-            || $this->ownedBy($user, $comment->thread->created_by);
+            || $this->ownsInReachableDocument($user, $comment->thread->created_by, $comment->thread->document);
     }
 
     public function updateComment(User $user, Comment $comment): bool
     {
         $comment->loadMissing('thread.document');
 
-        return $this->ownedBy($user, $comment->author_id)
+        return $this->ownsInReachableDocument($user, $comment->author_id, $comment->thread->document)
             || $this->authorOf($user, $comment->thread->document);
     }
 
@@ -30,7 +30,7 @@ class CommentPolicy
     {
         $comment->loadMissing('thread.document');
 
-        return $this->ownedBy($user, $comment->author_id)
+        return $this->ownsInReachableDocument($user, $comment->author_id, $comment->thread->document)
             || $this->authorOf($user, $comment->thread->document);
     }
 

@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Integration;
 use App\Models\User;
+use App\Policies\Concerns\AuthorizesWorkspaceMembership;
 
 /**
  * Integrations are reachable only within their workspace (SPEC §13, user story
@@ -17,12 +18,14 @@ use App\Models\User;
  */
 class IntegrationPolicy
 {
+    use AuthorizesWorkspaceMembership;
+
     /**
      * List integrations — always the caller's own workspace's (controller-scoped).
      */
     public function viewAny(User $user): bool
     {
-        return true;
+        return $this->hasPersonalWorkspace($user);
     }
 
     /**
@@ -30,7 +33,7 @@ class IntegrationPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return $this->hasPersonalWorkspace($user);
     }
 
     /**

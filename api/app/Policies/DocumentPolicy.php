@@ -20,7 +20,7 @@ class DocumentPolicy
      */
     public function view(User $user, Document $document): bool
     {
-        return $this->memberOf($user, $document);
+        return $this->canReadAndComment($user, $document);
     }
 
     /**
@@ -29,7 +29,7 @@ class DocumentPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return $this->hasPersonalWorkspace($user);
     }
 
     /**
@@ -49,6 +49,7 @@ class DocumentPolicy
      */
     public function claim(User $user, Document $document): bool
     {
-        return $document->isDemo();
+        return $document->isDemo()
+            && $this->hasPersonalWorkspace($user);
     }
 }

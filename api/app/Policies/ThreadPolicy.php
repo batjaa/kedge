@@ -13,19 +13,19 @@ class ThreadPolicy
 
     public function viewAny(User $user, Document $document): bool
     {
-        return $this->memberOf($user, $document);
+        return $this->canReadAndComment($user, $document);
     }
 
     public function create(User $user, Document $document): bool
     {
-        return $this->memberOf($user, $document);
+        return $this->canReadAndComment($user, $document);
     }
 
     public function reply(User $user, Thread $thread): bool
     {
         $thread->loadMissing('document');
 
-        return $this->memberOf($user, $thread->document);
+        return $this->canReadAndComment($user, $thread->document);
     }
 
     public function triage(User $user, Thread $thread): bool
@@ -33,6 +33,6 @@ class ThreadPolicy
         $thread->loadMissing('document');
 
         return $this->authorOf($user, $thread->document)
-            || $this->ownedBy($user, $thread->created_by);
+            || $this->ownsInReachableDocument($user, $thread->created_by, $thread->document);
     }
 }
