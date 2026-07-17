@@ -149,6 +149,79 @@ class GithubPatConnectorTest extends TestCase
         $this->connector()->fetch($this->boundSource());
     }
 
+    // --- Forbidden (403, not a rate limit): the token can't reach this file ---
+
+    public function test_403_forbidden_is_a_terminal_access_failure_with_a_reconnect_cta(): void
+    {
+        // A plain 403 with no rate-limit markers: the PAT authenticated (else 401)
+        // but GitHub forbids the read — a fine-grained token missing the repo or
+        // Contents:read. Terminal like a revoked token, not a transient retry.
+        $this->transport->respond(403, [
+            'Content-Type' => 'application/json; charset=utf-8',
+        ], $this->fixture('errors/forbidden-403.json'));
+
+        try {
+            $this->connector()->fetch($this->boundSource());
+            $this->fail('Expected a TokenRevokedException for a forbidden PAT fetch.');
+        } catch (TokenRevokedException $e) {
+            $this->assertStringContainsString('reconnect', $e->userMessage());
+        }
+    }
+
+    public function test_403_surfaces_githubs_own_reason_in_the_user_message(): void
+    {
+        // The forbidden fixture's body reason — the author needs the specific
+        // cause ("Must have admin rights to Repository.") to know what to fix.
+        $this->transport->respond(403, [
+            'Content-Type' => 'application/json; charset=utf-8',
+        ], $this->fixture('errors/forbidden-403.json'));
+
+        try {
+            $this->connector()->fetch($this->boundSource());
+            $this->fail('Expected a TokenRevokedException.');
+        } catch (TokenRevokedException $e) {
+            $this->assertStringContainsString('Must have admin rights to Repository', $e->userMessage());
+        }
+    }
+
+    public function test_403_reason_from_github_is_sanitized_and_truncated(): void
+    {
+        // GitHub's body is untrusted text: control chars stripped, length capped,
+        // never rendered as markup (SPEC §13, like the Kroki error detail).
+        $reason = str_repeat('A', 400)."\n\t<script>evil</script>";
+        $this->transport->respond(403, [
+            'Content-Type' => 'application/json; charset=utf-8',
+        ], json_encode(['message' => $reason]));
+
+        try {
+            $this->connector()->fetch($this->boundSource());
+            $this->fail('Expected a TokenRevokedException.');
+        } catch (TokenRevokedException $e) {
+            $message = $e->userMessage();
+            $this->assertLessThan(400, mb_strlen($message));
+            $this->assertStringNotContainsString("\n", $message);
+            $this->assertStringNotContainsString("\t", $message);
+        }
+    }
+
+    public function test_a_rate_limit_403_still_backs_off_rather_than_reading_as_forbidden(): void
+    {
+        // A 403 carrying rate-limit markers is a throttle, not an access failure —
+        // handling forbidden 403s must not swallow it into a terminal failure.
+        $this->transport->respond(403, [
+            'Content-Type' => 'application/json; charset=utf-8',
+            'X-RateLimit-Remaining' => '0',
+            'X-RateLimit-Reset' => (string) (now()->getTimestamp() + 30),
+        ], $this->fixture('errors/rate-limit-403.json'));
+
+        try {
+            $this->connector()->fetch($this->boundSource());
+            $this->fail('Expected a RateLimitedException for a rate-limited 403.');
+        } catch (RateLimitedException $e) {
+            $this->assertGreaterThan(0, $e->retryAfter);
+        }
+    }
+
     public function test_a_missing_integration_is_an_import_failure_not_an_unauthenticated_call(): void
     {
         // No integration bound: the connector must not silently fetch without a token.

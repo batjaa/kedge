@@ -51,16 +51,18 @@ class GithubPatConnector extends AbstractGithubBlobConnector
     }
 
     /**
-     * A 401 means the token was revoked, expired, or never had access. Terminal —
-     * retrying with the same dead token is pointless (SPEC §19). A 403 is left to
-     * the shared handling, where a rate-limit 403 backs off and any other is a
-     * normal import failure.
+     * A 401 (bad/revoked token) or a non-throttle 403 (valid token, no access to
+     * this repo — the fine-grained-PAT case: repo not selected, Contents:read
+     * missing, or org approval pending) is terminal: retrying the same token is
+     * pointless (SPEC §19). Rate-limit 403s never reach here — the shared flow
+     * classifies throttles first. Both surface the reconnect CTA.
      */
     protected function guardAuthentication(FetchResult $result): void
     {
-        if ($result->status === 401) {
+        if ($result->status === 401 || $result->status === 403) {
             throw new TokenRevokedException(
-                'GitHub rejected the PAT-authenticated fetch with HTTP 401.',
+                "GitHub rejected the PAT-authenticated fetch with HTTP {$result->status}.",
+                $this->githubReason($result),
             );
         }
     }

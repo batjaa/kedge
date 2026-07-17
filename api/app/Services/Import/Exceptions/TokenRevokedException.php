@@ -18,11 +18,27 @@ use RuntimeException;
 class TokenRevokedException extends RuntimeException
 {
     /**
+     * @param  string  $message  Technical, for logs; carries no token.
+     * @param  string|null  $detail  GitHub's own reason (already sanitized), appended
+     *                               to the author-facing copy so a forbidden 403 says
+     *                               exactly what to fix. Null when GitHub gave none.
+     */
+    public function __construct(string $message, private readonly ?string $detail = null)
+    {
+        parent::__construct($message);
+    }
+
+    /**
      * The message shown to the author, and matched by the web to offer a reconnect
-     * link. Deliberately actionable and provider-agnostic in tone.
+     * link. Deliberately actionable and provider-agnostic in tone; GitHub's own
+     * reason (e.g. "Must have admin rights to Repository.") is appended when present.
      */
     public function userMessage(): string
     {
-        return 'GitHub token was revoked or lacks access — reconnect the integration.';
+        $base = 'GitHub token was revoked or lacks access — reconnect the integration.';
+
+        return $this->detail !== null && $this->detail !== ''
+            ? $base.' GitHub said: '.$this->detail
+            : $base;
     }
 }
