@@ -106,10 +106,13 @@ class PatImportTest extends TestCase
         $document->refresh();
         $this->assertSame(DocumentStatus::Failed, $document->status);
         $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
-        $this->assertSame(
+        // The reconnect CTA copy, now with GitHub's own reason appended so the
+        // author knows the token was rejected as "Bad credentials".
+        $this->assertStringContainsString(
             'GitHub token was revoked or lacks access — reconnect the integration.',
             $document->sync_error,
         );
+        $this->assertStringContainsString('Bad credentials', $document->sync_error);
         // A first import that never produced a version — nothing to keep.
         $this->assertNull($document->current_version_id);
 
@@ -118,7 +121,7 @@ class PatImportTest extends TestCase
             ->getJson("/api/v1/documents/{$document->id}")
             ->assertOk()
             ->assertJsonPath('status', 'failed')
-            ->assertJsonPath('sync_error', 'GitHub token was revoked or lacks access — reconnect the integration.');
+            ->assertJsonPath('sync_error', fn (string $error): bool => str_contains($error, 'reconnect the integration.'));
     }
 
     public function test_the_pat_never_reaches_the_logs_across_a_full_import(): void

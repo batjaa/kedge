@@ -65,14 +65,18 @@ abstract class AbstractGithubBlobConnector implements Connector
             );
         }
 
-        // A terminal auth failure takes precedence: a revoked/again-invalid token
-        // is not a throttle and won't heal on retry. No-op for the public reader,
-        // which never authenticates and so never sees a 401.
-        $this->guardAuthentication($result);
-
+        // Throttles first: a 429, or a 403 carrying rate-limit markers, is a
+        // back-off — not an auth problem — so it must be classified before the
+        // auth guard, which otherwise can't tell a rate-limit 403 from a genuine
+        // "forbidden" 403.
         if ($this->isRateLimited($result)) {
             throw new RateLimitedException($this->retryAfter($result));
         }
+
+        // A terminal auth failure won't heal on retry: a 401 (bad/revoked token)
+        // or a non-throttle 403 (valid token, no access to this resource). No-op
+        // for the public reader, which never authenticates.
+        $this->guardAuthentication($result);
 
         if ($result->status === 404) {
             throw new ImportFailedException('GitHub file not found (404) — check the branch and path.');
@@ -205,5 +209,34 @@ abstract class AbstractGithubBlobConnector implements Connector
     private function clamp(int $seconds): int
     {
         return max(self::MIN_RETRY_AFTER, min($seconds, self::MAX_RETRY_AFTER));
+    }
+
+    /** Chars of GitHub's reason to keep — enough to be useful, capped as untrusted. */
+    private const MAX_REASON = 200;
+
+    /**
+     * GitHub's own reason for a failure, pulled from the JSON body's `message`,
+     * for surfacing to the author (e.g. "Must have admin rights to Repository.").
+     * Untrusted text (SPEC §13): control chars stripped, whitespace collapsed,
+     * hard-truncated. Null when the body isn't JSON or carries no message.
+     */
+    protected function githubReason(FetchResult $result): ?string
+    {
+        $decoded = json_decode($result->body, true);
+        $message = is_array($decoded) ? ($decoded['message'] ?? null) : null;
+
+        if (! is_string($message) || $message === '') {
+            return null;
+        }
+
+        $clean = trim((string) preg_replace('/\s+/', ' ', preg_replace('/[\x00-\x1F\x7F]+/', ' ', $message)));
+
+        if ($clean === '') {
+            return null;
+        }
+
+        return mb_strlen($clean) > self::MAX_REASON
+            ? mb_substr($clean, 0, self::MAX_REASON).'…'
+            : $clean;
     }
 }
