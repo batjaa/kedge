@@ -31,6 +31,7 @@ export function ImportFailed({
     const outcome = await retryImport(id);
     if (outcome.ok) {
       router.refresh();
+      setPending(false);
       return;
     }
 

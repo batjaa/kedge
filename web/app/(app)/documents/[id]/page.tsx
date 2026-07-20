@@ -95,6 +95,9 @@ export default async function DocumentPage({
             backLabel="← Review queue"
             plainText={document.current_version.plain_text ?? null}
             projectionVersion={document.current_version.projection_version ?? null}
+            canResync
+            lastSyncStatus={document.last_sync_status}
+            syncError={document.sync_error}
           >
             <DocumentBody
               format={document.format}

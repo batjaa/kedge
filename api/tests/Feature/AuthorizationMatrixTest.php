@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ResyncDocumentJob;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
@@ -93,6 +94,24 @@ class AuthorizationMatrixTest extends TestCase
         $this->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/retry")
             ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_document_resync_authorization(string $role, int $expectedStatus): void
+    {
+        Queue::fake();
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 202 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/resync")
+            ->assertStatus($expected);
+
+        if ($expected === 202) {
+            Queue::assertPushed(ResyncDocumentJob::class);
+        }
     }
 
     /**

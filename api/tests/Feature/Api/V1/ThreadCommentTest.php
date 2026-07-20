@@ -619,7 +619,7 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('comments', 1);
     }
 
-    public function test_thread_rail_keeps_anchor_from_the_creation_version_after_reimport(): void
+    public function test_thread_rail_does_not_leak_anchor_from_a_non_current_version(): void
     {
         [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
         $versionOne = $document->currentVersion;
@@ -643,8 +643,7 @@ class ThreadCommentTest extends TestCase
         $this->actingAs($author)->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/threads")
             ->assertOk()
-            ->assertJsonPath('data.0.anchor.exact', 'target')
-            ->assertJsonPath('data.0.anchor.document_version_id', $versionOne->id);
+            ->assertJsonPath('data.0.anchor', null);
     }
 
     public function test_reply_idempotency_key_returns_the_original_comment(): void

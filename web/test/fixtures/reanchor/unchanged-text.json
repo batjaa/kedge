@@ -1,0 +1,13 @@
+{
+  "newPlainText": "Alpha beta gamma delta.",
+  "anchors": [
+    {
+      "threadId": 10,
+      "exact": "beta gamma",
+      "prefix": "Alpha ",
+      "suffix": " delta.",
+      "start": 6,
+      "end": 16
+    }
+  ]
+}

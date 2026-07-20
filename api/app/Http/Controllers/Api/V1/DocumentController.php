@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Resources\V1\DocumentResource;
 use App\Jobs\ImportDocumentJob;
+use App\Jobs\ResyncDocumentJob;
 use App\Models\Document;
 use App\Models\User;
 use App\Models\Workspace;
@@ -183,6 +184,26 @@ class DocumentController extends Controller
         );
 
         ImportDocumentJob::dispatch($document);
+
+        return DocumentResource::make($document)
+            ->response()
+            ->setStatusCode(202);
+    }
+
+    /**
+     * POST /api/v1/documents/{document}/resync — manually pull the source again.
+     */
+    public function resync(Request $request, Document $document): JsonResponse
+    {
+        $this->authorize('resync', $document);
+
+        abort_unless(
+            $document->status === DocumentStatus::Ready && $document->current_version_id !== null,
+            409,
+            'Only a ready document can be re-synced.',
+        );
+
+        ResyncDocumentJob::dispatch($document, $request->user()?->id);
 
         return DocumentResource::make($document)
             ->response()

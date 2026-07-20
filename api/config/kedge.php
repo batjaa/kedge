@@ -100,6 +100,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Manual re-sync and re-anchoring
+    |--------------------------------------------------------------------------
+    |
+    | Manual re-sync is a rollout-gated M3 surface. Re-anchoring calls the web
+    | app's /internal/reanchor endpoint, guarded with the same shared-secret
+    | pattern as projection. Defaults mirror projection for local two-port dev.
+    |
+    */
+
+    'resync' => [
+        'enabled' => (bool) env('RESYNC_ENABLED', true),
+    ],
+
+    'reanchor' => [
+        'url' => rtrim((string) env('REANCHOR_URL', env('PROJECTION_URL', 'http://localhost:3000')), '/'),
+        'secret' => env('REANCHOR_SHARED_SECRET', env('PROJECTION_SHARED_SECRET', 'dev-projection-secret')),
+        'timeout' => (float) env('REANCHOR_TIMEOUT', 10),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Re-hosted media (SPEC 5.2)
     |--------------------------------------------------------------------------
     |

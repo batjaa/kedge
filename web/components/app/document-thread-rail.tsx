@@ -55,14 +55,22 @@ export function DocumentThreadRail({
 }) {
   const [cardHeights, setCardHeights] = useState<Record<number, number>>({});
   const [footerHeight, setFooterHeight] = useState(128);
+  const railThreads = useMemo(
+    () => threads.filter((thread) => thread.anchor?.state !== 'orphaned'),
+    [threads],
+  );
+  const orphanedThreads = useMemo(
+    () => threads.filter((thread) => thread.anchor?.state === 'orphaned'),
+    [threads],
+  );
   const fallbackCardHeight = (threadId: number) => activeThreadId === threadId ? EXPANDED_CARD_HEIGHT : COLLAPSED_CARD_HEIGHT;
   const placements = useMemo(() => {
-    return placeThreadCards(threads.map((thread) => ({
+    return placeThreadCards(railThreads.map((thread) => ({
       threadId: thread.id,
       anchorY: thread.anchor ? anchorPositions[thread.id] ?? null : null,
       height: cardHeights[thread.id] ?? fallbackCardHeight(thread.id),
     })), { minGap: 18 });
-  }, [activeThreadId, anchorPositions, cardHeights, threads]);
+  }, [activeThreadId, anchorPositions, cardHeights, railThreads]);
   const placementByThread = useMemo(() => {
     return new Map(placements.map((placement) => [placement.threadId, placement]));
   }, [placements]);
@@ -79,7 +87,7 @@ export function DocumentThreadRail({
   return (
     <aside className="relative hidden xl:block" data-review-rail aria-label="Thread rail">
       <div className="relative" style={{ minHeight: railHeight }}>
-        {threads.map((thread) => {
+        {railThreads.map((thread) => {
           const placement = placementByThread.get(thread.id);
           if (!placement) return null;
           const expanded = activeThreadId === thread.id;
@@ -114,7 +122,7 @@ export function DocumentThreadRail({
             </MeasuredThreadCard>
           );
         })}
-        {threads.length === 0 ? (
+        {railThreads.length === 0 && orphanedThreads.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
             No threads yet.
           </p>
@@ -135,7 +143,22 @@ export function DocumentThreadRail({
             </button>
           ) : null}
 
-          <OrphanedTray />
+          <OrphanedTray
+            threads={orphanedThreads}
+            activeThreadId={activeThreadId}
+            onFocusThread={onFocusThread}
+            onActivateThread={onActivateThread}
+            onHoverThread={onHoverThread}
+            onLeaveThread={onLeaveThread}
+            onSetThreadStatus={onSetThreadStatus}
+            onReply={onReply}
+            onForkComment={onForkComment}
+            forkingCommentIds={forkingCommentIds}
+            onEditComment={onEditComment}
+            onDeleteComment={onDeleteComment}
+            onSetSuggestionStatus={onSetSuggestionStatus}
+            onToggleReaction={onToggleReaction}
+          />
         </MeasuredRailFooter>
       </div>
     </aside>
@@ -247,7 +270,37 @@ function ThreadConnector({ placement, active }: { placement: ThreadPlacement; ac
   );
 }
 
-function OrphanedTray() {
+function OrphanedTray({
+  threads,
+  activeThreadId,
+  onFocusThread,
+  onActivateThread,
+  onHoverThread,
+  onLeaveThread,
+  onSetThreadStatus,
+  onReply,
+  onForkComment,
+  forkingCommentIds,
+  onEditComment,
+  onDeleteComment,
+  onSetSuggestionStatus,
+  onToggleReaction,
+}: {
+  threads: ReviewThread[];
+  activeThreadId: number | null;
+  onFocusThread: (thread: ReviewThread) => void;
+  onActivateThread: (thread: ReviewThread) => void;
+  onHoverThread: (thread: ReviewThread) => void;
+  onLeaveThread: () => void;
+  onSetThreadStatus: (thread: ReviewThread, status: ThreadStatus) => Promise<string | null>;
+  onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
+  onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
+  forkingCommentIds: ReadonlySet<number>;
+  onEditComment: (comment: ThreadComment, body: string) => Promise<string | null>;
+  onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
+  onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
+  onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
+}) {
   return (
     <section
       id="orphaned-threads"
@@ -258,12 +311,44 @@ function OrphanedTray() {
         <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />
         <h2 className="text-xs font-semibold text-rose-700 dark:text-rose-300">Orphaned tray</h2>
         <span className="ml-auto rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-rose-600 ring-1 ring-inset ring-rose-400/30 dark:text-rose-400">
-          empty
+          {threads.length === 0 ? 'empty' : threads.length}
         </span>
       </div>
-      <p className="mt-2 text-xs leading-5 text-rose-700/80 dark:text-rose-300/80">
-        No orphaned threads yet.
-      </p>
+      {threads.length === 0 ? (
+        <p className="mt-2 text-xs leading-5 text-rose-700/80 dark:text-rose-300/80">
+          No orphaned threads yet.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {threads.map((thread) => (
+            <div
+              key={thread.id}
+              className="space-y-2 rounded-md border border-rose-500/20 bg-white/70 p-2 dark:bg-zinc-950/30"
+            >
+              <p className="px-1 text-[11px] font-semibold uppercase text-rose-700 dark:text-rose-300">
+                Orphaned thread
+              </p>
+              <ThreadCard
+                thread={thread}
+                active={activeThreadId === thread.id}
+                expanded={activeThreadId === thread.id}
+                onFocusThread={onFocusThread}
+                onActivateThread={onActivateThread}
+                onHoverThread={onHoverThread}
+                onLeaveThread={onLeaveThread}
+                onSetThreadStatus={onSetThreadStatus}
+                onReply={onReply}
+                onForkComment={onForkComment}
+                forkingCommentIds={forkingCommentIds}
+                onEditComment={onEditComment}
+                onDeleteComment={onDeleteComment}
+                onSetSuggestionStatus={onSetSuggestionStatus}
+                onToggleReaction={onToggleReaction}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

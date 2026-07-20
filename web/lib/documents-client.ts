@@ -65,7 +65,7 @@ async function mutate(
   return {
     ok: false,
     kind: 'error',
-    message: 'Something went wrong starting the import. Please try again.',
+    message: 'Something went wrong starting the request. Please try again.',
   };
 }
 
@@ -88,4 +88,9 @@ export function importPaste(
 /** POST /api/v1/documents/{id}/retry — re-run a failed import. */
 export function retryImport(id: number): Promise<ImportOutcome> {
   return mutate(`/api/v1/documents/${id}/retry`);
+}
+
+/** POST /api/v1/documents/{id}/resync — pull the source again. */
+export function resyncDocument(id: number): Promise<ImportOutcome> {
+  return mutate(`/api/v1/documents/${id}/resync`);
 }

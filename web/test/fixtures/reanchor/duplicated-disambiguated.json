@@ -1,0 +1,13 @@
+{
+  "newPlainText": "Intro A. Repeat this sentence. Middle. Intro B. Repeat this sentence. Tail.",
+  "anchors": [
+    {
+      "threadId": 12,
+      "exact": "Repeat this sentence.",
+      "prefix": "Intro B. ",
+      "suffix": " Tail.",
+      "start": 9,
+      "end": 30
+    }
+  ]
+}

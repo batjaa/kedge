@@ -252,8 +252,15 @@ class CommentThreadService
             ->selectRaw('MAX(created_at) as latest_activity_at')
             ->groupBy('thread_id');
 
+        $currentAnchorIds = DB::table('anchors')
+            ->select('thread_id')
+            ->selectRaw('MAX(id) as anchor_id')
+            ->where('document_version_id', $document->current_version_id)
+            ->groupBy('thread_id');
+
         $query = Thread::query()
-            ->leftJoin('anchors as rail_anchors', 'rail_anchors.thread_id', '=', 'threads.id')
+            ->leftJoinSub($currentAnchorIds, 'current_anchor_ids', 'current_anchor_ids.thread_id', '=', 'threads.id')
+            ->leftJoin('anchors as rail_anchors', 'rail_anchors.id', '=', 'current_anchor_ids.anchor_id')
             ->leftJoinSub($stats, 'comment_stats', 'comment_stats.thread_id', '=', 'threads.id')
             ->where('threads.document_id', $document->id)
             ->select('threads.*')

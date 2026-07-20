@@ -1,7 +1,8 @@
 'use client';
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import { DocumentReviewHeader } from './document-review-header';
 import { DocumentReviewSidebar } from './document-review-sidebar';
@@ -24,6 +25,7 @@ import {
   updateThreadStatus,
   type ReplyToThreadInput,
 } from '@/lib/comments-client';
+import { resyncDocument } from '@/lib/documents-client';
 import {
   decorateAnchorHighlights,
   firstAnchorHighlightForThread,
@@ -40,7 +42,8 @@ import {
   type HeadingPosition,
   type TocEntry,
 } from '@/lib/review-surface-layout';
-import type { LifecycleStatus } from '@/lib/document-types';
+import { cn } from '@/lib/cn';
+import type { LifecycleStatus, SyncStatus } from '@/lib/document-types';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 const SCROLL_SPY_OFFSET = 136;
@@ -58,6 +61,9 @@ export function DocumentReviewSurface({
   backLabel,
   plainText,
   projectionVersion,
+  canResync = false,
+  lastSyncStatus = null,
+  syncError = null,
   children,
 }: {
   documentId: number;
@@ -71,8 +77,12 @@ export function DocumentReviewSurface({
   backLabel?: string | null;
   plainText: string | null;
   projectionVersion: string | null;
+  canResync?: boolean;
+  lastSyncStatus?: SyncStatus | null;
+  syncError?: string | null;
   children: ReactNode;
 }) {
+  const router = useRouter();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const headingPositionsRef = useRef<HeadingPosition[]>([]);
   const [threads, setThreads] = useState<ReviewThread[]>([]);
@@ -88,6 +98,8 @@ export function DocumentReviewSurface({
   const [composer, setComposer] = useState<ComposerState>({ open: false });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [resyncPending, setResyncPending] = useState(false);
+  const [resyncError, setResyncError] = useState<string | null>(null);
   const [forkingCommentIds, setForkingCommentIds] = useState<ReadonlySet<number>>(() => new Set());
   const submittingRef = useRef(false);
   const forkGuardRef = useRef<CommentForkGuard | null>(null);
@@ -124,6 +136,7 @@ export function DocumentReviewSurface({
     && composer.anchor != null
     && composer.failure == null;
   const composerCommentType = composerCanSuggest ? composerDraft.mode : 'comment';
+  const visibleSyncError = resyncError ?? (lastSyncStatus === 'failed' ? syncError : null);
 
   const reloadThreads = useCallback(async (targetPage = 1) => {
     const firstPage = await listThreads(documentId, 1);
@@ -478,13 +491,35 @@ export function DocumentReviewSurface({
     setHoveredThreadId(null);
     const root = rootRef.current;
     const target = firstAnchorHighlightForThread(root, thread.id);
-    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (target) {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+
+    const card = document.querySelector<HTMLElement>(`[data-thread-card-id="${thread.id}"]`);
+    card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   function jumpToHeading(id: string) {
     const target = document.getElementById(id);
     target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     setActiveHeadingId(id);
+  }
+
+  async function resync() {
+    if (resyncPending) return;
+    setResyncPending(true);
+    setResyncError(null);
+
+    const outcome = await resyncDocument(documentId);
+    if (!outcome.ok) {
+      setResyncError(outcome.message);
+      setResyncPending(false);
+      return;
+    }
+
+    router.refresh();
+    setResyncPending(false);
   }
 
   return (
@@ -499,6 +534,18 @@ export function DocumentReviewSurface({
         openThreadCount={openThreadCount}
         backHref={backHref}
         backLabel={backLabel}
+        syncError={visibleSyncError}
+        actions={canResync ? (
+          <button
+            type="button"
+            onClick={() => void resync()}
+            disabled={resyncPending}
+            className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+          >
+            <RefreshCw className={cn('h-4 w-4', resyncPending ? 'animate-spin' : '')} aria-hidden="true" />
+            {resyncPending ? 'Re-syncing...' : 'Re-sync'}
+          </button>
+        ) : null}
       />
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 py-8 lg:grid-cols-[16rem_minmax(0,52rem)] xl:grid-cols-[16rem_minmax(0,52rem)_320px] 2xl:grid-cols-[18rem_minmax(0,52rem)_360px]">

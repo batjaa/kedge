@@ -107,6 +107,9 @@ Route::prefix('v1')->group(function () {
                 ->name('api.v1.documents.store');
             Route::post('/documents/{document}/retry', [DocumentController::class, 'retry'])
                 ->name('api.v1.documents.retry');
+            Route::post('/documents/{document}/resync', [DocumentController::class, 'resync'])
+                ->middleware('resync.enabled')
+                ->name('api.v1.documents.resync');
 
             // Claim a demo doc into my workspace (SPEC 10.3, #25). Edition-gated
             // like the anonymous demo import: absent entirely when self-hosted.

@@ -39,17 +39,49 @@ class DocumentImporter
 
     public function import(Document $document): void
     {
+        $startedAt = microtime(true);
+
+        Log::info('import.started', [
+            'document_id' => $document->id,
+            'connector' => $document->source_type->value,
+        ]);
+
+        $prepared = $this->prepareVersion($document);
+
+        // firstOrCreate honours the (document_id, content_hash) unique constraint:
+        // re-importing identical content returns the existing version, no twin.
+        $version = DocumentVersion::firstOrCreate(
+            ['document_id' => $document->id, 'content_hash' => $prepared->contentHash],
+            $prepared->versionAttributes(),
+        );
+
+        $document->forceFill([
+            'title' => $prepared->title,
+            'format' => $prepared->format(),
+            'current_version_id' => $version->id,
+            'status' => DocumentStatus::Ready,
+            'last_sync_status' => SyncStatus::Ok,
+            'sync_error' => null,
+        ])->save();
+
+        Log::info('import.completed', [
+            'document_id' => $document->id,
+            'connector' => $prepared->connector,
+            'duration' => $this->elapsedMs($startedAt),
+            'bytes' => strlen($prepared->normalization->content),
+            'deduped' => ! $version->wasRecentlyCreated,
+        ]);
+
+        $this->audit->record($document->workspace, $document->creator, 'document.imported', $document);
+    }
+
+    public function prepareVersion(Document $document): PreparedDocumentVersion
+    {
         // Resolve by the document's stored source type, not by re-parsing its URL:
         // it is set once at import time and is the only handle the URL-less upload
         // connector has (SPEC 5.1 — the source type doubles as the registry key).
         $connector = $this->registry->forSourceType($document->source_type)
             ?? throw new UnsupportedSourceException('No connector handles this source.');
-
-        $startedAt = microtime(true);
-        Log::info('import.started', [
-            'document_id' => $document->id,
-            'connector' => $connector->sourceType()->value,
-        ]);
 
         $fetched = $connector->fetch(new DocumentSource(
             url: (string) $document->source_url,
@@ -70,14 +102,14 @@ class DocumentImporter
         // (SPEC 5.4). Pass the FRESHLY DETECTED format (not $document->format,
         // which is still the creation-time default): only then does the endpoint
         // run the real MDX compile that fills mdx_ok (#20). A projection failure
-        // is transient — it propagates to the job's retry path — so a version
-        // never lands without its plain_text.
+        // propagates to the caller's failure handling, so a version never lands
+        // without its plain_text.
         $isMdx = $normalization->format === DocumentFormat::Mdx;
         $projection = $this->projector->project($normalized, $normalization->format);
 
-        // A rejected or uncompilable MDX document is not an import failure — it
-        // renders as plain-markdown fallback. Record it so a broken source is
-        // observable (SPEC 6.1, 19).
+        // A rejected or uncompilable MDX document is not an import/re-sync
+        // failure — it renders as plain-markdown fallback. Record it from the
+        // shared preparation path so both flows stay observable.
         if ($isMdx && ! $projection->mdxOk) {
             Log::warning('mdx.compile_failed', [
                 'document_id' => $document->id,
@@ -85,41 +117,15 @@ class DocumentImporter
             ]);
         }
 
-        // firstOrCreate honours the (document_id, content_hash) unique constraint:
-        // re-importing identical content returns the existing version, no twin.
-        $version = DocumentVersion::firstOrCreate(
-            ['document_id' => $document->id, 'content_hash' => $hash],
-            [
-                'content_raw' => $fetched->content,
-                'content_normalized' => $normalized,
-                'plain_text' => $projection->plainText,
-                'projection_version' => $projection->projectionVersion,
-                // mdx_ok is meaningful only for MDX; null for md/html (SPEC 6.1).
-                'mdx_ok' => $isMdx ? $projection->mdxOk : null,
-                'import_warnings' => $normalization->warningsForStorage(),
-                'source_version' => $fetched->sourceVersion,
-                'synced_at' => now(),
-            ],
+        return new PreparedDocumentVersion(
+            connector: $connector->sourceType()->value,
+            fetched: $fetched,
+            normalization: $normalization,
+            projection: $projection,
+            contentHash: $hash,
+            title: $title,
+            isMdx: $isMdx,
         );
-
-        $document->forceFill([
-            'title' => $title,
-            'format' => $normalization->format,
-            'current_version_id' => $version->id,
-            'status' => DocumentStatus::Ready,
-            'last_sync_status' => SyncStatus::Ok,
-            'sync_error' => null,
-        ])->save();
-
-        Log::info('import.completed', [
-            'document_id' => $document->id,
-            'connector' => $connector->sourceType()->value,
-            'duration' => $this->elapsedMs($startedAt),
-            'bytes' => strlen($normalized),
-            'deduped' => ! $version->wasRecentlyCreated,
-        ]);
-
-        $this->audit->record($document->workspace, $document->creator, 'document.imported', $document);
     }
 
     private function elapsedMs(float $startedAt): int
