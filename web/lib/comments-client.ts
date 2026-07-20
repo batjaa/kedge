@@ -86,9 +86,15 @@ async function mutate(method: MutationMethod, path: string, body?: Record<string
   return res;
 }
 
-export async function listThreads(documentId: number, page = 1, versionId?: number): Promise<ThreadPage> {
+export async function listThreads(
+  documentId: number,
+  page = 1,
+  versionId?: number,
+  perPage?: number,
+): Promise<ThreadPage> {
   const params = new URLSearchParams({ page: String(page) });
   if (versionId !== undefined) params.set('version', String(versionId));
+  if (perPage !== undefined) params.set('per_page', String(perPage));
 
   const res = await fetch(`${publicApiBaseUrl}/api/v1/documents/${documentId}/threads?${params}`, {
     credentials: 'include',

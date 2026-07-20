@@ -56,6 +56,30 @@ export interface DocumentVersion {
   synced_at: string | null;
 }
 
+export interface VersionDiffVersion {
+  id: number;
+  ordinal: number | null;
+  label: string;
+  synced_at: string | null;
+  projection_version: string | null;
+  plain_text?: string | null;
+}
+
+export interface DocumentVersionDiff {
+  comparable: boolean;
+  message?: string;
+  document: {
+    id: number;
+    title: string;
+  };
+  current_version: VersionDiffVersion | null;
+  versions: {
+    a: VersionDiffVersion;
+    b: VersionDiffVersion;
+  };
+  approvals: Approval[];
+}
+
 export interface DocumentCapabilities {
   update_lifecycle: boolean;
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\VersionKind;
+use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
@@ -53,6 +54,50 @@ class DocumentVersionTest extends TestCase
             ->assertJsonPath('source_version', null);
     }
 
+    public function test_member_reads_version_diff_payload_with_plain_text_ordinals_and_stale_approval_roster(): void
+    {
+        [$member, $document, $versions] = $this->readyDocumentWithVersions();
+        $bob = $this->registerUser('bob@example.com');
+        Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $versions[0]->id,
+            'user_id' => $member->id,
+        ]);
+        Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $versions[2]->id,
+            'user_id' => $bob->id,
+        ]);
+
+        $response = $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$versions[0]->id}/diff/{$versions[2]->id}")
+            ->assertOk()
+            ->assertJsonPath('comparable', true)
+            ->assertJsonPath('document.id', $document->id)
+            ->assertJsonPath('current_version.id', $versions[2]->id)
+            ->assertJsonPath('current_version.ordinal', 3)
+            ->assertJsonPath('current_version.label', 'v3')
+            ->assertJsonPath('versions.a.id', $versions[0]->id)
+            ->assertJsonPath('versions.a.ordinal', 1)
+            ->assertJsonPath('versions.a.label', 'v1')
+            ->assertJsonPath('versions.a.plain_text', 'v1')
+            ->assertJsonPath('versions.b.id', $versions[2]->id)
+            ->assertJsonPath('versions.b.ordinal', 3)
+            ->assertJsonPath('versions.b.label', 'v3')
+            ->assertJsonPath('versions.b.plain_text', 'v3')
+            ->assertJsonCount(2, 'approvals');
+
+        $approvals = collect($response->json('approvals'))->keyBy('document_version_id');
+        $this->assertSame('v1', $approvals[$versions[0]->id]['version_label']);
+        $this->assertTrue($approvals[$versions[0]->id]['stale']);
+        $this->assertSame('v3', $approvals[$versions[2]->id]['version_label']);
+        $this->assertFalse($approvals[$versions[2]->id]['stale']);
+        $this->assertSame($versions[0]->synced_at?->toJSON(), $response->json('versions.a.synced_at'));
+        $this->assertSame($versions[2]->synced_at?->toJSON(), $response->json('versions.b.synced_at'));
+    }
+
     public function test_single_version_read_is_view_authorized(): void
     {
         [, $document, $versions] = $this->readyDocumentWithVersions();
@@ -75,6 +120,47 @@ class DocumentVersionTest extends TestCase
         $this->actingAs($member)->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/versions/{$foreignVersion->id}")
             ->assertNotFound();
+    }
+
+    public function test_version_diff_is_view_authorized(): void
+    {
+        [, $document, $versions] = $this->readyDocumentWithVersions();
+        $other = $this->registerUser('other@example.com');
+
+        $this->actingAs($other)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$versions[0]->id}/diff/{$versions[1]->id}")
+            ->assertForbidden();
+    }
+
+    public function test_version_diff_404s_foreign_version(): void
+    {
+        [$member, $document, $versions] = $this->readyDocumentWithVersions();
+        $foreignDocument = Document::factory()
+            ->for($member->personalWorkspace(), 'workspace')
+            ->ready()
+            ->create(['created_by' => $member->id]);
+        $foreignVersion = $this->versionFor($foreignDocument, 'foreign');
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$versions[0]->id}/diff/{$foreignVersion->id}")
+            ->assertNotFound();
+    }
+
+    public function test_version_diff_guards_mismatched_projection_versions(): void
+    {
+        [$member, $document, $versions] = $this->readyDocumentWithVersions();
+        $versions[1]->forceFill(['projection_version' => '3'])->save();
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$versions[0]->id}/diff/{$versions[1]->id}")
+            ->assertStatus(409)
+            ->assertJsonPath('comparable', false)
+            ->assertJsonPath('versions.a.ordinal', 1)
+            ->assertJsonPath('versions.b.ordinal', 2)
+            ->assertJsonPath('versions.a.projection_version', '2')
+            ->assertJsonPath('versions.b.projection_version', '3')
+            ->assertJsonMissingPath('versions.a.plain_text')
+            ->assertJsonMissingPath('versions.b.plain_text');
     }
 
     public function test_ordinals_are_independent_per_document_and_document_show_exposes_current_ordinal(): void

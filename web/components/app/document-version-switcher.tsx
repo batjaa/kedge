@@ -17,6 +17,8 @@ export function DocumentVersionSwitcher({
 }) {
   if (versions.length === 0) return null;
 
+  const compareBaseVersionId = compareBaseForVersions(versions, viewedVersionId, currentVersionId);
+
   return (
     <nav
       aria-label="Document versions"
@@ -45,6 +47,29 @@ export function DocumentVersionSwitcher({
           </Link>
         );
       })}
+      {compareBaseVersionId !== null ? (
+        <Link
+          href={`/documents/${documentId}/diff?a=${compareBaseVersionId}&b=${currentVersionId}`}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold uppercase text-emerald-700 ring-1 ring-inset ring-emerald-500/25 hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-300 dark:ring-emerald-400/25 dark:hover:bg-emerald-400/10"
+        >
+          <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
+          Compare
+        </Link>
+      ) : null}
     </nav>
   );
+}
+
+function compareBaseForVersions(
+  versions: DocumentVersion[],
+  viewedVersionId: number,
+  currentVersionId: number,
+): number | null {
+  if (versions.length < 2) return null;
+  if (viewedVersionId !== currentVersionId) return viewedVersionId;
+
+  const currentIndex = versions.findIndex((version) => version.id === currentVersionId);
+  const previous = currentIndex > 0 ? versions[currentIndex - 1] : null;
+
+  return previous?.id ?? null;
 }

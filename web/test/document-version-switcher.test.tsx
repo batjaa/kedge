@@ -23,7 +23,25 @@ describe('DocumentVersionSwitcher', () => {
     expect(html).toContain('v3');
     expect(html).toContain('(latest)');
     expect(html).toContain('href="/documents/42?version=202"');
+    expect(html).toContain('href="/documents/42/diff?a=202&amp;b=303"');
     expect(html).toContain('aria-current="page"');
+  });
+
+  it('compares the current version against the previous version by default', () => {
+    const html = renderToStaticMarkup(
+      <DocumentVersionSwitcher
+        documentId={42}
+        viewedVersionId={303}
+        currentVersionId={303}
+        versions={[
+          version({ id: 101, ordinal: 1 }),
+          version({ id: 202, ordinal: 2 }),
+          version({ id: 303, ordinal: 3 }),
+        ]}
+      />,
+    );
+
+    expect(html).toContain('href="/documents/42/diff?a=202&amp;b=303"');
   });
 });
 

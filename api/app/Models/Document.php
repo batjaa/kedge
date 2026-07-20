@@ -119,6 +119,13 @@ class Document extends Model
         return $this->versionOrdinalMap()[$versionId] ?? null;
     }
 
+    public function versionLabelForVersionId(?int $versionId): string
+    {
+        $ordinal = $this->ordinalForVersionId($versionId);
+
+        return $ordinal === null ? 'v?' : "v{$ordinal}";
+    }
+
     /**
      * Share links handed out for this document (SPEC 10.2). Cascade-deleted with
      * the document; a share never outlives what it points at.

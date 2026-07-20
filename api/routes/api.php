@@ -106,6 +106,8 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.documents.versions.index');
         Route::get('/documents/{document}/versions/{version}', [DocumentVersionController::class, 'show'])
             ->name('api.v1.documents.versions.show');
+        Route::get('/documents/{document}/versions/{baseVersion}/diff/{targetVersion}', [DocumentVersionController::class, 'diff'])
+            ->name('api.v1.documents.versions.diff');
 
         Route::middleware('throttle:imports')->group(function () {
             Route::post('/documents', [DocumentController::class, 'store'])
