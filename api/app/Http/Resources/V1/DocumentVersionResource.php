@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Enums\VersionKind;
 use App\Models\DocumentVersion;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -36,6 +37,8 @@ class DocumentVersionResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'kind' => $this->kind instanceof VersionKind ? $this->kind->value : $this->kind,
+            'parent_version_id' => $this->parent_version_id,
             'content_hash' => $this->content_hash,
             'content' => $this->content_normalized,
             'import_warnings' => $this->import_warnings ?? [],

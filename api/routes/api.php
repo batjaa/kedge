@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\CommentReactionController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\DocumentVersionController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MentionSuggestionController;
@@ -97,6 +98,9 @@ Route::prefix('v1')->group(function () {
         // retry hammer can't flood the fetch queue (SPEC 13).
         Route::get('/documents/{document}', [DocumentController::class, 'show'])
             ->name('api.v1.documents.show');
+
+        Route::get('/documents/{document}/versions', [DocumentVersionController::class, 'index'])
+            ->name('api.v1.documents.versions.index');
 
         Route::middleware('throttle:imports')->group(function () {
             Route::post('/documents', [DocumentController::class, 'store'])
