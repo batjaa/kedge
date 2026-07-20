@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
 use App\Services\RegistrationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -37,37 +38,65 @@ class ApprovalTest extends TestCase
         $this->assertSame(1, DB::table('audit_logs')->where('action', 'approval.given')->count());
     }
 
-    public function test_approving_after_a_new_version_lands_creates_a_reapproval_on_the_new_version(): void
+    public function test_approving_after_a_new_version_lands_supersedes_the_prior_active_approval(): void
     {
-        [$author, $document, $firstVersion] = $this->readyDocumentWithVersion();
+        [$alice, $document, $firstVersion] = $this->readyDocumentWithVersion('alice@example.com', 'Alice');
 
-        $oldApprovalId = $this->actingAs($author)->fromWebApp()
+        $oldApprovalId = $this->actingAs($alice)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/approvals")
             ->assertCreated()
             ->json('id');
+        $bob = $this->registerUser('bob@example.com', 'Bob');
+        $bobApproval = Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $firstVersion->id,
+            'user_id' => $bob->id,
+        ]);
 
         $secondVersion = $this->versionFor($document, 'v2 body', $firstVersion);
         $document->forceFill(['current_version_id' => $secondVersion->id])->save();
 
-        $this->actingAs($author)->fromWebApp()
+        $this->actingAs($alice)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/approvals")
             ->assertCreated()
             ->assertJsonPath('document_version_id', $secondVersion->id)
             ->assertJsonPath('version_label', "v{$secondVersion->id}")
             ->assertJsonPath('stale', false);
 
-        $this->assertDatabaseHas('approvals', [
-            'id' => $oldApprovalId,
-            'document_version_id' => $firstVersion->id,
-            'revoked_at' => null,
-        ]);
+        $this->assertNotNull(Approval::findOrFail($oldApprovalId)->revoked_at);
         $this->assertDatabaseHas('approvals', [
             'document_id' => $document->id,
             'document_version_id' => $secondVersion->id,
-            'user_id' => $author->id,
+            'user_id' => $alice->id,
             'revoked_at' => null,
         ]);
-        $this->assertDatabaseCount('approvals', 2);
+        $this->assertDatabaseHas('approvals', [
+            'id' => $bobApproval->id,
+            'revoked_at' => null,
+        ]);
+
+        $document->refresh()->loadCurrentVersionAndApprovals();
+        $aliceApprovals = $document->activeApprovals
+            ->where('user_id', $alice->id)
+            ->values();
+        $this->assertCount(1, $aliceApprovals);
+        $this->assertSame($secondVersion->id, $aliceApprovals->first()->document_version_id);
+        $this->assertFalse($aliceApprovals->first()->staleFor($document));
+        $this->assertCount(2, $document->activeApprovals);
+
+        $response = $this->actingAs($alice)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}")
+            ->assertOk()
+            ->assertJsonCount(2, 'approvals');
+
+        $aliceRosterEntries = collect($response->json('approvals'))
+            ->filter(fn (array $approval): bool => $approval['user']['id'] === $alice->id)
+            ->values();
+        $this->assertCount(1, $aliceRosterEntries);
+        $this->assertSame('Alice', $aliceRosterEntries->first()['user']['name']);
+        $this->assertSame($secondVersion->id, $aliceRosterEntries->first()['document_version_id']);
+        $this->assertFalse($aliceRosterEntries->first()['stale']);
     }
 
     public function test_document_roster_reports_older_active_approval_as_stale(): void
@@ -89,6 +118,35 @@ class ApprovalTest extends TestCase
             ->assertJsonPath('approvals.0.version_label', "v{$firstVersion->id}")
             ->assertJsonPath('approvals.0.stale', true)
             ->assertJsonPath('current_version.id', $secondVersion->id);
+    }
+
+    public function test_database_enforces_one_active_approval_per_reviewer_per_document(): void
+    {
+        [$author, $document, $firstVersion] = $this->readyDocumentWithVersion();
+        $secondVersion = $this->versionFor($document, 'v2 body', $firstVersion);
+
+        Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $firstVersion->id,
+            'user_id' => $author->id,
+            'revoked_at' => now(),
+        ]);
+        Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $secondVersion->id,
+            'user_id' => $author->id,
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $firstVersion->id,
+            'user_id' => $author->id,
+        ]);
     }
 
     public function test_revoke_sets_revoked_at_and_removes_approval_from_active_roster(): void
@@ -139,9 +197,11 @@ class ApprovalTest extends TestCase
     /**
      * @return array{User, Document, DocumentVersion}
      */
-    private function readyDocumentWithVersion(): array
-    {
-        $author = $this->registerUser('author@example.com');
+    private function readyDocumentWithVersion(
+        string $email = 'author@example.com',
+        string $name = 'Reviewer',
+    ): array {
+        $author = $this->registerUser($email, $name);
         $document = Document::factory()
             ->for($author->personalWorkspace(), 'workspace')
             ->ready()
@@ -171,10 +231,10 @@ class ApprovalTest extends TestCase
             ]);
     }
 
-    private function registerUser(string $email): User
+    private function registerUser(string $email, string $name = 'Reviewer'): User
     {
         return app(RegistrationService::class)->register(
-            name: 'Reviewer',
+            name: $name,
             email: $email,
             password: 'correct-horse-battery',
         );

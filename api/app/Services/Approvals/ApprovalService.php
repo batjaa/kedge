@@ -18,7 +18,8 @@ class ApprovalService
     /**
      * Approve the current document version. Idempotency is scoped to the current
      * version: an active approval on that exact version is returned; a stale
-     * approval on an older version remains pinned and a new approval is created.
+     * approval on an older version is superseded only when the reviewer
+     * explicitly approves the new current version.
      *
      * @return array{Approval, int}
      */
@@ -46,6 +47,33 @@ class ApprovalService
 
             if ($existing) {
                 return [$this->loadForResource($existing, $lockedDocument), 200];
+            }
+
+            $supersededApprovals = Approval::query()
+                ->where('document_id', $lockedDocument->id)
+                ->where('user_id', $actor->id)
+                ->whereNull('revoked_at')
+                ->where('document_version_id', '!=', $lockedDocument->current_version_id)
+                ->orderBy('id')
+                ->get();
+
+            $revokedAt = now();
+            foreach ($supersededApprovals as $supersededApproval) {
+                $supersededApproval->forceFill(['revoked_at' => $revokedAt])->save();
+
+                $this->audit->record(
+                    $lockedDocument->workspace,
+                    $actor,
+                    'approval.revoked',
+                    $supersededApproval,
+                    [
+                        'document_id' => $lockedDocument->id,
+                        'document_version_id' => $supersededApproval->document_version_id,
+                        'reason' => 'superseded',
+                        'superseded_by_document_version_id' => $lockedDocument->current_version_id,
+                    ],
+                    $ip,
+                );
             }
 
             $approval = Approval::create([
