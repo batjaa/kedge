@@ -92,11 +92,12 @@ final class ThreadCapabilities
         }
 
         if ($thread->relationLoaded('comments')) {
-            return $thread->comments->contains(fn ($comment) => $this->isViewer($comment->author_id));
+            return $thread->comments->contains(fn ($comment) => ! $comment->trashed() && $this->isViewer($comment->author_id));
         }
 
         return $thread->comments()
             ->where('author_id', $this->viewerId)
+            ->whereNull('deleted_at')
             ->exists();
     }
 

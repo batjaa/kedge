@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import { DocumentReviewHeader } from './document-review-header';
 import { DocumentReviewSidebar } from './document-review-sidebar';
-import { DocumentThreadRail } from './document-thread-rail';
+import { DocumentThreadRail, type ReattachStatus } from './document-thread-rail';
 import { MobileThreadSheet } from './mobile-thread-sheet';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
@@ -106,6 +106,7 @@ export function DocumentReviewSurface({
   const [resyncError, setResyncError] = useState<string | null>(null);
   const [pendingReattachThreadId, setPendingReattachThreadId] = useState<number | null>(null);
   const [reattachingThreadId, setReattachingThreadId] = useState<number | null>(null);
+  const [reattachStatus, setReattachStatus] = useState<ReattachStatus | null>(null);
   const [forkingCommentIds, setForkingCommentIds] = useState<ReadonlySet<number>>(() => new Set());
   const submittingRef = useRef(false);
   const forkGuardRef = useRef<CommentForkGuard | null>(null);
@@ -350,8 +351,11 @@ export function DocumentReviewSurface({
     } else {
       console.warn('anchor capture failed', result);
       if (pendingReattachThreadId !== null) {
-        setPendingReattachThreadId(null);
-        setMessage('Could not capture that selection. Re-attach by selecting document text.');
+        setReattachStatus({
+          threadId: pendingReattachThreadId,
+          tone: 'error',
+          message: 'Could not capture that selection. Re-attach by selecting document text.',
+        });
         return;
       }
 
@@ -371,12 +375,12 @@ export function DocumentReviewSurface({
         projection_version: String(anchor.projection_version),
       });
       if (!outcome.ok) {
-        setPendingReattachThreadId(null);
-        setMessage(outcome.message);
+        setReattachStatus({ threadId, tone: 'error', message: outcome.message });
         return;
       }
 
       setPendingReattachThreadId(null);
+      setReattachStatus(null);
       window.getSelection()?.removeAllRanges();
       await refreshLoadedThreads();
       setActiveThreadId(outcome.thread.id);
@@ -640,7 +644,12 @@ export function DocumentReviewSurface({
           onSetThreadStatus={setThreadStatus}
           onStartReattach={(thread) => {
             setPendingReattachThreadId(thread.id);
-            setMessage('Select replacement text in the document to re-attach this thread.');
+            setMessage(null);
+            setReattachStatus({
+              threadId: thread.id,
+              tone: 'info',
+              message: 'Select replacement text in the document to re-attach this thread.',
+            });
             setComposer({ open: false });
             setActiveThreadId(thread.id);
           }}
@@ -653,6 +662,7 @@ export function DocumentReviewSurface({
           onToggleReaction={toggleReaction}
           pendingReattachThreadId={pendingReattachThreadId}
           reattachingThreadId={reattachingThreadId}
+          reattachStatus={reattachStatus}
         />
       </div>
 

@@ -3,12 +3,19 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Link } from 'lucide-react';
 import { ThreadCard } from './document-thread-card';
+import { cn } from '@/lib/cn';
 import { placeThreadCards, type ThreadPlacement } from '@/lib/review-surface-layout';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 const COLLAPSED_CARD_HEIGHT = 190;
 const EXPANDED_CARD_HEIGHT = 390;
+
+export type ReattachStatus = {
+  threadId: number;
+  tone: 'info' | 'error';
+  message: string;
+};
 
 export function DocumentThreadRail({
   threads,
@@ -34,6 +41,7 @@ export function DocumentThreadRail({
   onToggleReaction,
   pendingReattachThreadId,
   reattachingThreadId,
+  reattachStatus,
 }: {
   threads: ReviewThread[];
   page: number;
@@ -58,6 +66,7 @@ export function DocumentThreadRail({
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
   pendingReattachThreadId: number | null;
   reattachingThreadId: number | null;
+  reattachStatus: ReattachStatus | null;
 }) {
   const [cardHeights, setCardHeights] = useState<Record<number, number>>({});
   const [footerHeight, setFooterHeight] = useState(128);
@@ -167,6 +176,7 @@ export function DocumentThreadRail({
             onToggleReaction={onToggleReaction}
             pendingReattachThreadId={pendingReattachThreadId}
             reattachingThreadId={reattachingThreadId}
+            reattachStatus={reattachStatus}
           />
         </MeasuredRailFooter>
       </div>
@@ -297,6 +307,7 @@ function OrphanedTray({
   onToggleReaction,
   pendingReattachThreadId,
   reattachingThreadId,
+  reattachStatus,
 }: {
   threads: ReviewThread[];
   activeThreadId: number | null;
@@ -315,6 +326,7 @@ function OrphanedTray({
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
   pendingReattachThreadId: number | null;
   reattachingThreadId: number | null;
+  reattachStatus: ReattachStatus | null;
 }) {
   return (
     <section
@@ -335,49 +347,66 @@ function OrphanedTray({
         </p>
       ) : (
         <div className="mt-3 space-y-2">
-          {threads.map((thread) => (
-            <div
-              key={thread.id}
-              className="space-y-2 rounded-md border border-rose-500/20 bg-white/70 p-2 dark:bg-zinc-950/30"
-            >
-              <p className="px-1 text-[11px] font-semibold uppercase text-rose-700 dark:text-rose-300">
-                Orphaned thread
-              </p>
-              {thread.can_reanchor ? (
-                <button
-                  type="button"
-                  title="Select replacement text in the document"
-                  disabled={reattachingThreadId === thread.id}
-                  onClick={() => onStartReattach(thread)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-1 dark:ring-inset dark:ring-rose-300/20 dark:hover:bg-rose-400/15"
-                >
-                  <Link className="h-3.5 w-3.5" aria-hidden="true" />
-                  {reattachingThreadId === thread.id
-                    ? 'Re-attaching...'
-                    : pendingReattachThreadId === thread.id
-                      ? 'Select text'
-                      : 'Re-attach'}
-                </button>
-              ) : null}
-              <ThreadCard
-                thread={thread}
-                active={activeThreadId === thread.id}
-                expanded={activeThreadId === thread.id}
-                onFocusThread={onFocusThread}
-                onActivateThread={onActivateThread}
-                onHoverThread={onHoverThread}
-                onLeaveThread={onLeaveThread}
-                onSetThreadStatus={onSetThreadStatus}
-                onReply={onReply}
-                onForkComment={onForkComment}
-                forkingCommentIds={forkingCommentIds}
-                onEditComment={onEditComment}
-                onDeleteComment={onDeleteComment}
-                onSetSuggestionStatus={onSetSuggestionStatus}
-                onToggleReaction={onToggleReaction}
-              />
-            </div>
-          ))}
+          {threads.map((thread) => {
+            const threadReattachStatus = reattachStatus?.threadId === thread.id ? reattachStatus : null;
+
+            return (
+              <div
+                key={thread.id}
+                className="space-y-2 rounded-md border border-rose-500/20 bg-white/70 p-2 dark:bg-zinc-950/30"
+              >
+                <p className="px-1 text-[11px] font-semibold uppercase text-rose-700 dark:text-rose-300">
+                  Orphaned thread
+                </p>
+                {thread.can_reanchor ? (
+                  <button
+                    type="button"
+                    title="Select replacement text in the document"
+                    disabled={reattachingThreadId === thread.id}
+                    onClick={() => onStartReattach(thread)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-1 dark:ring-inset dark:ring-rose-300/20 dark:hover:bg-rose-400/15"
+                  >
+                    <Link className="h-3.5 w-3.5" aria-hidden="true" />
+                    {reattachingThreadId === thread.id
+                      ? 'Re-attaching...'
+                      : pendingReattachThreadId === thread.id
+                        ? 'Select text'
+                        : 'Re-attach'}
+                  </button>
+                ) : null}
+                {threadReattachStatus ? (
+                  <p
+                    role={threadReattachStatus.tone === 'error' ? 'alert' : 'status'}
+                    className={cn(
+                      'rounded-md px-2 py-1.5 text-xs leading-5 ring-1 ring-inset',
+                      threadReattachStatus.tone === 'error'
+                        ? 'bg-rose-50 text-rose-700 ring-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200 dark:ring-rose-400/20'
+                        : 'bg-white/70 text-rose-700 ring-rose-500/20 dark:bg-zinc-950/30 dark:text-rose-200 dark:ring-rose-300/20',
+                    )}
+                  >
+                    {threadReattachStatus.message}
+                  </p>
+                ) : null}
+                <ThreadCard
+                  thread={thread}
+                  active={activeThreadId === thread.id}
+                  expanded={activeThreadId === thread.id}
+                  onFocusThread={onFocusThread}
+                  onActivateThread={onActivateThread}
+                  onHoverThread={onHoverThread}
+                  onLeaveThread={onLeaveThread}
+                  onSetThreadStatus={onSetThreadStatus}
+                  onReply={onReply}
+                  onForkComment={onForkComment}
+                  forkingCommentIds={forkingCommentIds}
+                  onEditComment={onEditComment}
+                  onDeleteComment={onDeleteComment}
+                  onSetSuggestionStatus={onSetSuggestionStatus}
+                  onToggleReaction={onToggleReaction}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

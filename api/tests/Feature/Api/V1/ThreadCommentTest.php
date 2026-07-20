@@ -569,6 +569,26 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('anchors', 1);
     }
 
+    public function test_share_reviewer_with_only_deleted_comment_gets_no_reanchor_capability_for_orphaned_thread(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $reviewer = User::factory()->create(['email' => 'reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+        $reply = $thread->comments()->create([
+            'author_id' => $reviewer->id,
+            'body_md' => 'Reviewer reply',
+        ]);
+        $reply->delete();
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.can_reanchor', false);
+    }
+
     public function test_same_thread_idempotency_key_on_different_documents_creates_distinct_comments(): void
     {
         [$author, $documentA] = $this->readyDocument();
