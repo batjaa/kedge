@@ -38,6 +38,7 @@ function send(method: 'POST' | 'PATCH', path: string, body?: Record<string, unkn
 async function mutate(
   path: string,
   body?: Record<string, unknown>,
+  fallbackError = 'Something went wrong starting the import. Please try again.',
 ): Promise<ImportOutcome> {
   await ensureCsrfCookie();
   let res = await post(path, body);
@@ -73,7 +74,7 @@ async function mutate(
   return {
     ok: false,
     kind: 'error',
-    message: 'Something went wrong starting the request. Please try again.',
+    message: fallbackError,
   };
 }
 
@@ -113,7 +114,11 @@ export async function readDocument(id: number): Promise<Document | null> {
 
 /** POST /api/v1/documents/{id}/resync — pull the source again. */
 export function resyncDocument(id: number): Promise<ImportOutcome> {
-  return mutate(`/api/v1/documents/${id}/resync`);
+  return mutate(
+    `/api/v1/documents/${id}/resync`,
+    undefined,
+    'Something went wrong starting the re-sync. Please try again.',
+  );
 }
 
 export type DocumentMutationOutcome =

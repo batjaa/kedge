@@ -20,7 +20,9 @@ test('create share with expiry → open read-only in a fresh context → revoke 
   await expect(
     page.getByRole('heading', { name: 'Share links' }),
   ).toBeVisible();
-  await page.getByRole('combobox').selectOption({ label: 'Expires in 7 days' });
+  await page
+    .getByRole('combobox', { name: 'Share expiry' })
+    .selectOption({ label: 'Expires in 7 days' });
   await page.getByRole('button', { name: 'Create share link', exact: true }).click();
 
   // The one-time URL banner: the token is shown exactly once, here.
