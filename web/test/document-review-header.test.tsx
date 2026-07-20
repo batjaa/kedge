@@ -38,4 +38,30 @@ describe('DocumentReviewHeader', () => {
     expect(html).toContain('Grace Hopper');
     expect(html).toContain('approved v5');
   });
+
+  it('uses the current version label for stale approvals while viewing an old version', () => {
+    const html = renderToStaticMarkup(
+      <DocumentReviewHeader
+        title="Review spec"
+        surfaceLabel="Authenticated document"
+        lifecycleStatus="in_review"
+        versionLabel="v1"
+        currentVersionLabel="v3"
+        syncedAt={null}
+        openThreadCount={2}
+        approvals={[
+          {
+            id: 10,
+            user: { id: 7, name: 'Ada Lovelace' },
+            document_version_id: 1,
+            version_label: 'v1',
+            stale: true,
+            created_at: '2026-07-20T18:00:00Z',
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('approved v1 · current v3');
+  });
 });

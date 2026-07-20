@@ -49,7 +49,9 @@ class DocumentResource extends JsonResource
             'current_version' => $this->whenLoaded(
                 'currentVersion',
                 fn () => $this->currentVersion
-                    ? DocumentVersionResource::make($this->currentVersion)->withProjectionSubstrate()
+                    ? DocumentVersionResource::make($this->currentVersion)
+                        ->withProjectionSubstrate()
+                        ->withOrdinal($this->ordinalForVersionId((int) $this->currentVersion->id))
                     : null,
             ),
             'created_at' => $this->created_at,

@@ -35,6 +35,7 @@ class StoreThreadRequest extends FormRequest
             'body' => ['sometimes', 'string', 'max:20000'],
             'proposed_text' => ['sometimes', 'string', 'max:20000'],
             'idempotency_key' => ['required', 'string', 'max:128'],
+            'document_version_id' => ['sometimes', 'integer', 'min:1'],
             'failed_capture' => ['sometimes', 'boolean'],
             'anchor' => ['nullable', 'array'],
             'anchor.exact' => ['required_with:anchor', 'string', 'max:20000'],

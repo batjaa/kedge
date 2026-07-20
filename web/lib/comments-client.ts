@@ -10,6 +10,7 @@ export type CreateThreadInput =
       body: string;
       anchor: ThreadAnchorPayload;
       idempotency_key: string;
+      document_version_id?: number;
       comment_type?: 'comment';
     }
   | {
@@ -19,12 +20,14 @@ export type CreateThreadInput =
       proposed_text: string;
       anchor: ThreadAnchorPayload;
       idempotency_key: string;
+      document_version_id?: number;
     }
   | {
       type: 'document';
       body: string;
       failed_capture?: boolean;
       idempotency_key: string;
+      document_version_id?: number;
     };
 
 export type CreateThreadOutcome =
@@ -83,8 +86,11 @@ async function mutate(method: MutationMethod, path: string, body?: Record<string
   return res;
 }
 
-export async function listThreads(documentId: number, page = 1): Promise<ThreadPage> {
-  const res = await fetch(`${publicApiBaseUrl}/api/v1/documents/${documentId}/threads?page=${page}`, {
+export async function listThreads(documentId: number, page = 1, versionId?: number): Promise<ThreadPage> {
+  const params = new URLSearchParams({ page: String(page) });
+  if (versionId !== undefined) params.set('version', String(versionId));
+
+  const res = await fetch(`${publicApiBaseUrl}/api/v1/documents/${documentId}/threads?${params}`, {
     credentials: 'include',
     headers: { accept: 'application/json' },
     cache: 'no-store',
@@ -147,6 +153,7 @@ export async function createSuggestionThread(
     proposed_text: string;
     anchor: ThreadAnchorPayload;
     idempotency_key: string;
+    document_version_id?: number;
   },
 ): Promise<CreateThreadOutcome> {
   return createThread(documentId, {
@@ -156,6 +163,7 @@ export async function createSuggestionThread(
     proposed_text: input.proposed_text,
     anchor: input.anchor,
     idempotency_key: input.idempotency_key,
+    document_version_id: input.document_version_id,
   });
 }
 

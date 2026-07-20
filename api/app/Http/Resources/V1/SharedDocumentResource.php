@@ -78,7 +78,8 @@ class SharedDocumentResource extends JsonResource
 
     private function versionResource(bool $includeProjectionSubstrate): DocumentVersionResource
     {
-        $resource = DocumentVersionResource::make($this->currentVersion);
+        $resource = DocumentVersionResource::make($this->currentVersion)
+            ->withOrdinal($this->ordinalForVersionId((int) $this->currentVersion->id));
 
         return $includeProjectionSubstrate
             ? $resource->withProjectionSubstrate()

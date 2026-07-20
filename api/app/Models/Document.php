@@ -32,6 +32,11 @@ class Document extends Model
     use HasFactory;
 
     /**
+     * @var array<int, int>|null
+     */
+    private ?array $versionOrdinalMap = null;
+
+    /**
      * In-memory defaults that mirror the migration's column defaults, so a
      * freshly created model (before a DB round-trip) already carries its enum
      * columns — the import response is serialized straight from it.
@@ -71,6 +76,47 @@ class Document extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(DocumentVersion::class);
+    }
+
+    /** @return HasMany<DocumentVersion, $this> */
+    public function versionsWithOrdinals(): HasMany
+    {
+        return $this->versions()
+            ->select('document_versions.*')
+            ->selectRaw('ROW_NUMBER() OVER (ORDER BY document_versions.id) as ordinal')
+            ->lineageOrdered();
+    }
+
+    /**
+     * Per-document display ordinals for mainline versions. M3's lineage order is
+     * id order; this helper gives resources one cached map instead of asking per
+     * version.
+     *
+     * @return array<int, int>
+     */
+    public function versionOrdinalMap(): array
+    {
+        if ($this->versionOrdinalMap !== null) {
+            return $this->versionOrdinalMap;
+        }
+
+        $this->versionOrdinalMap = $this->versions()
+            ->lineageOrdered()
+            ->pluck('document_versions.id')
+            ->values()
+            ->mapWithKeys(fn (int $id, int $index): array => [$id => $index + 1])
+            ->all();
+
+        return $this->versionOrdinalMap;
+    }
+
+    public function ordinalForVersionId(?int $versionId): ?int
+    {
+        if ($versionId === null) {
+            return null;
+        }
+
+        return $this->versionOrdinalMap()[$versionId] ?? null;
     }
 
     /**

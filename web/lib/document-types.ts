@@ -32,6 +32,9 @@ export interface ImportWarning {
 
 export interface DocumentVersion {
   id: number;
+  ordinal: number | null;
+  kind?: 'mainline' | 'candidate';
+  parent_version_id?: number | null;
   content_hash: string;
   /** content_normalized — the markdown/MDX the reading surface renders. */
   content: string;

@@ -722,7 +722,105 @@ class ThreadCommentTest extends TestCase
         $this->actingAs($author)->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/threads")
             ->assertOk()
-            ->assertJsonPath('data.0.anchor', null);
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_threads_endpoint_defaults_to_current_version_and_accepts_version_filter(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+        $versionOne = $document->currentVersion;
+
+        $created = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Inline on V1',
+                'idempotency_key' => 'v1-version-filter',
+                'anchor' => $this->anchorFor($versionOne->plain_text, 'Alpha', '2'),
+            ])
+            ->assertCreated();
+
+        $thread = Thread::findOrFail($created->json('id'));
+        $versionTwo = $this->attachVersion(
+            $document,
+            content: "# Doc\n\nBeta target text",
+            plainText: 'Beta target text',
+            projectionVersion: '2',
+        );
+        $thread->anchors()->create($this->anchorFor($versionTwo->plain_text, 'Beta', '2') + [
+            'document_version_id' => $versionTwo->id,
+            'state' => AnchorState::Anchored,
+        ]);
+        $thread->anchors()->create($this->anchorFor($versionTwo->plain_text, 'target', '2') + [
+            'document_version_id' => $versionTwo->id,
+            'state' => AnchorState::Relocated,
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk()
+            ->assertJsonPath('data.0.anchor.document_version_id', $versionTwo->id)
+            ->assertJsonPath('data.0.anchor.exact', 'target')
+            ->assertJsonPath('data.0.anchor.state', 'relocated');
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$versionOne->id}")
+            ->assertOk()
+            ->assertJsonPath('data.0.anchor.document_version_id', $versionOne->id)
+            ->assertJsonPath('data.0.anchor.exact', 'Alpha');
+    }
+
+    public function test_threads_endpoint_404s_foreign_version_filter(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $foreignDocument = Document::factory()
+            ->for($author->personalWorkspace(), 'workspace')
+            ->ready()
+            ->create(['created_by' => $author->id]);
+        $foreignVersion = $this->attachVersion($foreignDocument);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$foreignVersion->id}")
+            ->assertNotFound();
+    }
+
+    public function test_inline_thread_created_while_viewing_old_version_anchors_to_that_version(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Old-only target text');
+        $versionOne = $document->currentVersion;
+        $versionTwo = $this->attachVersion(
+            $document,
+            content: "# Doc\n\nCurrent replacement text",
+            plainText: 'Current replacement text',
+            projectionVersion: '2',
+        );
+
+        $response = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Comment on the old version',
+                'document_version_id' => $versionOne->id,
+                'idempotency_key' => 'old-version-thread',
+                'anchor' => $this->anchorFor($versionOne->plain_text, 'Old-only', '2'),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.document_version_id', $versionOne->id)
+            ->assertJsonPath('anchor.exact', 'Old-only');
+
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $response->json('id'),
+            'document_version_id' => $versionOne->id,
+            'exact' => 'Old-only',
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$versionOne->id}")
+            ->assertOk()
+            ->assertJsonPath('data.0.anchor.document_version_id', $versionOne->id);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$versionTwo->id}")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 
     public function test_reply_idempotency_key_returns_the_original_comment(): void

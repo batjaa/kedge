@@ -24,7 +24,7 @@ class ApprovalTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/approvals")
             ->assertCreated()
             ->assertJsonPath('document_version_id', $version->id)
-            ->assertJsonPath('version_label', "v{$version->id}")
+            ->assertJsonPath('version_label', 'v1')
             ->assertJsonPath('stale', false)
             ->assertJsonPath('user.name', $author->name);
 
@@ -61,7 +61,7 @@ class ApprovalTest extends TestCase
             ->postJson("/api/v1/documents/{$document->id}/approvals")
             ->assertCreated()
             ->assertJsonPath('document_version_id', $secondVersion->id)
-            ->assertJsonPath('version_label', "v{$secondVersion->id}")
+            ->assertJsonPath('version_label', 'v2')
             ->assertJsonPath('stale', false);
 
         $this->assertNotNull(Approval::findOrFail($oldApprovalId)->revoked_at);
@@ -115,7 +115,7 @@ class ApprovalTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'approvals')
             ->assertJsonPath('approvals.0.document_version_id', $firstVersion->id)
-            ->assertJsonPath('approvals.0.version_label', "v{$firstVersion->id}")
+            ->assertJsonPath('approvals.0.version_label', 'v1')
             ->assertJsonPath('approvals.0.stale', true)
             ->assertJsonPath('current_version.id', $secondVersion->id);
     }

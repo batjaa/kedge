@@ -4,9 +4,16 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { CheckCircle2, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
+import {
+  DocumentNewVersionBanner,
+  newerVersionNoticeFromDocument,
+  newerVersionNoticeFromVersion,
+  type NewerVersionNotice,
+} from './document-new-version-banner';
 import { DocumentReviewHeader } from './document-review-header';
 import { DocumentReviewSidebar } from './document-review-sidebar';
 import { DocumentThreadRail, type ReattachStatus } from './document-thread-rail';
+import { DocumentVersionSwitcher } from './document-version-switcher';
 import { MobileThreadSheet } from './mobile-thread-sheet';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
@@ -45,7 +52,8 @@ import {
 } from '@/lib/review-surface-layout';
 import { cn } from '@/lib/cn';
 import { approveDocument, revokeApproval } from '@/lib/approvals-client';
-import type { Approval, Document, LifecycleStatus, SyncStatus } from '@/lib/document-types';
+import type { Approval, Document, DocumentVersion, LifecycleStatus, SyncStatus } from '@/lib/document-types';
+import { versionLabel as displayVersionLabel } from '@/lib/version-label';
 import type { AnchorSelector } from '@/lib/anchor-capture-core';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
@@ -53,6 +61,7 @@ const SCROLL_SPY_OFFSET = 136;
 const MOBILE_BREAKPOINT = 1280;
 const RESYNC_POLL_INTERVAL_MS = 1500;
 const RESYNC_POLL_ATTEMPTS = 12;
+const NEW_VERSION_POLL_INTERVAL_MS = 15000;
 const LIFECYCLE_OPTIONS: LifecycleStatus[] = ['draft', 'in_review', 'approved', 'superseded'];
 
 export function DocumentReviewSurface({
@@ -61,6 +70,9 @@ export function DocumentReviewSurface({
   surfaceLabel,
   sourceUrl,
   lifecycleStatus,
+  versions = [],
+  viewedVersionId,
+  currentVersionId,
   versionLabel,
   syncedAt,
   approvals = [],
@@ -80,6 +92,9 @@ export function DocumentReviewSurface({
   surfaceLabel: string;
   sourceUrl?: string | null;
   lifecycleStatus?: LifecycleStatus | null;
+  versions?: DocumentVersion[];
+  viewedVersionId: number;
+  currentVersionId: number;
   versionLabel?: string | null;
   syncedAt?: string | null;
   approvals?: Approval[];
@@ -113,6 +128,10 @@ export function DocumentReviewSurface({
   const [headerMessage, setHeaderMessage] = useState<string | null>(null);
   const [resyncPending, setResyncPending] = useState(false);
   const [resyncError, setResyncError] = useState<string | null>(null);
+  const [newerVersionNotice, setNewerVersionNotice] = useState<NewerVersionNotice | null>(() => {
+    const currentVersion = versions.find((version) => version.id === currentVersionId) ?? null;
+    return newerVersionNoticeFromVersion({ currentVersion, documentId, viewedVersionId });
+  });
   const [approvalRoster, setApprovalRoster] = useState<Approval[]>(approvals);
   const [approvalPending, setApprovalPending] = useState(false);
   const [lifecycleValue, setLifecycleValue] = useState<LifecycleStatus | null>(lifecycleStatus ?? null);
@@ -162,13 +181,15 @@ export function DocumentReviewSurface({
     && composer.failure == null;
   const composerCommentType = composerCanSuggest ? composerDraft.mode : 'comment';
   const visibleSyncError = resyncError ?? (lastSyncStatus === 'failed' ? syncError : null);
+  const currentVersionLabel = displayVersionLabel(versions.find((version) => version.id === currentVersionId))
+    ?? (currentVersionId === viewedVersionId ? versionLabel ?? null : null);
 
   const reloadThreads = useCallback(async (targetPage = 1) => {
-    const firstPage = await listThreads(documentId, 1);
+    const firstPage = await listThreads(documentId, 1, viewedVersionId);
     const last = firstPage.meta?.last_page ?? 1;
     const finalPage = Math.min(Math.max(1, targetPage), last);
     const remainingPages = finalPage > 1
-      ? await Promise.all(Array.from({ length: finalPage - 1 }, (_, index) => listThreads(documentId, index + 2)))
+      ? await Promise.all(Array.from({ length: finalPage - 1 }, (_, index) => listThreads(documentId, index + 2, viewedVersionId)))
       : [];
     const pages = [firstPage, ...remainingPages];
 
@@ -176,7 +197,7 @@ export function DocumentReviewSurface({
     setThreads(pages.flatMap((threadPage) => threadPage.data));
     setPage(finalPage);
     setLastPage(last);
-  }, [documentId]);
+  }, [documentId, viewedVersionId]);
 
   const refreshLoadedThreads = useCallback(async () => {
     await reloadThreads(loadedPageRef.current);
@@ -212,6 +233,37 @@ export function DocumentReviewSurface({
   useEffect(() => {
     setLifecycleValue(lifecycleStatus ?? null);
   }, [lifecycleStatus]);
+
+  useEffect(() => {
+    const currentVersion = versions.find((version) => version.id === currentVersionId) ?? null;
+    setNewerVersionNotice(newerVersionNoticeFromVersion({ currentVersion, documentId, viewedVersionId }));
+  }, [currentVersionId, documentId, viewedVersionId, versions]);
+
+  useEffect(() => {
+    if (versions.length === 0) return;
+
+    let cancelled = false;
+
+    async function pollForNewerVersion() {
+      const document = await readDocument(documentId).catch(() => null);
+      if (cancelled) return;
+      if (!document) return;
+
+      setNewerVersionNotice(newerVersionNoticeFromDocument({
+        document,
+        documentId,
+        viewedVersionId,
+      }));
+    }
+
+    void pollForNewerVersion();
+    const interval = window.setInterval(() => void pollForNewerVersion(), NEW_VERSION_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [documentId, viewedVersionId, versions.length]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -447,6 +499,7 @@ export function DocumentReviewSurface({
           proposedText,
           idempotencyKey: composerDraft.idempotencyKey,
         },
+        documentVersionId: viewedVersionId,
         createThread,
         createSuggestionThread,
       });
@@ -581,7 +634,7 @@ export function DocumentReviewSurface({
 
   async function resync() {
     if (resyncPending) return;
-    const startingVersionLabel = versionLabel;
+    const startingVersionLabel = currentVersionLabel;
     setResyncPending(true);
     setResyncError(null);
     setHeaderMessage(null);
@@ -714,8 +767,18 @@ export function DocumentReviewSurface({
     </button>
   ) : null;
 
-  const headerActions = lifecycleControl || approvalControl || resyncControl ? (
+  const versionSwitcher = versions.length > 0 ? (
+    <DocumentVersionSwitcher
+      documentId={documentId}
+      versions={versions}
+      viewedVersionId={viewedVersionId}
+      currentVersionId={currentVersionId}
+    />
+  ) : null;
+
+  const headerActions = versionSwitcher || lifecycleControl || approvalControl || resyncControl ? (
     <>
+      {versionSwitcher}
       {lifecycleControl}
       {approvalControl}
       {resyncControl}
@@ -730,6 +793,7 @@ export function DocumentReviewSurface({
         sourceUrl={sourceUrl}
         lifecycleStatus={lifecycleValue}
         versionLabel={versionLabel}
+        currentVersionLabel={currentVersionLabel}
         syncedAt={syncedAt}
         approvals={approvalRoster}
         openThreadCount={openThreadCount}
@@ -744,6 +808,8 @@ export function DocumentReviewSurface({
           {headerMessage}
         </div>
       ) : null}
+
+      <DocumentNewVersionBanner notice={newerVersionNotice} />
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 py-8 lg:grid-cols-[16rem_minmax(0,52rem)] xl:grid-cols-[16rem_minmax(0,52rem)_320px] 2xl:grid-cols-[18rem_minmax(0,52rem)_360px]">
         <DocumentReviewSidebar
@@ -973,7 +1039,7 @@ async function refreshSurfaceAfterResync(
 }
 
 function documentVersionLabel(document: Document): string | null {
-  return document.current_version ? `v${document.current_version.id}` : null;
+  return displayVersionLabel(document.current_version);
 }
 
 function delay(ms: number): Promise<void> {

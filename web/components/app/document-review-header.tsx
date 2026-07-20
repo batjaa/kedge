@@ -12,6 +12,7 @@ export function DocumentReviewHeader({
   lifecycleStatus,
   sourceUrl,
   versionLabel,
+  currentVersionLabel = versionLabel,
   syncedAt,
   approvals = [],
   openThreadCount,
@@ -25,6 +26,7 @@ export function DocumentReviewHeader({
   lifecycleStatus?: LifecycleStatus | null;
   sourceUrl?: string | null;
   versionLabel?: string | null;
+  currentVersionLabel?: string | null;
   syncedAt?: string | null;
   approvals?: Approval[];
   openThreadCount: number;
@@ -74,7 +76,7 @@ export function DocumentReviewHeader({
                 <ApprovalRosterItem
                   key={approval.id}
                   approval={approval}
-                  currentVersionLabel={versionLabel}
+                  currentVersionLabel={currentVersionLabel}
                 />
               ))}
             </ul>

@@ -24,14 +24,83 @@ class DocumentVersionTest extends TestCase
             ->getJson("/api/v1/documents/{$document->id}/versions")
             ->assertOk()
             ->assertJsonPath('data.0.id', $versions[0]->id)
+            ->assertJsonPath('data.0.ordinal', 1)
             ->assertJsonPath('data.0.kind', 'mainline')
             ->assertJsonPath('data.0.parent_version_id', null)
             ->assertJsonPath('data.1.id', $versions[1]->id)
+            ->assertJsonPath('data.1.ordinal', 2)
             ->assertJsonPath('data.1.kind', 'mainline')
             ->assertJsonPath('data.1.parent_version_id', $versions[0]->id)
             ->assertJsonPath('data.2.id', $versions[2]->id)
+            ->assertJsonPath('data.2.ordinal', 3)
             ->assertJsonPath('data.2.kind', 'mainline')
             ->assertJsonPath('data.2.parent_version_id', $versions[1]->id);
+    }
+
+    public function test_member_reads_single_document_version_render_payload(): void
+    {
+        [$member, $document, $versions] = $this->readyDocumentWithVersions();
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$versions[1]->id}")
+            ->assertOk()
+            ->assertJsonPath('id', $versions[1]->id)
+            ->assertJsonPath('ordinal', 2)
+            ->assertJsonPath('content', 'v2')
+            ->assertJsonPath('plain_text', 'v2')
+            ->assertJsonPath('projection_version', '2')
+            ->assertJsonPath('mdx_ok', null)
+            ->assertJsonPath('source_version', null);
+    }
+
+    public function test_single_version_read_is_view_authorized(): void
+    {
+        [, $document, $versions] = $this->readyDocumentWithVersions();
+        $other = $this->registerUser('other@example.com');
+
+        $this->actingAs($other)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$versions[0]->id}")
+            ->assertForbidden();
+    }
+
+    public function test_single_version_read_404s_foreign_version(): void
+    {
+        [$member, $document] = $this->readyDocumentWithVersions();
+        $foreignDocument = Document::factory()
+            ->for($member->personalWorkspace(), 'workspace')
+            ->ready()
+            ->create(['created_by' => $member->id]);
+        $foreignVersion = $this->versionFor($foreignDocument, 'foreign');
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/versions/{$foreignVersion->id}")
+            ->assertNotFound();
+    }
+
+    public function test_ordinals_are_independent_per_document_and_document_show_exposes_current_ordinal(): void
+    {
+        [$member, $firstDocument, $firstVersions] = $this->readyDocumentWithVersions();
+        $secondDocument = Document::factory()
+            ->for($member->personalWorkspace(), 'workspace')
+            ->ready()
+            ->create(['created_by' => $member->id]);
+        $secondFirst = $this->versionFor($secondDocument, 'second-v1');
+        $secondSecond = $this->versionFor($secondDocument, 'second-v2', $secondFirst);
+        $secondDocument->forceFill(['current_version_id' => $secondSecond->id])->save();
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$firstDocument->id}")
+            ->assertOk()
+            ->assertJsonPath('current_version.id', $firstVersions[2]->id)
+            ->assertJsonPath('current_version.ordinal', 3);
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/documents/{$secondDocument->id}/versions")
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $secondFirst->id)
+            ->assertJsonPath('data.0.ordinal', 1)
+            ->assertJsonPath('data.1.id', $secondSecond->id)
+            ->assertJsonPath('data.1.ordinal', 2);
     }
 
     public function test_non_member_cannot_list_document_versions(): void

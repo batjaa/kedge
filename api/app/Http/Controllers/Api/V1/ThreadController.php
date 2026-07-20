@@ -9,6 +9,7 @@ use App\Http\Requests\StoreThreadRequest;
 use App\Http\Requests\UpdateThreadStatusRequest;
 use App\Http\Resources\V1\ThreadResource;
 use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Services\Comments\CommentThreadService;
 use Illuminate\Http\Request;
@@ -23,9 +24,10 @@ class ThreadController extends Controller
     public function index(Request $request, Document $document): AnonymousResourceCollection
     {
         $this->authorize('viewAny', [Thread::class, $document]);
+        $version = $this->requestedVersion($request, $document);
 
         return ThreadResource::collection(
-            $this->threads->listForDocument($document, (int) $request->integer('per_page', 20), $request->user()),
+            $this->threads->listForDocument($document, (int) $request->integer('per_page', 20), $request->user(), $version),
         );
     }
 
@@ -70,5 +72,19 @@ class ThreadController extends Controller
         );
 
         return ThreadResource::make($thread);
+    }
+
+    private function requestedVersion(Request $request, Document $document): ?DocumentVersion
+    {
+        if (! $request->query->has('version')) {
+            return null;
+        }
+
+        $value = $request->query('version');
+        abort_unless(is_scalar($value) && ctype_digit((string) $value) && (int) $value > 0, 404);
+
+        return $document->versions()
+            ->whereKey((int) $value)
+            ->firstOrFail();
     }
 }

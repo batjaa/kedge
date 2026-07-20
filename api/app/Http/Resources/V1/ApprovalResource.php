@@ -23,6 +23,9 @@ class ApprovalResource extends JsonResource
     public function toArray(Request $request): array
     {
         $document = $this->relationLoaded('document') ? $this->document : null;
+        $versionOrdinal = $document instanceof Document
+            ? $document->ordinalForVersionId((int) $this->document_version_id)
+            : null;
 
         return [
             'id' => $this->id,
@@ -31,7 +34,7 @@ class ApprovalResource extends JsonResource
                 'name' => $this->user->name,
             ]),
             'document_version_id' => $this->document_version_id,
-            'version_label' => "v{$this->document_version_id}",
+            'version_label' => $versionOrdinal === null ? 'v?' : "v{$versionOrdinal}",
             'stale' => $document instanceof Document ? $this->staleFor($document) : false,
             'created_at' => $this->created_at,
         ];
