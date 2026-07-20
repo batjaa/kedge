@@ -149,6 +149,10 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - Rail virtualization: anchor-aligned thread cards render unvirtualized; past ~200 threads the DOM cost hits the same wall as the re-anchor matcher budget (existing debt line). Revisit when a real document gets that busy. (M)
 
+## Known debt (added at M3 eng review, 2026-07-20)
+
+- **Candidate lineage lands unexercised.** M3 adds the candidate-capable version schema (`document_versions.kind` + `parent_version_id`, [ADR 0001](adr/0001-pr-is-a-candidate-version.md)) but only the **mainline** path runs; candidate *creation* and re-anchoring a candidate into the document's lineage arrive with the M6 PR-URL connector. A forward-compat schema that's never exercised can be subtly wrong — **M6 must add the candidate-path tests, not just the connector**. Where to start: the `kind`/`parent_version_id` columns + the version-lineage ordering M3 ships. (S) 
+
 ## Open TODOs (from M2 #64 magic-link review, 2026-07-16)
 
 - [ ] **Per-share `allow_anonymous` toggle** — SPEC §16 lists `allow_anonymous` on the `shares` entity and §10.2 promises "anonymous commenting off by default with a per-share toggle." The column was never added (M1) and #64 shipped magic-link-required only. Add the column + the anonymous-comment path behind it when a real need appears; magic-link-required is the safe default meanwhile. (S)
