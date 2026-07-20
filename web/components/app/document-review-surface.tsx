@@ -25,7 +25,7 @@ import {
   updateThreadStatus,
   type ReplyToThreadInput,
 } from '@/lib/comments-client';
-import { resyncDocument } from '@/lib/documents-client';
+import { readDocument, resyncDocument } from '@/lib/documents-client';
 import {
   decorateAnchorHighlights,
   firstAnchorHighlightForThread,
@@ -43,11 +43,13 @@ import {
   type TocEntry,
 } from '@/lib/review-surface-layout';
 import { cn } from '@/lib/cn';
-import type { LifecycleStatus, SyncStatus } from '@/lib/document-types';
+import type { Document, LifecycleStatus, SyncStatus } from '@/lib/document-types';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 const SCROLL_SPY_OFFSET = 136;
 const MOBILE_BREAKPOINT = 1280;
+const RESYNC_POLL_INTERVAL_MS = 1500;
+const RESYNC_POLL_ATTEMPTS = 12;
 
 export function DocumentReviewSurface({
   documentId,
@@ -508,18 +510,30 @@ export function DocumentReviewSurface({
 
   async function resync() {
     if (resyncPending) return;
+    const startingVersionLabel = versionLabel;
     setResyncPending(true);
     setResyncError(null);
 
-    const outcome = await resyncDocument(documentId);
-    if (!outcome.ok) {
-      setResyncError(outcome.message);
-      setResyncPending(false);
-      return;
-    }
+    try {
+      const outcome = await resyncDocument(documentId);
+      if (!outcome.ok) {
+        setResyncError(outcome.message);
+        return;
+      }
 
-    router.refresh();
-    setResyncPending(false);
+      const result = await waitForResyncCompletion(documentId, startingVersionLabel);
+      if (result.status === 'failed') {
+        setResyncError(result.message);
+        router.refresh();
+        return;
+      }
+
+      await refreshSurfaceAfterResync(refreshLoadedThreads, () => router.refresh());
+    } catch {
+      setResyncError('Something went wrong starting the request. Please try again.');
+    } finally {
+      setResyncPending(false);
+    }
   }
 
   return (
@@ -720,4 +734,51 @@ function firstThreadIdFromTarget(target: EventTarget | null): number | null {
     : null;
   const id = threadIdsFromAttribute(element?.dataset.kedgeThreadIds)[0];
   return id ? Number(id) : null;
+}
+
+type ResyncPollResult =
+  | { status: 'advanced' }
+  | { status: 'failed'; message: string }
+  | { status: 'timeout' };
+
+async function waitForResyncCompletion(
+  documentId: number,
+  startingVersionLabel: string | null | undefined,
+): Promise<ResyncPollResult> {
+  for (let attempt = 0; attempt < RESYNC_POLL_ATTEMPTS; attempt++) {
+    await delay(RESYNC_POLL_INTERVAL_MS);
+
+    const document = await readDocument(documentId).catch(() => null);
+    if (!document) continue;
+
+    if (document.last_sync_status === 'failed') {
+      return {
+        status: 'failed',
+        message: document.sync_error ?? 'Sync failed. Showing last good version.',
+      };
+    }
+
+    const currentVersionLabel = documentVersionLabel(document);
+    if (currentVersionLabel !== null && currentVersionLabel !== (startingVersionLabel ?? null)) {
+      return { status: 'advanced' };
+    }
+  }
+
+  return { status: 'timeout' };
+}
+
+async function refreshSurfaceAfterResync(
+  refreshThreads: () => Promise<void>,
+  refreshServerProps: () => void,
+): Promise<void> {
+  await refreshThreads().catch(() => undefined);
+  refreshServerProps();
+}
+
+function documentVersionLabel(document: Document): string | null {
+  return document.current_version ? `v${document.current_version.id}` : null;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -90,6 +90,19 @@ export function retryImport(id: number): Promise<ImportOutcome> {
   return mutate(`/api/v1/documents/${id}/retry`);
 }
 
+/** GET /api/v1/documents/{id} via the same-origin BFF poll route. */
+export async function readDocument(id: number): Promise<Document | null> {
+  const res = await fetch(`/api/bff/documents/${encodeURIComponent(String(id))}`, {
+    credentials: 'same-origin',
+    headers: { accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) return null;
+
+  return (await res.json()) as Document;
+}
+
 /** POST /api/v1/documents/{id}/resync — pull the source again. */
 export function resyncDocument(id: number): Promise<ImportOutcome> {
   return mutate(`/api/v1/documents/${id}/resync`);
