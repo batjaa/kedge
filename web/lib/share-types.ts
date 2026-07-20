@@ -2,7 +2,7 @@
 // codegen is accepted debt (TODOS.md); until then this is the web↔api contract.
 // Keep in sync with api/app/Http/Resources/V1/{Share,SharedDocument}Resource.php.
 
-import type { DocumentFormat, DocumentStatus, DocumentVersion } from './document-types';
+import type { Approval, DocumentFormat, DocumentStatus, DocumentVersion } from './document-types';
 
 /** `link` only at M1; `email_restricted`/`workspace` arrive with M2 identity. */
 export type ShareVisibility = 'link';
@@ -43,6 +43,7 @@ export interface SharedDocument {
   title: string;
   status: DocumentStatus;
   format: DocumentFormat;
+  approvals?: Approval[];
   current_version?: DocumentVersion | null;
   /**
    * Demo-doc claim affordance (SPEC §10.3, #25). `claimable` is true only for a
@@ -55,6 +56,7 @@ export interface SharedDocument {
   expires_at?: string | null;
   reviewer: {
     verified: boolean;
+    id?: number | null;
     name?: string | null;
     email?: string | null;
   };

@@ -7,6 +7,18 @@ export type SyncStatus = 'ok' | 'failed';
 export type LifecycleStatus = 'draft' | 'in_review' | 'approved' | 'superseded';
 export type DocumentFormat = 'md' | 'mdx' | 'html';
 
+export interface Approval {
+  id: number;
+  user: {
+    id: number;
+    name: string | null;
+  };
+  document_version_id: number;
+  version_label: string;
+  stale: boolean;
+  created_at: string | null;
+}
+
 /**
  * One thing that didn't survive normalization of this version (SPEC 5.2) — a
  * failed image fetch, a degraded HTML conversion. `message` is author-facing;
@@ -41,6 +53,10 @@ export interface DocumentVersion {
   synced_at: string | null;
 }
 
+export interface DocumentCapabilities {
+  update_lifecycle: boolean;
+}
+
 /** GET /api/v1/documents/{id} and the 202 from POST /api/v1/documents. */
 export interface Document {
   id: number;
@@ -52,6 +68,8 @@ export interface Document {
   last_sync_status: SyncStatus;
   sync_error: string | null;
   lifecycle_status: LifecycleStatus;
+  approvals?: Approval[];
+  capabilities?: DocumentCapabilities;
   /** Present (non-null) once the import lands a version; absent while importing. */
   current_version?: DocumentVersion | null;
   created_at: string | null;

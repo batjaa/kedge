@@ -52,6 +52,7 @@ class SharedDocumentResource extends JsonResource
             'title' => $this->title,
             'status' => $this->status->value,
             'format' => $this->format->value,
+            'approvals' => ApprovalResource::collection($this->whenLoaded('activeApprovals')),
             'current_version' => $this->whenLoaded(
                 'currentVersion',
                 fn () => $this->currentVersion
@@ -67,6 +68,7 @@ class SharedDocumentResource extends JsonResource
             'reviewer' => $isVerifiedReviewer
                 ? [
                     'verified' => true,
+                    'id' => $this->reviewer->user?->id,
                     'name' => $this->reviewer->user?->name,
                     'email' => $this->reviewer->user?->email,
                 ]

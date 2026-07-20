@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare, RefreshCw } from 'lucide-react';
+import { CheckCircle2, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import { DocumentReviewHeader } from './document-review-header';
@@ -26,7 +26,7 @@ import {
   updateThreadStatus,
   type ReplyToThreadInput,
 } from '@/lib/comments-client';
-import { readDocument, resyncDocument } from '@/lib/documents-client';
+import { readDocument, resyncDocument, updateDocumentLifecycle } from '@/lib/documents-client';
 import {
   decorateAnchorHighlights,
   firstAnchorHighlightForThread,
@@ -44,7 +44,8 @@ import {
   type TocEntry,
 } from '@/lib/review-surface-layout';
 import { cn } from '@/lib/cn';
-import type { Document, LifecycleStatus, SyncStatus } from '@/lib/document-types';
+import { approveDocument, revokeApproval } from '@/lib/approvals-client';
+import type { Approval, Document, LifecycleStatus, SyncStatus } from '@/lib/document-types';
 import type { AnchorSelector } from '@/lib/anchor-capture-core';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
@@ -52,6 +53,7 @@ const SCROLL_SPY_OFFSET = 136;
 const MOBILE_BREAKPOINT = 1280;
 const RESYNC_POLL_INTERVAL_MS = 1500;
 const RESYNC_POLL_ATTEMPTS = 12;
+const LIFECYCLE_OPTIONS: LifecycleStatus[] = ['draft', 'in_review', 'approved', 'superseded'];
 
 export function DocumentReviewSurface({
   documentId,
@@ -61,6 +63,9 @@ export function DocumentReviewSurface({
   lifecycleStatus,
   versionLabel,
   syncedAt,
+  approvals = [],
+  currentUserId = null,
+  canUpdateLifecycle = false,
   backHref,
   backLabel,
   plainText,
@@ -77,6 +82,9 @@ export function DocumentReviewSurface({
   lifecycleStatus?: LifecycleStatus | null;
   versionLabel?: string | null;
   syncedAt?: string | null;
+  approvals?: Approval[];
+  currentUserId?: number | null;
+  canUpdateLifecycle?: boolean;
   backHref?: string | null;
   backLabel?: string | null;
   plainText: string | null;
@@ -102,8 +110,13 @@ export function DocumentReviewSurface({
   const [composer, setComposer] = useState<ComposerState>({ open: false });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [headerMessage, setHeaderMessage] = useState<string | null>(null);
   const [resyncPending, setResyncPending] = useState(false);
   const [resyncError, setResyncError] = useState<string | null>(null);
+  const [approvalRoster, setApprovalRoster] = useState<Approval[]>(approvals);
+  const [approvalPending, setApprovalPending] = useState(false);
+  const [lifecycleValue, setLifecycleValue] = useState<LifecycleStatus | null>(lifecycleStatus ?? null);
+  const [lifecyclePending, setLifecyclePending] = useState(false);
   const [pendingReattachThreadId, setPendingReattachThreadId] = useState<number | null>(null);
   const [reattachingThreadId, setReattachingThreadId] = useState<number | null>(null);
   const [reattachStatus, setReattachStatus] = useState<ReattachStatus | null>(null);
@@ -118,6 +131,11 @@ export function DocumentReviewSurface({
   const canCapture = plainText != null && Number.isFinite(numericProjectionVersion);
   const openThreadCount = threads.filter((thread) => thread.status === 'open').length;
   const highlightedThreadId = hoveredThreadId ?? activeThreadId;
+  const currentUserApproval = useMemo(() => {
+    if (currentUserId === null) return null;
+
+    return approvalRoster.find((approval) => approval.user.id === currentUserId && !approval.stale) ?? null;
+  }, [approvalRoster, currentUserId]);
   const selectedMobileThread = useMemo(() => {
     return mobileThreadId === null ? null : threads.find((thread) => thread.id === mobileThreadId) ?? null;
   }, [mobileThreadId, threads]);
@@ -186,6 +204,14 @@ export function DocumentReviewSurface({
     setAnchorPositions((current) => anchorPositionsEqual(current, nextAnchorPositions) ? current : nextAnchorPositions);
     setDocumentHeight(Math.ceil(root.getBoundingClientRect().height));
   }, [threads]);
+
+  useEffect(() => {
+    setApprovalRoster(approvals);
+  }, [approvals]);
+
+  useEffect(() => {
+    setLifecycleValue(lifecycleStatus ?? null);
+  }, [lifecycleStatus]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -558,6 +584,7 @@ export function DocumentReviewSurface({
     const startingVersionLabel = versionLabel;
     setResyncPending(true);
     setResyncError(null);
+    setHeaderMessage(null);
 
     try {
       const outcome = await resyncDocument(documentId);
@@ -581,31 +608,142 @@ export function DocumentReviewSurface({
     }
   }
 
+  async function toggleApproval() {
+    if (approvalPending || currentUserId === null) return;
+
+    setApprovalPending(true);
+    setHeaderMessage(null);
+
+    try {
+      if (currentUserApproval) {
+        const outcome = await revokeApproval(currentUserApproval.id);
+        if (!outcome.ok) {
+          setHeaderMessage(outcome.message);
+          return;
+        }
+        setApprovalRoster((previous) => previous.filter((approval) => approval.id !== currentUserApproval.id));
+        router.refresh();
+        return;
+      }
+
+      const outcome = await approveDocument(documentId);
+      if (!outcome.ok) {
+        setHeaderMessage(outcome.message);
+        return;
+      }
+      setApprovalRoster((previous) => [
+        ...previous.filter((approval) => approval.id !== outcome.approval.id),
+        outcome.approval,
+      ].sort((a, b) => a.id - b.id));
+      router.refresh();
+    } finally {
+      setApprovalPending(false);
+    }
+  }
+
+  async function changeLifecycle(nextStatus: LifecycleStatus) {
+    if (lifecyclePending || lifecycleValue === nextStatus) return;
+
+    const previousStatus = lifecycleValue;
+    setLifecycleValue(nextStatus);
+    setLifecyclePending(true);
+    setHeaderMessage(null);
+
+    try {
+      const outcome = await updateDocumentLifecycle(documentId, nextStatus);
+      if (!outcome.ok) {
+        setLifecycleValue(previousStatus);
+        setHeaderMessage(outcome.message);
+        return;
+      }
+
+      setLifecycleValue(outcome.document.lifecycle_status);
+      setApprovalRoster((previous) => outcome.document.approvals ?? previous);
+      router.refresh();
+    } finally {
+      setLifecyclePending(false);
+    }
+  }
+
+  const lifecycleControl = canUpdateLifecycle && lifecycleValue ? (
+    <select
+      aria-label="Lifecycle status"
+      value={lifecycleValue}
+      disabled={lifecyclePending}
+      onChange={(event) => void changeLifecycle(event.target.value as LifecycleStatus)}
+      className="h-8 rounded-full bg-zinc-100 px-3 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
+    >
+      {LIFECYCLE_OPTIONS.map((status) => (
+        <option key={status} value={status}>
+          {status.replace('_', ' ')}
+        </option>
+      ))}
+    </select>
+  ) : null;
+
+  const approvalControl = currentUserId !== null ? (
+    <button
+      type="button"
+      onClick={() => void toggleApproval()}
+      disabled={approvalPending}
+      className={cn(
+        'inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60',
+        currentUserApproval
+          ? 'bg-zinc-100 text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10'
+          : 'bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15',
+      )}
+    >
+      {currentUserApproval ? (
+        <XCircle className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+      )}
+      {approvalPending ? 'Saving...' : currentUserApproval ? 'Revoke' : 'Approve'}
+    </button>
+  ) : null;
+
+  const resyncControl = canResync ? (
+    <button
+      type="button"
+      onClick={() => void resync()}
+      disabled={resyncPending}
+      className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+    >
+      <RefreshCw className={cn('h-4 w-4', resyncPending ? 'animate-spin' : '')} aria-hidden="true" />
+      {resyncPending ? 'Re-syncing...' : 'Re-sync'}
+    </button>
+  ) : null;
+
+  const headerActions = lifecycleControl || approvalControl || resyncControl ? (
+    <>
+      {lifecycleControl}
+      {approvalControl}
+      {resyncControl}
+    </>
+  ) : null;
+
   return (
     <div>
       <DocumentReviewHeader
         title={title}
         surfaceLabel={surfaceLabel}
         sourceUrl={sourceUrl}
-        lifecycleStatus={lifecycleStatus}
+        lifecycleStatus={lifecycleValue}
         versionLabel={versionLabel}
         syncedAt={syncedAt}
+        approvals={approvalRoster}
         openThreadCount={openThreadCount}
         backHref={backHref}
         backLabel={backLabel}
         syncError={visibleSyncError}
-        actions={canResync ? (
-          <button
-            type="button"
-            onClick={() => void resync()}
-            disabled={resyncPending}
-            className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
-          >
-            <RefreshCw className={cn('h-4 w-4', resyncPending ? 'animate-spin' : '')} aria-hidden="true" />
-            {resyncPending ? 'Re-syncing...' : 'Re-sync'}
-          </button>
-        ) : null}
+        actions={headerActions}
       />
+
+      {headerMessage ? (
+        <div className="mx-auto mt-3 max-w-7xl rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700 ring-1 ring-rose-600/15 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-rose-400/20">
+          {headerMessage}
+        </div>
+      ) : null}
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 py-8 lg:grid-cols-[16rem_minmax(0,52rem)] xl:grid-cols-[16rem_minmax(0,52rem)_320px] 2xl:grid-cols-[18rem_minmax(0,52rem)_360px]">
         <DocumentReviewSidebar

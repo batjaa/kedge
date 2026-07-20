@@ -1,0 +1,109 @@
+<?php
+
+namespace App\Services\Approvals;
+
+use App\Enums\DocumentStatus;
+use App\Models\Approval;
+use App\Models\Document;
+use App\Models\User;
+use App\Services\AuditLogger;
+use Illuminate\Support\Facades\DB;
+
+class ApprovalService
+{
+    public function __construct(
+        private readonly AuditLogger $audit,
+    ) {}
+
+    /**
+     * Approve the current document version. Idempotency is scoped to the current
+     * version: an active approval on that exact version is returned; a stale
+     * approval on an older version remains pinned and a new approval is created.
+     *
+     * @return array{Approval, int}
+     */
+    public function approveCurrent(Document $document, User $actor, ?string $ip): array
+    {
+        return DB::transaction(function () use ($document, $actor, $ip): array {
+            $lockedDocument = Document::query()
+                ->with('workspace')
+                ->whereKey($document->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_unless(
+                $lockedDocument->status === DocumentStatus::Ready && $lockedDocument->current_version_id !== null,
+                409,
+                'Only a ready document can be approved.',
+            );
+
+            $existing = Approval::query()
+                ->where('document_id', $lockedDocument->id)
+                ->where('document_version_id', $lockedDocument->current_version_id)
+                ->where('user_id', $actor->id)
+                ->whereNull('revoked_at')
+                ->first();
+
+            if ($existing) {
+                return [$this->loadForResource($existing, $lockedDocument), 200];
+            }
+
+            $approval = Approval::create([
+                'workspace_id' => $lockedDocument->workspace_id,
+                'document_id' => $lockedDocument->id,
+                'document_version_id' => $lockedDocument->current_version_id,
+                'user_id' => $actor->id,
+            ]);
+
+            $this->audit->record(
+                $lockedDocument->workspace,
+                $actor,
+                'approval.given',
+                $approval,
+                [
+                    'document_id' => $lockedDocument->id,
+                    'document_version_id' => $lockedDocument->current_version_id,
+                ],
+                $ip,
+            );
+
+            return [$this->loadForResource($approval, $lockedDocument, $actor), 201];
+        });
+    }
+
+    public function revoke(Approval $approval, User $actor, ?string $ip): Approval
+    {
+        $approval->loadMissing('document.workspace');
+
+        if ($approval->revoked_at !== null) {
+            return $this->loadForResource($approval, $approval->document, $actor);
+        }
+
+        $approval->forceFill(['revoked_at' => now()])->save();
+
+        $this->audit->record(
+            $approval->document->workspace,
+            $actor,
+            'approval.revoked',
+            $approval,
+            [
+                'document_id' => $approval->document_id,
+                'document_version_id' => $approval->document_version_id,
+            ],
+            $ip,
+        );
+
+        return $this->loadForResource($approval->refresh(), $approval->document, $actor);
+    }
+
+    private function loadForResource(Approval $approval, Document $document, ?User $actor = null): Approval
+    {
+        $approval->loadMissing('user');
+        if ($actor !== null && (int) $approval->user_id === (int) $actor->id) {
+            $approval->setRelation('user', $actor);
+        }
+        $approval->setRelation('document', $document);
+
+        return $approval;
+    }
+}

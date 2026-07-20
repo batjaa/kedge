@@ -42,6 +42,10 @@ class DocumentResource extends JsonResource
             'last_sync_status' => $this->last_sync_status->value,
             'sync_error' => $this->sync_error,
             'lifecycle_status' => $this->lifecycle_status->value,
+            'approvals' => ApprovalResource::collection($this->whenLoaded('activeApprovals')),
+            'capabilities' => [
+                'update_lifecycle' => $request->user()?->can('updateLifecycle', $this->resource) ?? false,
+            ],
             'current_version' => $this->whenLoaded(
                 'currentVersion',
                 fn () => $this->currentVersion

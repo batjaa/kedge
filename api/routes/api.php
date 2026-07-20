@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
 use App\Http\Controllers\Api\V1\ConfigController;
@@ -98,6 +99,8 @@ Route::prefix('v1')->group(function () {
         // retry hammer can't flood the fetch queue (SPEC 13).
         Route::get('/documents/{document}', [DocumentController::class, 'show'])
             ->name('api.v1.documents.show');
+        Route::patch('/documents/{document}', [DocumentController::class, 'update'])
+            ->name('api.v1.documents.update');
 
         Route::get('/documents/{document}/versions', [DocumentVersionController::class, 'index'])
             ->name('api.v1.documents.versions.index');
@@ -140,6 +143,10 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('throttle:comments')->group(function () {
+            Route::post('/documents/{document}/approvals', [ApprovalController::class, 'store'])
+                ->name('api.v1.documents.approvals.store');
+            Route::delete('/approvals/{approval}', [ApprovalController::class, 'destroy'])
+                ->name('api.v1.approvals.destroy');
             Route::post('/documents/{document}/threads', [ThreadController::class, 'store'])
                 ->name('api.v1.documents.threads.store');
             Route::patch('/threads/{thread}', [ThreadController::class, 'update'])

@@ -85,6 +85,8 @@ export default async function SharedDocumentPage({
               surfaceLabel="Shared document · verified reviewer"
               versionLabel={`v${doc.current_version.id}`}
               syncedAt={doc.current_version.synced_at}
+              approvals={doc.approvals ?? []}
+              currentUserId={doc.reviewer.id ?? null}
               plainText={doc.current_version.plain_text ?? null}
               projectionVersion={doc.current_version.projection_version ?? null}
             >

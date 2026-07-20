@@ -8,6 +8,7 @@ import { DocumentShares } from '@/components/app/document-shares';
 import { ImportWarnings } from '@/components/app/import-warnings';
 import { DocumentReviewSurface } from '@/components/app/document-review-surface';
 import { DocumentStaticHeader } from '@/components/app/document-static-header';
+import { getSession } from '@/lib/session';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
@@ -43,6 +44,7 @@ export default async function DocumentPage({
   }
 
   const { status, document } = await getDocument(id);
+  const session = await getSession();
 
   // 403 (another workspace) and 404 both land on the 404 page — an id in a URL
   // never reveals whether a document exists elsewhere (SPEC 13).
@@ -91,6 +93,9 @@ export default async function DocumentPage({
             lifecycleStatus={document.lifecycle_status}
             versionLabel={`v${document.current_version.id}`}
             syncedAt={document.current_version.synced_at}
+            approvals={document.approvals ?? []}
+            currentUserId={session?.user.id ?? null}
+            canUpdateLifecycle={document.capabilities?.update_lifecycle ?? false}
             backHref="/"
             backLabel="← Review queue"
             plainText={document.current_version.plain_text ?? null}

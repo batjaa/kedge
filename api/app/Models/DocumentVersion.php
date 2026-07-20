@@ -64,6 +64,12 @@ class DocumentVersion extends Model
         return $this->hasMany(Anchor::class);
     }
 
+    /** @return HasMany<Approval, $this> */
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(Approval::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

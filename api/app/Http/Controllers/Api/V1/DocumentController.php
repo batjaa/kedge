@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentStatus;
+use App\Enums\LifecycleStatus;
 use App\Enums\SourceType;
 use App\Enums\SyncStatus;
 use App\Http\Controllers\Controller;
@@ -16,11 +17,13 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Policies\DocumentPolicy;
 use App\Services\AuditLogger;
+use App\Services\Documents\DocumentLifecycleService;
 use App\Services\Import\ConnectorRegistry;
 use App\Services\Import\Connectors\UploadConnector;
 use App\Services\Import\TitleSynthesizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -151,7 +154,26 @@ class DocumentController extends Controller
     {
         $this->authorize('view', $document);
 
-        $document->load('currentVersion');
+        return DocumentResource::make($document->loadCurrentVersionAndApprovals());
+    }
+
+    /**
+     * PATCH /api/v1/documents/{document} — author-controlled lifecycle status.
+     */
+    public function update(Request $request, Document $document, DocumentLifecycleService $lifecycle): DocumentResource
+    {
+        $this->authorize('updateLifecycle', $document);
+
+        $validated = $request->validate([
+            'lifecycle_status' => ['required', Rule::enum(LifecycleStatus::class)],
+        ]);
+
+        $document = $lifecycle->update(
+            $document,
+            $request->user(),
+            LifecycleStatus::from((string) $validated['lifecycle_status']),
+            $request->ip(),
+        );
 
         return DocumentResource::make($document);
     }

@@ -90,6 +90,29 @@ class Document extends Model
         return $this->hasMany(Thread::class);
     }
 
+    /** @return HasMany<Approval, $this> */
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(Approval::class);
+    }
+
+    /** @return HasMany<Approval, $this> */
+    public function activeApprovals(): HasMany
+    {
+        return $this->approvals()
+            ->whereNull('revoked_at')
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
+
+    public function loadCurrentVersionAndApprovals(): self
+    {
+        $this->load(['currentVersion', 'activeApprovals.user']);
+        $this->activeApprovals->each(fn (Approval $approval) => $approval->setRelation('document', $this));
+
+        return $this;
+    }
+
     /**
      * The version currently rendered. Not a FK (the constraint would be circular
      * with document_versions.document_id) — just a pointer resolved by id.

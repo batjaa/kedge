@@ -43,6 +43,16 @@ class DocumentPolicy
     }
 
     /**
+     * Move the author-controlled editorial lifecycle (SPEC §9). Plain workspace
+     * members and share reviewers can review/comment/approve, but cannot change
+     * the document's state.
+     */
+    public function updateLifecycle(User $user, Document $document): bool
+    {
+        return $this->authorOf($user, $document);
+    }
+
+    /**
      * Pull a new source revision and re-anchor threads. Same author/member rule
      * as other document mutations; share reviewers stay on the share surface.
      */
