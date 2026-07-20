@@ -152,6 +152,8 @@
 
 - **Version labels are global DB ids, not per-document ordinals** (#75 review). The header/roster/switcher render `v{document_version.id}` (e.g. "approved v4821 · current v4830") instead of the spec's per-document "v3 · current v5". Web and api are consistent with each other, so it's cosmetic, but it reads poorly. **Fix in #78** (version switcher) by deriving a per-document version ordinal (position in the lineage) for display, reused by the roster + diff header. (S)
 
+- **Reviewer-surface version switcher + banner deferred** (#78). The authenticated member/author review page gets the version switcher + new-version banner; the **shared reviewer surface does not** (the version endpoints are member-scoped via DocumentPolicy::view). SPEC §7 implies reviewers land on latest and switch versions — wiring it needs reviewer-via-share version authz + embedding the ordinal-labelled version list in SharedDocumentResource (server-rendered per ?version= on the shared route). Add when the reviewer version-viewing experience is prioritized, or during the M3 e2e wrap. (S)
+
 ## Open TODOs (from M2 #64 magic-link review, 2026-07-16)
 
 - [ ] **Per-share `allow_anonymous` toggle** — SPEC §16 lists `allow_anonymous` on the `shares` entity and §10.2 promises "anonymous commenting off by default with a per-share toggle." The column was never added (M1) and #64 shipped magic-link-required only. Add the column + the anonymous-comment path behind it when a real need appears; magic-link-required is the safe default meanwhile. (S)
