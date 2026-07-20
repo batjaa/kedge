@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isReanchorAuthorized, REANCHOR_SECRET_HEADER } from '@/lib/reanchor-auth';
-import { reanchorExact, type ReanchorInputAnchor, type ReanchorResult } from '@/lib/reanchor-core';
+import { reanchorAnchors, type ReanchorInputAnchor, type ReanchorResult } from '@/lib/reanchor-core';
 
 // Internal re-anchor service (SPEC §8.3). The API's resync job POSTs outgoing
 // version anchors and the target version's projection here; web owns the matcher
-// because it already owns projection/capture offsets. M3 #76 ships exact only.
+// because it already owns projection/capture offsets.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const results: ReanchorResult[] = [];
   for (let index = 0; index < parsed.anchors.length; index += CHUNK_SIZE) {
-    results.push(...reanchorExact(
+    results.push(...reanchorAnchors(
       parsed.anchors.slice(index, index + CHUNK_SIZE),
       parsed.newPlainText,
     ));

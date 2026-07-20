@@ -236,6 +236,21 @@ class CommentThreadService
     }
 
     /**
+     * @param  array<string, mixed>  $anchor
+     */
+    public function reanchor(Thread $thread, User $actor, array $anchor): Thread
+    {
+        $thread->loadMissing('document');
+        $version = $this->commentableVersion($thread->document, includePlainText: true);
+        $validated = $this->validatedAnchor($thread->document, $version, $anchor);
+
+        $thread->anchors()->create(AnchorAttributes::fromCapture($validated, $version));
+        $thread->refresh();
+
+        return $this->loadThreadForResource($thread, $actor);
+    }
+
+    /**
      * Rail read: one position-ordered aggregate query over threads, anchors,
      * count, and latest activity. Comments and fork counts are bulk-hydrated
      * once after pagination so soft-deleted comments stay coherent.
@@ -483,7 +498,12 @@ class CommentThreadService
             $thread->setRelation('firstComment', $firstComment);
         }
 
-        $anchor = $thread->anchors->first();
+        $currentVersionId = $thread->document?->current_version_id;
+        $anchor = $thread->anchors
+            ->where('document_version_id', $currentVersionId)
+            ->sortByDesc('id')
+            ->first()
+            ?? $thread->anchors->first();
         if ($anchor) {
             $thread->setRelation('railAnchor', $anchor);
         }

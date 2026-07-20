@@ -144,6 +144,8 @@ Route::prefix('v1')->group(function () {
                 ->name('api.v1.documents.threads.store');
             Route::patch('/threads/{thread}', [ThreadController::class, 'update'])
                 ->name('api.v1.threads.update');
+            Route::post('/threads/{thread}/reanchor', [ThreadController::class, 'reanchor'])
+                ->name('api.v1.threads.reanchor');
             Route::post('/threads/{thread}/comments', [ThreadCommentController::class, 'store'])
                 ->name('api.v1.threads.comments.store');
             Route::post('/comments/{comment}/fork', [ThreadCommentController::class, 'fork'])

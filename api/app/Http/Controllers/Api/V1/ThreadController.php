@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\ThreadStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ReanchorThreadRequest;
 use App\Http\Requests\StoreThreadRequest;
 use App\Http\Requests\UpdateThreadStatusRequest;
 use App\Http\Resources\V1\ThreadResource;
@@ -53,6 +54,19 @@ class ThreadController extends Controller
             $request->user(),
             ThreadStatus::from((string) $request->validated('status')),
             $request->ip(),
+        );
+
+        return ThreadResource::make($thread);
+    }
+
+    public function reanchor(ReanchorThreadRequest $request, Thread $thread)
+    {
+        $this->authorize('reanchor', $thread);
+
+        $thread = $this->threads->reanchor(
+            $thread,
+            $request->user(),
+            (array) $request->validated('anchor'),
         );
 
         return ThreadResource::make($thread);

@@ -8,7 +8,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Client for the web layer's internal exact re-anchoring endpoint. The matcher
+ * Client for the web layer's internal re-anchoring endpoint. The matcher
  * lives beside the web projection/capture code so Kedge has one anchor language.
  */
 class ReanchorClient
@@ -84,7 +84,7 @@ class ReanchorClient
 
             if (
                 ! is_int($threadId)
-                || ! in_array($state, ['anchored', 'orphaned'], true)
+                || ! in_array($state, ['anchored', 'relocated', 'orphaned'], true)
                 || ! is_string($exact)
                 || ! is_int($start)
                 || ! is_int($end)

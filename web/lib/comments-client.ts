@@ -229,6 +229,28 @@ export async function updateThreadStatus(
   return { ok: false, kind: 'error', message: 'Could not update this thread. Please try again.' };
 }
 
+export async function reanchorThread(
+  threadId: number,
+  anchor: ThreadAnchorPayload,
+): Promise<ThreadMutationOutcome> {
+  const res = await mutate('POST', `/api/v1/threads/${threadId}/reanchor`, { anchor });
+
+  if (res.ok) {
+    return { ok: true, thread: (await res.json()) as ReviewThread };
+  }
+
+  if (res.status === 422) {
+    const data = (await res.json().catch(() => null)) as { message?: string } | null;
+    return { ok: false, kind: 'validation', message: data?.message ?? 'Could not re-attach this thread.' };
+  }
+
+  if (res.status === 429) {
+    return { ok: false, kind: 'rate-limited', message: 'Too many updates. Wait a minute, then try again.' };
+  }
+
+  return { ok: false, kind: 'error', message: 'Could not re-attach this thread. Please try again.' };
+}
+
 export async function forkComment(
   commentId: number,
   idempotencyKey: string,

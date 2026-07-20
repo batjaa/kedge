@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Link } from 'lucide-react';
 import { ThreadCard } from './document-thread-card';
 import { placeThreadCards, type ThreadPlacement } from '@/lib/review-surface-layout';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
@@ -24,6 +24,7 @@ export function DocumentThreadRail({
   onLeaveThread,
   onLoadMore,
   onSetThreadStatus,
+  onStartReattach,
   onReply,
   onForkComment,
   forkingCommentIds,
@@ -31,6 +32,8 @@ export function DocumentThreadRail({
   onDeleteComment,
   onSetSuggestionStatus,
   onToggleReaction,
+  pendingReattachThreadId,
+  reattachingThreadId,
 }: {
   threads: ReviewThread[];
   page: number;
@@ -45,6 +48,7 @@ export function DocumentThreadRail({
   onLeaveThread: () => void;
   onLoadMore: () => void;
   onSetThreadStatus: (thread: ReviewThread, status: ThreadStatus) => Promise<string | null>;
+  onStartReattach: (thread: ReviewThread) => void;
   onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
   forkingCommentIds: ReadonlySet<number>;
@@ -52,6 +56,8 @@ export function DocumentThreadRail({
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
+  pendingReattachThreadId: number | null;
+  reattachingThreadId: number | null;
 }) {
   const [cardHeights, setCardHeights] = useState<Record<number, number>>({});
   const [footerHeight, setFooterHeight] = useState(128);
@@ -151,6 +157,7 @@ export function DocumentThreadRail({
             onHoverThread={onHoverThread}
             onLeaveThread={onLeaveThread}
             onSetThreadStatus={onSetThreadStatus}
+            onStartReattach={onStartReattach}
             onReply={onReply}
             onForkComment={onForkComment}
             forkingCommentIds={forkingCommentIds}
@@ -158,6 +165,8 @@ export function DocumentThreadRail({
             onDeleteComment={onDeleteComment}
             onSetSuggestionStatus={onSetSuggestionStatus}
             onToggleReaction={onToggleReaction}
+            pendingReattachThreadId={pendingReattachThreadId}
+            reattachingThreadId={reattachingThreadId}
           />
         </MeasuredRailFooter>
       </div>
@@ -278,6 +287,7 @@ function OrphanedTray({
   onHoverThread,
   onLeaveThread,
   onSetThreadStatus,
+  onStartReattach,
   onReply,
   onForkComment,
   forkingCommentIds,
@@ -285,6 +295,8 @@ function OrphanedTray({
   onDeleteComment,
   onSetSuggestionStatus,
   onToggleReaction,
+  pendingReattachThreadId,
+  reattachingThreadId,
 }: {
   threads: ReviewThread[];
   activeThreadId: number | null;
@@ -293,6 +305,7 @@ function OrphanedTray({
   onHoverThread: (thread: ReviewThread) => void;
   onLeaveThread: () => void;
   onSetThreadStatus: (thread: ReviewThread, status: ThreadStatus) => Promise<string | null>;
+  onStartReattach: (thread: ReviewThread) => void;
   onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onForkComment: (thread: ReviewThread, comment: ThreadComment) => Promise<string | null>;
   forkingCommentIds: ReadonlySet<number>;
@@ -300,6 +313,8 @@ function OrphanedTray({
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
+  pendingReattachThreadId: number | null;
+  reattachingThreadId: number | null;
 }) {
   return (
     <section
@@ -328,6 +343,22 @@ function OrphanedTray({
               <p className="px-1 text-[11px] font-semibold uppercase text-rose-700 dark:text-rose-300">
                 Orphaned thread
               </p>
+              {thread.can_reanchor ? (
+                <button
+                  type="button"
+                  title="Select replacement text in the document"
+                  disabled={reattachingThreadId === thread.id}
+                  onClick={() => onStartReattach(thread)}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-1 dark:ring-inset dark:ring-rose-300/20 dark:hover:bg-rose-400/15"
+                >
+                  <Link className="h-3.5 w-3.5" aria-hidden="true" />
+                  {reattachingThreadId === thread.id
+                    ? 'Re-attaching...'
+                    : pendingReattachThreadId === thread.id
+                      ? 'Select text'
+                      : 'Re-attach'}
+                </button>
+              ) : null}
               <ThreadCard
                 thread={thread}
                 active={activeThreadId === thread.id}

@@ -90,13 +90,14 @@ class DocumentResyncTest extends TestCase
 
     public function test_changed_content_reanchors_then_advances_the_current_pointer(): void
     {
-        $oldContent = "# Doc\n\nAlpha survives.\n\nBeta deleted.\n";
-        $oldPlain = "Alpha survives.\n\nBeta deleted.";
-        $newContent = "# Doc\n\nAlpha survives.\n\nGamma new.\n";
-        $newPlain = "Alpha survives.\n\nGamma new.";
+        $oldContent = "# Doc\n\nAlpha survives.\n\nBeta deleted.\n\nMoved phrase.\n";
+        $oldPlain = "Alpha survives.\n\nBeta deleted.\n\nMoved phrase.";
+        $newContent = "# Doc\n\nAlpha survives.\n\nGamma new.\n\nMoved phrase.\n";
+        $newPlain = "Alpha survives.\n\nGamma new.\n\nMoved phrase.";
         [$author, $document, $current] = $this->readyDocument($oldContent, $oldPlain);
         $survives = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Alpha survives.');
         $deleted = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Beta deleted.');
+        $moved = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Moved phrase.');
         Log::spy();
 
         $this->fakeFetchReturns($newContent);
@@ -106,7 +107,7 @@ class DocumentResyncTest extends TestCase
                 'state' => 'anchored',
                 'exact' => 'Alpha survives.',
                 'prefix' => '',
-                'suffix' => "\n\nGamma new.",
+                'suffix' => "\n\nGamma new.\n\nMoved phrase.",
                 'start' => 0,
                 'end' => 15,
             ],
@@ -114,6 +115,15 @@ class DocumentResyncTest extends TestCase
                 'threadId' => $deleted->id,
                 'state' => 'orphaned',
                 ...$this->resultFromAnchor($deleted->anchors()->where('document_version_id', $current->id)->firstOrFail()),
+            ],
+            [
+                'threadId' => $moved->id,
+                'state' => 'relocated',
+                'exact' => 'Moved phrase.',
+                'prefix' => "Alpha survives.\n\nGamma new.\n\n",
+                'suffix' => '',
+                'start' => 29,
+                'end' => 42,
             ],
         ]);
 
@@ -143,22 +153,32 @@ class DocumentResyncTest extends TestCase
             'state' => AnchorState::Orphaned->value,
             'exact' => 'Beta deleted.',
         ]);
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $moved->id,
+            'document_version_id' => $target->id,
+            'state' => AnchorState::Relocated->value,
+            'exact' => 'Moved phrase.',
+            'start' => 29,
+            'end' => 42,
+        ]);
 
         $this->actingAs($author)->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
             ->assertOk()
-            ->assertJsonCount(2, 'data')
+            ->assertJsonCount(3, 'data')
             ->assertJsonPath('data.0.anchor.state', 'anchored')
-            ->assertJsonPath('data.1.anchor.state', 'orphaned');
+            ->assertJsonPath('data.1.anchor.state', 'orphaned')
+            ->assertJsonPath('data.2.anchor.state', 'relocated');
 
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/reanchor')
             && $request['newPlainText'] === $newPlain
-            && count($request['anchors']) === 2);
+            && count($request['anchors']) === 3);
         Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'resync.started'
             && $context['document_id'] === $document->id);
         Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'reanchor.completed'
             && $context['document_id'] === $document->id
             && $context['anchored'] === 1
+            && $context['relocated'] === 1
             && $context['orphaned'] === 1);
         Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'resync.completed'
             && $context['document_id'] === $document->id

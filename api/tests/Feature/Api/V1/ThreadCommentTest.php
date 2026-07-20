@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\AnchorState;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\WorkspaceRole;
@@ -508,6 +509,64 @@ class ThreadCommentTest extends TestCase
         $this->assertSame('2', $document->currentVersion->projection_version);
         $this->assertDatabaseHas('anchors', ['exact' => 'target', 'projection_version' => '2']);
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/projection'));
+    }
+
+    public function test_orphaned_thread_rejects_non_matching_reattach_anchor(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+        $anchor['exact'] = 'Missing text';
+        $this->fakeProjection($document->currentVersion->plain_text, '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/reanchor", ['anchor' => $anchor])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'anchor_document_changed');
+
+        $this->assertDatabaseCount('anchors', 1);
+    }
+
+    public function test_orphaned_thread_reattach_creates_current_anchored_row_and_leaves_tray(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/reanchor", ['anchor' => $anchor])
+            ->assertOk()
+            ->assertJsonPath('anchor.state', 'anchored')
+            ->assertJsonPath('anchor.exact', 'Replacement text');
+
+        $this->assertDatabaseCount('anchors', 2);
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $thread->id,
+            'document_version_id' => $document->currentVersion->id,
+            'exact' => 'Replacement text',
+            'state' => AnchorState::Anchored->value,
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.anchor.state', 'anchored')
+            ->assertJsonPath('data.0.anchor.exact', 'Replacement text');
+    }
+
+    public function test_non_member_cannot_reattach_thread_by_id(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $intruder = $this->registerUser('intruder@example.com');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+
+        $this->actingAs($intruder)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/reanchor", ['anchor' => $anchor])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('anchors', 1);
     }
 
     public function test_same_thread_idempotency_key_on_different_documents_creates_distinct_comments(): void
@@ -1936,6 +1995,26 @@ class ThreadCommentTest extends TestCase
         $document->setRelation('currentVersion', $version);
 
         return $version;
+    }
+
+    private function orphanedThread(Document $document, User $author, string $exact): Thread
+    {
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $thread->comments()->create([
+            'author_id' => $author->id,
+            'body_md' => 'Needs re-attach',
+        ]);
+        $thread->anchors()->create($this->anchorFor($document->currentVersion->plain_text, $exact, '2') + [
+            'document_version_id' => $document->currentVersion->id,
+            'state' => AnchorState::Orphaned,
+        ]);
+
+        return $thread;
     }
 
     /**

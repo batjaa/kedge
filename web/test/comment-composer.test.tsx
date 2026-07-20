@@ -444,6 +444,7 @@ function reviewThread(): ReviewThread {
     comments: [],
     can_resolve: true,
     can_reopen: false,
+    can_reanchor: true,
     created_at: null,
     updated_at: null,
   };

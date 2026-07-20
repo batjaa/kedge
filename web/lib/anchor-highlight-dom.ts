@@ -65,7 +65,7 @@ export function decorateAnchorHighlights(
   clearAnchorHighlights(root);
 
   const anchors = threads.flatMap((thread): HighlightAnchor[] => {
-    if (!thread.anchor || thread.anchor.state !== 'anchored') return [];
+    if (!thread.anchor || thread.anchor.state === 'orphaned') return [];
     return [{ id: thread.id, start: thread.anchor.start, end: thread.anchor.end }];
   });
   if (anchors.length === 0) return;
