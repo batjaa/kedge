@@ -1,10 +1,9 @@
-import { createRequire } from 'node:module';
+import { match as dmpMatch } from '@sanity/diff-match-patch';
 
 const DEFAULT_CONTEXT_CHARS = 64;
 const DEFAULT_FUZZY_TIMEOUT_MS = 25;
 const FUZZY_SEARCH_DISTANCE = 1000;
 const FUZZY_MIN_SIMILARITY = 0.72;
-const SANITY_DMP_PACKAGE = ['@sanity', 'diff-match-patch'].join('/');
 
 export type ReanchorState = 'anchored' | 'relocated' | 'orphaned';
 
@@ -127,10 +126,8 @@ function findFuzzyMatch(
     searchText.length,
     Math.max(0, anchor.start - windowStart),
   );
-  const matcher = options.matcher ?? diffMatchPatchMatch;
+  const matcher = options.matcher ?? defaultFuzzyMatcher;
   const found = matcher(searchText, anchor.exact, expectedLocation, {
-    Match_Distance: FUZZY_SEARCH_DISTANCE,
-    Match_Threshold: 1 - FUZZY_MIN_SIMILARITY,
     matchDistance: FUZZY_SEARCH_DISTANCE,
     matchThreshold: 1 - FUZZY_MIN_SIMILARITY,
   });
@@ -144,60 +141,11 @@ function findFuzzyMatch(
   return start;
 }
 
-let cachedSanityMatcher: FuzzyMatcher | null | undefined;
-
-function diffMatchPatchMatch(
-  text: string,
-  pattern: string,
-  expectedLocation: number,
-  options?: unknown,
-): number {
-  const sanityMatcher = loadSanityMatcher();
-
-  return sanityMatcher
-    ? sanityMatcher(text, pattern, expectedLocation, options)
-    : localApproximateMatch(text, pattern, expectedLocation);
-}
-
-function loadSanityMatcher(): FuzzyMatcher | null {
-  if (cachedSanityMatcher !== undefined) return cachedSanityMatcher;
-
-  try {
-    const require = createRequire(import.meta.url);
-    const mod = require(SANITY_DMP_PACKAGE) as { match?: unknown };
-    cachedSanityMatcher = typeof mod.match === 'function' ? mod.match as FuzzyMatcher : null;
-  } catch {
-    cachedSanityMatcher = null;
-  }
-
-  return cachedSanityMatcher;
-}
-
-function localApproximateMatch(text: string, pattern: string, expectedLocation: number): number {
-  const exactMatches = allOccurrences(text, pattern);
-  if (exactMatches.length > 0) {
-    return exactMatches.reduce((best, start) => {
-      return Math.abs(start - expectedLocation) < Math.abs(best - expectedLocation) ? start : best;
-    }, exactMatches[0]!);
-  }
-
-  const maxStart = Math.max(0, text.length - pattern.length);
-  let bestStart = -1;
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (let start = 0; start <= maxStart; start++) {
-    const candidate = text.slice(start, start + pattern.length);
-    const editScore = 1 - normalizedSimilarity(pattern, candidate);
-    const distanceScore = Math.abs(start - expectedLocation) / FUZZY_SEARCH_DISTANCE;
-    const score = editScore + distanceScore;
-    if (score < bestScore) {
-      bestScore = score;
-      bestStart = start;
-    }
-  }
-
-  return bestStart;
-}
+// diff-match-patch only PROPOSES a candidate location; the deterministic
+// normalizedSimilarity gate below decides relocated-vs-orphaned, so results
+// stay stable and package-version-independent. Injectable for tests.
+const defaultFuzzyMatcher: FuzzyMatcher = (text, pattern, expectedLocation, options) =>
+  dmpMatch(text, pattern, expectedLocation, options as Parameters<typeof dmpMatch>[3]);
 
 function allOccurrences(haystack: string, needle: string): number[] {
   const starts: number[] = [];
