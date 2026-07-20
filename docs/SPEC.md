@@ -513,6 +513,7 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 | Re-sync | source gone / token revoked | keep current version | "Sync failed — last good version" + reconnect |
 | MDX compile | invalid/rejected MDX | fallback render + log | plain render + banner |
 | Re-anchor | no match / matcher timeout | orphan state | Orphaned tray |
+| Re-anchor | endpoint down / retries exhausted | keep current version, re-sync marked failed (pointer never advanced) | "Re-sync couldn't finish — last good version" + retry |
 | Kroki | down / bad source | cached-miss error state | raw source block + error chip |
 | Notify | Postmark failure | queue retry; comment unaffected | — |
 | AI run | overloaded / rate-limited | status=failed | "Generation failed — retry" |
