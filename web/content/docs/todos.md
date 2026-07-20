@@ -153,6 +153,8 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - **Candidate lineage lands unexercised.** M3 adds the candidate-capable version schema (`document_versions.kind` + `parent_version_id`, [ADR 0001](adr/0001-pr-is-a-candidate-version.md)) but only the **mainline** path runs; candidate *creation* and re-anchoring a candidate into the document's lineage arrive with the M6 PR-URL connector. A forward-compat schema that's never exercised can be subtly wrong — **M6 must add the candidate-path tests, not just the connector**. Where to start: the `kind`/`parent_version_id` columns + the version-lineage ordering M3 ships. (S) 
 
+- **Version labels are global DB ids, not per-document ordinals** (#75 review). The header/roster/switcher render `v{document_version.id}` (e.g. "approved v4821 · current v4830") instead of the spec's per-document "v3 · current v5". Web and api are consistent with each other, so it's cosmetic, but it reads poorly. **Fix in #78** (version switcher) by deriving a per-document version ordinal (position in the lineage) for display, reused by the roster + diff header. (S)
+
 ## Open TODOs (from M2 #64 magic-link review, 2026-07-16)
 
 - [ ] **Per-share `allow_anonymous` toggle** — SPEC §16 lists `allow_anonymous` on the `shares` entity and §10.2 promises "anonymous commenting off by default with a per-share toggle." The column was never added (M1) and #64 shipped magic-link-required only. Add the column + the anonymous-comment path behind it when a real need appears; magic-link-required is the safe default meanwhile. (S)
