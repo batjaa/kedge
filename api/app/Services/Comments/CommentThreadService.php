@@ -354,15 +354,26 @@ class CommentThreadService
         }
 
         $plainText = (string) $version->plain_text;
-        $start = (int) $anchor['start'];
-        $end = (int) $anchor['end'];
-        $length = mb_strlen($plainText, 'UTF-8');
+        $startCodeUnits = (int) $anchor['start'];
+        $endCodeUnits = (int) $anchor['end'];
+        $utf16PlainText = mb_convert_encoding($plainText, 'UTF-16LE', 'UTF-8');
+        $lengthCodeUnits = intdiv(strlen($utf16PlainText), 2);
 
-        if ($start < 0 || $end <= $start || $end > $length) {
+        if (
+            $startCodeUnits < 0
+            || $endCodeUnits <= $startCodeUnits
+            || $endCodeUnits > $lengthCodeUnits
+        ) {
             return false;
         }
 
-        return mb_substr($plainText, $start, $end - $start, 'UTF-8') === (string) $anchor['exact'];
+        $utf16Slice = substr(
+            $utf16PlainText,
+            $startCodeUnits * 2,
+            ($endCodeUnits - $startCodeUnits) * 2,
+        );
+
+        return mb_convert_encoding($utf16Slice, 'UTF-8', 'UTF-16LE') === (string) $anchor['exact'];
     }
 
     private function refreshProjection(Document $document, DocumentVersion $version): DocumentVersion

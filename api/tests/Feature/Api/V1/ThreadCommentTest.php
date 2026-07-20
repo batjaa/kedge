@@ -84,6 +84,44 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('anchors', 1);
     }
 
+    public function test_inline_anchor_offsets_validate_as_utf16_code_units_after_astral_text(): void
+    {
+        $plainText = 'Intro 👍 target text.';
+        [$author, $document] = $this->readyDocument(
+            plainText: $plainText,
+        );
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'target', '2');
+        $this->fakeProjection(plainText: $plainText, version: '2');
+
+        $this->assertSame(9, $anchor['start']);
+        $this->assertSame(15, $anchor['end']);
+        $selectedText = $this->utf16CodeUnitSlice(
+            $document->currentVersion->plain_text,
+            $anchor['start'],
+            $anchor['end'] - $anchor['start'],
+        );
+        $oldCodepointSlice = mb_substr(
+            $document->currentVersion->plain_text,
+            $anchor['start'],
+            $anchor['end'] - $anchor['start'],
+            'UTF-8',
+        );
+        $this->assertSame('target', $selectedText);
+        $this->assertNotSame('target', $oldCodepointSlice);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Emoji-safe anchor',
+                'idempotency_key' => 'inline-utf16-offsets',
+                'anchor' => $anchor,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.exact', 'target')
+            ->assertJsonPath('anchor.start', 9)
+            ->assertJsonPath('anchor.end', 15);
+    }
+
     public function test_reviewer_can_create_inline_suggestion_and_reply_suggestion_pending(): void
     {
         [$author, $document] = $this->readyDocument(
@@ -1906,19 +1944,33 @@ class ThreadCommentTest extends TestCase
      */
     private function anchorFor(string $plainText, string $exact, string $projectionVersion): array
     {
-        $start = mb_strpos($plainText, $exact, 0, 'UTF-8');
-        $this->assertNotFalse($start);
-        $end = $start + mb_strlen($exact, 'UTF-8');
+        $codepointStart = mb_strpos($plainText, $exact, 0, 'UTF-8');
+        $this->assertNotFalse($codepointStart);
+        $start = $this->utf16CodeUnitLength(mb_substr($plainText, 0, $codepointStart, 'UTF-8'));
+        $end = $start + $this->utf16CodeUnitLength($exact);
 
         return [
             'exact' => $exact,
-            'prefix' => mb_substr($plainText, max(0, $start - 8), min(8, $start), 'UTF-8'),
-            'suffix' => mb_substr($plainText, $end, 8, 'UTF-8'),
+            'prefix' => $this->utf16CodeUnitSlice($plainText, max(0, $start - 8), min(8, $start)),
+            'suffix' => $this->utf16CodeUnitSlice($plainText, $end, 8),
             'start' => $start,
             'end' => $end,
             'heading_path' => ['Doc'],
             'projection_version' => $projectionVersion,
         ];
+    }
+
+    private function utf16CodeUnitLength(string $value): int
+    {
+        return intdiv(strlen(mb_convert_encoding($value, 'UTF-16LE', 'UTF-8')), 2);
+    }
+
+    private function utf16CodeUnitSlice(string $value, int $start, int $length): string
+    {
+        $utf16 = mb_convert_encoding($value, 'UTF-16LE', 'UTF-8');
+        $slice = substr($utf16, $start * 2, $length * 2);
+
+        return mb_convert_encoding($slice, 'UTF-8', 'UTF-16LE');
     }
 
     private function fakeProjection(string $plainText, string $version): void
