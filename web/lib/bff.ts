@@ -87,6 +87,11 @@ export async function forwardApiGetWithJson<T>(
         ...statefulOriginHeaders(incoming),
       },
       cache: 'no-store',
+      // Bound every server-to-server GET forward: without this a hung API blocks
+      // the whole authenticated render for undici's ~300s default (there is no
+      // Suspense over the list), instead of the intended degrade-the-list-area
+      // -alone path. The abort lands in the catch → 502 → degraded panel.
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!bodyStatuses.includes(res.status)) {
