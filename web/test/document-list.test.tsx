@@ -126,7 +126,7 @@ describe('DocumentList', () => {
     expect(html).not.toContain('href="/settings"');
   });
 
-  it('offers reconnect (not a futile retry) on a dead-PAT failed row', () => {
+  it('offers BOTH retry and reconnect on a dead-PAT failed row (additive, like ImportFailed)', () => {
     const html = renderToStaticMarkup(
       <DocumentList
         items={[
@@ -146,13 +146,87 @@ describe('DocumentList', () => {
       />,
     );
 
-    // A dead PAT can't heal on retry (SPEC §19): reconnect link to Settings, and
-    // NO retry action at all — mutually exclusive with the transient branch.
+    // A dead PAT surfaces the reconnect link (SPEC §19) ADDITIONALLY — but Retry
+    // stays, matching the doc page's ImportFailed: a user who has since reconnected
+    // must still be able to re-run the import from the row, not hit a Settings-only
+    // dead end.
     expect(html).toContain('GitHub access was revoked. Reconnect the integration in Settings.');
     expect(html).toContain('Reconnect GitHub');
     expect(html).toContain('href="/settings"');
-    expect(html).not.toContain('Retry import');
-    expect(html).not.toContain('<button');
+    expect(html).toContain('Retry import');
+    expect(html).toContain('<button');
+  });
+
+  it('flags a ready doc whose re-sync failed instead of rendering it healthy', () => {
+    // A ready document with last_sync_status "failed" (a later re-sync broke): the
+    // row must carry the failure, not the emerald healthy treatment — the doc page
+    // shows a failure banner for the same state (C2).
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({
+            id: 11,
+            title: 'Re-sync broke',
+            status: 'ready',
+            last_sync_status: 'failed',
+            sync_error: 'Source returned 500 on re-sync.',
+            synced_at: new Date(Date.now() - 60_000).toISOString(),
+          }),
+        ]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+    );
+
+    expect(html).toContain('Sync failed');
+    // The error rides a title attribute for hover disclosure.
+    expect(html).toContain('title="Source returned 500 on re-sync."');
+    // Rose treatment, not the healthy emerald dot / "synced" label.
+    expect(html).toContain('bg-rose-500');
+    expect(html).not.toContain('synced 1m ago');
+  });
+
+  it('spins an importing row (DocumentPoller treatment), not a static dot', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 9, title: 'Still importing', status: 'importing' })]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+    );
+
+    expect(html).toContain('Importing');
+    // The spinner shares DocumentPoller's markup.
+    expect(html).toContain('animate-spin');
+    expect(html).toContain('border-t-emerald-500');
+  });
+
+  it('keeps the failure signal visible when degraded but this session has rows', () => {
+    // degraded with rows: the StatePanel yields to the live prepends, so a slim
+    // inline warning must keep the failure visible (a large workspace could
+    // otherwise look like only this session's imports) (C2).
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 3, title: 'This session import' })]}
+        total={1}
+        degraded={true}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+    );
+
+    // Rows still render…
+    expect(html).toContain('href="/documents/3"');
+    // …with the inline warning above them, not the full StatePanel.
+    expect(html).toContain('showing only this session');
+    expect(html).toContain('Refresh to see everything');
   });
 
   it('degrades the list area alone to the StatePanel when the fetch fails', () => {

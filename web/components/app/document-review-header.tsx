@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { MetaChip } from './meta-chip';
+import { StatusChip } from './status-chip';
 import { ApprovalRoster } from './approval-roster';
-import { cn } from '@/lib/cn';
 import type { Approval, LifecycleStatus } from '@/lib/document-types';
 import { relativeTime } from '@/lib/relative-time';
 
@@ -82,22 +82,5 @@ export function DocumentReviewHeader({
         </div>
       </div>
     </header>
-  );
-}
-
-function StatusChip({ status }: { status: LifecycleStatus }) {
-  const active = status === 'in_review';
-
-  return (
-    <span
-      className={cn(
-        'rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase ring-1 ring-inset',
-        active
-          ? 'bg-amber-400/10 text-amber-600 ring-amber-500/30 dark:text-amber-400'
-          : 'text-zinc-500 ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700',
-      )}
-    >
-      {status.replace('_', ' ')}
-    </span>
   );
 }
