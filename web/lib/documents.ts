@@ -1,6 +1,11 @@
 import { headers } from 'next/headers';
 import { forwardApiGet, forwardApiGetWithJson } from './bff';
-import type { Document, DocumentVersion, DocumentVersionDiff } from './document-types';
+import type {
+  Document,
+  DocumentListPage,
+  DocumentVersion,
+  DocumentVersionDiff,
+} from './document-types';
 
 // Server-only. Reads a document by forwarding the incoming request's cookies to
 // the API's poll endpoint (the BFF read path, SPEC 4). Shared by the document
@@ -19,6 +24,26 @@ export async function getDocument(id: string): Promise<DocumentReadResult> {
     `/api/v1/documents/${encodeURIComponent(id)}`,
   );
   return { status, document: data };
+}
+
+export interface DocumentsReadResult {
+  /** 200 with a page, 401/403 refused, 502 API down — `page` is null unless 200. */
+  status: number;
+  page: DocumentListPage | null;
+}
+
+/**
+ * The workspace document list for the authenticated home (SPEC 11). Reads page
+ * `page` (default 1) through the BFF cookie-forwarding path — the same seam as
+ * {@link getDocument}. A non-200 leaves `page` null so the home can degrade the
+ * list area alone without ever throwing.
+ */
+export async function getDocuments(page = 1): Promise<DocumentsReadResult> {
+  const { status, data } = await forwardApiGet<DocumentListPage>(
+    await headers(),
+    `/api/v1/documents?page=${encodeURIComponent(page)}`,
+  );
+  return { status, page: data };
 }
 
 export interface DocumentVersionsReadResult {

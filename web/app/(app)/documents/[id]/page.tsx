@@ -9,6 +9,7 @@ import { ImportWarnings } from '@/components/app/import-warnings';
 import { DocumentReviewSurface } from '@/components/app/document-review-surface';
 import { DocumentStaticHeader } from '@/components/app/document-static-header';
 import { PageContainer } from '@/components/app/page-container';
+import { StatePanel } from '@/components/app/state-panel';
 import { getSession } from '@/lib/session';
 import type { DocumentVersion } from '@/lib/document-types';
 import { versionLabel } from '@/lib/version-label';
@@ -170,17 +171,4 @@ function parseVersionParam(value: string | string[] | undefined): string | null 
   if (Array.isArray(value) || !/^[1-9][0-9]*$/.test(value)) notFound();
 
   return value;
-}
-
-function StatePanel({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="mt-8 rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-        {title}
-      </h2>
-      <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        {body}
-      </p>
-    </div>
-  );
 }
