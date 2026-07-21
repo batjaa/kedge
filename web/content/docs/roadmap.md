@@ -21,7 +21,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Comments & suggestions | L | Import & render | done (2026-07-16) | [specs/m2-comments-suggestions.md](specs/m2-comments-suggestions.md) · [#58](https://github.com/batjaa/kedge/issues/58) |
 | Versions, diff & approvals | L | Comments & suggestions | done (2026-07-20) | [specs/m3-versions-diff-approvals.md](specs/m3-versions-diff-approvals.md) · [#72](https://github.com/batjaa/kedge/issues/72) |
 | Documents list | S | Versions, diff & approvals | done (2026-07-21) | [specs/m3.5-documents-list.md](specs/m3.5-documents-list.md) · [#82](https://github.com/batjaa/kedge/issues/82) |
-| Projects & tracked repos | M | Documents list | specced (2026-07-21) | [specs/m3.6-projects-tracked-repos.md](specs/m3.6-projects-tracked-repos.md) |
+| Projects & tracked repos | M | Documents list | ticketed (2026-07-21) | [specs/m3.6-projects-tracked-repos.md](specs/m3.6-projects-tracked-repos.md) · [#89](https://github.com/batjaa/kedge/issues/89) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | specced (2026-07-20) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
