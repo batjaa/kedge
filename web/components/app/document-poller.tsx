@@ -1,21 +1,21 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import type { Document } from '@/lib/document-types';
 
 // Polls an in-flight import (SPEC 5.3) via the same-origin BFF route until the
 // API reports it left `importing`, then refreshes the server component so the
-// rendered doc (or the failed state) takes over. Stops itself on completion.
+// rendered doc (or the failed state) takes over. Stops itself on completion. The
+// timer/settle/cleanup skeleton and the poll cadence live in the shared
+// usePollUntilSettled hook (12A); this owns only the read and the settle action.
 export function DocumentPoller({ id }: { id: number }) {
   const router = useRouter();
-  const stopped = useRef(false);
 
-  useEffect(() => {
-    stopped.current = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function tick() {
+  usePollUntilSettled({
+    // A non-ok response or a thrown fetch is a transient hiccup → null keeps the
+    // loop alive; a doc that has left `importing` is the settle payload.
+    poll: async (): Promise<Document | null> => {
       try {
         const res = await fetch(`/api/bff/documents/${id}`, {
           credentials: 'same-origin',
@@ -24,27 +24,17 @@ export function DocumentPoller({ id }: { id: number }) {
 
         if (res.ok) {
           const doc = (await res.json()) as Document;
-          if (doc.status !== 'importing') {
-            stopped.current = true;
-            router.refresh();
-            return;
-          }
+          if (doc.status !== 'importing') return doc;
         }
       } catch {
         // Transient network hiccup — keep polling.
       }
 
-      if (!stopped.current) {
-        timer = setTimeout(tick, 1500);
-      }
-    }
-
-    timer = setTimeout(tick, 1500);
-    return () => {
-      stopped.current = true;
-      clearTimeout(timer);
-    };
-  }, [id, router]);
+      return null;
+    },
+    onSettled: () => router.refresh(),
+    deps: [id, router],
+  });
 
   return (
     <div className="mt-8 flex items-center gap-3 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">

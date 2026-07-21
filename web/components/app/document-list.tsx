@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { MetaChip } from './meta-chip';
@@ -9,7 +8,8 @@ import { StatusChip } from './status-chip';
 import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
 import { readDocument } from '@/lib/documents-client';
-import { POLL_INTERVAL_MS, shouldPoll } from '@/lib/document-list-live';
+import { shouldPoll } from '@/lib/document-list-live';
+import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { useImportRetry } from '@/lib/import-retry';
 import type { Document, DocumentListItem } from '@/lib/document-types';
 
@@ -241,34 +241,22 @@ function RowRetry({
 }
 
 // One importing row's poll loop (2A) — the per-document sibling of the doc
-// page's DocumentPoller. Reads the existing per-doc BFF route on the shared
-// cadence; on the first non-importing read it settles the row in place and
-// stops. A transient failure (readDocument → null) keeps the last state and
-// retries next tick. Renders nothing: it is behaviour, not markup.
+// page's DocumentPoller, on the same shared usePollUntilSettled skeleton (12A).
+// Reads the existing per-doc BFF route on the shared cadence; the first
+// non-importing read settles the row in place and stops. A transient failure
+// (readDocument → null) keeps the last state and retries next tick. Renders
+// nothing: it is behaviour, not markup.
 function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) => void }) {
-  useEffect(() => {
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function tick() {
+  usePollUntilSettled({
+    // readDocument already maps a transient failure to null; a still-importing
+    // read stays null too, so only a settled doc becomes the payload.
+    poll: async (): Promise<Document | null> => {
       const doc = await readDocument(id);
-      if (stopped) return;
-
-      if (doc && doc.status !== 'importing') {
-        stopped = true;
-        onSettled(doc);
-        return;
-      }
-
-      timer = setTimeout(tick, POLL_INTERVAL_MS);
-    }
-
-    timer = setTimeout(tick, POLL_INTERVAL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [id, onSettled]);
+      return doc && doc.status !== 'importing' ? doc : null;
+    },
+    onSettled,
+    deps: [id, onSettled],
+  });
 
   return null;
 }
