@@ -1,16 +1,20 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DocumentList } from '@/components/app/document-list';
-import type { DocumentListItem, DocumentListPage } from '@/lib/document-types';
+import type { DocumentListItem } from '@/lib/document-types';
 
-// Static-markup coverage for the home document list (SPEC 11, #84): the row
-// anatomy, the empty state, and the degraded "API unreachable" state. Renders
-// the pure component the home server component feeds — no browser, no fetch.
+// Static-markup coverage for the home document list (SPEC 11): the row anatomy,
+// the empty state, the degraded "API unreachable" state, and the polite live
+// region (10A). Renders the live client island with fixed props — no browser, no
+// poll (effects don't run under renderToStaticMarkup). The prepend/settle/poll
+// LOGIC is unit-tested purely in document-list-live.test.ts.
 describe('DocumentList', () => {
+  const noop = () => {};
+
   it('renders one navigable row per document with its lifecycle, sync state, and open-thread count', () => {
     const html = renderToStaticMarkup(
       <DocumentList
-        page={pageOf([
+        items={[
           item({
             id: 7,
             title: 'Anchoring RFC',
@@ -27,7 +31,11 @@ describe('DocumentList', () => {
             sync_error: 'Source unreachable',
           }),
           item({ id: 9, title: 'Still importing', status: 'importing' }),
-        ])}
+        ]}
+        total={3}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
       />,
     );
 
@@ -49,6 +57,10 @@ describe('DocumentList', () => {
     expect(html).toContain('>3<');
     expect(html).toContain('open threads');
 
+    // The polite live region is always present (10A), so assistive tech watches
+    // it across settles even when it starts empty.
+    expect(html).toContain('aria-live="polite"');
+
     // DESIGN.md panel anatomy: divide-y rows in a rounded-2xl hairline card,
     // and the a11y focus ring the mockup omits.
     expect(html).toContain('rounded-2xl');
@@ -56,8 +68,24 @@ describe('DocumentList', () => {
     expect(html).toContain('focus-visible:ring-emerald-500');
   });
 
+  it('announces a settle through the polite live region', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1, title: 'Anchoring RFC', status: 'ready' })]}
+        total={1}
+        degraded={false}
+        announcement="Import ready: Anchoring RFC"
+        onSettled={noop}
+      />,
+    );
+
+    expect(html).toContain('Import ready: Anchoring RFC');
+  });
+
   it('shows an empty state that points back at the import box', () => {
-    const html = renderToStaticMarkup(<DocumentList page={pageOf([])} />);
+    const html = renderToStaticMarkup(
+      <DocumentList items={[]} total={0} degraded={false} announcement="" onSettled={noop} />,
+    );
 
     expect(html).toContain('No documents yet');
     expect(html).toContain('box above');
@@ -66,23 +94,18 @@ describe('DocumentList', () => {
   });
 
   it('degrades the list area alone to the StatePanel when the fetch fails', () => {
-    // page === null models a non-200 read (API down or a mid-rollout 404). The
-    // home renders the import box as a sibling unconditionally; only this area
-    // falls back — the page never 500s over the list.
-    const html = renderToStaticMarkup(<DocumentList page={null} />);
+    // degraded models a non-200 read (API down or a mid-rollout 404). The home
+    // renders the import box as a sibling unconditionally; only this area falls
+    // back — the page never 500s over the list.
+    const html = renderToStaticMarkup(
+      <DocumentList items={[]} total={0} degraded={true} announcement="" onSettled={noop} />,
+    );
 
     expect(html).toContain('load your documents');
     expect(html).toContain('unreachable');
     expect(html).not.toContain('href="/documents/');
   });
 });
-
-function pageOf(data: DocumentListItem[]): DocumentListPage {
-  return {
-    data,
-    meta: { current_page: 1, last_page: 1, per_page: 20, total: data.length },
-  };
-}
 
 function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentListItem {
   return {

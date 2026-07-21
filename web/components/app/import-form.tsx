@@ -3,17 +3,20 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { importPaste, importUrl } from '@/lib/documents-client';
+import type { Document } from '@/lib/document-types';
 
 type Mode = 'url' | 'paste';
 
 // The import entry point on the authenticated home shell. Two modes: paste a link
 // to a spec (ticket #17) or paste the content directly (#22). Either way the API
-// returns 202 with the new document; we route to its page, which polls
-// importing → ready. DESIGN.md tokens, matching the auth form.
+// returns 202 with the new document. When `onImported` is supplied (the home's
+// live list, 5A) the form stays put and hands the 202'd document up to prepend as
+// an importing row; without it, it falls back to navigating to the doc page. A
+// failed submit keeps its inline error and adds no row. DESIGN.md tokens.
 const BUTTON_CLASS =
   'shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
 
-export function ImportForm() {
+export function ImportForm({ onImported }: { onImported?: (doc: Document) => void }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('url');
   const [url, setUrl] = useState('');
@@ -41,6 +44,16 @@ export function ImportForm() {
         : await importPaste(content, title);
 
     if (outcome.ok) {
+      if (onImported) {
+        // Stay home (5A): hand the row up and reset for the next import, so a
+        // reviewer can fire several and watch them all settle from this screen.
+        onImported(outcome.document);
+        setUrl('');
+        setContent('');
+        setTitle('');
+        setPending(false);
+        return;
+      }
       router.push(`/documents/${outcome.document.id}`);
       return;
     }
