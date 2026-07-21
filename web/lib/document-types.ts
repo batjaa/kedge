@@ -102,3 +102,33 @@ export interface Document {
   created_at: string | null;
   updated_at: string | null;
 }
+
+/**
+ * One row of the workspace document list — GET /api/v1/documents (SPEC 11).
+ * Deliberately lean: navigation fields only, no version content and no
+ * capabilities block (decision 6A). Keep in sync with
+ * api/app/Http/Resources/V1/DocumentListResource.php.
+ */
+export interface DocumentListItem {
+  id: number;
+  title: string;
+  status: DocumentStatus;
+  last_sync_status: SyncStatus;
+  sync_error: string | null;
+  lifecycle_status: LifecycleStatus;
+  open_threads_count: number;
+  /** The current version's sync time; null while a doc is still importing. */
+  synced_at: string | null;
+  created_at: string | null;
+}
+
+/** Laravel's paginated resource-collection envelope for the document list. */
+export interface DocumentListPage {
+  data: DocumentListItem[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}

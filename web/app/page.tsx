@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
 import { DemoHome } from '@/components/app/demo-home';
+import { DocumentList } from '@/components/app/document-list';
 import { ImportForm } from '@/components/app/import-form';
+import { getDocuments } from '@/lib/documents';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
@@ -42,14 +44,18 @@ function firstNameOf(name: string): string {
 }
 
 // The authenticated landing surface — the review queue's home, with the
-// paste-a-URL import entry point (#17). Panel-based, DESIGN.md tokens.
-function ReviewQueue({
+// paste-a-URL import entry point (#17) and, under it, the workspace document
+// list (SPEC 11, #84). Page 1 is read server-side; a failed read degrades the
+// list area alone (the import box always renders). Panel-based, DESIGN.md tokens.
+async function ReviewQueue({
   firstName,
   workspace,
 }: {
   firstName: string;
   workspace: Workspace;
 }) {
+  const documents = await getDocuments();
+
   return (
     <PageContainer>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -73,6 +79,8 @@ function ReviewQueue({
         </p>
         <ImportForm />
       </div>
+
+      <DocumentList page={documents.page} />
     </PageContainer>
   );
 }
