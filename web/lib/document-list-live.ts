@@ -1,7 +1,7 @@
 import type { Document, DocumentListItem, DocumentListMeta } from './document-types';
 
-/** Keep list rows as responsive as the existing document poller (2A). */
-export const POLL_INTERVAL_MS = 1500;
+// The poll cadence moved to its single home in lib/use-poll-until-settled.ts (12A),
+// which now owns the timer/settle/cleanup skeleton every poller shares.
 
 /** Turn the import response into the lean row the home list owns (5A). */
 export function toListItem(doc: Document): DocumentListItem {
