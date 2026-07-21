@@ -467,8 +467,8 @@ GET    /documents/{id}                                      → doc + current ve
 PATCH  /documents/{id}             {lifecycle_status | project_id}
 
 GET    /projects                   POST /projects           PATCH /projects/{id}    (M3.6)
-POST   /tracked-repos/preview       {repo_url, ref?, path_glob}  → matched files, no import (M3.6)
-POST   /tracked-repos              {repo_url, ref?, path_glob, project_id}  → create + first scan (202)
+POST   /tracked-repos/preview       {repo_url, ref?, path_pattern}  → matched files, no import (M3.6)
+POST   /tracked-repos              {repo_url, ref?, path_pattern, project_id}  → create + first scan (202)
 POST   /tracked-repos/{id}/scan                              → manual re-scan (202, idempotent per content)
 GET    /tracked-repos/{id}                                   → scan state + per-file outcome
 POST   /documents/{id}/resync
@@ -533,6 +533,9 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 | Re-sync | source gone / token revoked | keep current version | "Sync failed — last good version" + reconnect |
 | MDX compile | invalid/rejected MDX | fallback render + log | plain render + banner |
 | Re-anchor | no match / matcher timeout | orphan state | Orphaned tray |
+| Scan (M3.6) | tree listing truncated | repo-level scan failure | "Repo too large to scan" + cap guidance |
+| Scan (M3.6) | blob fetch rate-limited | per-file failed w/ reason | failed row + report entry; Re-scan retries |
+| Scan (M3.6) | worker died mid-scan | stale-running takeover (~15min) | Re-scan claimable; takeover noted in report |
 | Re-anchor | endpoint down / retries exhausted | keep current version, re-sync marked failed (pointer never advanced) | "Re-sync couldn't finish — last good version" + retry |
 | Kroki | down / bad source | cached-miss error state | raw source block + error chip |
 | Notify | Postmark failure | queue retry; comment unaffected | — |
