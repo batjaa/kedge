@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendItems,
+  hasMorePages,
   mergeSettled,
+  nextLoadMorePage,
   prependItem,
   settleAnnouncement,
   shouldPoll,
   toListItem,
 } from '@/lib/document-list-live';
-import type { Document, DocumentListItem } from '@/lib/document-types';
+import type { Document, DocumentListItem, DocumentListMeta } from '@/lib/document-types';
 
 describe('document list live state', () => {
   describe('prependItem', () => {
@@ -161,6 +164,77 @@ describe('document list live state', () => {
       expect(settleAnnouncement({ status: 'importing', title: 'Still importing' })).toBeNull();
     });
   });
+
+  describe('appendItems', () => {
+    it('appends a fetched page below the loaded rows in order', () => {
+      const loaded = [item({ id: 5 }), item({ id: 4 })];
+      const incoming = [item({ id: 3 }), item({ id: 2 }), item({ id: 1 })];
+
+      const result = appendItems(loaded, incoming);
+
+      expect(result.map(({ id }) => id)).toEqual([5, 4, 3, 2, 1]);
+    });
+
+    it('drops an id already loaded so a prepended or retried row never doubles', () => {
+      // A live prepend (or a page window that shifts by one) can put an
+      // already-shown doc into a later page; appending must dedup by id (#86).
+      const loaded = [item({ id: 9, title: 'Prepended import' }), item({ id: 6 })];
+      const incoming = [item({ id: 6, title: 'Stale copy' }), item({ id: 5 })];
+
+      const result = appendItems(loaded, incoming);
+
+      expect(result.map(({ id }) => id)).toEqual([9, 6, 5]);
+      // The already-loaded row wins; the duplicate from the page is discarded.
+      expect(result[1].title).toBe('Untitled');
+    });
+
+    it('does not mutate the inputs', () => {
+      const loaded = [item({ id: 2 })];
+      const incoming = [item({ id: 1 })];
+
+      const result = appendItems(loaded, incoming);
+
+      expect(loaded.map(({ id }) => id)).toEqual([2]);
+      expect(incoming.map(({ id }) => id)).toEqual([1]);
+      expect(result).not.toBe(loaded);
+    });
+  });
+
+  describe('hasMorePages', () => {
+    it('is true only while the current page is behind the last page', () => {
+      expect(hasMorePages(meta({ current_page: 1, last_page: 3 }))).toBe(true);
+      expect(hasMorePages(meta({ current_page: 2, last_page: 3 }))).toBe(true);
+      expect(hasMorePages(meta({ current_page: 3, last_page: 3 }))).toBe(false);
+    });
+
+    it('is false for a null meta (degraded read has no pages to load)', () => {
+      expect(hasMorePages(null)).toBe(false);
+    });
+  });
+
+  describe('nextLoadMorePage', () => {
+    it('returns the next page number when more pages remain and no load is in flight', () => {
+      expect(
+        nextLoadMorePage({ meta: meta({ current_page: 1, last_page: 3 }), loading: false }),
+      ).toBe(2);
+    });
+
+    it('returns null while a load is in flight — the double-click guard', () => {
+      expect(
+        nextLoadMorePage({ meta: meta({ current_page: 1, last_page: 3 }), loading: true }),
+      ).toBeNull();
+    });
+
+    it('returns null when the paginator is exhausted', () => {
+      expect(
+        nextLoadMorePage({ meta: meta({ current_page: 3, last_page: 3 }), loading: false }),
+      ).toBeNull();
+    });
+
+    it('returns null when there is no meta', () => {
+      expect(nextLoadMorePage({ meta: null, loading: false })).toBeNull();
+    });
+  });
 });
 
 function document(overrides: Partial<Document> = {}): Document {
@@ -177,6 +251,16 @@ function document(overrides: Partial<Document> = {}): Document {
     current_version: null,
     created_at: null,
     updated_at: null,
+    ...overrides,
+  };
+}
+
+function meta(overrides: Partial<DocumentListMeta> = {}): DocumentListMeta {
+  return {
+    current_page: 1,
+    last_page: 1,
+    per_page: 20,
+    total: 20,
     ...overrides,
   };
 }

@@ -1,15 +1,24 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import {
+  appendItems,
+  hasMorePages,
   mergeSettled,
+  nextLoadMorePage,
   prependItem,
   settleAnnouncement,
   toListItem,
 } from '@/lib/document-list-live';
-import type { Document, DocumentListItem, DocumentListPage } from '@/lib/document-types';
+import { readDocumentPage } from '@/lib/documents-client';
+import type {
+  Document,
+  DocumentListItem,
+  DocumentListMeta,
+  DocumentListPage,
+} from '@/lib/document-types';
 
 // The authenticated home's live surface (SPEC 11; decisions 2A + 5A). The one
 // client island: it owns the row state so submit-stays-home and per-row polling
@@ -28,7 +37,10 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
   // A null page 1 is the degraded read (3A) — the API was unreachable server-side.
   const [degraded] = useState(initialPage === null);
   const [items, setItems] = useState<DocumentListItem[]>(initialPage?.data ?? []);
+  const [meta, setMeta] = useState<DocumentListMeta | null>(initialPage?.meta ?? null);
   const [total, setTotal] = useState(initialPage?.meta.total ?? 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingRef = useRef(false);
   const [announcement, setAnnouncement] = useState('');
 
   const handleImported = useCallback((doc: Document) => {
@@ -41,6 +53,26 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
     const message = settleAnnouncement(doc);
     if (message) setAnnouncement(message);
   }, []);
+
+  // The ref guards the synchronous double-click that batched state cannot (#86);
+  // a failed fetch keeps every loaded row and leaves meta untouched so Load more reappears.
+  const handleLoadMore = useCallback(async () => {
+    if (loadingRef.current) return;
+    const next = nextLoadMorePage({ meta, loading: false });
+    if (next === null) return;
+    loadingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await readDocumentPage(next);
+      if (page) {
+        setItems((prev) => appendItems(prev, page.data));
+        setMeta(page.meta);
+      }
+    } finally {
+      loadingRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [meta]);
 
   return (
     <>
@@ -57,6 +89,9 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
       <DocumentList
         items={items}
         total={total}
+        hasMore={hasMorePages(meta)}
+        loadingMore={loadingMore}
+        onLoadMore={handleLoadMore}
         degraded={degraded}
         announcement={announcement}
         onSettled={handleSettled}
