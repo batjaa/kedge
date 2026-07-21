@@ -27,7 +27,11 @@ test('paste Markdown content → rendered document', async ({ page }) => {
   await page.getByLabel('Content', { exact: true }).fill(PASTED_CONTENT);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
 
-  // Synchronous E2E queue: the document is rendered on first load, no poll.
+  // Submit stays home (5A): the pasted doc prepends as a row; click through to
+  // reach its review surface. The synchronous E2E queue renders it on first load.
+  const rows = page.getByRole('region', { name: 'Your documents' }).getByRole('link');
+  await expect(rows).toHaveCount(1, { timeout: 30_000 });
+  await rows.first().click();
   await expect(page).toHaveURL(/\/documents\/\d+$/, { timeout: 30_000 });
 
   // Title synthesized from the first heading, body rendered from the pasted text.

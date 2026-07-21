@@ -76,10 +76,13 @@ export async function signIn(
 
 /**
  * Import a document from a URL through the authenticated review-queue form, then
- * land on its page. The E2E queue is synchronous (serve-api.sh), so by the time
- * the API answers the import has already run — the document page renders its
- * ready (or failed) state on first load, no poll to wait on. Returns the numeric
- * document id parsed from the URL.
+ * land on its page. Submit now STAYS on the home (5A): the import prepends as a
+ * new row on the "Your documents" list rather than navigating, so this drives the
+ * real flow — submit, wait for the row to appear at the top, click through to the
+ * review surface. Gating on the row COUNT rising by one (not just `.first()`)
+ * keeps it correct for callers that import several docs in a row. The E2E queue
+ * is synchronous (serve-api.sh), so the click lands on a fully-rendered document,
+ * no poll to wait on. Returns the numeric document id parsed from the URL.
  */
 export async function importDocumentFromUrl(page: Page, url: string): Promise<number> {
   await page.goto('/');
@@ -87,8 +90,15 @@ export async function importDocumentFromUrl(page: Page, url: string): Promise<nu
     page.getByRole('heading', { name: 'Import a document' }),
   ).toBeVisible();
 
+  const rows = page.getByRole('region', { name: 'Your documents' }).getByRole('link');
+  const before = await rows.count();
+
   await page.getByLabel('Document URL', { exact: true }).fill(url);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
+
+  // The 202'd document prepends as a new row; the newest sits first.
+  await expect(rows).toHaveCount(before + 1, { timeout: 30_000 });
+  await rows.first().click();
 
   await expect(page).toHaveURL(/\/documents\/\d+$/, { timeout: 30_000 });
   const match = /\/documents\/(\d+)$/.exec(page.url());

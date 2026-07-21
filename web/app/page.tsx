@@ -2,8 +2,7 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
 import { DemoHome } from '@/components/app/demo-home';
-import { DocumentList } from '@/components/app/document-list';
-import { ImportForm } from '@/components/app/import-form';
+import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
@@ -45,8 +44,10 @@ function firstNameOf(name: string): string {
 
 // The authenticated landing surface — the review queue's home, with the
 // paste-a-URL import entry point (#17) and, under it, the workspace document
-// list (SPEC 11, #84). Page 1 is read server-side; a failed read degrades the
-// list area alone (the import box always renders). Panel-based, DESIGN.md tokens.
+// list (SPEC 11). Page 1 is read server-side and seeds the live client island
+// (WorkspaceHome), which owns submit-stays-home + per-row polling (#85); a
+// failed read degrades the list area alone (the import box always renders).
+// Panel-based, DESIGN.md tokens.
 async function ReviewQueue({
   firstName,
   workspace,
@@ -70,17 +71,7 @@ async function ReviewQueue({
         Welcome, {firstName}. This is {workspace.name} — your personal workspace.
       </p>
 
-      <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-          Import a document
-        </h2>
-        <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paste a link to a spec or RFC and get a rendered page you can review.
-        </p>
-        <ImportForm />
-      </div>
-
-      <DocumentList page={documents.page} />
+      <WorkspaceHome initialPage={documents.page} />
     </PageContainer>
   );
 }

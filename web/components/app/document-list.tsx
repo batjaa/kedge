@@ -1,19 +1,42 @@
+'use client';
+
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { MetaChip } from './meta-chip';
 import { StatePanel } from './state-panel';
 import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
-import type { DocumentListItem, DocumentListPage, LifecycleStatus } from '@/lib/document-types';
+import { readDocument } from '@/lib/documents-client';
+import { POLL_INTERVAL_MS } from '@/lib/document-list-live';
+import type { Document, DocumentListItem, LifecycleStatus } from '@/lib/document-types';
 
-// The workspace document list on the authenticated home (SPEC 11). A pure,
-// server-rendered panel fed page 1 by the home server component — it owns the
-// three read outcomes: rows, the empty state, and the degraded "API
-// unreachable" state (the home never 500s over the list). Live import progress,
-// prepend-on-submit, inline retry, and "Load more" are later tickets (#85–#87);
-// this is the static list that grounds them. DESIGN.md panel idiom: divide-y
-// rows in a rounded-2xl hairline card, mono chips, status hues in chips only.
-export function DocumentList({ page }: { page: DocumentListPage | null }) {
+// The workspace document list on the authenticated home (SPEC 11). The client
+// island (WorkspaceHome) owns the row state; this renders it live: prepend-on-
+// submit rows arrive importing and each settles in place to ready/failed (2A),
+// only importing rows poll and they stop the moment they settle. It owns the
+// three read outcomes — rows, the empty state, and the degraded "API
+// unreachable" state (the home never 500s over the list) — plus a polite live
+// region that announces each settle for assistive tech (10A). DESIGN.md panel
+// idiom: divide-y rows in a rounded-2xl hairline card, mono chips, status hues
+// in chips only; rows stay real links.
+export function DocumentList({
+  items,
+  total,
+  degraded,
+  announcement,
+  onSettled,
+}: {
+  items: DocumentListItem[];
+  total: number;
+  degraded: boolean;
+  announcement: string;
+  onSettled: (doc: Document) => void;
+}) {
+  // Degraded wins only while we have nothing to show; a successful import gives
+  // us a real row, so the StatePanel yields to it rather than hiding it.
+  const showDegraded = degraded && items.length === 0;
+
   return (
     <section className="mt-10" aria-labelledby="documents-heading">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -23,23 +46,30 @@ export function DocumentList({ page }: { page: DocumentListPage | null }) {
         >
           Your documents
         </h2>
-        {page && page.data.length > 0 ? <MetaChip>{page.meta.total}</MetaChip> : null}
+        {!showDegraded && items.length > 0 ? <MetaChip>{total}</MetaChip> : null}
       </div>
 
-      {page === null ? (
+      {/* Settle announcements for screen readers (10A): a single polite region
+          whose text is swapped as each import lands, never removed from the DOM
+          so assistive tech keeps watching it. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </div>
+
+      {showDegraded ? (
         // Degraded (3A): the API is unreachable or 404s mid-rollout. The import
         // box above keeps working; only this area falls back to the panel idiom.
         <StatePanel
           title="Couldn't load your documents"
           body="The API is unreachable right now. Your import box above still works — refresh in a moment."
         />
-      ) : page.data.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
           <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
-            {page.data.map((item) => (
-              <DocumentRow key={item.id} item={item} />
+            {items.map((item) => (
+              <DocumentRow key={item.id} item={item} onSettled={onSettled} />
             ))}
           </ul>
         </div>
@@ -62,7 +92,13 @@ function EmptyState() {
   );
 }
 
-function DocumentRow({ item }: { item: DocumentListItem }) {
+function DocumentRow({
+  item,
+  onSettled,
+}: {
+  item: DocumentListItem;
+  onSettled: (doc: Document) => void;
+}) {
   return (
     <li>
       <Link
@@ -80,8 +116,47 @@ function DocumentRow({ item }: { item: DocumentListItem }) {
         </div>
         <OpenThreads count={item.open_threads_count} />
       </Link>
+      {/* Only importing rows mount a poller, so an idle list issues zero
+          background requests (2A); the poller unmounts — and stops — the moment
+          the row settles out of `importing`. */}
+      {item.status === 'importing' ? (
+        <RowPoller id={item.id} onSettled={onSettled} />
+      ) : null}
     </li>
   );
+}
+
+// One importing row's poll loop (2A) — the per-document sibling of the doc
+// page's DocumentPoller. Reads the existing per-doc BFF route on the shared
+// cadence; on the first non-importing read it settles the row in place and
+// stops. A transient failure (readDocument → null) keeps the last state and
+// retries next tick. Renders nothing: it is behaviour, not markup.
+function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) => void }) {
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function tick() {
+      const doc = await readDocument(id);
+      if (stopped) return;
+
+      if (doc && doc.status !== 'importing') {
+        stopped = true;
+        onSettled(doc);
+        return;
+      }
+
+      timer = setTimeout(tick, POLL_INTERVAL_MS);
+    }
+
+    timer = setTimeout(tick, POLL_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [id, onSettled]);
+
+  return null;
 }
 
 // Reuses the review header's lifecycle chip: amber only for in-review, neutral
