@@ -36,17 +36,20 @@ import type {
 // success handler is a client callback — a server component can't hand one down.
 export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage | null }) {
   // A null page 1 is the degraded read (3A) — the API was unreachable server-side.
-  const [degraded] = useState(initialPage === null);
+  // Fixed for this render's lifetime (no setter ever ran), so a plain const.
+  const degraded = initialPage === null;
   const [items, setItems] = useState<DocumentListItem[]>(initialPage?.data ?? []);
   const [meta, setMeta] = useState<DocumentListMeta | null>(initialPage?.meta ?? null);
-  const [total, setTotal] = useState(initialPage?.meta.total ?? 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const loadingRef = useRef(false);
   const [announcement, setAnnouncement] = useState('');
 
+  // The workspace count derives from meta alone (its single source of truth): an
+  // import bumps meta.total, Load more refreshes it. The fallback to items.length
+  // covers the degraded-null read, where the chip counts this session's imports.
   const handleImported = useCallback((doc: Document) => {
     setItems((prev) => prependItem(prev, toListItem(doc)));
-    setTotal((prev) => prev + 1);
+    setMeta((prev) => (prev ? { ...prev, total: prev.total + 1 } : prev));
   }, []);
 
   const handleSettled = useCallback((doc: Document) => {
@@ -80,6 +83,11 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
   // import takes, announced through the region via handleSettled when it lands
   // (a recovery to ready reads as a new "Import ready" message).
   const handleRetried = useCallback((id: number) => {
+    // Clear the live region first: a deterministic re-fail settles to the SAME
+    // "Import failed: X" message, and React bails out on an identical state update
+    // — so without resetting to '' between settles the aria-live region stays
+    // silent on the second failure. The empty string re-announces the next settle.
+    setAnnouncement('');
     setItems((prev) => markRetrying(prev, id));
   }, []);
 
@@ -97,7 +105,7 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
 
       <DocumentList
         items={items}
-        total={total}
+        total={meta?.total ?? items.length}
         hasMore={hasMorePages(meta)}
         loadingMore={loadingMore}
         onLoadMore={handleLoadMore}
