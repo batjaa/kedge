@@ -105,7 +105,7 @@ export function DocumentDiffView({ diff }: { diff: DocumentVersionDiff }) {
         openThreadCount={openThreadCount}
       />
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-8 py-8 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-8 px-6 py-8 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
         <article className="min-w-0">
           <div className="overflow-hidden rounded-lg bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
             <div className="flex flex-wrap items-center gap-2 border-b border-zinc-900/10 px-4 py-3 dark:border-white/10">
@@ -171,7 +171,7 @@ function DiffHeader({
   const currentVersionLabel = diff.current_version?.label ?? null;
 
   return (
-    <header className="sticky top-14 z-30 -mx-6 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
+    <header className="sticky top-14 z-30 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-3">
         <div className="min-w-0 flex-1">
           <Link

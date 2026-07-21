@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   highlightedTextSlicesForSegment,
   projectionRangeFromAttribute,
+  restyleAnchorHighlights,
   threadIdsFromAttribute,
 } from '@/lib/anchor-highlight-dom';
 
@@ -20,5 +21,36 @@ describe('anchor highlight DOM helpers', () => {
 
   it('parses comma and whitespace separated thread ids during migration from element highlights', () => {
     expect(threadIdsFromAttribute('4,5 6')).toEqual([4, 5, 6]);
+  });
+
+  // Regression: hover/active changes must restyle the EXISTING marks, never
+  // rebuild them — a rebuild between mousedown and mouseup disconnects the
+  // mousedown target and the browser then never fires the click.
+  it('restyles existing highlight marks in place by thread id', () => {
+    const markFor = (ids: string) => {
+      const classes = new Set<string>();
+      return {
+        classes,
+        getAttribute: (name: string) => (name === 'data-kedge-thread-ids' ? ids : null),
+        classList: {
+          toggle: (cls: string, force: boolean) => {
+            if (force) classes.add(cls);
+            else classes.delete(cls);
+          },
+        },
+      };
+    };
+    const ours = markFor('4 5');
+    const other = markFor('6');
+    const root = {
+      querySelectorAll: () => [ours, other],
+    } as unknown as HTMLElement;
+
+    restyleAnchorHighlights(root, 4);
+    expect(ours.classes.has('ring-2')).toBe(true);
+    expect(other.classes.size).toBe(0);
+
+    restyleAnchorHighlights(root, null);
+    expect(ours.classes.size).toBe(0);
   });
 });

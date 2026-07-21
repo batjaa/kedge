@@ -37,8 +37,8 @@ export function DocumentReviewHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="sticky top-14 z-30 -mx-6 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-3">
+    <header className="sticky top-14 z-30 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <div className="min-w-0 flex-1">
           {backHref && backLabel ? (
             <Link

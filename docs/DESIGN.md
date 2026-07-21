@@ -64,6 +64,8 @@
 
 Use the full viewport width — the docs grid must not reserve space for chrome that isn't there (`--fd-layout-width: 100%`, no phantom TOC column). The review pair (prose + rail) centers in the remaining width: prose column capped at **52rem** (readability measure — full width goes to the pair and its breathing room, never to line length), comment rail **320px** (`360px` at 2xl), gap 40–56px. Below `xl` the rail hides behind the mobile pill and prose keeps its measure.
 
+Both side columns are **collapsible** (added 2026-07-21): the sidebar collapses from a button in its chip row and the rail from a slim `w-12` gutter pinned to the right viewport edge; a collapsed column leaves a slim strip with a `PanelLeft/RightOpen` ghost icon (the rail strip also shows the open-thread count chip and a rose dot when orphans exist). Preferences persist per device (`localStorage`); both columns default to expanded, and activating a thread (highlight click, sidebar nav) re-opens a collapsed rail. Collapsing never widens the prose past 52rem — it buys measure on small screens and breathing room on large ones.
+
 ## Component inventory (all present in the canonical mockup)
 
 - **Header** — fixed, `h-14`, `bg-white/85 dark:bg-zinc-900/85 backdrop-blur`, hairline bottom border. Logo · ⌘K search pill · nav links · theme toggle · approval avatar stack (stale approvals at `opacity-50` with title tooltip) · primary AI-digest button.

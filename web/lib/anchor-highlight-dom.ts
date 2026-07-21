@@ -77,6 +77,21 @@ export function decorateAnchorHighlights(
   }
 }
 
+/**
+ * Toggle the active styling on existing highlight marks WITHOUT rebuilding
+ * them. Node identity must survive a hover/active change: a rebuild between
+ * mousedown and mouseup disconnects the mousedown target and the browser then
+ * never fires the click at all (observed in Chrome), so hover restyling has to
+ * happen in place.
+ */
+export function restyleAnchorHighlights(root: HTMLElement, activeThreadId: number | null): void {
+  for (const highlight of Array.from(root.querySelectorAll<HTMLElement>(`[${HIGHLIGHT_ATTR}]`))) {
+    const active = activeThreadId != null
+      && threadIdsFromAttribute(highlight.getAttribute(THREAD_IDS_ATTR)).includes(activeThreadId);
+    for (const cls of ACTIVE_ANCHOR_CLASSES) highlight.classList.toggle(cls, active);
+  }
+}
+
 export function firstAnchorHighlightForThread(root: HTMLElement | null, threadId: number): HTMLElement | null {
   if (!root) return null;
   for (const element of root.querySelectorAll<HTMLElement>(`[${THREAD_IDS_ATTR}]`)) {

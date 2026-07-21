@@ -1,7 +1,15 @@
 'use client';
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  MessageSquare,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  RefreshCw,
+  XCircle,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import {
@@ -37,6 +45,7 @@ import { readDocument, resyncDocument, updateDocumentLifecycle } from '@/lib/doc
 import {
   decorateAnchorHighlights,
   firstAnchorHighlightForThread,
+  restyleAnchorHighlights,
   threadIdsFromAttribute,
 } from '@/lib/anchor-highlight-dom';
 import {
@@ -44,6 +53,7 @@ import {
   newCommentDraftIdempotencyKey,
   useCommentDraft,
 } from '@/lib/comment-draft';
+import { useCollapsePreference } from '@/lib/collapse-preference';
 import {
   activeHeadingIdForScroll,
   deriveTocEntriesFromHeadings,
@@ -139,6 +149,8 @@ export function DocumentReviewSurface({
   const [pendingReattachThreadId, setPendingReattachThreadId] = useState<number | null>(null);
   const [reattachingThreadId, setReattachingThreadId] = useState<number | null>(null);
   const [reattachStatus, setReattachStatus] = useState<ReattachStatus | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useCollapsePreference('kedge:review:sidebar-collapsed');
+  const [railCollapsed, setRailCollapsed] = useCollapsePreference('kedge:review:rail-collapsed');
   const [forkingCommentIds, setForkingCommentIds] = useState<ReadonlySet<number>>(() => new Set());
   const submittingRef = useRef(false);
   const forkGuardRef = useRef<CommentForkGuard | null>(null);
@@ -149,6 +161,7 @@ export function DocumentReviewSurface({
   const numericProjectionVersion = projectionVersion == null ? NaN : Number(projectionVersion);
   const canCapture = plainText != null && Number.isFinite(numericProjectionVersion);
   const openThreadCount = threads.filter((thread) => thread.status === 'open').length;
+  const orphanedThreadCount = threads.filter((thread) => thread.anchor?.state === 'orphaned').length;
   const highlightedThreadId = hoveredThreadId ?? activeThreadId;
   const currentUserApproval = useMemo(() => {
     if (currentUserId === null) return null;
@@ -207,11 +220,21 @@ export function DocumentReviewSurface({
     void reloadThreads(1);
   }, [reloadThreads]);
 
+  // Build the highlight marks only when the thread set or projection changes;
+  // hover/active changes restyle the existing marks in place. Rebuilding on
+  // hover would swap the DOM node out from under an in-flight click (mousedown
+  // target disconnects → the browser never fires the click).
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    decorateAnchorHighlights(root, threads, highlightedThreadId, plainText ?? '');
-  }, [threads, highlightedThreadId, plainText]);
+    decorateAnchorHighlights(root, threads, null, plainText ?? '');
+  }, [threads, plainText]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    restyleAnchorHighlights(root, highlightedThreadId);
+  }, [threads, plainText, highlightedThreadId]);
 
   const refreshDocumentLayout = useCallback(() => {
     const root = rootRef.current;
@@ -323,12 +346,22 @@ export function DocumentReviewSurface({
   const activateThreadCard = useCallback((threadId: number) => {
     setActiveThreadId(threadId);
     setHoveredThreadId(null);
-    window.requestAnimationFrame(() => {
-      const card = document.querySelector<HTMLElement>(`[data-thread-card-id="${threadId}"]`);
-      card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      card?.focus({ preventScroll: true });
-    });
-  }, []);
+    setRailCollapsed(false);
+    // The rail may be mounting right now (it was collapsed): retry across a few
+    // frames until the card exists.
+    const focusCard = (attemptsLeft: number) => {
+      window.requestAnimationFrame(() => {
+        const card = document.querySelector<HTMLElement>(`[data-thread-card-id="${threadId}"]`);
+        if (!card) {
+          if (attemptsLeft > 0) focusCard(attemptsLeft - 1);
+          return;
+        }
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        card.focus({ preventScroll: true });
+      });
+    };
+    focusCard(5);
+  }, [setRailCollapsed]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -615,6 +648,7 @@ export function DocumentReviewSurface({
   function focusThread(thread: ReviewThread) {
     setActiveThreadId(thread.id);
     setHoveredThreadId(null);
+    setRailCollapsed(false);
     const root = rootRef.current;
     const target = firstAnchorHighlightForThread(root, thread.id);
     if (target) {
@@ -804,70 +838,132 @@ export function DocumentReviewSurface({
       />
 
       {headerMessage ? (
-        <div className="mx-auto mt-3 max-w-7xl rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700 ring-1 ring-rose-600/15 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-rose-400/20">
-          {headerMessage}
+        <div className="px-6">
+          <div className="mx-auto mt-3 max-w-7xl rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700 ring-1 ring-rose-600/15 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-rose-400/20">
+            {headerMessage}
+          </div>
         </div>
       ) : null}
 
       <DocumentNewVersionBanner notice={newerVersionNotice} />
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 py-8 lg:grid-cols-[16rem_minmax(0,52rem)] xl:grid-cols-[16rem_minmax(0,52rem)_320px] 2xl:grid-cols-[18rem_minmax(0,52rem)_360px]">
-        <DocumentReviewSidebar
-          tocEntries={tocEntries}
-          activeHeadingId={activeHeadingId}
-          threads={threads}
-          activeThreadId={activeThreadId}
-          lifecycleStatus={lifecycleStatus}
-          versionLabel={versionLabel}
-          onJumpToHeading={jumpToHeading}
-          onFocusThread={focusThread}
-        />
-
-        <div
-          ref={rootRef}
-          onMouseUp={captureSelection}
-          onKeyUp={captureSelection}
-          className="min-w-0 max-w-[52rem]"
-        >
-          {children}
+      {/* Full-viewport review row (DESIGN.md: the docs grid must not reserve
+          space for chrome that isn't there). The sidebar and thread rail are
+          collapsible; the prose column keeps its 52rem measure and centers in
+          whatever width remains. */}
+      <div className="flex">
+        <div className={cn('hidden shrink-0 lg:block', sidebarCollapsed ? 'w-12' : 'w-72')}>
+          {sidebarCollapsed ? (
+            <div className="sticky top-32 flex justify-center py-8">
+              <ColumnToggleButton
+                label="Show contents and threads"
+                onClick={() => setSidebarCollapsed(false)}
+              >
+                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+              </ColumnToggleButton>
+            </div>
+          ) : (
+            <DocumentReviewSidebar
+              tocEntries={tocEntries}
+              activeHeadingId={activeHeadingId}
+              threads={threads}
+              activeThreadId={activeThreadId}
+              lifecycleStatus={lifecycleStatus}
+              versionLabel={versionLabel}
+              onJumpToHeading={jumpToHeading}
+              onFocusThread={focusThread}
+              onCollapse={() => setSidebarCollapsed(true)}
+            />
+          )}
         </div>
 
-        <DocumentThreadRail
-          threads={threads}
-          page={page}
-          lastPage={lastPage}
-          activeThreadId={activeThreadId}
-          highlightedThreadId={highlightedThreadId}
-          anchorPositions={anchorPositions}
-          documentHeight={documentHeight}
-          onFocusThread={focusThread}
-          onActivateThread={(thread) => setActiveThreadId(thread.id)}
-          onHoverThread={(thread) => setHoveredThreadId(thread.id)}
-          onLeaveThread={() => setHoveredThreadId(null)}
-          onLoadMore={() => void reloadThreads(page + 1)}
-          onSetThreadStatus={setThreadStatus}
-          onStartReattach={(thread) => {
-            setPendingReattachThreadId(thread.id);
-            setMessage(null);
-            setReattachStatus({
-              threadId: thread.id,
-              tone: 'info',
-              message: 'Select replacement text in the document to re-attach this thread.',
-            });
-            setComposer({ open: false });
-            setActiveThreadId(thread.id);
-          }}
-          onReply={reply}
-          onForkComment={fork}
-          forkingCommentIds={forkingCommentIds}
-          onEditComment={edit}
-          onDeleteComment={remove}
-          onSetSuggestionStatus={setSuggestionStatus}
-          onToggleReaction={toggleReaction}
-          pendingReattachThreadId={pendingReattachThreadId}
-          reattachingThreadId={reattachingThreadId}
-          reattachStatus={reattachStatus}
-        />
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              'mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 px-6 py-8 xl:justify-center',
+              railCollapsed
+                ? 'xl:grid-cols-[minmax(0,52rem)]'
+                : 'xl:grid-cols-[minmax(0,52rem)_320px] 2xl:grid-cols-[minmax(0,52rem)_360px]',
+            )}
+          >
+            <div
+              ref={rootRef}
+              onMouseUp={captureSelection}
+              onKeyUp={captureSelection}
+              className="mx-auto w-full min-w-0 max-w-[52rem]"
+            >
+              {children}
+            </div>
+
+            {railCollapsed ? null : (
+              <DocumentThreadRail
+                threads={threads}
+                page={page}
+                lastPage={lastPage}
+                activeThreadId={activeThreadId}
+                highlightedThreadId={highlightedThreadId}
+                anchorPositions={anchorPositions}
+                documentHeight={documentHeight}
+                onFocusThread={focusThread}
+                onActivateThread={(thread) => setActiveThreadId(thread.id)}
+                onHoverThread={(thread) => setHoveredThreadId(thread.id)}
+                onLeaveThread={() => setHoveredThreadId(null)}
+                onLoadMore={() => void reloadThreads(page + 1)}
+                onSetThreadStatus={setThreadStatus}
+                onStartReattach={(thread) => {
+                  setPendingReattachThreadId(thread.id);
+                  setMessage(null);
+                  setReattachStatus({
+                    threadId: thread.id,
+                    tone: 'info',
+                    message: 'Select replacement text in the document to re-attach this thread.',
+                  });
+                  setComposer({ open: false });
+                  setActiveThreadId(thread.id);
+                }}
+                onReply={reply}
+                onForkComment={fork}
+                forkingCommentIds={forkingCommentIds}
+                onEditComment={edit}
+                onDeleteComment={remove}
+                onSetSuggestionStatus={setSuggestionStatus}
+                onToggleReaction={toggleReaction}
+                pendingReattachThreadId={pendingReattachThreadId}
+                reattachingThreadId={reattachingThreadId}
+                reattachStatus={reattachStatus}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="hidden w-12 shrink-0 xl:block">
+          <div className="sticky top-32 flex flex-col items-center gap-2 py-8">
+            <ColumnToggleButton
+              label={railCollapsed ? 'Show thread rail' : 'Hide thread rail'}
+              onClick={() => setRailCollapsed(!railCollapsed)}
+            >
+              {railCollapsed ? (
+                <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+              )}
+            </ColumnToggleButton>
+            {railCollapsed && threads.length > 0 ? (
+              <span
+                title={`${openThreadCount} open ${openThreadCount === 1 ? 'thread' : 'threads'}`}
+                className="rounded-full bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
+              >
+                {openThreadCount}
+              </span>
+            ) : null}
+            {railCollapsed && orphanedThreadCount > 0 ? (
+              <span
+                title={`${orphanedThreadCount} orphaned ${orphanedThreadCount === 1 ? 'thread' : 'threads'}`}
+                className="h-2 w-2 rounded-full bg-rose-500"
+              />
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {threads.length > 0 ? (
@@ -931,6 +1027,28 @@ export function DocumentReviewSurface({
         onSubmit={() => void submit()}
       />
     </div>
+  );
+}
+
+function ColumnToggleButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="rounded-full p-2 text-zinc-400 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:ring-white/10 dark:hover:bg-white/5 dark:hover:text-zinc-200"
+    >
+      {children}
+    </button>
   );
 }
 

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
+import { PageContainer } from '@/components/app/page-container';
 import { DemoHome } from '@/components/app/demo-home';
 import { ImportForm } from '@/components/app/import-form';
 import { getSession } from '@/lib/session';
@@ -50,7 +51,7 @@ function ReviewQueue({
   workspace: Workspace;
 }) {
   return (
-    <div>
+    <PageContainer>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Review queue
@@ -72,6 +73,6 @@ function ReviewQueue({
         </p>
         <ImportForm />
       </div>
-    </div>
+    </PageContainer>
   );
 }

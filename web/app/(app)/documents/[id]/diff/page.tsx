@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { ApprovalRoster } from '@/components/app/approval-roster';
 import { DocumentDiffView } from '@/components/app/document-diff-view';
 import { MetaChip } from '@/components/app/meta-chip';
+import { PageContainer } from '@/components/app/page-container';
 import { getDocumentVersionDiff } from '@/lib/documents';
 import type { DocumentVersionDiff } from '@/lib/document-types';
 
@@ -26,15 +27,21 @@ export default async function DocumentDiffPage({
 
   if (!diff) {
     return (
-      <StatePanel
-        title="Couldn't load this diff"
-        body="The API is unreachable right now. Try again in a moment."
-      />
+      <PageContainer>
+        <StatePanel
+          title="Couldn't load this diff"
+          body="The API is unreachable right now. Try again in a moment."
+        />
+      </PageContainer>
     );
   }
 
   if (status === 409 || !diff.comparable) {
-    return <ProjectionGuard diff={diff} />;
+    return (
+      <PageContainer>
+        <ProjectionGuard diff={diff} />
+      </PageContainer>
+    );
   }
 
   return <DocumentDiffView diff={diff} />;

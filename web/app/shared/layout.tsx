@@ -22,7 +22,7 @@ export default function SharedLayout({ children }: { children: ReactNode }) {
         <BrandMark />
         <ThemeToggle />
       </header>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10 sm:py-14">{children}</main>
+      <main className="flex-1">{children}</main>
       <footer className="border-t border-zinc-900/10 px-6 py-4 text-center dark:border-white/10">
         <a
           href="/"

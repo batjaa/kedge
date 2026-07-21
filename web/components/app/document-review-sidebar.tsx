@@ -1,5 +1,6 @@
 'use client';
 
+import { PanelLeftClose } from 'lucide-react';
 import { MetaChip } from './meta-chip';
 import { cn } from '@/lib/cn';
 import type { LifecycleStatus } from '@/lib/document-types';
@@ -15,6 +16,7 @@ export function DocumentReviewSidebar({
   versionLabel,
   onJumpToHeading,
   onFocusThread,
+  onCollapse,
 }: {
   tocEntries: TocEntry[];
   activeHeadingId: string | null;
@@ -24,13 +26,25 @@ export function DocumentReviewSidebar({
   versionLabel?: string | null;
   onJumpToHeading: (id: string) => void;
   onFocusThread: (thread: ReviewThread) => void;
+  onCollapse?: () => void;
 }) {
   return (
-    <aside className="hidden lg:block">
-      <div className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 pr-6 dark:border-white/10">
+    <aside>
+      <div className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10">
         <div className="mb-4 flex min-w-0 items-center gap-2 text-xs font-mono">
           {versionLabel ? <MetaChip>{versionLabel}</MetaChip> : null}
           {lifecycleStatus ? <LifecycleChip status={lifecycleStatus} /> : null}
+          {onCollapse ? (
+            <button
+              type="button"
+              onClick={onCollapse}
+              aria-label="Hide contents and threads"
+              title="Hide contents and threads"
+              className="ml-auto rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/5 dark:hover:text-zinc-200"
+            >
+              <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
 
         <h2 className="text-xs font-semibold text-zinc-900 dark:text-white">Document</h2>

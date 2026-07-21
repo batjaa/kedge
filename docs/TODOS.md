@@ -173,3 +173,9 @@
 ## Known debt (M2 #68 e2e mailbox helper, 2026-07-16)
 
 - The e2e magic-link mailbox helper (`web/e2e/mailbox.ts`) scopes to a fixed ±char window around the recipient email and only truncates the log at server boot (not per test). Both hold today via per-run unique emails; revisit (larger/again-computed window, per-test truncation) if the mail template grows or specs start reusing addresses. (S)
+
+## Decision log (review-surface layout, 2026-07-21)
+
+- ✅ **Full-viewport review surface** — the app shells' `<main>` is now full-bleed and every non-review page opts back into the centered column via `PageContainer`; the review surface (and the diff view's sticky header) use the whole viewport. This fixes a real regression against DESIGN.md §Page layout: all three columns had been packed inside one `max-w-7xl` container, squeezing the prose to ~504–576px (worse on larger screens) instead of its 52rem measure.
+- ✅ **Collapsible sidebar + thread rail** — both side columns collapse to slim strips (rail strip carries the open-thread count and an orphan dot); preference persists per device in `localStorage`, defaults to expanded, and activating a thread re-opens a collapsed rail. Collapsing never widens prose past 52rem. Codified in DESIGN.md §Page layout.
+- ✅ **Highlight restyling is in-place** (`restyleAnchorHighlights`) — hover/active changes toggle classes on the existing marks instead of rebuilding them. Rebuilding raced the click gesture: the mark receiving mousedown was disconnected before mouseup, so Chrome never fired `click` on document highlights (found by the layout e2e probe; unit-tested in `anchor-highlight-dom.test.ts`).

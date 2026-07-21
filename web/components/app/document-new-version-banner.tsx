@@ -51,19 +51,21 @@ export function DocumentNewVersionBanner({
   if (!notice) return null;
 
   return (
-    <div className="mx-auto mt-3 max-w-7xl rounded-2xl bg-emerald-50/50 px-4 py-3 text-sm text-emerald-950 ring-1 ring-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-100 dark:ring-emerald-400/20">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Info className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-        <p className="min-w-0 flex-1">
-          You&apos;re viewing an older version. Latest is{' '}
-          <span className="font-mono text-[11px] font-semibold uppercase">{notice.label}</span>.
-        </p>
-        <Link
-          href={notice.href}
-          className="inline-flex rounded-full bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
-        >
-          View latest
-        </Link>
+    <div className="px-6">
+      <div className="mx-auto mt-3 max-w-7xl rounded-2xl bg-emerald-50/50 px-4 py-3 text-sm text-emerald-950 ring-1 ring-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-100 dark:ring-emerald-400/20">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Info className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+          <p className="min-w-0 flex-1">
+            You&apos;re viewing an older version. Latest is{' '}
+            <span className="font-mono text-[11px] font-semibold uppercase">{notice.label}</span>.
+          </p>
+          <Link
+            href={notice.href}
+            className="inline-flex rounded-full bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+          >
+            View latest
+          </Link>
+        </div>
       </div>
     </div>
   );

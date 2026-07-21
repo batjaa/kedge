@@ -7,9 +7,11 @@ import { SessionMonitor } from '@/components/app/session-monitor';
 import type { User } from '@/lib/auth-types';
 
 // The authenticated chrome — sticky header (wordmark, theme toggle, identity,
-// sign out) over a centered main column. Extracted from the (app) route-group
-// layout (#25) so the root page can render the signed-in review queue in the
-// same shell while owning its own anonymous-vs-authenticated branch.
+// sign out) over a full-bleed main. Pages opt back into the centered column
+// with PageContainer; the review surface uses the whole viewport (DESIGN.md).
+// Extracted from the (app) route-group layout (#25) so the root page can
+// render the signed-in review queue in the same shell while owning its own
+// anonymous-vs-authenticated branch.
 export function AppShell({
   user,
   children,
@@ -39,7 +41,7 @@ export function AppShell({
           <SignOutButton />
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10 sm:py-14">
+      <main className="flex-1">
         {children}
       </main>
     </div>

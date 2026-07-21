@@ -8,6 +8,7 @@ import { DocumentShares } from '@/components/app/document-shares';
 import { ImportWarnings } from '@/components/app/import-warnings';
 import { DocumentReviewSurface } from '@/components/app/document-review-surface';
 import { DocumentStaticHeader } from '@/components/app/document-static-header';
+import { PageContainer } from '@/components/app/page-container';
 import { getSession } from '@/lib/session';
 import type { DocumentVersion } from '@/lib/document-types';
 import { versionLabel } from '@/lib/version-label';
@@ -36,12 +37,12 @@ export default async function DocumentPage({
   // which POSTs the claim and then lands on the clean, now-owned doc URL.
   if (claim === '1') {
     return (
-      <div>
+      <PageContainer>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Claiming your document
         </h1>
         <DocumentClaim id={Number(id)} />
-      </div>
+      </PageContainer>
     );
   }
 
@@ -54,10 +55,12 @@ export default async function DocumentPage({
 
   if (!document) {
     return (
-      <StatePanel
-        title="Couldn't load this document"
-        body="The API is unreachable right now. Try again in a moment."
-      />
+      <PageContainer>
+        <StatePanel
+          title="Couldn't load this document"
+          body="The API is unreachable right now. Try again in a moment."
+        />
+      </PageContainer>
     );
   }
 
@@ -77,10 +80,12 @@ export default async function DocumentPage({
 
       if (!versionResult.version) {
         return (
-          <StatePanel
-            title="Couldn't load this version"
-            body="The API is unreachable right now. Try again in a moment."
-          />
+          <PageContainer>
+            <StatePanel
+              title="Couldn't load this version"
+              body="The API is unreachable right now. Try again in a moment."
+            />
+          </PageContainer>
         );
       }
 
@@ -91,27 +96,33 @@ export default async function DocumentPage({
   return (
     <div>
       {showStaticHeader ? (
-        <DocumentStaticHeader
-          title={document.title}
-          sourceUrl={document.source_url}
-          backHref="/"
-          backLabel="← Review queue"
-        />
-      ) : null}
+        <PageContainer>
+          <DocumentStaticHeader
+            title={document.title}
+            sourceUrl={document.source_url}
+            backHref="/"
+            backLabel="← Review queue"
+          />
 
-      {document.status === 'importing' ? (
-        <DocumentPoller id={document.id} />
-      ) : null}
+          {document.status === 'importing' ? (
+            <DocumentPoller id={document.id} />
+          ) : null}
 
-      {document.status === 'failed' ? (
-        <ImportFailed id={document.id} error={document.sync_error} />
+          {document.status === 'failed' ? (
+            <ImportFailed id={document.id} error={document.sync_error} />
+          ) : null}
+        </PageContainer>
       ) : null}
 
       {document.status === 'ready' && document.current_version && viewedVersion ? (
         <>
-          <ImportWarnings
-            warnings={viewedVersion.import_warnings ?? []}
-          />
+          {(viewedVersion.import_warnings ?? []).length > 0 ? (
+            <PageContainer flush>
+              <div className="pt-6">
+                <ImportWarnings warnings={viewedVersion.import_warnings ?? []} />
+              </div>
+            </PageContainer>
+          ) : null}
           <DocumentReviewSurface
             documentId={document.id}
             title={document.title}
@@ -143,7 +154,13 @@ export default async function DocumentPage({
         </>
       ) : null}
 
-      {document.status === 'ready' ? <DocumentShares documentId={document.id} /> : null}
+      {document.status === 'ready' ? (
+        <PageContainer flush>
+          <div className="pb-10 sm:pb-14">
+            <DocumentShares documentId={document.id} />
+          </div>
+        </PageContainer>
+      ) : null}
     </div>
   );
 }

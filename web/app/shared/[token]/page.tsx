@@ -4,6 +4,7 @@ import { getSharedDocument } from '@/lib/shared-document';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentReviewSurface } from '@/components/app/document-review-surface';
 import { DocumentStaticHeader } from '@/components/app/document-static-header';
+import { PageContainer } from '@/components/app/page-container';
 import { SharedLinkGone } from '@/components/shared/shared-link-gone';
 import { ClaimCta } from '@/components/shared/claim-cta';
 import { SharedDocumentPoller } from '@/components/shared/shared-document-poller';
@@ -40,19 +41,25 @@ export default async function SharedDocumentPage({
   const result = await getSharedDocument(token, await headers());
 
   if (result.kind === 'gone') {
-    return <SharedLinkGone reason={result.reason} />;
+    return (
+      <PageContainer>
+        <SharedLinkGone reason={result.reason} />
+      </PageContainer>
+    );
   }
 
   if (result.kind === 'error') {
     return (
-      <div className="mx-auto mt-16 max-w-md rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">
-          Couldn&apos;t load this document
-        </h1>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Something went wrong reaching the server. Try again in a moment.
-        </p>
-      </div>
+      <PageContainer>
+        <div className="mx-auto mt-16 max-w-md rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">
+            Couldn&apos;t load this document
+          </h1>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+            Something went wrong reaching the server. Try again in a moment.
+          </p>
+        </div>
+      </PageContainer>
     );
   }
 
@@ -64,8 +71,50 @@ export default async function SharedDocumentPage({
   const verifyState = verifyReturnState(query.verify);
   const showShareHeader = !verifiedReviewer || doc.status !== 'ready';
 
+  // Verified reviewer on a ready doc → the full-bleed review surface (it owns
+  // its own containers); everything else stays in the centered page column.
+  if (doc.status === 'ready' && doc.current_version && verifiedReviewer) {
+    return (
+      <div>
+        {query.verified === '1' ? (
+          <PageContainer flush>
+            <div className="pt-6">
+              <ReviewStatePanel message="Email verified. You can comment on this document now." />
+            </div>
+          </PageContainer>
+        ) : null}
+        <DocumentReviewSurface
+          documentId={doc.document_id!}
+          title={doc.title}
+          surfaceLabel="Shared document · verified reviewer"
+          viewedVersionId={doc.current_version.id}
+          currentVersionId={doc.current_version.id}
+          versionLabel={versionLabel(doc.current_version)}
+          syncedAt={doc.current_version.synced_at}
+          approvals={doc.approvals ?? []}
+          currentUserId={doc.reviewer.id ?? null}
+          plainText={doc.current_version.plain_text ?? null}
+          projectionVersion={doc.current_version.projection_version ?? null}
+        >
+          <DocumentBody
+            format={doc.format}
+            mdxOk={doc.current_version.mdx_ok}
+            content={doc.current_version.content}
+          />
+        </DocumentReviewSurface>
+        {isDemo ? (
+          <PageContainer flush>
+            <div className="pb-10 sm:pb-14">
+              <ClaimCta documentId={doc.document_id!} />
+            </div>
+          </PageContainer>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div>
+    <PageContainer>
       {showShareHeader ? (
         <DocumentStaticHeader
           title={doc.title}
@@ -75,47 +124,20 @@ export default async function SharedDocumentPage({
       ) : null}
 
       {doc.status === 'ready' && doc.current_version ? (
-        verifiedReviewer ? (
-          <>
-            {query.verified === '1' ? (
-              <ReviewStatePanel message="Email verified. You can comment on this document now." />
-            ) : null}
-            <DocumentReviewSurface
-              documentId={doc.document_id!}
-              title={doc.title}
-              surfaceLabel="Shared document · verified reviewer"
-              viewedVersionId={doc.current_version.id}
-              currentVersionId={doc.current_version.id}
-              versionLabel={versionLabel(doc.current_version)}
-              syncedAt={doc.current_version.synced_at}
-              approvals={doc.approvals ?? []}
-              currentUserId={doc.reviewer.id ?? null}
-              plainText={doc.current_version.plain_text ?? null}
-              projectionVersion={doc.current_version.projection_version ?? null}
-            >
-              <DocumentBody
-                format={doc.format}
-                mdxOk={doc.current_version.mdx_ok}
-                content={doc.current_version.content}
-              />
-            </DocumentReviewSurface>
-          </>
-        ) : (
-          <>
-            <DocumentBody
-              format={doc.format}
-              mdxOk={doc.current_version.mdx_ok}
-              content={doc.current_version.content}
+        <>
+          <DocumentBody
+            format={doc.format}
+            mdxOk={doc.current_version.mdx_ok}
+            content={doc.current_version.content}
+          />
+          {!isDemo ? (
+            <ReviewerVerification
+              token={token}
+              returnState={verifyState}
+              completionToken={query.verify_complete ?? null}
             />
-            {!isDemo ? (
-              <ReviewerVerification
-                token={token}
-                returnState={verifyState}
-                completionToken={query.verify_complete ?? null}
-              />
-            ) : null}
-          </>
-        )
+          ) : null}
+        </>
       ) : doc.status === 'importing' && isDemo ? (
         // A freshly-pasted demo doc: poll the public surface and reveal the
         // render the moment it lands, without asking the visitor to refresh.
@@ -127,7 +149,7 @@ export default async function SharedDocumentPage({
       )}
 
       {isDemo ? <ClaimCta documentId={doc.document_id!} /> : null}
-    </div>
+    </PageContainer>
   );
 }
 

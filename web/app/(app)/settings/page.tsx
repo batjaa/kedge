@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { IntegrationsPanel } from '@/components/app/integrations-panel';
+import { PageContainer } from '@/components/app/page-container';
 
 // Workspace settings (ticket #23). M1 surface: the Integrations section, where a
 // workspace connects a GitHub PAT for private-repo imports. A server component in
@@ -16,7 +17,7 @@ export default async function SettingsPage() {
   const { workspace } = session;
 
   return (
-    <div>
+    <PageContainer>
       <div className="mb-6">
         <Link
           href="/"
@@ -33,6 +34,6 @@ export default async function SettingsPage() {
       </div>
 
       <IntegrationsPanel />
-    </div>
+    </PageContainer>
   );
 }
