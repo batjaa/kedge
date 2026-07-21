@@ -36,6 +36,7 @@ describe('DocumentList', () => {
         degraded={false}
         announcement=""
         onSettled={noop}
+        onRetried={noop}
       />,
     );
 
@@ -76,6 +77,7 @@ describe('DocumentList', () => {
         degraded={false}
         announcement="Import ready: Anchoring RFC"
         onSettled={noop}
+        onRetried={noop}
       />,
     );
 
@@ -84,7 +86,7 @@ describe('DocumentList', () => {
 
   it('shows an empty state that points back at the import box', () => {
     const html = renderToStaticMarkup(
-      <DocumentList items={[]} total={0} degraded={false} announcement="" onSettled={noop} />,
+      <DocumentList items={[]} total={0} degraded={false} announcement="" onSettled={noop} onRetried={noop} />,
     );
 
     expect(html).toContain('No documents yet');
@@ -93,12 +95,72 @@ describe('DocumentList', () => {
     expect(html).not.toContain('href="/documents/');
   });
 
+  it('offers inline Retry on a transient failed row — the shared affordance, no reconnect link', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({
+            id: 8,
+            title: 'Broken import',
+            status: 'failed',
+            last_sync_status: 'failed',
+            sync_error: 'URL not allowed (private address).',
+          }),
+        ]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+    );
+
+    // The import error is shown on the row, and a real focusable Retry button
+    // with the standard emerald focus ring (copy identical to the doc page).
+    expect(html).toContain('URL not allowed (private address).');
+    expect(html).toContain('Retry import');
+    expect(html).toContain('<button');
+    expect(html).toContain('focus-visible:ring-emerald-500');
+    // A transient failure is on the retry path — no reconnect CTA.
+    expect(html).not.toContain('Reconnect GitHub');
+    expect(html).not.toContain('href="/settings"');
+  });
+
+  it('offers reconnect (not a futile retry) on a dead-PAT failed row', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({
+            id: 8,
+            title: 'Revoked token',
+            status: 'failed',
+            last_sync_status: 'failed',
+            sync_error: 'GitHub access was revoked. Reconnect the integration in Settings.',
+          }),
+        ]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+    );
+
+    // A dead PAT can't heal on retry (SPEC §19): reconnect link to Settings, and
+    // NO retry action at all — mutually exclusive with the transient branch.
+    expect(html).toContain('GitHub access was revoked. Reconnect the integration in Settings.');
+    expect(html).toContain('Reconnect GitHub');
+    expect(html).toContain('href="/settings"');
+    expect(html).not.toContain('Retry import');
+    expect(html).not.toContain('<button');
+  });
+
   it('degrades the list area alone to the StatePanel when the fetch fails', () => {
     // degraded models a non-200 read (API down or a mid-rollout 404). The home
     // renders the import box as a sibling unconditionally; only this area falls
     // back — the page never 500s over the list.
     const html = renderToStaticMarkup(
-      <DocumentList items={[]} total={0} degraded={true} announcement="" onSettled={noop} />,
+      <DocumentList items={[]} total={0} degraded={true} announcement="" onSettled={noop} onRetried={noop} />,
     );
 
     expect(html).toContain('load your documents');

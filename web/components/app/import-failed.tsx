@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useImportRetry } from '@/lib/import-retry';
 
 // The failed-import state (SPEC 19): shows why it failed and offers a retry CTA.
@@ -16,7 +17,14 @@ export function ImportFailed({
   id: number;
   error: string | null;
 }) {
-  const { needsReconnect, pending, retryError, onRetry } = useImportRetry({ id, error });
+  // The doc page's success behaviour: refresh the route so it re-enters the
+  // importing/poll state (the row consumer flips its own row instead).
+  const router = useRouter();
+  const { needsReconnect, pending, retryError, onRetry } = useImportRetry({
+    id,
+    error,
+    onRetried: () => router.refresh(),
+  });
 
   return (
     <div className="mt-8 rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">

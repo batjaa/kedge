@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import {
+  markRetrying,
   mergeSettled,
   prependItem,
   settleAnnouncement,
@@ -42,6 +43,14 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
     if (message) setAnnouncement(message);
   }, []);
 
+  // A row's inline retry succeeded: flip it back to importing so its RowPoller
+  // re-mounts and settles it live in place (7A) — the same live path a fresh
+  // import takes, announced through the region via handleSettled when it lands
+  // (a recovery to ready reads as a new "Import ready" message).
+  const handleRetried = useCallback((id: number) => {
+    setItems((prev) => markRetrying(prev, id));
+  }, []);
+
   return (
     <>
       <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
@@ -60,6 +69,7 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
         degraded={degraded}
         announcement={announcement}
         onSettled={handleSettled}
+        onRetried={handleRetried}
       />
     </>
   );

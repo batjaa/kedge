@@ -51,6 +51,24 @@ export function shouldPoll(item: Pick<DocumentListItem, 'status'>): boolean {
   return item.status === 'importing';
 }
 
+/**
+ * Flip a retried row back to `importing` (7A) so its RowPoller re-mounts and
+ * settles it live in place. Optimistic and independent of what the retry response
+ * says — the row always re-enters the poll loop, and `mergeSettled` overwrites
+ * these fields on the next settle. The stale `sync_error` is cleared so the
+ * importing interval never shows the old failure.
+ */
+export function markRetrying(
+  items: DocumentListItem[],
+  id: number,
+): DocumentListItem[] {
+  return items.map((item) =>
+    item.id === id
+      ? { ...item, status: 'importing', last_sync_status: 'ok', sync_error: null }
+      : item,
+  );
+}
+
 /** Give assistive technology one exact announcement when an import settles (10A). */
 export function settleAnnouncement(
   doc: Pick<Document, 'status' | 'title'>,
