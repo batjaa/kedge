@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { MetaChip } from './meta-chip';
 import { StatePanel } from './state-panel';
+import { StatusChip } from './status-chip';
 import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
 import { readDocument } from '@/lib/documents-client';
-import { POLL_INTERVAL_MS } from '@/lib/document-list-live';
+import { POLL_INTERVAL_MS, shouldPoll } from '@/lib/document-list-live';
 import { useImportRetry } from '@/lib/import-retry';
-import type { Document, DocumentListItem, LifecycleStatus } from '@/lib/document-types';
+import type { Document, DocumentListItem } from '@/lib/document-types';
 
 // The workspace document list on the authenticated home (SPEC 11). The client
 // island (WorkspaceHome) owns the row state; this renders it live: prepend-on-
@@ -75,18 +76,25 @@ export function DocumentList({
       ) : items.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-          <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
-            {items.map((item) => (
-              <DocumentRow
-                key={item.id}
-                item={item}
-                onSettled={onSettled}
-                onRetried={onRetried}
-              />
-            ))}
-          </ul>
-        </div>
+        <>
+          {/* Degraded, but a live prepend gave us rows to show: the StatePanel
+              yields to them, yet the failure signal must not vanish (a 30-doc
+              workspace could otherwise present as this session's imports alone).
+              A slim inline warning keeps it visible above the rows (C2). */}
+          {degraded ? <DegradedNotice /> : null}
+          <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
+            <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
+              {items.map((item) => (
+                <DocumentRow
+                  key={item.id}
+                  item={item}
+                  onSettled={onSettled}
+                  onRetried={onRetried}
+                />
+              ))}
+            </ul>
+          </div>
+        </>
       )}
 
       {/* Appends the next page in order and disappears when the paginator has no further pages (#86). */}
@@ -103,6 +111,20 @@ export function DocumentList({
         </div>
       ) : null}
     </section>
+  );
+}
+
+// The degraded-but-not-empty signal (C2): a slim amber warning shown above the
+// rows when the server-side list read failed yet this session's live prepends
+// give us something to render — so the failure never silently disappears.
+function DegradedNotice() {
+  return (
+    <div
+      role="status"
+      className="mt-4 rounded-xl bg-amber-500/5 px-4 py-2.5 text-xs leading-5 text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300 dark:ring-amber-400/20"
+    >
+      Couldn&apos;t load your documents — showing only this session&apos;s imports. Refresh to see everything.
+    </div>
   );
 }
 
@@ -137,7 +159,7 @@ function DocumentRow({
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <LifecycleChip status={item.lifecycle_status} />
+            <StatusChip status={item.lifecycle_status} />
             <SyncState item={item} />
           </div>
           <p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-white">
@@ -155,8 +177,9 @@ function DocumentRow({
       {/* Only importing rows mount a poller, so an idle list issues zero
           background requests (2A); the poller unmounts — and stops — the moment
           the row settles out of `importing`. A retry flips the row back to
-          `importing`, which re-mounts this poller so the row settles live. */}
-      {item.status === 'importing' ? (
+          `importing`, which re-mounts this poller so the row settles live. The
+          tested `shouldPoll` predicate owns this decision (no inlined status). */}
+      {shouldPoll(item) ? (
         <RowPoller id={item.id} onSettled={onSettled} />
       ) : null}
     </li>
@@ -166,13 +189,14 @@ function DocumentRow({
 // The failed row's inline recovery (7A) — the documents-list's consumer of the
 // shared affordance the doc page's ImportFailed also uses, so copy and behaviour
 // (pending guard, retry-error copy, dead-PAT branch) match exactly. Compact by
-// design (a list row, not the doc-page panel): the import error and one action.
-// A transient failure offers Retry, which flips the row back to `importing` via
-// onRetried so the RowPoller resumes and settles it in place. A dead PAT can't
-// heal on retry, so it offers "reconnect in Settings" INSTEAD — never a futile
-// retry (SPEC §19). The re-settle rides the list's existing polite live region:
-// a recovery to ready reads as a fresh "Import ready: {title}" announcement — no
-// new a11y machinery.
+// design (a list row, not the doc-page panel): the import error and its actions.
+// Retry is ALWAYS offered (it flips the row back to `importing` via onRetried so
+// the RowPoller resumes and settles it in place); a dead PAT ADDITIONALLY shows a
+// "reconnect in Settings" link — additive, exactly like ImportFailed, so a user
+// who has since reconnected is never left with only the Settings link and no way
+// to re-run the import from the row (SPEC §19). The re-settle rides the list's
+// existing polite live region: a recovery to ready reads as a fresh "Import
+// ready: {title}" announcement — no new a11y machinery.
 function RowRetry({
   item,
   onRetried,
@@ -191,6 +215,14 @@ function RowRetry({
       <p className="min-w-0 flex-1 text-xs leading-5 text-rose-600 dark:text-rose-400">
         {item.sync_error ?? 'The document could not be imported.'}
       </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={pending}
+        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+      >
+        {pending ? 'Retrying…' : 'Retry import'}
+      </button>
       {needsReconnect ? (
         <Link
           href="/settings"
@@ -198,16 +230,7 @@ function RowRetry({
         >
           Reconnect GitHub
         </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={pending}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
-        >
-          {pending ? 'Retrying…' : 'Retry import'}
-        </button>
-      )}
+      ) : null}
       {retryError ? (
         <p role="alert" className="w-full text-xs text-rose-600 dark:text-rose-400">
           {retryError}
@@ -250,27 +273,9 @@ function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) =
   return null;
 }
 
-// Reuses the review header's lifecycle chip: amber only for in-review, neutral
-// zinc otherwise — status hues live in chips, never in prose (DESIGN.md).
-function LifecycleChip({ status }: { status: LifecycleStatus }) {
-  const active = status === 'in_review';
-
-  return (
-    <span
-      className={cn(
-        'rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase ring-1 ring-inset',
-        active
-          ? 'bg-amber-400/10 text-amber-600 ring-amber-500/30 dark:text-amber-400'
-          : 'text-zinc-500 ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700',
-      )}
-    >
-      {status.replace('_', ' ')}
-    </span>
-  );
-}
-
 // Last-sync state + relative time. A colored dot carries the hue (emerald
-// ready, amber importing, rose failed); the label stays quiet.
+// ready, rose failed); an importing row spins (DocumentPoller's treatment). The
+// label stays quiet.
 function SyncState({ item }: { item: DocumentListItem }) {
   if (item.status === 'failed') {
     return (
@@ -284,8 +289,23 @@ function SyncState({ item }: { item: DocumentListItem }) {
   if (item.status === 'importing') {
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-        <Dot className="bg-amber-500" />
+        <Spinner />
         Importing…
+      </span>
+    );
+  }
+
+  // A ready document whose LATER re-sync failed (SPEC §19): the row must not read
+  // healthy emerald while the doc page shows the failure banner. Rose treatment
+  // carrying the sync error in a title, checked before the healthy branch.
+  if (item.last_sync_status === 'failed') {
+    return (
+      <span
+        title={item.sync_error ?? undefined}
+        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-600 dark:text-rose-400"
+      >
+        <Dot className="bg-rose-500" />
+        Sync failed
       </span>
     );
   }
@@ -300,6 +320,17 @@ function SyncState({ item }: { item: DocumentListItem }) {
 
 function Dot({ className }: { className: string }) {
   return <span className={cn('h-1.5 w-1.5 rounded-full', className)} aria-hidden="true" />;
+}
+
+// The importing row's spinner — DocumentPoller's exact treatment, sized down for
+// a list row, so a doc in flight animates rather than sitting on a static dot.
+function Spinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500"
+    />
+  );
 }
 
 function OpenThreads({ count }: { count: number }) {

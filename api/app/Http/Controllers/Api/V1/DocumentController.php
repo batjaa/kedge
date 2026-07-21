@@ -60,7 +60,11 @@ class DocumentController extends Controller
         $documents = $request->user()->personalWorkspace()->documents()
             ->with(['currentVersion' => fn ($query) => $query->select('id', 'document_id', 'synced_at')])
             ->withCount(['threads as open_threads_count' => fn ($query) => $query->where('status', ThreadStatus::Open->value)])
+            // `created_at` is second-precision, so a stable tiebreaker is required:
+            // without it same-second rows can order differently between page reads,
+            // and a row straddling a page boundary can permute or silently drop.
             ->latest()
+            ->orderByDesc('id')
             ->paginate($perPage);
 
         return DocumentListResource::collection($documents);
@@ -218,10 +222,24 @@ class DocumentController extends Controller
             'Only a failed import can be retried.',
         );
 
+        // Rebind a PAT-sourced import to the workspace's current GitHub PAT before
+        // re-queuing (#23, SPEC §19). A dead PAT that a user reconnected supersedes
+        // the revoked one (`githubPatIntegration()` returns the latest); without
+        // rebinding, the retry resolves the OLD integration_id and re-fails against
+        // the revoked token. Left untouched when no PAT integration exists.
+        $rebind = [];
+        if ($document->source_type === SourceType::GithubPat) {
+            $integration = $document->workspace->githubPatIntegration();
+            if ($integration !== null) {
+                $rebind['integration_id'] = $integration->id;
+            }
+        }
+
         $document->forceFill([
             'status' => DocumentStatus::Importing,
             'last_sync_status' => SyncStatus::Ok,
             'sync_error' => null,
+            ...$rebind,
         ])->save();
 
         $this->audit->record(

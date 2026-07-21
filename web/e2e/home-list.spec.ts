@@ -26,6 +26,21 @@ test('imports stay home: two rows import at once and settle to ready in place', 
   const rows = documents.getByRole('link');
   const importing = documents.getByText('Importing');
 
+  // Park the per-ROW poll — match ONLY /api/bff/documents/<id>, never the list
+  // route /api/bff/documents?… — so neither row settles before we can assert both
+  // are importing at once. The E2E queue is synchronous, so row 1 would otherwise
+  // settle on its first 1.5s tick and the two-importing window would be missed: a
+  // deterministic hard fail under retries:0. The parked poll answers "still
+  // importing"; unrouting below lets the real ready settle proceed.
+  const perRowPoll = /\/api\/bff\/documents\/\d+(?:\?.*)?$/;
+  await page.route(perRowPoll, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'importing' }),
+    }),
+  );
+
   // First import — prepends as an importing row; submit does NOT navigate.
   await page.getByLabel('Document URL', { exact: true }).fill(PLAIN_DOC.url);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
@@ -44,6 +59,9 @@ test('imports stay home: two rows import at once and settle to ready in place', 
   await page.evaluate(() => {
     (window as Window & { __noReload?: boolean }).__noReload = true;
   });
+
+  // Release the parked poll: the real, synchronous-ready settle now proceeds.
+  await page.unroute(perRowPoll);
 
   // Each importing row polls itself and settles in place to ready — no refresh.
   await expect(importing).toHaveCount(0, { timeout: 30_000 });

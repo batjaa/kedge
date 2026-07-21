@@ -3,9 +3,11 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\DocumentStatus;
+use App\Enums\SourceType;
 use App\Enums\SyncStatus;
 use App\Jobs\ImportDocumentJob;
 use App\Models\Document;
+use App\Models\Integration;
 use App\Models\User;
 use App\Services\Fetch\BlockReason;
 use App\Services\Fetch\Exceptions\BlockedUrlException;
@@ -198,6 +200,62 @@ class DocumentImportTest extends TestCase
 
         $this->runImport($document);
         $this->assertSame(DocumentStatus::Ready, $document->fresh()->status);
+    }
+
+    public function test_retry_rebinds_a_pat_document_to_the_reconnected_integration(): void
+    {
+        // A PAT-sourced import failed on a since-revoked token. The user reconnects
+        // a fresh PAT (a new integration); retry must rebind the document to it, or
+        // the queued job resolves the OLD integration_id and re-fails (#23, SPEC §19).
+        Queue::fake();
+
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        $revoked = Integration::factory()->for($workspace)->create();
+        $document = Document::factory()
+            ->for($workspace, 'workspace')
+            ->failed('GitHub access was revoked. Reconnect the integration in Settings.')
+            ->create([
+                'created_by' => $user->id,
+                'source_type' => SourceType::GithubPat,
+                'source_url' => 'https://github.com/acme/private/blob/main/spec.md',
+                'integration_id' => $revoked->id,
+            ]);
+
+        // The reconnect: a fresh integration, now the workspace's current PAT.
+        $reconnected = Integration::factory()->for($workspace)->create();
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/retry")
+            ->assertStatus(202);
+
+        // Rebound to the reconnected token, not the revoked one it failed on.
+        $this->assertSame($reconnected->id, $document->fresh()->integration_id);
+        Queue::assertPushed(ImportDocumentJob::class);
+    }
+
+    public function test_retry_leaves_a_non_pat_document_binding_untouched(): void
+    {
+        // A raw-URL import carries no integration; retry must not invent one nor
+        // trip over the PAT-only rebind branch.
+        Queue::fake();
+
+        $user = $this->registerUser();
+        $document = Document::factory()
+            ->for($user->personalWorkspace(), 'workspace')
+            ->failed('Import failed — the source could not be reached. Try again.')
+            ->create([
+                'created_by' => $user->id,
+                'source_type' => SourceType::RawUrl,
+                'integration_id' => null,
+            ]);
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/retry")
+            ->assertStatus(202);
+
+        $this->assertNull($document->fresh()->integration_id);
     }
 
     public function test_retry_rejects_a_document_that_is_not_failed(): void
