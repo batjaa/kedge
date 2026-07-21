@@ -42,6 +42,15 @@ class DocumentResource extends JsonResource
             'last_sync_status' => $this->last_sync_status->value,
             'sync_error' => $this->sync_error,
             'lifecycle_status' => $this->lifecycle_status->value,
+            // The document's project (M3.6), for the review header's assignment
+            // selector. Included only when the relation is loaded (show/update);
+            // null is Unfiled.
+            'project' => $this->whenLoaded(
+                'project',
+                fn () => $this->project
+                    ? ['id' => $this->project->id, 'name' => $this->project->name]
+                    : null,
+            ),
             'approvals' => ApprovalResource::collection($this->whenLoaded('activeApprovals')),
             'capabilities' => [
                 'update_lifecycle' => $request->user()?->can('updateLifecycle', $this->resource) ?? false,

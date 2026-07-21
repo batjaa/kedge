@@ -52,9 +52,10 @@ class DocumentListTest extends TestCase
             ->assertJsonPath('data.0.title', 'Newer doc')
             ->assertJsonPath('data.1.id', $older->id);
 
-        // The row is exactly the lean set — no more, no less.
+        // The row is exactly the lean set — no more, no less. `project` (M3.6) is
+        // the reserved chip slot: id + name, or null for Unfiled.
         $this->assertEqualsCanonicalizing(
-            ['id', 'title', 'status', 'last_sync_status', 'sync_error', 'lifecycle_status', 'open_threads_count', 'synced_at', 'created_at'],
+            ['id', 'title', 'status', 'last_sync_status', 'sync_error', 'lifecycle_status', 'open_threads_count', 'synced_at', 'project', 'created_at'],
             array_keys($response->json('data.0')),
         );
 

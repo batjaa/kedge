@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\DocumentVersionController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MentionSuggestionController;
+use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ReviewerMagicLinkController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
@@ -99,6 +100,16 @@ Route::prefix('v1')->group(function () {
         // limiter.
         Route::get('/documents', [DocumentController::class, 'index'])
             ->name('api.v1.documents.index');
+
+        // Projects (SPEC §16, M3.6), all behind ProjectPolicy. List and create
+        // are scoped to the caller's own workspace; update resolves a row by id.
+        // No delete this milestone. Rare mutations, so no dedicated limiter.
+        Route::get('/projects', [ProjectController::class, 'index'])
+            ->name('api.v1.projects.index');
+        Route::post('/projects', [ProjectController::class, 'store'])
+            ->name('api.v1.projects.store');
+        Route::patch('/projects/{project}', [ProjectController::class, 'update'])
+            ->name('api.v1.projects.update');
 
         // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
         // (import, retry) share a per-user limiter so a runaway paste loop or a

@@ -16,7 +16,14 @@ type Mode = 'url' | 'paste';
 const BUTTON_CLASS =
   'shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
 
-export function ImportForm({ onImported }: { onImported?: (doc: Document) => void }) {
+export function ImportForm({
+  onImported,
+  projectId,
+}: {
+  onImported?: (doc: Document) => void;
+  /** File the imported document under this project (a project page, M3.6). */
+  projectId?: number;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('url');
   const [url, setUrl] = useState('');
@@ -40,8 +47,8 @@ export function ImportForm({ onImported }: { onImported?: (doc: Document) => voi
 
     const outcome =
       mode === 'url'
-        ? await importUrl(url.trim())
-        : await importPaste(content, title);
+        ? await importUrl(url.trim(), projectId)
+        : await importPaste(content, title, projectId);
 
     if (outcome.ok) {
       if (onImported) {

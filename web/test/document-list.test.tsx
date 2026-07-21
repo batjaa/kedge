@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DocumentList } from '@/components/app/document-list';
-import type { DocumentListItem } from '@/lib/document-types';
+import type { DocumentListItem, Project } from '@/lib/document-types';
 
 // Static-markup coverage for the home document list (SPEC 11): the row anatomy,
 // the empty state, the degraded "API unreachable" state, and the polite live
@@ -301,7 +301,133 @@ describe('DocumentList', () => {
     expect(html).toContain('Loading');
     expect(html).toContain('disabled=""');
   });
+
+  // ---- M3.6: grouping, the project chip, and the project-page states --------
+
+  it('groups the home by project — headers alphabetical, Unfiled last (14A)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({ id: 1, title: 'Unfiled doc', project: null }),
+          item({ id: 2, title: 'Zebra doc', project: { id: 20, name: 'Zebra' } }),
+          item({ id: 3, title: 'Anchor doc', project: { id: 10, name: 'Anchoring' } }),
+        ]}
+        total={3}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={projects()}
+        grouped
+      />,
+    );
+
+    // Header order: Anchoring, then Zebra, then Unfiled (14A). Match on
+    // header-specific markup — the row chips' <option>s also say "Unfiled".
+    const anchoring = html.indexOf('href="/projects/10"');
+    const zebra = html.indexOf('href="/projects/20"');
+    const unfiled = html.indexOf('>Unfiled</h3>');
+    expect(anchoring).toBeGreaterThan(-1);
+    expect(zebra).toBeGreaterThan(anchoring);
+    expect(unfiled).toBeGreaterThan(zebra);
+  });
+
+  it('carries a project chip selector on each row when the workspace has projects', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 7, title: 'Anchoring RFC', project: { id: 10, name: 'Anchoring' } })]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={projects()}
+        grouped
+      />,
+    );
+
+    // The chip is a labelled selector — the reserved slot filled AND the
+    // assignment affordance. It offers Unfiled + every project.
+    expect(html).toContain('aria-label="Project for Anchoring RFC"');
+    expect(html).toContain('>Unfiled<');
+    expect(html).toContain('>Anchoring<');
+    expect(html).toContain('>Zebra<');
+    // The row's own project (Anchoring, id 10) is the selected option.
+    expect(html).toContain('value="10"');
+  });
+
+  it('renders no chips and no headers when the workspace has no projects (looks like today)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1, title: 'Only doc', project: null })]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={[]}
+        grouped
+      />,
+    );
+
+    // No selector, no "Unfiled" header — a single implicit group (14A).
+    expect(html).not.toContain('aria-label="Project for');
+    expect(html).not.toContain('>Unfiled<');
+    // Still one navigable row.
+    expect(html).toContain('href="/documents/1"');
+  });
+
+  it('renders a project page as a flat list with a custom heading (no group headers)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({ id: 1, title: 'One', project: { id: 10, name: 'Anchoring' } }),
+          item({ id: 2, title: 'Two', project: { id: 10, name: 'Anchoring' } }),
+        ]}
+        total={2}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={projects()}
+        heading="Documents"
+      />,
+    );
+
+    expect(html).toContain('Documents');
+    expect(html).toContain('href="/documents/1"');
+    expect(html).toContain('href="/documents/2"');
+    // Flat: no project group header links back to the project page.
+    expect(html).not.toContain('href="/projects/10"');
+  });
+
+  it('shows the project-page empty state pointing at import and assignment', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[]}
+        total={0}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        emptyTitle="No documents in this project yet"
+        emptyBody="Import one with the box above, or assign an existing document from its review header or the project chip on any home row."
+      />,
+    );
+
+    expect(html).toContain('No documents in this project yet');
+    expect(html).toContain('box above');
+    expect(html).toContain('assign an existing document');
+    expect(html).not.toContain('href="/documents/');
+  });
 });
+
+function projects(): Project[] {
+  return [
+    { id: 10, name: 'Anchoring', slug: 'anchoring', description: null, created_at: null },
+    { id: 20, name: 'Zebra', slug: 'zebra', description: null, created_at: null },
+  ];
+}
 
 function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentListItem {
   return {
@@ -312,6 +438,7 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     lifecycle_status: 'draft',
     open_threads_count: 0,
     synced_at: null,
+    project: null,
     created_at: null,
     ...overrides,
   };
