@@ -38,6 +38,17 @@ class Workspace extends Model
     }
 
     /**
+     * Every document imported into this workspace (SPEC 16). The home-list
+     * endpoint reads exactly this set — the scope an id can never escape.
+     *
+     * @return HasMany<Document, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /**
      * The workspace's connected GitHub PAT, or null (#23). The single source of
      * truth for "does this workspace import GitHub authenticated" — the import
      * flow prefers the authenticated connector whenever this is non-null. The

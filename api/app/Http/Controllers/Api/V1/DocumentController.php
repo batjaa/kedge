@@ -7,8 +7,10 @@ use App\Enums\DocumentStatus;
 use App\Enums\LifecycleStatus;
 use App\Enums\SourceType;
 use App\Enums\SyncStatus;
+use App\Enums\ThreadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDocumentRequest;
+use App\Http\Resources\V1\DocumentListResource;
 use App\Http\Resources\V1\DocumentResource;
 use App\Jobs\ImportDocumentJob;
 use App\Jobs\ResyncDocumentJob;
@@ -23,6 +25,7 @@ use App\Services\Import\Connectors\UploadConnector;
 use App\Services\Import\TitleSynthesizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -38,6 +41,30 @@ class DocumentController extends Controller
     public function __construct(
         private readonly AuditLogger $audit,
     ) {}
+
+    /**
+     * GET /api/v1/documents — the workspace's document list for the authenticated
+     * home (SPEC 11; decisions 1A/4A/6A). `viewAny` authorizes (personal-workspace
+     * holders only — a magic-link reviewer gets 403, never a 500); the query then
+     * explicitly scopes to that workspace, so an id is never an access path and the
+     * system workspace's demo docs fall outside the scope structurally. Newest
+     * first, page-paginated with a clamped size; the lean per-row resource keeps
+     * the home's cost flat as a workspace grows.
+     */
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $this->authorize('viewAny', Document::class);
+
+        $perPage = min(max((int) $request->integer('per_page', 20), 1), 50);
+
+        $documents = $request->user()->personalWorkspace()->documents()
+            ->with(['currentVersion' => fn ($query) => $query->select('id', 'document_id', 'synced_at')])
+            ->withCount(['threads as open_threads_count' => fn ($query) => $query->where('status', ThreadStatus::Open->value)])
+            ->latest()
+            ->paginate($perPage);
+
+        return DocumentListResource::collection($documents);
+    }
 
     /**
      * POST /api/v1/documents — begin importing a document from a URL or from
