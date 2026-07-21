@@ -42,17 +42,26 @@ export function hasMorePages(
   return meta ? meta.current_page < meta.last_page : false;
 }
 
-/** Choose the next page unless an in-flight load already owns the click (#86). */
+/**
+ * Choose the next page, or null when the paginator is exhausted (#86). The
+ * synchronous double-click guard is the caller's in-flight ref (loadingRef), not
+ * a param here — a batched `loading` state would still be false on the second
+ * click of a rapid pair, so this predicate only owns "is there a next page".
+ */
 export function nextLoadMorePage(state: {
   meta: Pick<DocumentListMeta, 'current_page' | 'last_page'> | null;
-  loading: boolean;
 }): number | null {
-  if (state.loading) return null;
   if (!hasMorePages(state.meta)) return null;
   return state.meta!.current_page + 1;
 }
 
-/** Settle only poll-owned fields while retaining list-only thread data (2A). */
+/**
+ * Settle only poll-owned fields while retaining list-only thread data (2A). Built
+ * on {@link toListItem} so the doc→row projection lives in exactly one place, then
+ * overrides the fields the poll must NOT clobber: the row's `open_threads_count`
+ * and `created_at` (never carried by the poll doc's list shape) and the `synced_at`
+ * fallback to the row's prior value while a settle carries no fresh version.
+ */
 export function mergeSettled(
   items: DocumentListItem[],
   doc: Document,
@@ -60,12 +69,9 @@ export function mergeSettled(
   return items.map((item) =>
     item.id === doc.id
       ? {
-          ...item,
-          title: doc.title,
-          status: doc.status,
-          last_sync_status: doc.last_sync_status,
-          sync_error: doc.sync_error,
-          lifecycle_status: doc.lifecycle_status,
+          ...toListItem(doc),
+          open_threads_count: item.open_threads_count,
+          created_at: item.created_at,
           synced_at: doc.current_version?.synced_at ?? item.synced_at,
         }
       : item,

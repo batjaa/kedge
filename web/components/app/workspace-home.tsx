@@ -59,7 +59,7 @@ export function WorkspaceHome({ initialPage }: { initialPage: DocumentListPage |
   // a failed fetch keeps every loaded row and leaves meta untouched so Load more reappears.
   const handleLoadMore = useCallback(async () => {
     if (loadingRef.current) return;
-    const next = nextLoadMorePage({ meta, loading: false });
+    const next = nextLoadMorePage({ meta });
     if (next === null) return;
     loadingRef.current = true;
     setLoadingMore(true);

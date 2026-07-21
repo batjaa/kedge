@@ -258,26 +258,19 @@ describe('document list live state', () => {
   });
 
   describe('nextLoadMorePage', () => {
-    it('returns the next page number when more pages remain and no load is in flight', () => {
-      expect(
-        nextLoadMorePage({ meta: meta({ current_page: 1, last_page: 3 }), loading: false }),
-      ).toBe(2);
-    });
-
-    it('returns null while a load is in flight — the double-click guard', () => {
-      expect(
-        nextLoadMorePage({ meta: meta({ current_page: 1, last_page: 3 }), loading: true }),
-      ).toBeNull();
+    // The in-flight guard is the caller's loadingRef, not a param here (a batched
+    // `loading` state is still false on the second click of a rapid pair), so this
+    // predicate only decides whether a next page exists.
+    it('returns the next page number when more pages remain', () => {
+      expect(nextLoadMorePage({ meta: meta({ current_page: 1, last_page: 3 }) })).toBe(2);
     });
 
     it('returns null when the paginator is exhausted', () => {
-      expect(
-        nextLoadMorePage({ meta: meta({ current_page: 3, last_page: 3 }), loading: false }),
-      ).toBeNull();
+      expect(nextLoadMorePage({ meta: meta({ current_page: 3, last_page: 3 }) })).toBeNull();
     });
 
     it('returns null when there is no meta', () => {
-      expect(nextLoadMorePage({ meta: null, loading: false })).toBeNull();
+      expect(nextLoadMorePage({ meta: null })).toBeNull();
     });
   });
 });

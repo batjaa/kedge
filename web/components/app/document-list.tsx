@@ -8,7 +8,7 @@ import { StatePanel } from './state-panel';
 import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
 import { readDocument } from '@/lib/documents-client';
-import { POLL_INTERVAL_MS } from '@/lib/document-list-live';
+import { POLL_INTERVAL_MS, shouldPoll } from '@/lib/document-list-live';
 import { useImportRetry } from '@/lib/import-retry';
 import type { Document, DocumentListItem, LifecycleStatus } from '@/lib/document-types';
 
@@ -155,8 +155,9 @@ function DocumentRow({
       {/* Only importing rows mount a poller, so an idle list issues zero
           background requests (2A); the poller unmounts — and stops — the moment
           the row settles out of `importing`. A retry flips the row back to
-          `importing`, which re-mounts this poller so the row settles live. */}
-      {item.status === 'importing' ? (
+          `importing`, which re-mounts this poller so the row settles live. The
+          tested `shouldPoll` predicate owns this decision (no inlined status). */}
+      {shouldPoll(item) ? (
         <RowPoller id={item.id} onSettled={onSettled} />
       ) : null}
     </li>
