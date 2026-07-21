@@ -29,6 +29,8 @@ Gists (full scope + demo criteria: SPEC §21):
 - **Import & render** (M1) — public GitHub / raw URL / upload / PAT connectors, normalization with warnings, web-owned text projection, Fumadocs rendering, self-hosted Kroki diagrams, MDX allowlist + fallback, share links, instant demo mode.
 - **Comments & suggestions** (M2) — selection anchors, threads/replies/resolve/fork, suggested edits with accept/decline, magic-link reviewer identity, orphan-tray shell.
 - **Versions, diff & approvals** (M3) — manual re-sync, re-anchoring ladder (hypothes.is port), version switcher, diff view with comment overlay, approvals lite with staleness.
+- **Documents list** (M3.5, wedge 2026-07-21) — authenticated home lists all workspace docs with lifecycle/threads/sync chips, live import-status polling, inline retry. Pulls the "Your docs" half of SPEC §11 forward from M5.
+- **Projects & repo sources** (M3.6, wedge 2026-07-21) — projects as free containers with dedicated pages, doc assignment + Unfiled bucket; repo directory import (URL + ref + glob → preview → bulk import) persisted as a repo source with manual Re-scan; webhook watching stays M6.
 - **AI & agents** (M4) — digest, improve-prompt, reply drafts, comment split, thread summaries, `ai_runs` UI; MCP server with agent badges.
 - **Notifications & review queue** (M5) — in-app inbox, Postmark email, mentions, digest scheduling, per-user prefs, review-queue dashboard.
 - **Private sources & post-back** (M6) — GitHub App with push-webhook auto re-sync, Confluence import via API token, digest post-back to PR/Confluence.
@@ -57,6 +59,7 @@ Work these one per session (`/wayfinder` work mode):
 - **Destination includes launch of both editions** — this charting, 2026-07-10.
 - **Sync-agent idea stays in the fog** (v1 is pull-based via connectors) — this charting, 2026-07-10.
 - **Web-side error reporting deferred to Launch** (SaaS has no public traffic before go-live; must be off/optional self-hosted either way) — Import & render speccing, 2026-07-11.
+- **Workspace UX wedge before M4** (M3.5 documents list → M3.6 projects & repo sources) — dogfooding pain: invisible imports, no multi-import progress, no organization, one-by-one import; M4's agent flows demo far better against an organized repo-full of docs. TODOS.md decision log 2026-07-21.
 - **A PR is a candidate version, not a separate document** — constrains the Versions module's lineage schema (lineage-with-candidates, not linear-only) — [ADR 0001](adr/0001-pr-is-a-candidate-version.md), 2026-07-15.
 - **Organization language pinned: Project (container) + Source (origin)** — a repo is a source, never the container (monorepos and mixed-source efforts break the 1:1); issues attach as References, never import — CONTEXT.md, 2026-07-15.
 

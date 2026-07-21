@@ -179,6 +179,7 @@ MCP --> API : same policies, same data
 | Upload / paste | n/a | M1 | Size-capped; manual-only versioning |
 | GitHub private file | **PAT** | M1 | Encrypted per-workspace token; **permanent connector** — the primary path for self-hosted instances |
 | GitHub private file | **GitHub App** | M6 | Fine-grained installs, org approval, push webhooks for auto re-sync. SaaS uses Kedge's App; **self-hosters register their own** (guided setup docs) or stay on PAT |
+| GitHub repo directory | none / PAT | **M3.6** | Repo URL + ref + path glob → preview matched files → bulk import into a project. Persists a **repo source** record with **manual Re-scan** (new files import, changed files re-sync, deletions flagged — never auto-deleted). Pull-based on purpose; the M6 App's push webhook later drives the same record |
 | Confluence page URL | Atlassian API token | M6 | Storage-format XHTML + version number; OAuth 2.0 (3LO) later |
 
 Generic git-over-https (GitLab/Bitbucket/self-hosted) is deferred; the `Connector` interface accommodates it:
@@ -347,12 +348,14 @@ The `reanchor.completed` event logs `{anchored, relocated, orphaned}` counts —
 - Demo docs live in a reserved system workspace with `expires_at = +48h`; a scheduled command prunes them.
 - Rendered page shows a "Claim this doc — sign up to share & collect comments" CTA; claiming moves the doc into the new user's workspace. Every share-link footer: "Review your own spec →".
 
-## 11. Review queue
+## 11. Review queue, documents list & projects
 
 Authenticated home page, two lists (paginated, DB-level):
-- **Needs your attention**: docs shared with you with unresolved threads/mentions or awaiting your approval; docs you author with new comments/suggestions since last visit.
-- **Your docs**: lifecycle status, open/resolved counts, approval roster, last sync state.
+- **Needs your attention** (M5 — needs notification data): docs shared with you with unresolved threads/mentions or awaiting your approval; docs you author with new comments/suggestions since last visit.
+- **Your docs** (**pulled forward to M3.5**, amended 2026-07-21): every workspace doc, newest first — lifecycle status, open/resolved counts, approval roster, last sync state, **and import status with live polling** (importing → ready/failed settles in place; failed rows retry inline). Rationale: docs were unreachable except by URL and multi-import progress was invisible; this half of the queue has no M5 dependency.
 Simple aggregate queries (single `selectRaw` per card, eager-loaded) — no feed infrastructure.
+
+**Projects** (**pulled forward from post-v1 to M3.6**, amended 2026-07-21; semantics per CONTEXT.md): a free organizational container inside a workspace — what you're working on, never where content lives (a repo is a Source). Docs attach to at most one project; unassigned docs sit in an **Unfiled** bucket. Each project gets a **page**: description, its documents (same row anatomy as the home list), and its attached repo sources with Re-scan. The home list groups/filters by project. Deferred with the rest of post-v1: project-level sharing/permissions, References.
 
 ## 12. Notifications
 
@@ -412,7 +415,9 @@ entity users { id \n name, email, avatar_url \n password? }
 entity workspaces { id \n name, slug, settings }
 entity workspace_members { workspace_id, user_id \n role: owner|member }
 entity integrations { id \n workspace_id \n provider: github_app|github_pat|confluence \n credentials (encrypted) \n meta }
-entity documents { id \n workspace_id, integration_id? \n source_type, source_url, source_meta \n title, format: md|mdx|html \n current_version_id \n status: importing|ready|failed \n last_sync_status: ok|failed \n sync_error? \n lifecycle_status: draft|in_review|approved|superseded \n expires_at? (demo) \n created_by }
+entity projects { id \n workspace_id \n name, slug, description? \n created_by }
+entity repo_sources { id \n workspace_id, project_id? \n integration_id? \n repo_url, ref?, path_glob \n last_scan_status: ok|failed \n scan_error?, last_scanned_at \n created_by }
+entity documents { id \n workspace_id, integration_id? \n project_id?, repo_source_id? \n source_type, source_url, source_meta \n title, format: md|mdx|html \n current_version_id \n status: importing|ready|failed \n last_sync_status: ok|failed \n sync_error? \n lifecycle_status: draft|in_review|approved|superseded \n expires_at? (demo) \n created_by }
 entity document_versions { id \n document_id \n kind: mainline|candidate \n parent_version_id? \n content_raw, content_normalized \n plain_text, projection_version \n content_hash (uniq w/ doc) \n source_version, synced_at }
 entity shares { id \n document_id \n token (uniq), visibility \n allow_anonymous, expires_at, revoked_at }
 entity threads { id \n document_id \n type: inline|document \n status: open|resolved \n forked_from_comment_id? \n created_by }
@@ -425,6 +430,11 @@ entity audit_logs { id \n workspace_id, user_id? \n action, subject_type, subjec
 workspaces ||--o{ workspace_members
 users ||--o{ workspace_members
 workspaces ||--o{ integrations
+workspaces ||--o{ projects
+projects |o--o{ documents
+projects |o--o{ repo_sources
+repo_sources |o--o{ documents
+integrations |o--o{ repo_sources
 workspaces ||--o{ documents
 integrations |o--o{ documents
 documents ||--o{ document_versions
@@ -449,8 +459,15 @@ All list endpoints are **paginated at the database** (cursor or page). Policies 
 POST   /demo/documents             {url}                    → unauthenticated import (rate-limited)
 POST   /documents/{id}/claim                                → move demo doc into my workspace
 POST   /documents                  {url | content}          → import (202)
+GET    /documents                  ?project=&status=&page=  → workspace docs list (M3.5): lifecycle, counts, sync + import state
 GET    /documents/{id}                                      → doc + current version + sync/lifecycle state
-PATCH  /documents/{id}             {lifecycle_status}
+PATCH  /documents/{id}             {lifecycle_status | project_id}
+
+GET    /projects                   POST /projects           PATCH /projects/{id}    (M3.6)
+POST   /repo-sources/preview       {repo_url, ref?, path_glob}  → matched files, no import (M3.6)
+POST   /repo-sources               {repo_url, ref?, path_glob, project_id}  → create + first scan (202)
+POST   /repo-sources/{id}/scan                              → manual re-scan (202, idempotent per content)
+GET    /repo-sources/{id}                                   → scan state + per-file outcome
 POST   /documents/{id}/resync
 GET    /documents/{id}/versions
 GET    /documents/{id}/versions/{a}/diff/{b}                → diff + overlaid thread refs
@@ -559,6 +576,8 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 - **M1 — Render, share & demo**: import public GitHub / raw URL / upload + **PAT stopgap** for private GitHub; normalization pipeline with warnings; projection service; Fumadocs rendering; **Kroki diagrams (self-hosted container, full engine allowlist, hash-cached, click-to-zoom)**; MDX allowlist + compile cache + fallback; share links; **instant demo mode** (TTL + claim). ✅ a stranger pastes a URL and gets a beautiful doc with zero signup.
 - **M2 — Comments & suggestions**: selection anchors (web-owned projection, `projection_version`), threads, replies, resolve, fork-from-comment, **suggested edits** with accept/decline, magic-link identity (transactional mail), pagination, orphan-tray shell, localStorage drafts. ✅ full review conversation including an accepted suggestion, in two browsers.
 - **M3 — Versions, diff & approvals**: manual re-sync (idempotent), re-anchoring job (hypothes.is port) with relocated/orphaned states + re-attach UI, version switcher, "new version" banner, **diff view with comment overlay**, **approvals lite** (lifecycle status + version-pinned ✓ + staleness). ✅ push a change → re-sync → comments survive or land in the tray; approval shows stale against the new version.
+- **M3.5 — Documents list** (wedge, added 2026-07-21): the authenticated home lists every workspace doc — lifecycle chip, open-thread count, last-sync state, **import status with live polling**, inline retry for failures; import box stays on top. Pulls the "Your docs" half of §11 forward from M5 (no notification dependency); dogfooding was blind without it. ✅ kick off three imports from home and watch them settle importing → ready without leaving the list.
+- **M3.6 — Projects & repo sources** (wedge, added 2026-07-21): **projects** as free containers (CONTEXT.md semantics) with dedicated pages (description, doc list, attached sources) + assignment/filtering and an Unfiled bucket; **repo directory import** — repo URL + ref + path glob → preview → bulk import into a project — persisted as a repo-source record with **manual Re-scan** (new files import, changed re-sync, deletions flagged, never auto-delete). Watching stays pull-based; the M6 App webhook later drives the same record. ✅ add Kedge's own `docs/` as a source: the project fills itself, and a re-scan after a push imports the new doc.
 - **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
 - **M5 — Notifications & queue**: in-app inbox, Postmark notifications, mentions, digest scheduling, per-user prefs, approval events, **review-queue dashboard**. ✅ reviewer replies → author gets the email; dashboard shows "needs your attention".
 - **M6 — Private sources & post-back**: **GitHub App** (install → pick repo → private import → push-webhook auto re-sync) for the SaaS; **PAT remains a supported connector** (self-host primary) — plus the guided register-your-own-App docs for self-hosters; Confluence via API token (storage-format conversion); **digest post-back** to PR/Confluence. ✅ private repo doc auto-resyncs on push; digest lands on the PR.
