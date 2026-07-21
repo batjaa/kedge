@@ -1,4 +1,4 @@
-import type { Document, DocumentListItem } from './document-types';
+import type { Document, DocumentListItem, DocumentListMeta } from './document-types';
 
 /** Keep list rows as responsive as the existing document poller (2A). */
 export const POLL_INTERVAL_MS = 1500;
@@ -24,6 +24,32 @@ export function prependItem(
   item: DocumentListItem,
 ): DocumentListItem[] {
   return [item, ...items.filter((existing) => existing.id !== item.id)];
+}
+
+/** Append a later page in order without duplicating prepended rows (#86). */
+export function appendItems(
+  items: DocumentListItem[],
+  incoming: DocumentListItem[],
+): DocumentListItem[] {
+  const existingIds = new Set(items.map((item) => item.id));
+  return [...items, ...incoming.filter((item) => !existingIds.has(item.id))];
+}
+
+/** Report whether the document-list paginator has another page (#86). */
+export function hasMorePages(
+  meta: Pick<DocumentListMeta, 'current_page' | 'last_page'> | null,
+): boolean {
+  return meta ? meta.current_page < meta.last_page : false;
+}
+
+/** Choose the next page unless an in-flight load already owns the click (#86). */
+export function nextLoadMorePage(state: {
+  meta: Pick<DocumentListMeta, 'current_page' | 'last_page'> | null;
+  loading: boolean;
+}): number | null {
+  if (state.loading) return null;
+  if (!hasMorePages(state.meta)) return null;
+  return state.meta!.current_page + 1;
 }
 
 /** Settle only poll-owned fields while retaining list-only thread data (2A). */

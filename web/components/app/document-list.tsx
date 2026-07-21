@@ -23,12 +23,18 @@ import type { Document, DocumentListItem, LifecycleStatus } from '@/lib/document
 export function DocumentList({
   items,
   total,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore = () => {},
   degraded,
   announcement,
   onSettled,
 }: {
   items: DocumentListItem[];
   total: number;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   degraded: boolean;
   announcement: string;
   onSettled: (doc: Document) => void;
@@ -74,6 +80,20 @@ export function DocumentList({
           </ul>
         </div>
       )}
+
+      {/* Appends the next page in order and disappears when the paginator has no further pages (#86). */}
+      {!showDegraded && hasMore ? (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="rounded-full bg-zinc-100 px-4 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 transition hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/10"
+          >
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

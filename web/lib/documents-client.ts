@@ -5,7 +5,7 @@
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
-import type { Document, LifecycleStatus } from './document-types';
+import type { Document, DocumentListPage, LifecycleStatus } from './document-types';
 import type { ValidationErrorBody } from './auth-types';
 
 export type ImportOutcome =
@@ -110,6 +110,19 @@ export async function readDocument(id: number): Promise<Document | null> {
   if (!res.ok) return null;
 
   return (await res.json()) as Document;
+}
+
+/** GET page N of the workspace document list via the same-origin BFF route (#86). */
+export async function readDocumentPage(page: number): Promise<DocumentListPage | null> {
+  const res = await fetch(`/api/bff/documents?page=${encodeURIComponent(String(page))}`, {
+    credentials: 'same-origin',
+    headers: { accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) return null;
+
+  return (await res.json()) as DocumentListPage;
 }
 
 /** POST /api/v1/documents/{id}/resync — pull the source again. */

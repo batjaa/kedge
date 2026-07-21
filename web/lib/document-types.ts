@@ -122,13 +122,16 @@ export interface DocumentListItem {
   created_at: string | null;
 }
 
+/** Laravel paginator meta for the document list — drives "Load more" (#86). */
+export interface DocumentListMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
 /** Laravel's paginated resource-collection envelope for the document list. */
 export interface DocumentListPage {
   data: DocumentListItem[];
-  meta: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-  };
+  meta: DocumentListMeta;
 }

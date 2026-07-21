@@ -105,6 +105,63 @@ describe('DocumentList', () => {
     expect(html).toContain('unreachable');
     expect(html).not.toContain('href="/documents/');
   });
+
+  it('shows the Load more control when the paginator has a further page', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1 })]}
+        total={40}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        hasMore={true}
+        loadingMore={false}
+        onLoadMore={noop}
+      />,
+    );
+
+    expect(html).toContain('Load more');
+    // House "Load more threads" idiom: the secondary rounded-full button.
+    expect(html).toContain('rounded-full');
+    // Enabled while idle — the disabled attribute is absent (the class carries
+    // the `disabled:` variants unconditionally, so match the attribute, not text).
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it('hides the Load more control when no further page exists', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1 })]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        hasMore={false}
+        loadingMore={false}
+        onLoadMore={noop}
+      />,
+    );
+
+    expect(html).not.toContain('Load more');
+  });
+
+  it('shows a loading, disabled Load more button while a page fetch is in flight', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1 })]}
+        total={40}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        hasMore={true}
+        loadingMore={true}
+        onLoadMore={noop}
+      />,
+    );
+
+    expect(html).toContain('Loading');
+    expect(html).toContain('disabled=""');
+  });
 });
 
 function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentListItem {
