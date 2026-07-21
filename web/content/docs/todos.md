@@ -157,6 +157,12 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - **Reviewer-surface version switcher + banner deferred** (#78). The authenticated member/author review page gets the version switcher + new-version banner; the **shared reviewer surface does not** (the version endpoints are member-scoped via DocumentPolicy::view). SPEC §7 implies reviewers land on latest and switch versions — wiring it needs reviewer-via-share version authz + embedding the ordinal-labelled version list in SharedDocumentResource (server-rendered per ?version= on the shared route). Add when the reviewer version-viewing experience is prioritized, or during the M3 e2e wrap. (S)
 
+## Known debt (added at M4 eng review, 2026-07-20)
+
+- **Per-agent display identity on comments** — agent comments render owner-name + generic `AGENT · MCP` badge; a user running two agents can't tell their comments apart. The token name is known at auth time (`currentAccessToken()->name`) and the audit log records it per MCP write, so no data is lost — only rendering is deferred. Where to start: a `comments` meta/`agent_name` column + a badge variant. Revisit when multi-agent workspaces are real. P3 (S)
+- **Workspace AI spend cap** — `throttle:ai` limits request *rate*, not *spend*; a chunked digest costs many× a normal run, and on the SaaS one workspace could burn the shared-key budget. The `ai_runs` ledger records cost per run, so enforcement is a config ceiling + `SUM(cost)` guard in the run-creating endpoints. Same tune-at-Launch class as demo abuse thresholds (real numbers need real traffic). P2 (S)
+- **Dedicated AI queue** — AI jobs (10–60s, minutes when chunked) share the single database queue with import/re-sync; a digest burst could delay a re-sync (the core promise). One-line `onQueue('ai')` + a second worker when needed, but that complicates the M7 compose story — measure queue wait in `ai_run.started` logs first, act on evidence. P3 (S)
+
 ## Open TODOs (from M2 #64 magic-link review, 2026-07-16)
 
 - [ ] **Per-share `allow_anonymous` toggle** — SPEC §16 lists `allow_anonymous` on the `shares` entity and §10.2 promises "anonymous commenting off by default with a per-share toggle." The column was never added (M1) and #64 shipped magic-link-required only. Add the column + the anonymous-comment path behind it when a real need appears; magic-link-required is the safe default meanwhile. (S)
