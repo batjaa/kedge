@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { PageContainer } from '@/components/app/page-container';
 import { ProjectHeader } from '@/components/app/project-header';
 import { ProjectDocuments } from '@/components/app/project-documents';
+import { TrackedRepoAdd } from '@/components/app/tracked-repo-add';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 
@@ -44,6 +45,8 @@ export default async function ProjectPage({
       </Link>
 
       <ProjectHeader project={project} />
+
+      <TrackedRepoAdd projectId={project.id} />
 
       <ProjectDocuments
         projectId={project.id}
