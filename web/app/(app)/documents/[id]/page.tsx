@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getDocument } from '@/lib/documents';
+import { getDocument, getDocumentVersion, getDocumentVersions } from '@/lib/documents';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { DocumentClaim } from '@/components/app/document-claim';
@@ -8,6 +8,9 @@ import { DocumentShares } from '@/components/app/document-shares';
 import { ImportWarnings } from '@/components/app/import-warnings';
 import { DocumentReviewSurface } from '@/components/app/document-review-surface';
 import { DocumentStaticHeader } from '@/components/app/document-static-header';
+import { getSession } from '@/lib/session';
+import type { DocumentVersion } from '@/lib/document-types';
+import { versionLabel } from '@/lib/version-label';
 
 // The imported-document reading surface (ticket #17). A server component fed
 // from the API via the BFF cookie-forwarding read. Renders the three import
@@ -22,10 +25,10 @@ export default async function DocumentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ claim?: string }>;
+  searchParams: Promise<{ claim?: string | string[]; version?: string | string[] }>;
 }) {
   const { id } = await params;
-  const { claim } = await searchParams;
+  const { claim, version } = await searchParams;
 
   // Claim intent (#25): a just-signed-up visitor arriving from the demo page's
   // "Claim this doc" CTA. The doc still lives in the system workspace, so we must
@@ -43,6 +46,7 @@ export default async function DocumentPage({
   }
 
   const { status, document } = await getDocument(id);
+  const session = await getSession();
 
   // 403 (another workspace) and 404 both land on the 404 page — an id in a URL
   // never reveals whether a document exists elsewhere (SPEC 13).
@@ -58,6 +62,31 @@ export default async function DocumentPage({
   }
 
   const showStaticHeader = document.status !== 'ready';
+  const requestedVersionId = parseVersionParam(version);
+  let viewedVersion: DocumentVersion | null = document.current_version ?? null;
+  let versions: DocumentVersion[] = viewedVersion ? [viewedVersion] : [];
+
+  if (document.status === 'ready' && document.current_version) {
+    const versionsResult = await getDocumentVersions(id);
+    if (versionsResult.status === 403 || versionsResult.status === 404) notFound();
+    if (versionsResult.status === 200) versions = versionsResult.versions;
+
+    if (requestedVersionId !== null) {
+      const versionResult = await getDocumentVersion(id, requestedVersionId);
+      if (versionResult.status === 403 || versionResult.status === 404) notFound();
+
+      if (!versionResult.version) {
+        return (
+          <StatePanel
+            title="Couldn't load this version"
+            body="The API is unreachable right now. Try again in a moment."
+          />
+        );
+      }
+
+      viewedVersion = versionResult.version;
+    }
+  }
 
   return (
     <div>
@@ -78,10 +107,10 @@ export default async function DocumentPage({
         <ImportFailed id={document.id} error={document.sync_error} />
       ) : null}
 
-      {document.status === 'ready' && document.current_version ? (
+      {document.status === 'ready' && document.current_version && viewedVersion ? (
         <>
           <ImportWarnings
-            warnings={document.current_version.import_warnings ?? []}
+            warnings={viewedVersion.import_warnings ?? []}
           />
           <DocumentReviewSurface
             documentId={document.id}
@@ -89,17 +118,26 @@ export default async function DocumentPage({
             surfaceLabel="Authenticated document"
             sourceUrl={document.source_url}
             lifecycleStatus={document.lifecycle_status}
-            versionLabel={`v${document.current_version.id}`}
-            syncedAt={document.current_version.synced_at}
+            versions={versions}
+            viewedVersionId={viewedVersion.id}
+            currentVersionId={document.current_version.id}
+            versionLabel={versionLabel(viewedVersion)}
+            syncedAt={viewedVersion.synced_at}
+            approvals={document.approvals ?? []}
+            currentUserId={session?.user.id ?? null}
+            canUpdateLifecycle={document.capabilities?.update_lifecycle ?? false}
             backHref="/"
             backLabel="← Review queue"
-            plainText={document.current_version.plain_text ?? null}
-            projectionVersion={document.current_version.projection_version ?? null}
+            plainText={viewedVersion.plain_text ?? null}
+            projectionVersion={viewedVersion.projection_version ?? null}
+            canResync
+            lastSyncStatus={document.last_sync_status}
+            syncError={document.sync_error}
           >
             <DocumentBody
               format={document.format}
-              mdxOk={document.current_version.mdx_ok}
-              content={document.current_version.content}
+              mdxOk={viewedVersion.mdx_ok}
+              content={viewedVersion.content}
             />
           </DocumentReviewSurface>
         </>
@@ -108,6 +146,13 @@ export default async function DocumentPage({
       {document.status === 'ready' ? <DocumentShares documentId={document.id} /> : null}
     </div>
   );
+}
+
+function parseVersionParam(value: string | string[] | undefined): string | null {
+  if (value === undefined) return null;
+  if (Array.isArray(value) || !/^[1-9][0-9]*$/.test(value)) notFound();
+
+  return value;
 }
 
 function StatePanel({ title, body }: { title: string; body: string }) {

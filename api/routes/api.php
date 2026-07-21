@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\DocumentVersionController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MentionSuggestionController;
@@ -97,12 +99,24 @@ Route::prefix('v1')->group(function () {
         // retry hammer can't flood the fetch queue (SPEC 13).
         Route::get('/documents/{document}', [DocumentController::class, 'show'])
             ->name('api.v1.documents.show');
+        Route::patch('/documents/{document}', [DocumentController::class, 'update'])
+            ->name('api.v1.documents.update');
+
+        Route::get('/documents/{document}/versions', [DocumentVersionController::class, 'index'])
+            ->name('api.v1.documents.versions.index');
+        Route::get('/documents/{document}/versions/{version}', [DocumentVersionController::class, 'show'])
+            ->name('api.v1.documents.versions.show');
+        Route::get('/documents/{document}/versions/{baseVersion}/diff/{targetVersion}', [DocumentVersionController::class, 'diff'])
+            ->name('api.v1.documents.versions.diff');
 
         Route::middleware('throttle:imports')->group(function () {
             Route::post('/documents', [DocumentController::class, 'store'])
                 ->name('api.v1.documents.store');
             Route::post('/documents/{document}/retry', [DocumentController::class, 'retry'])
                 ->name('api.v1.documents.retry');
+            Route::post('/documents/{document}/resync', [DocumentController::class, 'resync'])
+                ->middleware('resync.enabled')
+                ->name('api.v1.documents.resync');
 
             // Claim a demo doc into my workspace (SPEC 10.3, #25). Edition-gated
             // like the anonymous demo import: absent entirely when self-hosted.
@@ -133,10 +147,16 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('throttle:comments')->group(function () {
+            Route::post('/documents/{document}/approvals', [ApprovalController::class, 'store'])
+                ->name('api.v1.documents.approvals.store');
+            Route::delete('/approvals/{approval}', [ApprovalController::class, 'destroy'])
+                ->name('api.v1.approvals.destroy');
             Route::post('/documents/{document}/threads', [ThreadController::class, 'store'])
                 ->name('api.v1.documents.threads.store');
             Route::patch('/threads/{thread}', [ThreadController::class, 'update'])
                 ->name('api.v1.threads.update');
+            Route::post('/threads/{thread}/reanchor', [ThreadController::class, 'reanchor'])
+                ->name('api.v1.threads.reanchor');
             Route::post('/threads/{thread}/comments', [ThreadCommentController::class, 'store'])
                 ->name('api.v1.threads.comments.store');
             Route::post('/comments/{comment}/fork', [ThreadCommentController::class, 'fork'])

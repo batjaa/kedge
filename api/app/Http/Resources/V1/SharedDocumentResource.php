@@ -52,6 +52,7 @@ class SharedDocumentResource extends JsonResource
             'title' => $this->title,
             'status' => $this->status->value,
             'format' => $this->format->value,
+            'approvals' => ApprovalResource::collection($this->whenLoaded('activeApprovals')),
             'current_version' => $this->whenLoaded(
                 'currentVersion',
                 fn () => $this->currentVersion
@@ -67,6 +68,7 @@ class SharedDocumentResource extends JsonResource
             'reviewer' => $isVerifiedReviewer
                 ? [
                     'verified' => true,
+                    'id' => $this->reviewer->user?->id,
                     'name' => $this->reviewer->user?->name,
                     'email' => $this->reviewer->user?->email,
                 ]
@@ -76,7 +78,8 @@ class SharedDocumentResource extends JsonResource
 
     private function versionResource(bool $includeProjectionSubstrate): DocumentVersionResource
     {
-        $resource = DocumentVersionResource::make($this->currentVersion);
+        $resource = DocumentVersionResource::make($this->currentVersion)
+            ->withOrdinal($this->ordinalForVersionId((int) $this->currentVersion->id));
 
         return $includeProjectionSubstrate
             ? $resource->withProjectionSubstrate()

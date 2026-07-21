@@ -276,6 +276,7 @@ Why sole-engine won: one code path for ~20 diagram types (Excalidraw sketches an
 ## 7. Documents, versions, diff & re-sync
 
 - `documents` = stable identity; `document_versions` = immutable snapshots.
+- **Version lineage is candidate-capable** (ADR 0001): `document_versions.kind` (`mainline`|`candidate`) + a nullable `parent_version_id` model the lineage as a chain that can branch, not a strictly linear one — so a PR's *candidate version* attaches to the document it proposes to change without minting a new document or a migration. M3 builds and exercises only the mainline path; candidate creation arrives with the M6 PR-URL connector.
 - **Re-sync triggers**: manual button (M3); GitHub App push webhook filtered to the doc path (M6); Confluence polling on view + scheduled check (M6).
 - New version → re-anchoring job (§8.3) → participants notified.
 - **Version diff view (v1)**: text diff between any two versions, rendered inline with **comment overlay** — threads shown against the side they anchor to, so a reviewer answers "what changed since I commented?" in one screen. Approvals pinned to older versions render as stale markers in the diff header.
@@ -414,7 +415,7 @@ entity workspaces { id \n name, slug, settings }
 entity workspace_members { workspace_id, user_id \n role: owner|member }
 entity integrations { id \n workspace_id \n provider: github_app|github_pat|confluence \n credentials (encrypted) \n meta }
 entity documents { id \n workspace_id, integration_id? \n source_type, source_url, source_meta \n title, format: md|mdx|html \n current_version_id \n status: importing|ready|failed \n last_sync_status: ok|failed \n sync_error? \n lifecycle_status: draft|in_review|approved|superseded \n expires_at? (demo) \n created_by }
-entity document_versions { id \n document_id \n content_raw, content_normalized \n plain_text, projection_version \n content_hash (uniq w/ doc) \n source_version, synced_at }
+entity document_versions { id \n document_id \n kind: mainline|candidate \n parent_version_id? \n content_raw, content_normalized \n plain_text, projection_version \n content_hash (uniq w/ doc) \n source_version, synced_at }
 entity shares { id \n document_id \n token (uniq), visibility \n allow_anonymous, expires_at, revoked_at }
 entity threads { id \n document_id \n type: inline|document \n status: open|resolved \n forked_from_comment_id? \n created_by }
 entity anchors { id \n thread_id, document_version_id \n exact, prefix, suffix, start, end \n heading_path, projection_version \n state: anchored|relocated|orphaned }
@@ -514,6 +515,7 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 | Re-sync | source gone / token revoked | keep current version | "Sync failed — last good version" + reconnect |
 | MDX compile | invalid/rejected MDX | fallback render + log | plain render + banner |
 | Re-anchor | no match / matcher timeout | orphan state | Orphaned tray |
+| Re-anchor | endpoint down / retries exhausted | keep current version, re-sync marked failed (pointer never advanced) | "Re-sync couldn't finish — last good version" + retry |
 | Kroki | down / bad source | cached-miss error state | raw source block + error chip |
 | Notify | Postmark failure | queue retry; comment unaffected | — |
 | AI run | overloaded / rate-limited | status=failed | "Generation failed — retry" |

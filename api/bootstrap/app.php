@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureDemoModeEnabled;
+use App\Http\Middleware\EnsureResyncEnabled;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,7 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Instant demo mode is SaaS-only (SPEC §10.3, #25): this alias 404s the
         // demo + claim routes on a self-hosted instance, per request.
-        $middleware->alias(['demo.enabled' => EnsureDemoModeEnabled::class]);
+        $middleware->alias([
+            'demo.enabled' => EnsureDemoModeEnabled::class,
+            'resync.enabled' => EnsureResyncEnabled::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // The API is a headless JSON backend: versioned routes and the

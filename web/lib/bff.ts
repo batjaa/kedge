@@ -57,13 +57,21 @@ export interface BffJsonResult<T> {
 
 /**
  * Forward the caller's cookies (and a stateful Origin) to an authenticated API
- * GET, returning the parsed body on 200. The generalization of {@link forwardMe}
+ * GET, returning the parsed body on allowed JSON statuses. The generalization of {@link forwardMe}
  * for resource reads (e.g. a document poll) — same cookie-forwarding contract,
  * same "no cookie ⇒ 401 without a round-trip" and "unreachable ⇒ 502" handling.
  */
 export async function forwardApiGet<T>(
   incoming: Headers,
   path: string,
+): Promise<BffJsonResult<T>> {
+  return forwardApiGetWithJson<T>(incoming, path);
+}
+
+export async function forwardApiGetWithJson<T>(
+  incoming: Headers,
+  path: string,
+  bodyStatuses: readonly number[] = [200],
 ): Promise<BffJsonResult<T>> {
   const cookie = incoming.get('cookie') ?? '';
 
@@ -81,11 +89,11 @@ export async function forwardApiGet<T>(
       cache: 'no-store',
     });
 
-    if (res.status !== 200) {
+    if (!bodyStatuses.includes(res.status)) {
       return { status: res.status, data: null };
     }
 
-    return { status: 200, data: (await res.json()) as T };
+    return { status: res.status, data: (await res.json()) as T };
   } catch {
     return { status: 502, data: null };
   }

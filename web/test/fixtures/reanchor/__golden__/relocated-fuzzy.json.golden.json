@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "threadId": 14,
+      "state": "relocated",
+      "exact": "Shared phrase.",
+      "prefix": "Intro copy. Shared phrase. Tail.\n\nFresh surroundings. ",
+      "suffix": " Updated tail.",
+      "start": 54,
+      "end": 68
+    }
+  ]
+}

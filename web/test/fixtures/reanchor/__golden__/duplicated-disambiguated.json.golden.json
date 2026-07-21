@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "threadId": 12,
+      "state": "anchored",
+      "exact": "Repeat this sentence.",
+      "prefix": "Intro A. Repeat this sentence. Middle. Intro B. ",
+      "suffix": " Tail.",
+      "start": 48,
+      "end": 69
+    }
+  ]
+}

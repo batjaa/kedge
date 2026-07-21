@@ -13,6 +13,7 @@ final class ThreadCapabilities
     private function __construct(
         private readonly ?int $viewerId,
         private readonly bool $viewerOwnsDocument,
+        private readonly bool $viewerIsWorkspaceMember,
         private readonly bool $viewerHasReviewerIdentity,
         private readonly bool $viewerCanViewThreads,
     ) {}
@@ -21,12 +22,12 @@ final class ThreadCapabilities
     {
         $user = $request->user();
         if ($user === null) {
-            return new self(null, false, false, false);
+            return new self(null, false, false, false, false);
         }
 
         $document = self::documentFor($thread);
         if (! $document instanceof Document) {
-            return new self((int) $user->id, false, false, false);
+            return new self((int) $user->id, false, false, false, false);
         }
 
         $key = self::class.':'.$document->id.':'.$user->id;
@@ -37,14 +38,18 @@ final class ThreadCapabilities
 
         $viewerId = (int) $user->id;
         $viewerOwnsDocument = $document->created_by !== null && (int) $document->created_by === $viewerId;
+        $viewerIsWorkspaceMember = $viewerOwnsDocument
+            ? false
+            : self::viewerIsWorkspaceMember($viewerId, $document);
         $viewerHasReviewerIdentity = ! $viewerOwnsDocument && self::viewerHasReviewerIdentity($viewerId);
         $capabilities = new self(
             $viewerId,
             $viewerOwnsDocument,
+            $viewerIsWorkspaceMember,
             $viewerHasReviewerIdentity,
-            $viewerHasReviewerIdentity
-                ? self::viewerCanViewThreads($viewerId, $document)
-                : false,
+            $viewerIsWorkspaceMember || ($viewerHasReviewerIdentity
+                ? self::viewerIsDocumentReviewer($viewerId, $document)
+                : false),
         );
         $request->attributes->set($key, $capabilities);
 
@@ -68,6 +73,34 @@ final class ThreadCapabilities
         return ! $this->viewerHasReviewerIdentity || $this->viewerCanViewThreads;
     }
 
+    public function canReanchor(Thread $thread): bool
+    {
+        if ($this->viewerId === null) {
+            return false;
+        }
+
+        if ($this->viewerOwnsDocument || $this->viewerIsWorkspaceMember) {
+            return true;
+        }
+
+        if (! $this->viewerCanViewThreads) {
+            return false;
+        }
+
+        if ($this->isViewer($thread->created_by)) {
+            return true;
+        }
+
+        if ($thread->relationLoaded('comments')) {
+            return $thread->comments->contains(fn ($comment) => ! $comment->trashed() && $this->isViewer($comment->author_id));
+        }
+
+        return $thread->comments()
+            ->where('author_id', $this->viewerId)
+            ->whereNull('deleted_at')
+            ->exists();
+    }
+
     private function isViewer(mixed $userId): bool
     {
         return $userId !== null && (int) $userId === $this->viewerId;
@@ -80,12 +113,6 @@ final class ThreadCapabilities
         }
 
         return $thread->document;
-    }
-
-    private static function viewerCanViewThreads(int $viewerId, Document $document): bool
-    {
-        return self::viewerIsWorkspaceMember($viewerId, $document)
-            || self::viewerIsDocumentReviewer($viewerId, $document);
     }
 
     private static function viewerIsWorkspaceMember(int $viewerId, Document $document): bool

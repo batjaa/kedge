@@ -1,0 +1,13 @@
+{
+  "newPlainText": "Intro copy. Shared phrase. Tail.\n\nFresh surroundings. Shared phrase. Updated tail.",
+  "anchors": [
+    {
+      "threadId": 14,
+      "exact": "Shared phrase.",
+      "prefix": "Old surroundings. ",
+      "suffix": " Old tail.",
+      "start": 52,
+      "end": 66
+    }
+  ]
+}

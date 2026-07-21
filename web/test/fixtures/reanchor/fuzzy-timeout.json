@@ -1,0 +1,16 @@
+{
+  "newPlainText": "Alpha targat text moved.",
+  "options": {
+    "fuzzyTimeoutMs": 0
+  },
+  "anchors": [
+    {
+      "threadId": 15,
+      "exact": "target text",
+      "prefix": "Alpha ",
+      "suffix": ".",
+      "start": 6,
+      "end": 17
+    }
+  ]
+}

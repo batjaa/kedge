@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "threadId": 13,
+      "state": "anchored",
+      "exact": "keep",
+      "prefix": "Lead 😀 ",
+      "suffix": " this text.",
+      "start": 8,
+      "end": 12
+    }
+  ]
+}

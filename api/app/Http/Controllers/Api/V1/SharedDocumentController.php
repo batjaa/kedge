@@ -47,10 +47,13 @@ class SharedDocumentController extends Controller
             return $this->gone($share->goneReason() ?? 'unknown');
         }
 
-        $document = $share->document;
-        $document->load('currentVersion');
-
         $participant = $this->verifiedParticipant($request, $share);
+        $document = $share->document;
+        if ($participant instanceof ShareParticipant) {
+            $document->loadCurrentVersionAndApprovals();
+        } else {
+            $document->load('currentVersion');
+        }
 
         return SharedDocumentResource::make($document)
             ->withReviewer($participant)

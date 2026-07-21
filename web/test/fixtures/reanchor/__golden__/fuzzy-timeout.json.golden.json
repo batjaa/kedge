@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "threadId": 15,
+      "state": "orphaned",
+      "exact": "target text",
+      "prefix": "Alpha ",
+      "suffix": ".",
+      "start": 6,
+      "end": 17
+    }
+  ]
+}

@@ -22,7 +22,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 ## Open TODOs (pre-implementation)
 
 - [x] ~~P1 (S) `/design-explore` the comment gutter~~ — **done 2026-07-03**: 6 variants explored; **"Protocol Rebuild" approved** (clean-room Protocol aesthetic). Design language codified in `docs/DESIGN.md`; canonical mockup `docs/designs/review-page.html`; losing variants deleted.
-- [ ] P1 (S) **Spike: port hypothes.is anchoring** (`dom-anchor-text-quote` + diff-match-patch) — validate the exact→fuzzy→orphan ladder on 2-3 real RFCs before M3 design hardens.
+- [x] ~~P1 (S) **Spike: port hypothes.is anchoring**~~ — **done 2026-07-20 (M3)**: exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, golden-corpus-validated.
 - [x] ~~P1 (S) M0 spike: validate Fumadocs~~ — **done 2026-07-03: VALIDATED** (`web/` in repo, run `npm run dev`). Fumadocs 16 + Next 16 renders `.md` and `.mdx`; DESIGN.md tokens applied via `--color-fd-*` overrides; system fonts + dark default work; right TOC column swapped for a static review rail — the comment-gutter layout is feasible. Dogfooding: SPEC/DESIGN/TODOS render as content copies. **Findings for the real build:** (a) unknown fence languages (`plantuml`) crash Shiki — `langAlias` workaround in `source.config.ts`; product needs a never-crash fallback for arbitrary fence langs (add to §19 failure modes at M1); (b) content needs frontmatter — the ingestion pipeline must synthesize `title`/`description` at import; (c) M2 work identified: sticky/anchor-aligned rail, sidebar "Threads" nav group.
 - [x] ~~Diagram rendering spike~~ — **done 2026-07-03: VALIDATED, then revised same day.** Final state: **Kroki is the sole diagram engine** (decision below). `remark-diagrams` converts any fence on the engine allowlist (~20 engines) → `<KrokiDiagram/>` before Shiki, for both `.md` and `.mdx`; async RSC → Kroki GET (deflate+base64url), fetch-cached, `KROKI_URL` override, SVG via `<img data:>` (no script surface), skeleton + show-source error state. Verified live: Mermaid, PlantUML (incl. SPEC.md's architecture/sequence/ER diagrams), and an Excalidraw sketch. **Findings:** (a) complex diagrams shrink to fit — click-to-zoom is genuinely needed, build at M1; (b) product needs the R2-backed SVG cache keyed by source hash (§6.2) — Next fetch cache is per-build, not shared.
 
@@ -148,6 +148,14 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 ## Known debt (added at M2 eng review, 2026-07-15)
 
 - Rail virtualization: anchor-aligned thread cards render unvirtualized; past ~200 threads the DOM cost hits the same wall as the re-anchor matcher budget (existing debt line). Revisit when a real document gets that busy. (M)
+
+## Known debt (added at M3 eng review, 2026-07-20)
+
+- **Candidate lineage lands unexercised.** M3 adds the candidate-capable version schema (`document_versions.kind` + `parent_version_id`, [ADR 0001](adr/0001-pr-is-a-candidate-version.md)) but only the **mainline** path runs; candidate *creation* and re-anchoring a candidate into the document's lineage arrive with the M6 PR-URL connector. A forward-compat schema that's never exercised can be subtly wrong — **M6 must add the candidate-path tests, not just the connector**. Where to start: the `kind`/`parent_version_id` columns + the version-lineage ordering M3 ships. (S) 
+
+- **Version labels are global DB ids, not per-document ordinals** (#75 review). The header/roster/switcher render `v{document_version.id}` (e.g. "approved v4821 · current v4830") instead of the spec's per-document "v3 · current v5". Web and api are consistent with each other, so it's cosmetic, but it reads poorly. **Fix in #78** (version switcher) by deriving a per-document version ordinal (position in the lineage) for display, reused by the roster + diff header. (S)
+
+- **Reviewer-surface version switcher + banner deferred** (#78). The authenticated member/author review page gets the version switcher + new-version banner; the **shared reviewer surface does not** (the version endpoints are member-scoped via DocumentPolicy::view). SPEC §7 implies reviewers land on latest and switch versions — wiring it needs reviewer-via-share version authz + embedding the ordinal-labelled version list in SharedDocumentResource (server-rendered per ?version= on the shared route). Add when the reviewer version-viewing experience is prioritized, or during the M3 e2e wrap. (S)
 
 ## Open TODOs (from M2 #64 magic-link review, 2026-07-16)
 

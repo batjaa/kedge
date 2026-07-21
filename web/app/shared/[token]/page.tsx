@@ -12,6 +12,7 @@ import {
   REVIEWER_VERIFICATION_STATUS,
   type VerifyReturnState,
 } from '@/lib/reviewer-verification-status';
+import { versionLabel } from '@/lib/version-label';
 
 // The public, read-only share surface (SPEC 10.2, ticket #24). Anonymous — no
 // auth, no session — rendering the doc through the SAME DocumentBody as the
@@ -83,8 +84,12 @@ export default async function SharedDocumentPage({
               documentId={doc.document_id!}
               title={doc.title}
               surfaceLabel="Shared document · verified reviewer"
-              versionLabel={`v${doc.current_version.id}`}
+              viewedVersionId={doc.current_version.id}
+              currentVersionId={doc.current_version.id}
+              versionLabel={versionLabel(doc.current_version)}
               syncedAt={doc.current_version.synced_at}
+              approvals={doc.approvals ?? []}
+              currentUserId={doc.reviewer.id ?? null}
               plainText={doc.current_version.plain_text ?? null}
               projectionVersion={doc.current_version.projection_version ?? null}
             >

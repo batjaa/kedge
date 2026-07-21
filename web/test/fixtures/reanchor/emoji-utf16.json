@@ -1,0 +1,13 @@
+{
+  "newPlainText": "Lead 😀 keep this text.",
+  "anchors": [
+    {
+      "threadId": 13,
+      "exact": "keep",
+      "prefix": "Lead 😀 ",
+      "suffix": " this",
+      "start": 8,
+      "end": 12
+    }
+  ]
+}

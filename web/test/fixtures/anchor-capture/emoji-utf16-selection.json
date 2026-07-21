@@ -1,0 +1,22 @@
+{
+  "projectionVersion": 73,
+  "plainText": "Before 👍 middle 🚀 target.",
+  "root": {
+    "tagName": "article",
+    "childNodes": [
+      {
+        "tagName": "p",
+        "attrs": [
+          { "name": "data-prange", "value": "0:27" }
+        ],
+        "childNodes": [
+          { "nodeName": "#text", "value": "Before 👍 middle 🚀 target." }
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "start": { "path": [0, 0], "offset": 10 },
+    "end": { "path": [0, 0], "offset": 26 }
+  }
+}

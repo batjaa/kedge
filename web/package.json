@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "^3.1.1",
+    "@sanity/diff-match-patch": "^3.2.0",
     "cnfast": "^0.0.8",
     "fumadocs-core": "16.10.7",
     "fumadocs-mdx": "15.0.13",

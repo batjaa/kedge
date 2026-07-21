@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { MetaChip } from './meta-chip';
+import { ApprovalRoster } from './approval-roster';
 import { cn } from '@/lib/cn';
-import type { LifecycleStatus } from '@/lib/document-types';
+import type { Approval, LifecycleStatus } from '@/lib/document-types';
 import { relativeTime } from '@/lib/relative-time';
 
 export function DocumentReviewHeader({
@@ -11,20 +13,28 @@ export function DocumentReviewHeader({
   lifecycleStatus,
   sourceUrl,
   versionLabel,
+  currentVersionLabel = versionLabel,
   syncedAt,
+  approvals = [],
   openThreadCount,
   backHref,
   backLabel,
+  syncError,
+  actions,
 }: {
   title: string;
   surfaceLabel: string;
   lifecycleStatus?: LifecycleStatus | null;
   sourceUrl?: string | null;
   versionLabel?: string | null;
+  currentVersionLabel?: string | null;
   syncedAt?: string | null;
+  approvals?: Approval[];
   openThreadCount: number;
   backHref?: string | null;
   backLabel?: string | null;
+  syncError?: string | null;
+  actions?: ReactNode;
 }) {
   return (
     <header className="sticky top-14 z-30 -mx-6 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
@@ -56,10 +66,19 @@ export function DocumentReviewHeader({
               {sourceUrl}
             </p>
           ) : null}
+          {syncError ? (
+            <p className="mt-2 text-xs font-medium text-rose-700 dark:text-rose-300">
+              {syncError}
+            </p>
+          ) : null}
+          <ApprovalRoster approvals={approvals} currentVersionLabel={currentVersionLabel} />
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10">
-          <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          <span>{openThreadCount} open</span>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {actions}
+          <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10">
+            <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <span>{openThreadCount} open</span>
+          </div>
         </div>
       </div>
     </header>

@@ -2,11 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Enums\WorkspaceRole;
+use App\Jobs\ResyncDocumentJob;
+use App\Models\Approval;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Integration;
 use App\Models\Share;
+use App\Models\ShareParticipant;
 use App\Models\Thread;
 use App\Models\User;
 use App\Services\RegistrationService;
@@ -93,6 +97,24 @@ class AuthorizationMatrixTest extends TestCase
         $this->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/retry")
             ->assertStatus($expected);
+    }
+
+    #[DataProvider('documentRoleMatrix')]
+    public function test_document_resync_authorization(string $role, int $expectedStatus): void
+    {
+        Queue::fake();
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsDocumentRole($role, $owner);
+
+        $expected = $expectedStatus === 200 ? 202 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/resync")
+            ->assertStatus($expected);
+
+        if ($expected === 202) {
+            Queue::assertPushed(ResyncDocumentJob::class);
+        }
     }
 
     /**
@@ -305,6 +327,91 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     /**
+     * Approval writes use the thread-view capability: authors, workspace
+     * members, and verified reviewers for this exact document can approve.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function approvalRoleMatrix(): array
+    {
+        return [
+            'author can approve current version' => ['author', 201],
+            'workspace member can approve current version' => ['member', 201],
+            'reviewer via active share can approve scoped document' => ['reviewer', 201],
+            'reviewer via a different share cannot approve this document' => ['other_reviewer', 403],
+            'non-member cannot approve' => ['non_member', 403],
+            'guest cannot approve' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('approvalRoleMatrix')]
+    public function test_approval_create_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/approvals")
+            ->assertStatus($expectedStatus);
+    }
+
+    public function test_approval_revoke_is_own_approval_only(): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $member = $this->workspaceMemberFor($document);
+        $approval = Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $document->current_version_id,
+            'user_id' => $owner->id,
+        ]);
+
+        $this->actingAs($member)->fromWebApp()
+            ->deleteJson("/api/v1/approvals/{$approval->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('approvals', [
+            'id' => $approval->id,
+            'revoked_at' => null,
+        ]);
+    }
+
+    /**
+     * Lifecycle is stricter than approvals: only the document author can move
+     * the editorial state.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function lifecycleRoleMatrix(): array
+    {
+        return [
+            'author can change lifecycle' => ['author', 200],
+            'workspace member cannot change lifecycle' => ['member', 403],
+            'reviewer via active share cannot change lifecycle' => ['reviewer', 403],
+            'non-member cannot change lifecycle' => ['non_member', 403],
+            'guest cannot change lifecycle' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('lifecycleRoleMatrix')]
+    public function test_lifecycle_update_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->patchJson("/api/v1/documents/{$document->id}", ['lifecycle_status' => 'in_review'])
+            ->assertStatus($expectedStatus);
+
+        if ($expectedStatus === 200) {
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'lifecycle.changed',
+                'subject_id' => $document->id,
+            ]);
+        }
+    }
+
+    /**
      * Integration credentials (SPEC §16, ticket #23) are workspace-scoped like
      * shares. Delete resolves a row by id, so it obeys the full guest/other/owner
      * rule: a foreign integration id is never an access path.
@@ -477,5 +584,53 @@ class AuthorizationMatrixTest extends TestCase
                 password: 'correct-horse-battery',
             )),
         };
+    }
+
+    private function actAsReviewRole(string $role, User $owner, Document $document): void
+    {
+        $user = match ($role) {
+            'guest' => null,
+            'author' => $owner,
+            'member' => $this->workspaceMemberFor($document),
+            'reviewer' => $this->verifiedReviewerFor($document, 'reviewer@example.com'),
+            'other_reviewer' => $this->verifiedReviewerFor(Document::factory()->ready()->create(), 'other-reviewer@example.com'),
+            'non_member' => app(RegistrationService::class)->register(
+                name: 'Non Member',
+                email: 'non-member@example.com',
+                password: 'correct-horse-battery',
+            ),
+        };
+
+        if ($user instanceof User) {
+            $this->actingAs($user);
+        }
+    }
+
+    private function workspaceMemberFor(Document $document): User
+    {
+        $member = User::factory()->create([
+            'name' => 'Workspace Member',
+            'email' => 'workspace-member@example.com',
+        ]);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        return $member;
+    }
+
+    private function verifiedReviewerFor(Document $document, string $email): User
+    {
+        $reviewer = User::factory()->create([
+            'name' => 'Share Reviewer',
+            'email' => $email,
+            'password' => null,
+        ]);
+        $share = Share::factory()->for($document)->create();
+        ShareParticipant::create([
+            'share_id' => $share->id,
+            'user_id' => $reviewer->id,
+            'verified_at' => now(),
+        ]);
+
+        return $reviewer;
     }
 }

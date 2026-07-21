@@ -37,4 +37,25 @@ class ThreadPolicy
         return $this->authorOf($user, $thread->document)
             || $this->ownsSubjectInReachableDocument($user, $thread->created_by, $thread->document);
     }
+
+    public function reanchor(User $user, Thread $thread): bool
+    {
+        $thread->loadMissing('document');
+
+        if ($this->authorOf($user, $thread->document) || $this->memberOf($user, $thread->document)) {
+            return true;
+        }
+
+        if (! $this->canViewThreads($user, $thread->document)) {
+            return false;
+        }
+
+        if ($this->ownedBy($user, $thread->created_by)) {
+            return true;
+        }
+
+        return $thread->comments()
+            ->where('author_id', $user->id)
+            ->exists();
+    }
 }

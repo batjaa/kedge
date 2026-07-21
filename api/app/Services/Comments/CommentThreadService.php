@@ -63,18 +63,23 @@ class CommentThreadService
     public function create(Document $document, User $author, array $data, ?string $ip): array
     {
         $idempotencyKey = (string) $data['idempotency_key'];
+        $type = ThreadType::from((string) $data['type']);
+        $commentType = CommentType::from((string) ($data['comment_type'] ?? CommentType::Comment->value));
+        $version = $this->commentableVersion(
+            $document,
+            includePlainText: $type === ThreadType::Inline,
+            versionId: array_key_exists('document_version_id', $data) ? (int) $data['document_version_id'] : null,
+        );
+
         if ($existing = $this->idempotentComment(
             $author,
             $idempotencyKey,
             self::IDEMPOTENCY_SCOPE_DOCUMENT,
             (int) $document->id,
         )) {
-            return [$this->loadThreadForResource($existing->thread, $author), 200];
+            return [$this->loadThreadForResource($existing->thread, $author, $version), 200];
         }
 
-        $type = ThreadType::from((string) $data['type']);
-        $commentType = CommentType::from((string) ($data['comment_type'] ?? CommentType::Comment->value));
-        $version = $this->commentableVersion($document, includePlainText: $type === ThreadType::Inline);
         $anchor = $type === ThreadType::Inline
             ? $this->validatedAnchor($document, $version, (array) $data['anchor'])
             : null;
@@ -120,13 +125,13 @@ class CommentThreadService
                 (int) $document->id,
             );
 
-            return [$this->loadThreadForResource($existing->thread, $author), 200];
+            return [$this->loadThreadForResource($existing->thread, $author, $version), 200];
         }
 
         $this->recordEvent('thread.created', $document, $author, $thread, $ip);
         $this->recordEvent('comment.created', $document, $author, $comment, $ip);
 
-        return [$this->loadThreadForResource($thread, $author), 201];
+        return [$this->loadThreadForResource($thread, $author, $version), 201];
     }
 
     /**
@@ -236,15 +241,35 @@ class CommentThreadService
     }
 
     /**
+     * @param  array<string, mixed>  $anchor
+     */
+    public function reanchor(Thread $thread, User $actor, array $anchor): Thread
+    {
+        $thread->loadMissing('document');
+        $version = $this->commentableVersion($thread->document, includePlainText: true);
+        $validated = $this->validatedAnchor($thread->document, $version, $anchor);
+
+        $thread->anchors()->create(AnchorAttributes::fromCapture($validated, $version));
+        $thread->refresh();
+
+        return $this->loadThreadForResource($thread, $actor, $version);
+    }
+
+    /**
      * Rail read: one position-ordered aggregate query over threads, anchors,
      * count, and latest activity. Comments and fork counts are bulk-hydrated
      * once after pagination so soft-deleted comments stay coherent.
      *
      * @return LengthAwarePaginator<int, Thread>
      */
-    public function listForDocument(Document $document, int $perPage, ?User $viewer = null): LengthAwarePaginator
-    {
+    public function listForDocument(
+        Document $document,
+        int $perPage,
+        ?User $viewer = null,
+        ?DocumentVersion $version = null,
+    ): LengthAwarePaginator {
         $perPage = min(max($perPage, 1), 50);
+        $targetVersionId = (int) ($version?->id ?? $document->current_version_id);
 
         $stats = DB::table('comments')
             ->select('thread_id')
@@ -252,8 +277,15 @@ class CommentThreadService
             ->selectRaw('MAX(created_at) as latest_activity_at')
             ->groupBy('thread_id');
 
+        $targetAnchorIds = DB::table('anchors')
+            ->select('thread_id')
+            ->selectRaw('MAX(id) as anchor_id')
+            ->where('document_version_id', $targetVersionId)
+            ->groupBy('thread_id');
+
         $query = Thread::query()
-            ->leftJoin('anchors as rail_anchors', 'rail_anchors.thread_id', '=', 'threads.id')
+            ->leftJoinSub($targetAnchorIds, 'target_anchor_ids', 'target_anchor_ids.thread_id', '=', 'threads.id')
+            ->leftJoin('anchors as rail_anchors', 'rail_anchors.id', '=', 'target_anchor_ids.anchor_id')
             ->leftJoinSub($stats, 'comment_stats', 'comment_stats.thread_id', '=', 'threads.id')
             ->where('threads.document_id', $document->id)
             ->select('threads.*')
@@ -271,6 +303,11 @@ class CommentThreadService
                 'comment_stats.comments_count as comments_count',
                 'comment_stats.latest_activity_at as latest_activity_at',
             ])
+            ->where(function ($query): void {
+                $query
+                    ->where('threads.type', ThreadType::Document->value)
+                    ->orWhereNotNull('rail_anchors.id');
+            })
             ->orderByRaw('case when threads.type = ? then 0 else 1 end', [ThreadType::Document->value])
             ->orderBy('rail_anchors.start')
             ->orderBy('threads.id');
@@ -287,8 +324,11 @@ class CommentThreadService
         return $paginator;
     }
 
-    private function commentableVersion(Document $document, bool $includePlainText = false): DocumentVersion
-    {
+    private function commentableVersion(
+        Document $document,
+        bool $includePlainText = false,
+        ?int $versionId = null,
+    ): DocumentVersion {
         if ($document->isDemo()) {
             $this->reject('demo_document_unclaimed', 'Demo documents must be claimed before they can receive comments.', 'document');
         }
@@ -297,12 +337,24 @@ class CommentThreadService
             $this->reject('document_not_ready', 'Only ready documents can receive comments.', 'document');
         }
 
-        $this->loadCurrentVersion(
-            $document,
-            $includePlainText
-                ? ['id', 'plain_text', 'projection_version']
-                : ['id'],
-        );
+        $columns = $includePlainText
+            ? ['id', 'document_id', 'plain_text', 'projection_version']
+            : ['id', 'document_id'];
+
+        if ($versionId !== null) {
+            $version = $document->versions()
+                ->select($columns)
+                ->whereKey($versionId)
+                ->first();
+
+            if (! $version instanceof DocumentVersion) {
+                abort(404);
+            }
+
+            return $version;
+        }
+
+        $this->loadCurrentVersion($document, $columns);
 
         if (! $document->currentVersion) {
             $this->reject('document_not_ready', 'Only ready documents can receive comments.', 'document');
@@ -354,15 +406,26 @@ class CommentThreadService
         }
 
         $plainText = (string) $version->plain_text;
-        $start = (int) $anchor['start'];
-        $end = (int) $anchor['end'];
-        $length = mb_strlen($plainText, 'UTF-8');
+        $startCodeUnits = (int) $anchor['start'];
+        $endCodeUnits = (int) $anchor['end'];
+        $utf16PlainText = mb_convert_encoding($plainText, 'UTF-16LE', 'UTF-8');
+        $lengthCodeUnits = intdiv(strlen($utf16PlainText), 2);
 
-        if ($start < 0 || $end <= $start || $end > $length) {
+        if (
+            $startCodeUnits < 0
+            || $endCodeUnits <= $startCodeUnits
+            || $endCodeUnits > $lengthCodeUnits
+        ) {
             return false;
         }
 
-        return mb_substr($plainText, $start, $end - $start, 'UTF-8') === (string) $anchor['exact'];
+        $utf16Slice = substr(
+            $utf16PlainText,
+            $startCodeUnits * 2,
+            ($endCodeUnits - $startCodeUnits) * 2,
+        );
+
+        return mb_convert_encoding($utf16Slice, 'UTF-8', 'UTF-16LE') === (string) $anchor['exact'];
     }
 
     private function refreshProjection(Document $document, DocumentVersion $version): DocumentVersion
@@ -450,7 +513,7 @@ class CommentThreadService
         return true;
     }
 
-    public function loadThreadForResource(Thread $thread, ?User $viewer = null): Thread
+    public function loadThreadForResource(Thread $thread, ?User $viewer = null, ?DocumentVersion $version = null): Thread
     {
         $thread->load([
             'document.workspace',
@@ -465,7 +528,12 @@ class CommentThreadService
             $thread->setRelation('firstComment', $firstComment);
         }
 
-        $anchor = $thread->anchors->first();
+        $targetVersionId = $version?->id ?? $thread->document?->current_version_id;
+        $anchor = $thread->anchors
+            ->where('document_version_id', $targetVersionId)
+            ->sortByDesc('id')
+            ->first()
+            ?? $thread->anchors->first();
         if ($anchor) {
             $thread->setRelation('railAnchor', $anchor);
         }

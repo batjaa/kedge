@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\AnchorState;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\WorkspaceRole;
@@ -82,6 +83,44 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('threads', 2);
         $this->assertDatabaseCount('comments', 3);
         $this->assertDatabaseCount('anchors', 1);
+    }
+
+    public function test_inline_anchor_offsets_validate_as_utf16_code_units_after_astral_text(): void
+    {
+        $plainText = 'Intro 👍 target text.';
+        [$author, $document] = $this->readyDocument(
+            plainText: $plainText,
+        );
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'target', '2');
+        $this->fakeProjection(plainText: $plainText, version: '2');
+
+        $this->assertSame(9, $anchor['start']);
+        $this->assertSame(15, $anchor['end']);
+        $selectedText = $this->utf16CodeUnitSlice(
+            $document->currentVersion->plain_text,
+            $anchor['start'],
+            $anchor['end'] - $anchor['start'],
+        );
+        $oldCodepointSlice = mb_substr(
+            $document->currentVersion->plain_text,
+            $anchor['start'],
+            $anchor['end'] - $anchor['start'],
+            'UTF-8',
+        );
+        $this->assertSame('target', $selectedText);
+        $this->assertNotSame('target', $oldCodepointSlice);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Emoji-safe anchor',
+                'idempotency_key' => 'inline-utf16-offsets',
+                'anchor' => $anchor,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.exact', 'target')
+            ->assertJsonPath('anchor.start', 9)
+            ->assertJsonPath('anchor.end', 15);
     }
 
     public function test_reviewer_can_create_inline_suggestion_and_reply_suggestion_pending(): void
@@ -472,6 +511,84 @@ class ThreadCommentTest extends TestCase
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/projection'));
     }
 
+    public function test_orphaned_thread_rejects_non_matching_reattach_anchor(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+        $anchor['exact'] = 'Missing text';
+        $this->fakeProjection($document->currentVersion->plain_text, '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/reanchor", ['anchor' => $anchor])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'anchor_document_changed');
+
+        $this->assertDatabaseCount('anchors', 1);
+    }
+
+    public function test_orphaned_thread_reattach_creates_current_anchored_row_and_leaves_tray(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/reanchor", ['anchor' => $anchor])
+            ->assertOk()
+            ->assertJsonPath('anchor.state', 'anchored')
+            ->assertJsonPath('anchor.exact', 'Replacement text');
+
+        $this->assertDatabaseCount('anchors', 2);
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $thread->id,
+            'document_version_id' => $document->currentVersion->id,
+            'exact' => 'Replacement text',
+            'state' => AnchorState::Anchored->value,
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.anchor.state', 'anchored')
+            ->assertJsonPath('data.0.anchor.exact', 'Replacement text');
+    }
+
+    public function test_non_member_cannot_reattach_thread_by_id(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $intruder = $this->registerUser('intruder@example.com');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+
+        $this->actingAs($intruder)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/reanchor", ['anchor' => $anchor])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('anchors', 1);
+    }
+
+    public function test_share_reviewer_with_only_deleted_comment_gets_no_reanchor_capability_for_orphaned_thread(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $thread = $this->orphanedThread($document, $author, 'target text');
+        $reviewer = User::factory()->create(['email' => 'reviewer@example.com']);
+        $share = Share::factory()->for($document)->create();
+        $this->verifyParticipant($share, $reviewer);
+        $reply = $thread->comments()->create([
+            'author_id' => $reviewer->id,
+            'body_md' => 'Reviewer reply',
+        ]);
+        $reply->delete();
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?per_page=10")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.can_reanchor', false);
+    }
+
     public function test_same_thread_idempotency_key_on_different_documents_creates_distinct_comments(): void
     {
         [$author, $documentA] = $this->readyDocument();
@@ -581,7 +698,7 @@ class ThreadCommentTest extends TestCase
         $this->assertDatabaseCount('comments', 1);
     }
 
-    public function test_thread_rail_keeps_anchor_from_the_creation_version_after_reimport(): void
+    public function test_thread_rail_does_not_leak_anchor_from_a_non_current_version(): void
     {
         [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
         $versionOne = $document->currentVersion;
@@ -605,8 +722,105 @@ class ThreadCommentTest extends TestCase
         $this->actingAs($author)->fromWebApp()
             ->getJson("/api/v1/documents/{$document->id}/threads")
             ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_threads_endpoint_defaults_to_current_version_and_accepts_version_filter(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text');
+        $versionOne = $document->currentVersion;
+
+        $created = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Inline on V1',
+                'idempotency_key' => 'v1-version-filter',
+                'anchor' => $this->anchorFor($versionOne->plain_text, 'Alpha', '2'),
+            ])
+            ->assertCreated();
+
+        $thread = Thread::findOrFail($created->json('id'));
+        $versionTwo = $this->attachVersion(
+            $document,
+            content: "# Doc\n\nBeta target text",
+            plainText: 'Beta target text',
+            projectionVersion: '2',
+        );
+        $thread->anchors()->create($this->anchorFor($versionTwo->plain_text, 'Beta', '2') + [
+            'document_version_id' => $versionTwo->id,
+            'state' => AnchorState::Anchored,
+        ]);
+        $thread->anchors()->create($this->anchorFor($versionTwo->plain_text, 'target', '2') + [
+            'document_version_id' => $versionTwo->id,
+            'state' => AnchorState::Relocated,
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads")
+            ->assertOk()
+            ->assertJsonPath('data.0.anchor.document_version_id', $versionTwo->id)
             ->assertJsonPath('data.0.anchor.exact', 'target')
+            ->assertJsonPath('data.0.anchor.state', 'relocated');
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$versionOne->id}")
+            ->assertOk()
+            ->assertJsonPath('data.0.anchor.document_version_id', $versionOne->id)
+            ->assertJsonPath('data.0.anchor.exact', 'Alpha');
+    }
+
+    public function test_threads_endpoint_404s_foreign_version_filter(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $foreignDocument = Document::factory()
+            ->for($author->personalWorkspace(), 'workspace')
+            ->ready()
+            ->create(['created_by' => $author->id]);
+        $foreignVersion = $this->attachVersion($foreignDocument);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$foreignVersion->id}")
+            ->assertNotFound();
+    }
+
+    public function test_inline_thread_created_while_viewing_old_version_anchors_to_that_version(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Old-only target text');
+        $versionOne = $document->currentVersion;
+        $versionTwo = $this->attachVersion(
+            $document,
+            content: "# Doc\n\nCurrent replacement text",
+            plainText: 'Current replacement text',
+            projectionVersion: '2',
+        );
+
+        $response = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Comment on the old version',
+                'document_version_id' => $versionOne->id,
+                'idempotency_key' => 'old-version-thread',
+                'anchor' => $this->anchorFor($versionOne->plain_text, 'Old-only', '2'),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.document_version_id', $versionOne->id)
+            ->assertJsonPath('anchor.exact', 'Old-only');
+
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $response->json('id'),
+            'document_version_id' => $versionOne->id,
+            'exact' => 'Old-only',
+        ]);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$versionOne->id}")
+            ->assertOk()
             ->assertJsonPath('data.0.anchor.document_version_id', $versionOne->id);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/threads?version={$versionTwo->id}")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 
     public function test_reply_idempotency_key_returns_the_original_comment(): void
@@ -1901,24 +2115,58 @@ class ThreadCommentTest extends TestCase
         return $version;
     }
 
+    private function orphanedThread(Document $document, User $author, string $exact): Thread
+    {
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $thread->comments()->create([
+            'author_id' => $author->id,
+            'body_md' => 'Needs re-attach',
+        ]);
+        $thread->anchors()->create($this->anchorFor($document->currentVersion->plain_text, $exact, '2') + [
+            'document_version_id' => $document->currentVersion->id,
+            'state' => AnchorState::Orphaned,
+        ]);
+
+        return $thread;
+    }
+
     /**
      * @return array{exact: string, prefix: string, suffix: string, start: int, end: int, heading_path: list<string>, projection_version: string}
      */
     private function anchorFor(string $plainText, string $exact, string $projectionVersion): array
     {
-        $start = mb_strpos($plainText, $exact, 0, 'UTF-8');
-        $this->assertNotFalse($start);
-        $end = $start + mb_strlen($exact, 'UTF-8');
+        $codepointStart = mb_strpos($plainText, $exact, 0, 'UTF-8');
+        $this->assertNotFalse($codepointStart);
+        $start = $this->utf16CodeUnitLength(mb_substr($plainText, 0, $codepointStart, 'UTF-8'));
+        $end = $start + $this->utf16CodeUnitLength($exact);
 
         return [
             'exact' => $exact,
-            'prefix' => mb_substr($plainText, max(0, $start - 8), min(8, $start), 'UTF-8'),
-            'suffix' => mb_substr($plainText, $end, 8, 'UTF-8'),
+            'prefix' => $this->utf16CodeUnitSlice($plainText, max(0, $start - 8), min(8, $start)),
+            'suffix' => $this->utf16CodeUnitSlice($plainText, $end, 8),
             'start' => $start,
             'end' => $end,
             'heading_path' => ['Doc'],
             'projection_version' => $projectionVersion,
         ];
+    }
+
+    private function utf16CodeUnitLength(string $value): int
+    {
+        return intdiv(strlen(mb_convert_encoding($value, 'UTF-16LE', 'UTF-8')), 2);
+    }
+
+    private function utf16CodeUnitSlice(string $value, int $start, int $length): string
+    {
+        $utf16 = mb_convert_encoding($value, 'UTF-16LE', 'UTF-8');
+        $slice = substr($utf16, $start * 2, $length * 2);
+
+        return mb_convert_encoding($slice, 'UTF-8', 'UTF-16LE');
     }
 
     private function fakeProjection(string $plainText, string $version): void

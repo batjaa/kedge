@@ -31,16 +31,24 @@ export interface ReplyComposerDraftSnapshot {
 
 export async function postDocumentComposerDraft({
   documentId,
+  documentVersionId,
   draft,
   createThread,
   createSuggestionThread,
 }: {
   documentId: number;
+  documentVersionId?: number;
   draft: DocumentComposerDraftSnapshot;
   createThread: (documentId: number, input: CreateThreadInput) => Promise<CreateThreadOutcome>;
   createSuggestionThread: (
     documentId: number,
-    input: { body?: string; proposed_text: string; anchor: ThreadAnchorPayload; idempotency_key: string },
+    input: {
+      body?: string;
+      proposed_text: string;
+      anchor: ThreadAnchorPayload;
+      idempotency_key: string;
+      document_version_id?: number;
+    },
   ) => Promise<CreateThreadOutcome>;
 }): Promise<DraftPostResult<ReviewThread>> {
   const canSuggest = draft.mode === 'inline' && draft.anchor != null && !draft.failedCapture;
@@ -69,6 +77,7 @@ export async function postDocumentComposerDraft({
         proposed_text: submitState.trimmedProposedText,
         anchor,
         idempotency_key: draft.idempotencyKey,
+        document_version_id: documentVersionId,
       })
     : draft.mode === 'inline' && anchor
       ? await createThread(documentId, {
@@ -76,12 +85,14 @@ export async function postDocumentComposerDraft({
           body: draft.body,
           anchor,
           idempotency_key: draft.idempotencyKey,
+          document_version_id: documentVersionId,
         })
       : await createThread(documentId, {
           type: 'document',
           body: draft.body,
           failed_capture: draft.failedCapture,
           idempotency_key: draft.idempotencyKey,
+          document_version_id: documentVersionId,
         });
 
   if (!outcome.ok) return { status: 'failed', message: outcome.message };

@@ -27,8 +27,8 @@ class ThreadResource extends JsonResource
     {
         $anchor = $this->railAnchor();
         $firstComment = $this->resourceFirstComment();
-        $canTriage = ThreadCapabilities::for($request, $this->resource)
-            ->canTriage($this->resource);
+        $capabilities = ThreadCapabilities::for($request, $this->resource);
+        $canTriage = $capabilities->canTriage($this->resource);
 
         return [
             'id' => $this->id,
@@ -49,6 +49,7 @@ class ThreadResource extends JsonResource
             'comments' => CommentResource::collection($this->whenLoaded('comments')),
             'can_resolve' => $canTriage && $this->status->value === 'open',
             'can_reopen' => $canTriage && $this->status->value === 'resolved',
+            'can_reanchor' => $capabilities->canReanchor($this->resource),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "threadId": 10,
+      "state": "anchored",
+      "exact": "beta gamma",
+      "prefix": "Alpha ",
+      "suffix": " delta.",
+      "start": 6,
+      "end": 16
+    }
+  ]
+}

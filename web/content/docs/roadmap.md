@@ -19,7 +19,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Scaffold | M | — | done (2026-07-12) | [specs/m0-scaffold.md](specs/m0-scaffold.md) · [#7](https://github.com/batjaa/kedge/issues/7) |
 | Import & render | L | Scaffold | done (2026-07-15) | [specs/m1-import-render.md](specs/m1-import-render.md) · [#15](https://github.com/batjaa/kedge/issues/15) |
 | Comments & suggestions | L | Import & render | done (2026-07-16) | [specs/m2-comments-suggestions.md](specs/m2-comments-suggestions.md) · [#58](https://github.com/batjaa/kedge/issues/58) |
-| Versions, diff & approvals | L | Comments & suggestions | deciding | — |
+| Versions, diff & approvals | L | Comments & suggestions | done (2026-07-20) | [specs/m3-versions-diff-approvals.md](specs/m3-versions-diff-approvals.md) · [#72](https://github.com/batjaa/kedge/issues/72) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
@@ -42,7 +42,7 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-1. **Anchoring port spike** (P1, S) — validate hypothes.is's `dom-anchor-text-quote` + diff-match-patch exact→fuzzy→orphan ladder on 2–3 real RFCs. Blocks **Versions, diff & approvals**. (TODOS.md open spikes)
+1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
 3. **Domains, org & trademark** (P1, user actions) — register kedge.review/kedge.ink, create the kedgehq org, USPTO/EUIPO search. Gates **Launch**. (TODOS.md)
 

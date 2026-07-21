@@ -2,6 +2,7 @@ import { Children, isValidElement, type ReactElement, type ReactNode } from 'rea
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentCommentComposer, type ComposerState } from '@/components/app/document-comment-composer';
+import { DocumentThreadRail } from '@/components/app/document-thread-rail';
 import { MentionTextarea } from '@/components/app/mention-textarea';
 import { postDocumentComposerDraft, postReplyComposerDraft } from '@/lib/comment-composer-actions';
 import { createCommentForkGuard } from '@/lib/comment-fork-guard';
@@ -252,6 +253,38 @@ describe('fork idempotency guard', () => {
   });
 });
 
+describe('orphaned tray re-attach status', () => {
+  it('renders the selection instruction while the composer is closed', () => {
+    const html = renderRail({
+      pendingReattachThreadId: 71,
+      reattachStatus: {
+        threadId: 71,
+        tone: 'info',
+        message: 'Select replacement text in the document to re-attach this thread.',
+      },
+    });
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Select replacement text in the document to re-attach this thread.');
+    expect(html).toContain('Select text');
+  });
+
+  it('renders re-attach API failures as visible errors', () => {
+    const html = renderRail({
+      pendingReattachThreadId: 71,
+      reattachStatus: {
+        threadId: 71,
+        tone: 'error',
+        message: 'The document changed since this text was selected. Re-select the text and try again.',
+      },
+    });
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('The document changed since this text was selected. Re-select the text and try again.');
+    expect(html).toContain('Select text');
+  });
+});
+
 function installStorage<T extends TestStorage>(storage: T): T {
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -444,7 +477,53 @@ function reviewThread(): ReviewThread {
     comments: [],
     can_resolve: true,
     can_reopen: false,
+    can_reanchor: true,
     created_at: null,
     updated_at: null,
   };
+}
+
+function orphanedThread(): ReviewThread {
+  const thread = reviewThread();
+  if (!thread.anchor) throw new Error('Review thread fixture needs an anchor');
+
+  return {
+    ...thread,
+    anchor: {
+      ...thread.anchor,
+      state: 'orphaned',
+    },
+  };
+}
+
+function renderRail(overrides: Partial<Parameters<typeof DocumentThreadRail>[0]> = {}): string {
+  return renderToStaticMarkup(
+    <DocumentThreadRail
+      threads={[orphanedThread()]}
+      page={1}
+      lastPage={1}
+      activeThreadId={null}
+      highlightedThreadId={null}
+      anchorPositions={{}}
+      documentHeight={320}
+      onFocusThread={() => {}}
+      onActivateThread={() => {}}
+      onHoverThread={() => {}}
+      onLeaveThread={() => {}}
+      onLoadMore={() => {}}
+      onSetThreadStatus={async () => null}
+      onStartReattach={() => {}}
+      onReply={async () => null}
+      onForkComment={async () => null}
+      forkingCommentIds={new Set()}
+      onEditComment={async () => null}
+      onDeleteComment={async () => null}
+      onSetSuggestionStatus={async () => null}
+      onToggleReaction={async () => null}
+      pendingReattachThreadId={null}
+      reattachingThreadId={null}
+      reattachStatus={null}
+      {...overrides}
+    />,
+  );
 }

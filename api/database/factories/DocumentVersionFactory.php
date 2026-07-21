@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\VersionKind;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -22,6 +23,8 @@ class DocumentVersionFactory extends Factory
 
         return [
             'document_id' => Document::factory(),
+            'kind' => VersionKind::Mainline,
+            'parent_version_id' => null,
             'content_raw' => $content,
             'content_normalized' => $content,
             'content_hash' => hash('sha256', $content),

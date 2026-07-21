@@ -43,6 +43,25 @@ class DocumentPolicy
     }
 
     /**
+     * Move the author-controlled editorial lifecycle (SPEC §9). Plain workspace
+     * members and share reviewers can review/comment/approve, but cannot change
+     * the document's state.
+     */
+    public function updateLifecycle(User $user, Document $document): bool
+    {
+        return $this->authorOf($user, $document);
+    }
+
+    /**
+     * Pull a new source revision and re-anchor threads. Same author/member rule
+     * as other document mutations; share reviewers stay on the share surface.
+     */
+    public function resync(User $user, Document $document): bool
+    {
+        return $this->update($user, $document);
+    }
+
+    /**
      * Claim a demo document into your own workspace (SPEC §10.3, #25). Deliberately
      * NOT a membership check — the whole point is that the doc is *not* yours yet:
      * it lives in the reserved system workspace. Only a demo doc is claimable, so

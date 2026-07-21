@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Enums\VersionKind;
 use App\Models\DocumentVersion;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,11 +21,27 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class DocumentVersionResource extends JsonResource
 {
+    /**
+     * No "data" envelope for single version reads.
+     *
+     * @var string|null
+     */
+    public static $wrap = null;
+
     private bool $includeProjectionSubstrate = false;
+
+    private ?int $ordinal = null;
 
     public function withProjectionSubstrate(): self
     {
         $this->includeProjectionSubstrate = true;
+
+        return $this;
+    }
+
+    public function withOrdinal(?int $ordinal): self
+    {
+        $this->ordinal = $ordinal;
 
         return $this;
     }
@@ -36,6 +53,9 @@ class DocumentVersionResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'ordinal' => $this->ordinal(),
+            'kind' => $this->kind instanceof VersionKind ? $this->kind->value : $this->kind,
+            'parent_version_id' => $this->parent_version_id,
             'content_hash' => $this->content_hash,
             'content' => $this->content_normalized,
             'import_warnings' => $this->import_warnings ?? [],
@@ -45,5 +65,16 @@ class DocumentVersionResource extends JsonResource
             'source_version' => $this->source_version,
             'synced_at' => $this->synced_at,
         ];
+    }
+
+    private function ordinal(): ?int
+    {
+        if ($this->ordinal !== null) {
+            return $this->ordinal;
+        }
+
+        $attribute = $this->resource->getAttribute('ordinal');
+
+        return $attribute === null ? null : (int) $attribute;
     }
 }

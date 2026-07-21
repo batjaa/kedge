@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
-import { forwardApiGet } from './bff';
-import type { Document } from './document-types';
+import { forwardApiGet, forwardApiGetWithJson } from './bff';
+import type { Document, DocumentVersion, DocumentVersionDiff } from './document-types';
 
 // Server-only. Reads a document by forwarding the incoming request's cookies to
 // the API's poll endpoint (the BFF read path, SPEC 4). Shared by the document
@@ -19,4 +19,55 @@ export async function getDocument(id: string): Promise<DocumentReadResult> {
     `/api/v1/documents/${encodeURIComponent(id)}`,
   );
   return { status, document: data };
+}
+
+export interface DocumentVersionsReadResult {
+  status: number;
+  versions: DocumentVersion[];
+}
+
+interface DocumentVersionCollection {
+  data: DocumentVersion[];
+}
+
+export async function getDocumentVersions(id: string): Promise<DocumentVersionsReadResult> {
+  const { status, data } = await forwardApiGet<DocumentVersionCollection>(
+    await headers(),
+    `/api/v1/documents/${encodeURIComponent(id)}/versions`,
+  );
+
+  return { status, versions: data?.data ?? [] };
+}
+
+export interface DocumentVersionReadResult {
+  status: number;
+  version: DocumentVersion | null;
+}
+
+export async function getDocumentVersion(id: string, versionId: string): Promise<DocumentVersionReadResult> {
+  const { status, data } = await forwardApiGet<DocumentVersion>(
+    await headers(),
+    `/api/v1/documents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`,
+  );
+
+  return { status, version: data };
+}
+
+export interface DocumentVersionDiffReadResult {
+  status: number;
+  diff: DocumentVersionDiff | null;
+}
+
+export async function getDocumentVersionDiff(
+  id: string,
+  baseVersionId: string,
+  targetVersionId: string,
+): Promise<DocumentVersionDiffReadResult> {
+  const { status, data } = await forwardApiGetWithJson<DocumentVersionDiff>(
+    await headers(),
+    `/api/v1/documents/${encodeURIComponent(id)}/versions/${encodeURIComponent(baseVersionId)}/diff/${encodeURIComponent(targetVersionId)}`,
+    [200, 409],
+  );
+
+  return { status, diff: data };
 }

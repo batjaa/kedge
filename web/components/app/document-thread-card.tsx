@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, RotateCcw } from 'lucide-react';
+import { Check, Flag, RotateCcw } from 'lucide-react';
 import { StatusBadge } from './document-thread-badges';
 import { CommentRow, useCommentEditState } from './document-thread-comment-row';
 import { ReplyComposer } from './document-thread-reply-composer';
@@ -132,6 +132,7 @@ export function ThreadCard({
             {isAgentThread ? 'Agent' : isSuggestionThread ? 'Suggestion' : 'Thread'}
           </span>
         </button>
+        {thread.anchor?.state === 'relocated' ? <RelocatedBadge /> : null}
         <span className="truncate font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
           {sectionLabel(thread.anchor)}
         </span>
@@ -212,9 +213,26 @@ export function ThreadCard({
 }
 
 function Quote({ anchor }: { anchor: ThreadAnchor }) {
+  const relocated = anchor.state === 'relocated';
+
   return (
-    <span className="block border-l-2 border-emerald-500/40 pl-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+    <span className={cn(
+      'block border-l-2 pl-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400',
+      relocated ? 'border-amber-500/60' : 'border-emerald-500/40',
+    )}>
       {anchor.exact}
+    </span>
+  );
+}
+
+function RelocatedBadge() {
+  return (
+    <span
+      title="Relocated after re-anchoring; verify the moved selection."
+      className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 ring-1 ring-inset ring-amber-400/35 dark:text-amber-300 dark:ring-amber-400/25"
+    >
+      <Flag className="h-3 w-3" aria-hidden="true" />
+      Moved
     </span>
   );
 }

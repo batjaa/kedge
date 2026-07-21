@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "selector": {
+    "exact": "middle 🚀 target",
+    "prefix": "Before 👍 ",
+    "suffix": ".",
+    "start": 10,
+    "end": 26,
+    "heading_path": [],
+    "projection_version": 73
+  }
+}

@@ -75,6 +75,7 @@ export interface ReviewThread {
   comments?: ThreadComment[];
   can_resolve: boolean;
   can_reopen: boolean;
+  can_reanchor: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
