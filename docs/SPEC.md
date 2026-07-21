@@ -416,7 +416,7 @@ entity workspaces { id \n name, slug, settings }
 entity workspace_members { workspace_id, user_id \n role: owner|member }
 entity integrations { id \n workspace_id \n provider: github_app|github_pat|confluence \n credentials (encrypted) \n meta }
 entity projects { id \n workspace_id \n name, slug, description? \n created_by }
-entity tracked_repos { id \n workspace_id, project_id? \n integration_id? \n repo_url, ref?, path_glob \n last_scan_status: ok|failed \n scan_error?, last_scanned_at \n created_by }
+entity tracked_repos { id \n workspace_id, project_id? \n integration_id? \n repo_url, ref?, path_pattern \n last_scan_status: ok|failed \n scan_error?, last_scanned_at \n created_by }
 entity documents { id \n workspace_id, integration_id? \n project_id?, tracked_repo_id? \n source_type, source_url, source_meta \n title, format: md|mdx|html \n current_version_id \n status: importing|ready|failed \n last_sync_status: ok|failed \n sync_error? \n lifecycle_status: draft|in_review|approved|superseded \n expires_at? (demo) \n created_by }
 entity document_versions { id \n document_id \n kind: mainline|candidate \n parent_version_id? \n content_raw, content_normalized \n plain_text, projection_version \n content_hash (uniq w/ doc) \n source_version, synced_at }
 entity shares { id \n document_id \n token (uniq), visibility \n allow_anonymous, expires_at, revoked_at }
