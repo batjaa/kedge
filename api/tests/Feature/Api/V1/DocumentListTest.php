@@ -126,6 +126,38 @@ class DocumentListTest extends TestCase
             ->assertJsonPath('meta.per_page', 1);
     }
 
+    public function test_same_second_documents_paginate_without_dropping_or_duplicating_rows(): void
+    {
+        $user = $this->registerUser();
+
+        // 25 documents sharing one second-precision timestamp: `latest()` alone
+        // cannot order them, so only the `id` tiebreaker keeps a page boundary from
+        // permuting rows between reads — which would drop one straddling row and
+        // double another (4A).
+        $ids = Document::factory()->count(25)->for($user->personalWorkspace())
+            ->create(['created_at' => now()])
+            ->pluck('id')
+            ->all();
+
+        $pageOne = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?per_page=20')
+            ->assertOk();
+        $pageTwo = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?per_page=20&page=2')
+            ->assertOk();
+
+        $seen = array_merge(
+            array_column($pageOne->json('data'), 'id'),
+            array_column($pageTwo->json('data'), 'id'),
+        );
+
+        // The union of the two pages is every id exactly once — no straddling row
+        // lost, none duplicated.
+        $this->assertCount(25, $seen);
+        $this->assertSame(count($seen), count(array_unique($seen)));
+        $this->assertEqualsCanonicalizing($ids, $seen);
+    }
+
     public function test_open_threads_count_counts_only_open_threads(): void
     {
         $user = $this->registerUser();

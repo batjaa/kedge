@@ -60,7 +60,11 @@ class DocumentController extends Controller
         $documents = $request->user()->personalWorkspace()->documents()
             ->with(['currentVersion' => fn ($query) => $query->select('id', 'document_id', 'synced_at')])
             ->withCount(['threads as open_threads_count' => fn ($query) => $query->where('status', ThreadStatus::Open->value)])
+            // `created_at` is second-precision, so a stable tiebreaker is required:
+            // without it same-second rows can order differently between page reads,
+            // and a row straddling a page boundary can permute or silently drop.
             ->latest()
+            ->orderByDesc('id')
             ->paginate($perPage);
 
         return DocumentListResource::collection($documents);
