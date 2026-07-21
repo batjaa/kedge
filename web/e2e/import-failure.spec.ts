@@ -7,9 +7,11 @@ import { register, uniqueIdentity } from './helpers';
 //
 //   1. SSRF-blocked URL — a private/reserved address the guard refuses. This is
 //      DETERMINISTIC, so the import job swallows it (no retry, no rethrow) and
-//      marks the document failed inline: the API answers 202, the browser lands
-//      on the document page, and it shows the friendly "URL not allowed" message
-//      with a working Retry CTA.
+//      marks the document failed inline: the API answers 202, and submit stays
+//      home (5A) — the failed import surfaces as a row on the "Your documents"
+//      list that settles to failed in place (2A). Clicking through to its review
+//      surface shows the friendly "URL not allowed" message with a working Retry
+//      CTA (the shared retry affordance; inline row retry is #87).
 //
 //   2. Transient upstream error — a source that 500s. This bubbles out of the
 //      import as a non-deterministic failure. It surfaces as a friendly inline
@@ -40,8 +42,17 @@ test('SSRF-blocked URL fails fast with a friendly message and a working retry CT
   await page.getByLabel('Document URL', { exact: true }).fill(PRIVATE_ADDRESS_URL);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
 
-  // A deterministic block is marked failed inline, so the browser still lands on
-  // the document page — showing the failed state, not the importing spinner.
+  // Submit stays home (5A): the blocked import prepends a row that settles to
+  // failed in place (2A) — the failure surfaces on the home list, not by an
+  // automatic navigation.
+  const rows = page.getByRole('region', { name: 'Your documents' }).getByRole('link');
+  await expect(rows).toHaveCount(1, { timeout: 30_000 });
+  await expect(rows.first().getByText('Import failed')).toBeVisible({ timeout: 30_000 });
+
+  // The row is a real link (10A): click through to the review surface, where the
+  // shared retry affordance lives (inline row retry is #87). The failed document
+  // page shows the friendly failed state, not the importing spinner.
+  await rows.first().click();
   await expect(page).toHaveURL(/\/documents\/\d+$/, { timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Import failed' })).toBeVisible();
 
