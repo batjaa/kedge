@@ -459,7 +459,7 @@ All list endpoints are **paginated at the database** (cursor or page). Policies 
 POST   /demo/documents             {url}                    → unauthenticated import (rate-limited)
 POST   /documents/{id}/claim                                → move demo doc into my workspace
 POST   /documents                  {url | content}          → import (202)
-GET    /documents                  ?project=&status=&page=  → workspace docs list (M3.5): lifecycle, counts, sync + import state
+GET    /documents                  ?page=&per_page=         → workspace docs list (M3.5): lifecycle, counts, sync + import state; ?project= arrives M3.6, no ?status= filter is scheduled
 GET    /documents/{id}                                      → doc + current version + sync/lifecycle state
 PATCH  /documents/{id}             {lifecycle_status | project_id}
 
