@@ -14,6 +14,7 @@ export function toListItem(doc: Document): DocumentListItem {
     lifecycle_status: doc.lifecycle_status,
     open_threads_count: 0,
     synced_at: doc.current_version?.synced_at ?? null,
+    project: doc.project ?? null,
     created_at: doc.created_at,
   };
 }

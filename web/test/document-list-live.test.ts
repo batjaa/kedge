@@ -312,6 +312,7 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     lifecycle_status: 'draft',
     open_threads_count: 0,
     synced_at: null,
+    project: null,
     created_at: null,
     ...overrides,
   };

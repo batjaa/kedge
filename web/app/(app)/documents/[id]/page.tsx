@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getDocument, getDocumentVersion, getDocumentVersions } from '@/lib/documents';
+import { getProjects } from '@/lib/projects';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { DocumentClaim } from '@/components/app/document-claim';
@@ -11,7 +12,7 @@ import { DocumentStaticHeader } from '@/components/app/document-static-header';
 import { PageContainer } from '@/components/app/page-container';
 import { StatePanel } from '@/components/app/state-panel';
 import { getSession } from '@/lib/session';
-import type { DocumentVersion } from '@/lib/document-types';
+import type { DocumentVersion, Project } from '@/lib/document-types';
 import { versionLabel } from '@/lib/version-label';
 
 // The imported-document reading surface (ticket #17). A server component fed
@@ -69,11 +70,18 @@ export default async function DocumentPage({
   const requestedVersionId = parseVersionParam(version);
   let viewedVersion: DocumentVersion | null = document.current_version ?? null;
   let versions: DocumentVersion[] = viewedVersion ? [viewedVersion] : [];
+  let projects: Project[] = [];
 
   if (document.status === 'ready' && document.current_version) {
-    const versionsResult = await getDocumentVersions(id);
+    const [versionsResult, projectsResult] = await Promise.all([
+      getDocumentVersions(id),
+      getProjects(),
+    ]);
     if (versionsResult.status === 403 || versionsResult.status === 404) notFound();
     if (versionsResult.status === 200) versions = versionsResult.versions;
+    // The assignment selector's options; a refused/unreachable read just leaves
+    // the selector out (it degrades to no-projects, never an error).
+    projects = projectsResult.projects;
 
     if (requestedVersionId !== null) {
       const versionResult = await getDocumentVersion(id, requestedVersionId);
@@ -138,6 +146,8 @@ export default async function DocumentPage({
             approvals={document.approvals ?? []}
             currentUserId={session?.user.id ?? null}
             canUpdateLifecycle={document.capabilities?.update_lifecycle ?? false}
+            projects={projects}
+            projectId={document.project?.id ?? null}
             backHref="/"
             backLabel="← Review queue"
             plainText={viewedVersion.plain_text ?? null}

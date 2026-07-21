@@ -4,6 +4,7 @@ import { PageContainer } from '@/components/app/page-container';
 import { DemoHome } from '@/components/app/demo-home';
 import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
+import { getProjects } from '@/lib/projects';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
@@ -55,7 +56,7 @@ async function ReviewQueue({
   firstName: string;
   workspace: Workspace;
 }) {
-  const documents = await getDocuments();
+  const [documents, projectsResult] = await Promise.all([getDocuments(), getProjects()]);
 
   // A refused list read is an auth problem, not an outage: the session lapsed
   // between the /me guard and this fetch, or a workspace-less reviewer reached
@@ -77,7 +78,7 @@ async function ReviewQueue({
         Welcome, {firstName}. This is {workspace.name} — your personal workspace.
       </p>
 
-      <WorkspaceHome initialPage={documents.page} />
+      <WorkspaceHome initialPage={documents.page} initialProjects={projectsResult.projects} />
     </PageContainer>
   );
 }

@@ -10,9 +10,15 @@ import type { DocumentListPage } from '@/lib/document-types';
 // their status straight through, matching the per-document poll route.
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const page = request.nextUrl.searchParams.get('page') ?? '1';
+  const query = new URLSearchParams({ page });
+  // Forward the reserved `?project=` filter (id or `unfiled`) so a project
+  // page's Load more stays scoped to its project (M3.6).
+  const project = request.nextUrl.searchParams.get('project');
+  if (project) query.set('project', project);
+
   const { status, data } = await forwardApiGet<DocumentListPage>(
     request.headers,
-    `/api/v1/documents?page=${encodeURIComponent(page)}`,
+    `/api/v1/documents?${query.toString()}`,
   );
 
   if (data) {
