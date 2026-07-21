@@ -179,6 +179,7 @@ describe('DocumentList', () => {
         hasMore={true}
         loadingMore={false}
         onLoadMore={noop}
+        onRetried={noop}
       />,
     );
 
@@ -201,6 +202,7 @@ describe('DocumentList', () => {
         hasMore={false}
         loadingMore={false}
         onLoadMore={noop}
+        onRetried={noop}
       />,
     );
 
@@ -218,6 +220,7 @@ describe('DocumentList', () => {
         hasMore={true}
         loadingMore={true}
         onLoadMore={noop}
+        onRetried={noop}
       />,
     );
 
