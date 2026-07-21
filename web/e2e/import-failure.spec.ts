@@ -105,10 +105,25 @@ test('a failed home row recovers INLINE — retry flips it to importing and sett
   await expect(documents.getByRole('link', { name: 'Reconnect GitHub' })).toHaveCount(0);
   await expect(page).toHaveURL('/');
 
+  // Park the per-row poll — only /api/bff/documents/<id>, never the list route —
+  // so the retried row is observably "Importing" before it settles: the
+  // synchronous queue re-fails the blocked URL immediately, so without parking the
+  // first 1.5s poll could settle it back to failed before this assertion runs, a
+  // deterministic race under retries:0. Unrouting lets the real (failed) settle go.
+  const perRowPoll = /\/api\/bff\/documents\/\d+(?:\?.*)?$/;
+  await page.route(perRowPoll, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'importing' }),
+    }),
+  );
+
   // Inline retry re-runs the import IN PLACE: the row flips back to importing
   // (proof onRetry wires into the row's status so the RowPoller resumes)…
   await retry.click();
   await expect(documents.getByText('Importing')).toBeVisible({ timeout: 30_000 });
+  await page.unroute(perRowPoll);
 
   // …and settles again in place — still one row, still on home, no navigation.
   // A blocked URL is deterministic, so it re-settles to failed and offers Retry

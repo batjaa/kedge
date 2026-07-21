@@ -90,15 +90,20 @@ export async function importDocumentFromUrl(page: Page, url: string): Promise<nu
     page.getByRole('heading', { name: 'Import a document' }),
   ).toBeVisible();
 
-  const rows = page.getByRole('region', { name: 'Your documents' }).getByRole('link');
+  // Count STRUCTURAL rows, not anchors: a failed row renders two anchors (the row
+  // link plus a Reconnect link), which would break link-count arithmetic. Each
+  // list row is one listitem regardless of how many actions it carries.
+  const rows = page.getByRole('region', { name: 'Your documents' }).getByRole('listitem');
   const before = await rows.count();
 
   await page.getByLabel('Document URL', { exact: true }).fill(url);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
 
-  // The 202'd document prepends as a new row; the newest sits first.
+  // The 202'd document prepends as a new row; the newest sits first. Click that
+  // row's OWN document link (its first anchor), never a Reconnect link a failed
+  // row might also render.
   await expect(rows).toHaveCount(before + 1, { timeout: 30_000 });
-  await rows.first().click();
+  await rows.first().getByRole('link').first().click();
 
   await expect(page).toHaveURL(/\/documents\/\d+$/, { timeout: 30_000 });
   const match = /\/documents\/(\d+)$/.exec(page.url());
