@@ -17,6 +17,40 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | GitHub API host
+    |--------------------------------------------------------------------------
+    |
+    | The host every GitHub REST call targets — the blob connectors (#17/#23) and
+    | the tracked-repo tree lister (M3.6) alike. `api.github.com` in every real
+    | deployment; env-configurable ONLY as the test seam (SPEC §16 M3.6 testing
+    | decision 3): the Playwright journeys and preview fixtures point it at a
+    | loopback server that emulates the minimal repo/branches/tree endpoints. It
+    | must never be changed in production — the outbound fetch still runs the full
+    | SSRF guard, and a listed FETCH_ALLOW_HOSTS entry is what admits the loopback.
+    |
+    */
+
+    'github' => [
+        'api_host' => (string) env('GITHUB_API_HOST', 'api.github.com'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tracked repos (SPEC §16, M3.6)
+    |--------------------------------------------------------------------------
+    |
+    | The file-count cap enforced at preview (and, later, scan): a recursive
+    | match-everything glob on a monorepo fails loudly with an over-cap error
+    | naming the count, never a workspace-flooding import (story 18). Tunable.
+    |
+    */
+
+    'tracked_repos' => [
+        'file_cap' => (int) env('TRACKED_REPO_FILE_CAP', 200),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Frontend URL
     |--------------------------------------------------------------------------
     |
