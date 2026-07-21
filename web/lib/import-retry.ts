@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { retryImport, type ImportOutcome } from '@/lib/documents-client';
 
 // The API's token-revoked sync_error carries "reconnect" (SPEC §19). A dead PAT
@@ -56,18 +55,23 @@ export interface ImportRetry {
 }
 
 // Shared failed-import recovery affordance (SPEC §11 M3.5, decision 7A):
-// pending guard, dead-PAT branch, and retry error copy in one place, consumed
-// today by the doc page's ImportFailed state and next by the documents-list row
-// (#87) — whatever markup each surface wraps around it.
+// pending guard, dead-PAT branch, and retry error copy in one place, consumed by
+// the doc page's ImportFailed state (#83) and the documents-list row (#87) —
+// whatever markup each surface wraps around it. What "success" *does* differs per
+// surface, so the consumer injects `onRetried`: the doc page refreshes the route
+// (re-entering its importing/poll state); the list row flips its own row back to
+// `importing` so the RowPoller resumes in place. Keeping the router out of here
+// means the row consumer needs no app-router context.
 export function useImportRetry({
   id,
   error,
+  onRetried,
 }: {
   id: number;
   error: string | null;
+  onRetried: () => void;
 }): ImportRetry {
   const needsReconnect = importNeedsReconnect(error);
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
 
@@ -78,7 +82,7 @@ export function useImportRetry({
       retry: retryImport,
       setPending,
       setError: setRetryError,
-      onRetried: () => router.refresh(),
+      onRetried,
     });
 
   return { needsReconnect, pending, retryError, onRetry };

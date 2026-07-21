@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appendItems,
   hasMorePages,
+  markRetrying,
   mergeSettled,
   nextLoadMorePage,
   prependItem,
@@ -113,6 +114,50 @@ describe('document list live state', () => {
       const result = mergeSettled(items, document({ id: 1, status: 'ready' }));
 
       expect(result[1]).toBe(untouched);
+    });
+  });
+
+  describe('markRetrying', () => {
+    it('flips a retried failed row back to importing so shouldPoll re-arms it (7A)', () => {
+      const items = [
+        item({
+          id: 1,
+          status: 'failed',
+          last_sync_status: 'failed',
+          sync_error: 'URL not allowed (private address).',
+          open_threads_count: 2,
+        }),
+      ];
+
+      const result = markRetrying(items, 1);
+
+      expect(result[0]).toMatchObject({
+        status: 'importing',
+        last_sync_status: 'ok',
+        sync_error: null,
+        // Row-only data is preserved across the flip.
+        open_threads_count: 2,
+      });
+      expect(shouldPoll(result[0])).toBe(true);
+    });
+
+    it('leaves other rows untouched and does not mutate the input', () => {
+      const untouched = item({ id: 2, title: 'Other document' });
+      const items = [item({ id: 1, status: 'failed' }), untouched];
+
+      const result = markRetrying(items, 1);
+
+      expect(result[1]).toBe(untouched);
+      expect(result).not.toBe(items);
+      expect(items[0].status).toBe('failed');
+    });
+
+    it('leaves the list unchanged when the id is absent', () => {
+      const items = [item({ id: 1, status: 'failed' }), item({ id: 2 })];
+
+      const result = markRetrying(items, 99);
+
+      expect(result).toEqual(items);
     });
   });
 

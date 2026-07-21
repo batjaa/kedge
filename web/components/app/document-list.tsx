@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
 import { readDocument } from '@/lib/documents-client';
 import { POLL_INTERVAL_MS } from '@/lib/document-list-live';
+import { useImportRetry } from '@/lib/import-retry';
 import type { Document, DocumentListItem, LifecycleStatus } from '@/lib/document-types';
 
 // The workspace document list on the authenticated home (SPEC 11). The client
@@ -29,6 +30,7 @@ export function DocumentList({
   degraded,
   announcement,
   onSettled,
+  onRetried,
 }: {
   items: DocumentListItem[];
   total: number;
@@ -38,6 +40,7 @@ export function DocumentList({
   degraded: boolean;
   announcement: string;
   onSettled: (doc: Document) => void;
+  onRetried: (id: number) => void;
 }) {
   // Degraded wins only while we have nothing to show; a successful import gives
   // us a real row, so the StatePanel yields to it rather than hiding it.
@@ -75,7 +78,12 @@ export function DocumentList({
         <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
           <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
             {items.map((item) => (
-              <DocumentRow key={item.id} item={item} onSettled={onSettled} />
+              <DocumentRow
+                key={item.id}
+                item={item}
+                onSettled={onSettled}
+                onRetried={onRetried}
+              />
             ))}
           </ul>
         </div>
@@ -115,9 +123,11 @@ function EmptyState() {
 function DocumentRow({
   item,
   onSettled,
+  onRetried,
 }: {
   item: DocumentListItem;
   onSettled: (doc: Document) => void;
+  onRetried: (id: number) => void;
 }) {
   return (
     <li>
@@ -136,13 +146,74 @@ function DocumentRow({
         </div>
         <OpenThreads count={item.open_threads_count} />
       </Link>
+      {/* Recovery lives outside the row link (an anchor can't wrap a button):
+          a failed row shows its error and the shared retry affordance inline (7A),
+          so recovery starts where the failure is seen. */}
+      {item.status === 'failed' ? (
+        <RowRetry item={item} onRetried={onRetried} />
+      ) : null}
       {/* Only importing rows mount a poller, so an idle list issues zero
           background requests (2A); the poller unmounts — and stops — the moment
-          the row settles out of `importing`. */}
+          the row settles out of `importing`. A retry flips the row back to
+          `importing`, which re-mounts this poller so the row settles live. */}
       {item.status === 'importing' ? (
         <RowPoller id={item.id} onSettled={onSettled} />
       ) : null}
     </li>
+  );
+}
+
+// The failed row's inline recovery (7A) — the documents-list's consumer of the
+// shared affordance the doc page's ImportFailed also uses, so copy and behaviour
+// (pending guard, retry-error copy, dead-PAT branch) match exactly. Compact by
+// design (a list row, not the doc-page panel): the import error and one action.
+// A transient failure offers Retry, which flips the row back to `importing` via
+// onRetried so the RowPoller resumes and settles it in place. A dead PAT can't
+// heal on retry, so it offers "reconnect in Settings" INSTEAD — never a futile
+// retry (SPEC §19). The re-settle rides the list's existing polite live region:
+// a recovery to ready reads as a fresh "Import ready: {title}" announcement — no
+// new a11y machinery.
+function RowRetry({
+  item,
+  onRetried,
+}: {
+  item: DocumentListItem;
+  onRetried: (id: number) => void;
+}) {
+  const { needsReconnect, pending, retryError, onRetry } = useImportRetry({
+    id: item.id,
+    error: item.sync_error,
+    onRetried: () => onRetried(item.id),
+  });
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 pb-4 sm:px-6">
+      <p className="min-w-0 flex-1 text-xs leading-5 text-rose-600 dark:text-rose-400">
+        {item.sync_error ?? 'The document could not be imported.'}
+      </p>
+      {needsReconnect ? (
+        <Link
+          href="/settings"
+          className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
+        >
+          Reconnect GitHub
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={pending}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+        >
+          {pending ? 'Retrying…' : 'Retry import'}
+        </button>
+      )}
+      {retryError ? (
+        <p role="alert" className="w-full text-xs text-rose-600 dark:text-rose-400">
+          {retryError}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
