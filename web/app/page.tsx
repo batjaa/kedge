@@ -57,6 +57,12 @@ async function ReviewQueue({
 }) {
   const documents = await getDocuments();
 
+  // A refused list read is an auth problem, not an outage: the session lapsed
+  // between the /me guard and this fetch, or a workspace-less reviewer reached
+  // here. Route to sign-in rather than dressing it up as "API unreachable". A
+  // 5xx/network read (page === null with a 502) still degrades the list area.
+  if (documents.status === 401 || documents.status === 403) redirect('/signin');
+
   return (
     <PageContainer>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
