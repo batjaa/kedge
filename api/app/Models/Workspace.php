@@ -49,6 +49,18 @@ class Workspace extends Model
     }
 
     /**
+     * The workspace's projects (SPEC §16, M3.6) — free containers for grouping
+     * documents. Scoped exactly like {@see documents()}: the set an id can never
+     * escape, which is what makes a foreign project id read as not-found (8A).
+     *
+     * @return HasMany<Project, $this>
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    /**
      * The workspace's connected GitHub PAT, or null (#23). The single source of
      * truth for "does this workspace import GitHub authenticated" — the import
      * flow prefers the authenticated connector whenever this is non-null. The

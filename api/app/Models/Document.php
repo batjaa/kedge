@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * failure, `last_sync_status` + `sync_error`.
  */
 #[Fillable([
-    'workspace_id', 'integration_id', 'source_type', 'source_url', 'source_meta',
+    'workspace_id', 'project_id', 'integration_id', 'source_type', 'source_url', 'source_meta',
     'title', 'format', 'current_version_id', 'status', 'last_sync_status',
     'sync_error', 'lifecycle_status', 'expires_at', 'created_by',
 ])]
@@ -53,6 +53,16 @@ class Document extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * The project this document is filed under, or null for Unfiled (SPEC §16,
+     * M3.6). Assignment moves freely and back to Unfiled; the project is a
+     * grouping container, never the document's owner.
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     /**
