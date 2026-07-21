@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -132,6 +133,10 @@ class DocumentProjectAssignmentTest extends TestCase
 
     public function test_importing_with_a_project_files_the_document(): void
     {
+        // Keep the import queued (not run inline) so the assertion is about
+        // filing at store time, not the full import pipeline.
+        Queue::fake();
+
         $user = $this->registerUser();
         $project = Project::factory()->for($user->personalWorkspace())->create(['name' => 'Anchoring']);
 
