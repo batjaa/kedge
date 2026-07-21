@@ -61,6 +61,18 @@ class Workspace extends Model
     }
 
     /**
+     * The workspace's tracked repos (SPEC §16, M3.6) — repo URL + ref + path
+     * pattern records Kedge scans on demand. Scoped exactly like {@see documents()}:
+     * the set an id can never escape.
+     *
+     * @return HasMany<TrackedRepo, $this>
+     */
+    public function trackedRepos(): HasMany
+    {
+        return $this->hasMany(TrackedRepo::class);
+    }
+
+    /**
      * The workspace's connected GitHub PAT, or null (#23). The single source of
      * truth for "does this workspace import GitHub authenticated" — the import
      * flow prefers the authenticated connector whenever this is non-null. The

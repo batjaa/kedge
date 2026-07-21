@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
 use App\Http\Controllers\Api\V1\ThreadCommentController;
 use App\Http\Controllers\Api\V1\ThreadController;
+use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
@@ -110,6 +111,14 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.projects.store');
         Route::patch('/projects/{project}', [ProjectController::class, 'update'])
             ->name('api.v1.projects.update');
+
+        // Tracked repos (SPEC §16, M3.6), behind TrackedRepoPolicy. READ-ONLY this
+        // milestone: preview lists what a scan would import with no side effects.
+        // Under the import limiter — it drives 2–3 outbound GitHub calls per hit,
+        // the same fetch-budget concern as an import (#93 adds create/scan/show).
+        Route::post('/tracked-repos/preview', [TrackedRepoController::class, 'preview'])
+            ->middleware('throttle:imports')
+            ->name('api.v1.tracked-repos.preview');
 
         // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
         // (import, retry) share a per-user limiter so a runaway paste loop or a
