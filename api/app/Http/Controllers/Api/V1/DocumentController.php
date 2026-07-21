@@ -222,10 +222,24 @@ class DocumentController extends Controller
             'Only a failed import can be retried.',
         );
 
+        // Rebind a PAT-sourced import to the workspace's current GitHub PAT before
+        // re-queuing (#23, SPEC §19). A dead PAT that a user reconnected supersedes
+        // the revoked one (`githubPatIntegration()` returns the latest); without
+        // rebinding, the retry resolves the OLD integration_id and re-fails against
+        // the revoked token. Left untouched when no PAT integration exists.
+        $rebind = [];
+        if ($document->source_type === SourceType::GithubPat) {
+            $integration = $document->workspace->githubPatIntegration();
+            if ($integration !== null) {
+                $rebind['integration_id'] = $integration->id;
+            }
+        }
+
         $document->forceFill([
             'status' => DocumentStatus::Importing,
             'last_sync_status' => SyncStatus::Ok,
             'sync_error' => null,
+            ...$rebind,
         ])->save();
 
         $this->audit->record(
