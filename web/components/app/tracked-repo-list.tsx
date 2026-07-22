@@ -1,38 +1,66 @@
 'use client';
 
-import { readTrackedRepo } from '@/lib/tracked-repos-client';
+import Link from 'next/link';
+import { useState } from 'react';
+import { deleteTrackedRepo, readTrackedRepo, rescanTrackedRepo } from '@/lib/tracked-repos-client';
+import { runDelete, runRescan } from '@/lib/tracked-repo-actions';
 import {
   isScanInFlight,
+  isUpToDate,
   scanSettled,
+  type ScanOutcome,
   type ScanReport,
   type TrackedRepo,
 } from '@/lib/tracked-repo-scan';
+import { importNeedsReconnect } from '@/lib/import-retry';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 
-// The tracked repos on a project page (SPEC §16, M3.6, stories 12/14/22): each
-// record's state and last-scan report. A running/pending record polls the show
-// endpoint until its scan settles (the shared hook's fourth consumer), then the
-// settled report's queued imports materialize on the island. A repo-level failure
-// (bad ref, revoked PAT, rate limit, truncation, over-cap) surfaces its message; a
-// completed scan summarizes its per-outcome counts with an expandable per-file
-// breakdown. Pure view apart from the poller, so each state renders statically.
+// The tracked repos on a project page (SPEC §16, M3.6, stories 10/11/12/14/16/22):
+// each record's state, last-scan report, and its Re-scan / Delete actions. A
+// running/pending record polls the show endpoint until its scan settles (the shared
+// hook's fourth consumer), then the settled report's queued imports materialize on
+// the island. A completed scan summarizes its per-outcome counts (new / re-synced /
+// unchanged / missing / failed) with an expandable per-file breakdown, or reads
+// "already up to date" when nothing changed. A repo-level failure surfaces its
+// message with Re-scan and — when the PAT is dead — an additive Reconnect link
+// (never a reconnect-only dead end). Pure view apart from the poller and the row's
+// own action state.
 
 const ERROR_CLASS =
   'mt-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20';
 
+const ACTION_CLASS =
+  'rounded-full px-3 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/15 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:text-zinc-200 dark:ring-white/15 dark:hover:bg-white/10';
+
+const DANGER_CLASS =
+  'rounded-full px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:text-rose-300 dark:ring-rose-400/20 dark:hover:bg-rose-500/10';
+
+const LINK_CLASS =
+  'rounded-full px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-300 dark:ring-emerald-400/20 dark:hover:bg-emerald-400/10';
+
 export function TrackedRepoList({
   repos,
   onScanned,
+  onRescanned,
+  onRemoved,
 }: {
   repos: TrackedRepo[];
   onScanned: (repo: TrackedRepo) => void;
+  onRescanned: (repo: TrackedRepo) => void;
+  onRemoved: (id: number) => void;
 }) {
   if (repos.length === 0) return null;
 
   return (
     <ul className="mt-6 space-y-3 border-t border-zinc-900/5 pt-6 dark:border-white/5">
       {repos.map((repo) => (
-        <TrackedRepoRow key={repo.id} repo={repo} onScanned={onScanned} />
+        <TrackedRepoRow
+          key={repo.id}
+          repo={repo}
+          onScanned={onScanned}
+          onRescanned={onRescanned}
+          onRemoved={onRemoved}
+        />
       ))}
     </ul>
   );
@@ -41,9 +69,13 @@ export function TrackedRepoList({
 export function TrackedRepoRow({
   repo,
   onScanned,
+  onRescanned,
+  onRemoved,
 }: {
   repo: TrackedRepo;
   onScanned: (repo: TrackedRepo) => void;
+  onRescanned: (repo: TrackedRepo) => void;
+  onRemoved: (id: number) => void;
 }) {
   const inFlight = isScanInFlight(repo.last_scan_status);
   const report = repo.last_scan_report;
@@ -77,32 +109,155 @@ export function TrackedRepoRow({
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Not scanned yet.</p>
       )}
 
-      {inFlight ? <ScanPoller id={repo.id} onScanned={onScanned} /> : null}
+      {inFlight ? (
+        <ScanPoller id={repo.id} onScanned={onScanned} />
+      ) : (
+        <RowActions repo={repo} onRescanned={onRescanned} onRemoved={onRemoved} />
+      )}
     </li>
   );
 }
 
+/**
+ * The Re-scan / Delete actions for a settled row. Re-scan is idempotent and always
+ * offered; a dead-PAT failure additionally offers Reconnect (additive, never a
+ * reconnect-only dead end). Delete is a two-step inline confirm — its documents
+ * stay, only tracking goes — and surfaces the 409-while-running message in place.
+ */
+function RowActions({
+  repo,
+  onRescanned,
+  onRemoved,
+}: {
+  repo: TrackedRepo;
+  onRescanned: (repo: TrackedRepo) => void;
+  onRemoved: (id: number) => void;
+}) {
+  const [rescanPending, setRescanPending] = useState(false);
+  const [rescanError, setRescanError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const failed = repo.last_scan_status === 'failed';
+  const needsReconnect = failed && importNeedsReconnect(repo.scan_error);
+
+  const onRescan = () =>
+    runRescan({
+      id: repo.id,
+      pending: rescanPending,
+      rescan: rescanTrackedRepo,
+      setPending: setRescanPending,
+      setError: setRescanError,
+      // The trigger returns the still-settled record; flip it in-flight so the
+      // existing poll takes over and the spinner shows at once.
+      onRescanned: (fresh) => onRescanned({ ...fresh, last_scan_status: 'running' }),
+    });
+
+  const onConfirmDelete = () =>
+    runDelete({
+      id: repo.id,
+      pending: deletePending,
+      remove: deleteTrackedRepo,
+      setPending: setDeletePending,
+      setError: setDeleteError,
+      onRemoved,
+    });
+
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onRescan} disabled={rescanPending} className={ACTION_CLASS}>
+          {rescanPending ? 'Re-scanning…' : failed ? 'Retry scan' : 'Re-scan'}
+        </button>
+
+        {needsReconnect ? (
+          <Link href="/settings" className={LINK_CLASS}>
+            Reconnect GitHub
+          </Link>
+        ) : null}
+
+        <div className="ml-auto">
+          {confirmingDelete ? (
+            <span className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+              Remove tracking?
+              <button type="button" onClick={onConfirmDelete} disabled={deletePending} className={DANGER_CLASS}>
+                {deletePending ? 'Removing…' : 'Delete'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deletePending}
+                className={ACTION_CLASS}
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button type="button" onClick={() => setConfirmingDelete(true)} className={DANGER_CLASS}>
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+
+      {confirmingDelete && !deleteError ? (
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Its documents stay in the project — only tracking is removed.
+        </p>
+      ) : null}
+      {rescanError ? (
+        <p role="alert" className="mt-2 text-xs text-rose-700 dark:text-rose-400">
+          {rescanError}
+        </p>
+      ) : null}
+      {deleteError ? (
+        <p role="alert" className="mt-2 text-xs text-rose-700 dark:text-rose-400">
+          {deleteError}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ScanReportSummary({ report }: { report: ScanReport }) {
-  const { import_queued, unchanged, failed } = report.counts;
+  const { import_queued, resync_queued, unchanged, missing, failed } = report.counts;
 
   return (
     <div className="mt-2">
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">
-        <span className="font-medium text-emerald-700 dark:text-emerald-400">{import_queued} queued</span>
-        {' · '}
-        {unchanged} unchanged
-        {failed > 0 ? (
-          <span className="text-rose-700 dark:text-rose-400">{' · '}{failed} failed</span>
-        ) : null}
-        {report.stale_takeover ? (
-          <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
-        ) : null}
-      </p>
+      {isUpToDate(report) ? (
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          <span className="font-medium text-emerald-700 dark:text-emerald-400">Already up to date</span>
+          {unchanged > 0 ? ` · ${unchanged} file${unchanged === 1 ? '' : 's'} unchanged` : null}
+          {report.stale_takeover ? (
+            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+          ) : null}
+        </p>
+      ) : (
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          <span className="font-medium text-emerald-700 dark:text-emerald-400">{import_queued} queued</span>
+          {resync_queued > 0 ? (
+            <span className="text-emerald-700 dark:text-emerald-400">{' · '}{resync_queued} re-synced</span>
+          ) : null}
+          {' · '}
+          {unchanged} unchanged
+          {missing > 0 ? (
+            <span className="text-amber-700 dark:text-amber-400">{' · '}{missing} missing</span>
+          ) : null}
+          {failed > 0 ? (
+            <span className="text-rose-700 dark:text-rose-400">{' · '}{failed} failed</span>
+          ) : null}
+          {report.stale_takeover ? (
+            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+          ) : null}
+        </p>
+      )}
 
       {report.files.length > 0 ? (
         <details className="mt-1.5">
           <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
             {report.matched} file{report.matched === 1 ? '' : 's'} scanned
+            {missing > 0 ? `, ${missing} missing` : ''}
           </summary>
           <ul className="mt-2 divide-y divide-zinc-900/5 rounded-lg ring-1 ring-inset ring-zinc-900/10 dark:divide-white/5 dark:ring-white/10">
             {report.files.map((file) => (
@@ -123,17 +278,29 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
   );
 }
 
-function OutcomeBadge({
-  outcome,
-  reason,
-}: {
-  outcome: 'import_queued' | 'unchanged' | 'failed';
-  reason: string | null;
-}) {
+const BADGE_BASE = 'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium';
+
+function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: string | null }) {
   if (outcome === 'import_queued') {
     return (
-      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300">
+      <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
         Queued
+      </span>
+    );
+  }
+
+  if (outcome === 'resync_queued') {
+    return (
+      <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
+        Re-synced
+      </span>
+    );
+  }
+
+  if (outcome === 'missing') {
+    return (
+      <span className={`${BADGE_BASE} bg-amber-100 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300`}>
+        Missing
       </span>
     );
   }
@@ -142,7 +309,7 @@ function OutcomeBadge({
     return (
       <span
         title={reason ?? undefined}
-        className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-400/10 dark:text-rose-300"
+        className={`${BADGE_BASE} bg-rose-100 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300`}
       >
         Failed
       </span>
@@ -150,7 +317,7 @@ function OutcomeBadge({
   }
 
   return (
-    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-400">
+    <span className={`${BADGE_BASE} bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-400`}>
       Unchanged
     </span>
   );

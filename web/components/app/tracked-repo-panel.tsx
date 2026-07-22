@@ -100,6 +100,16 @@ export function TrackedRepoPanel({
     [onMaterialize],
   );
 
+  // A re-scan just triggered: replace the record with its (optimistically in-flight)
+  // self so the poll takes over — nothing to materialize until it settles.
+  const handleRescanned = useCallback((repo: TrackedRepo) => {
+    setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
+  }, []);
+
+  const handleRemoved = useCallback((id: number) => {
+    setRepos((prev) => prev.filter((existing) => existing.id !== id));
+  }, []);
+
   return (
     <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
       <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Track a repository</h2>
@@ -179,7 +189,12 @@ export function TrackedRepoPanel({
         />
       ) : null}
 
-      <TrackedRepoList repos={repos} onScanned={handleScanned} />
+      <TrackedRepoList
+        repos={repos}
+        onScanned={handleScanned}
+        onRescanned={handleRescanned}
+        onRemoved={handleRemoved}
+      />
     </div>
   );
 }

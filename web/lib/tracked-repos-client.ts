@@ -193,6 +193,94 @@ export async function createTrackedRepo(input: PreviewInput): Promise<CreateTrac
   return { ok: false, kind: 'error', message: 'Something went wrong starting the scan. Please try again.' };
 }
 
+/** A re-scan trigger outcome — the record on success, else an author-facing message. */
+export type RescanOutcome =
+  | { ok: true; trackedRepo: TrackedRepo }
+  | { ok: false; message: string };
+
+function sendScan(id: number): Promise<Response> {
+  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos/${id}/scan`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { accept: 'application/json', ...xsrfHeader() },
+  });
+}
+
+/**
+ * POST /api/v1/tracked-repos/{id}/scan — re-trigger a scan (#94). Idempotent (the
+ * API's atomic claim collapses a double-press onto one scan), 202 with the record.
+ * The caller flips the record in-flight so the existing poll takes over until the
+ * scan settles. A rate-limit is the only distinct copy; everything else is generic.
+ */
+export async function rescanTrackedRepo(id: number): Promise<RescanOutcome> {
+  await ensureCsrfCookie();
+  let res = await sendScan(id);
+
+  if (res.status === 419) {
+    await refreshCsrfCookie();
+    res = await sendScan(id);
+  }
+
+  if (res.ok) {
+    const body = (await res.json()) as TrackedRepoEnvelope;
+    return { ok: true, trackedRepo: body.data };
+  }
+
+  if (res.status === 429) {
+    return { ok: false, message: 'Too many scans. Wait a minute, then try again.' };
+  }
+
+  return { ok: false, message: 'Could not start the re-scan. Please try again.' };
+}
+
+/**
+ * A delete outcome. `conflict` is the 409 a delete hits while a scan is running
+ * (7A) — a transient state the caller surfaces distinctly ("wait, then retry"),
+ * never a hard failure.
+ */
+export type DeleteTrackedRepoOutcome =
+  | { ok: true }
+  | { ok: false; kind: 'conflict' | 'error'; message: string };
+
+function sendDelete(id: number): Promise<Response> {
+  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { accept: 'application/json', ...xsrfHeader() },
+  });
+}
+
+/**
+ * DELETE /api/v1/tracked-repos/{id} — un-track the repo (7A); its documents remain
+ * (provenance cleared on the API). 204 on success; a 409 while a scan is running is
+ * surfaced as a `conflict` with the API's message, so the row can say "a scan is
+ * running" rather than a generic error.
+ */
+export async function deleteTrackedRepo(id: number): Promise<DeleteTrackedRepoOutcome> {
+  await ensureCsrfCookie();
+  let res = await sendDelete(id);
+
+  if (res.status === 419) {
+    await refreshCsrfCookie();
+    res = await sendDelete(id);
+  }
+
+  if (res.ok) {
+    return { ok: true };
+  }
+
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => null)) as PreviewErrorBody | null;
+    return {
+      ok: false,
+      kind: 'conflict',
+      message: body?.message ?? 'A scan is running — wait for it to finish, then delete.',
+    };
+  }
+
+  return { ok: false, kind: 'error', message: 'Could not remove this tracked repo. Please try again.' };
+}
+
 /**
  * GET /api/v1/tracked-repos/{id} — the scan poll target. Returns the record on a
  * 200, or null on any hiccup so the poll loop stays alive (the document-poller
