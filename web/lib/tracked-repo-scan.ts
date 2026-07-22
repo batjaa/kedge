@@ -151,19 +151,31 @@ export function reportImportingRows(
   return rows;
 }
 
+/** The result of a merge: the (possibly unchanged) list and how many rows were new. */
+export interface MergeResult {
+  items: DocumentListItem[];
+  /** Rows that were actually new to `items` — the exact amount to bump the total by. */
+  added: number;
+}
+
 /**
  * Merge scan-reported importing rows into the island's items, deduped by id like
- * the prepend path: a row already present (e.g. a poll already settled it, or a
- * hand-import minted it) is left untouched — the freshly-reported ones prepend so
- * they show newest-first. Never mutates the input.
+ * the prepend path: a row already present (e.g. a poll already settled it, a
+ * hand-import minted it, or a Load more already appended it) is left untouched —
+ * the freshly-reported ones prepend so they show newest-first. Never mutates the
+ * input. Returns `added` — the count of genuinely-new rows — so the caller bumps
+ * the total by exactly that (never double-counting rows a Load more already
+ * surfaced), computed against the list actually merged into, not a stale closure.
  */
 export function mergeReportedRows(
   items: DocumentListItem[],
   rows: DocumentListItem[],
-): DocumentListItem[] {
+): MergeResult {
   const existing = new Set(items.map((item) => item.id));
   const fresh = rows.filter((row) => !existing.has(row.id));
-  return fresh.length === 0 ? items : [...fresh, ...items];
+  return fresh.length === 0
+    ? { items, added: 0 }
+    : { items: [...fresh, ...items], added: fresh.length };
 }
 
 /** A readable placeholder title from a repo-relative path (the import overwrites it). */

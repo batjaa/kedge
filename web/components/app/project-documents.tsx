@@ -52,16 +52,27 @@ export function ProjectDocuments({
   } = useLiveDocumentList({ initialPage, projectFilter: projectId });
 
   // A settled scan's queued imports appear as importing rows, deduped by id like
-  // the prepend path — then settle through the existing per-row poller.
+  // the prepend path — then settle through the existing per-row poller. The merge
+  // and the actually-added count are computed together inside ONE functional
+  // updater, against `prev` (never a stale `items` closure), so concurrent settles
+  // chain correctly and a Load more that already surfaced these rows can't inflate
+  // the count. `items` is intentionally OUT of the deps: keeping it here churned
+  // this callback's identity on every list mutation, tearing down and restarting
+  // the scan poller each time a row settled.
   const handleScanMaterialize = useCallback(
     (rows: DocumentListItem[]) => {
-      const added = rows.filter((row) => !items.some((item) => item.id === row.id)).length;
-      setItems((prev) => mergeReportedRows(prev, rows));
-      if (added > 0) {
-        setMeta((prev) => (prev ? { ...prev, total: prev.total + added } : prev));
-      }
+      let added = 0;
+      setItems((prev) => {
+        const merged = mergeReportedRows(prev, rows);
+        added = merged.added; // idempotent assignment — StrictMode-safe
+        return merged.items;
+      });
+      // The items updater runs before the meta updater in the same render (items is
+      // declared first in useLiveDocumentList), so `added` is set by the time this
+      // reads it; bump the total by exactly the new rows, once.
+      setMeta((prev) => (prev && added > 0 ? { ...prev, total: prev.total + added } : prev));
     },
-    [items, setItems, setMeta],
+    [setItems, setMeta],
   );
 
   const handleAssigned = useCallback(

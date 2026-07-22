@@ -123,16 +123,36 @@ describe('isUpToDate', () => {
 describe('mergeReportedRows', () => {
   it('prepends fresh rows and drops ones already in the list, without mutating', () => {
     const items = [item(1), item(2)];
-    const merged = mergeReportedRows(items, [item(2), item(3)]);
+    const { items: merged, added } = mergeReportedRows(items, [item(2), item(3)]);
 
     expect(merged.map((row) => row.id)).toEqual([3, 1, 2]);
+    expect(added).toBe(1); // only id 3 was new
     expect(merged).not.toBe(items);
     expect(items.map((row) => row.id)).toEqual([1, 2]);
   });
 
-  it('returns the same array reference when nothing is new', () => {
+  it('returns the same array reference and zero added when nothing is new', () => {
     const items = [item(1)];
-    expect(mergeReportedRows(items, [item(1)])).toBe(items);
+    const result = mergeReportedRows(items, [item(1)]);
+    expect(result.items).toBe(items);
+    expect(result.added).toBe(0);
+  });
+
+  it('reports zero added when a Load more already appended the materialized rows', () => {
+    // The double-count guard (B4): a mid-scan Load more surfaced ids 10 and 11
+    // (and bumped meta.total from the server). Re-materializing the same report
+    // must add nothing, so the total is never bumped twice for the same docs.
+    const items = [item(1), item(10), item(11)];
+    const { items: merged, added } = mergeReportedRows(items, [item(10), item(11)]);
+
+    expect(added).toBe(0);
+    expect(merged).toBe(items);
+  });
+
+  it('counts only the genuinely new rows when a report partly overlaps the list', () => {
+    const items = [item(10)]; // id 10 already surfaced
+    const { added } = mergeReportedRows(items, [item(10), item(11), item(12)]);
+    expect(added).toBe(2); // 11 and 12 are new; 10 is not re-counted
   });
 });
 
