@@ -7,7 +7,13 @@ import { TrackedRepoPanel } from './tracked-repo-panel';
 import { hasMorePages } from '@/lib/document-list-live';
 import { mergeReportedRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
-import type { Document, DocumentListItem, DocumentListPage, Project } from '@/lib/document-types';
+import type {
+  Document,
+  DocumentListItem,
+  DocumentListPage,
+  Project,
+  ProjectRef,
+} from '@/lib/document-types';
 
 // A project page's live document surface (SPEC §16 story 6, M3.6) — the M3.5
 // home re-scoped to one project: the same row components, per-row polling, retry
@@ -19,16 +25,18 @@ import type { Document, DocumentListItem, DocumentListPage, Project } from '@/li
 // materialize as importing rows here and settle through the existing per-row path
 // (this closes the M3.5 out-of-band-liveness TODO, story 22).
 export function ProjectDocuments({
-  projectId,
+  project,
   initialPage,
   projects,
   initialTrackedRepos = [],
 }: {
-  projectId: number;
+  /** This page's project — scopes the list and stamps scan-materialized rows (B1). */
+  project: ProjectRef;
   initialPage: DocumentListPage | null;
   projects: Project[];
   initialTrackedRepos?: TrackedRepo[];
 }) {
+  const projectId = project.id;
   const {
     degraded,
     items,
@@ -76,7 +84,7 @@ export function ProjectDocuments({
   return (
     <>
       <TrackedRepoPanel
-        projectId={projectId}
+        project={project}
         initialRepos={initialTrackedRepos}
         onMaterialize={handleScanMaterialize}
       />

@@ -8,7 +8,7 @@
 // materializes — which is how the scan closes the M3.5 out-of-band-liveness TODO
 // (story 22). Both are pure so they test without a browser.
 
-import type { DocumentListItem } from './document-types';
+import type { DocumentListItem, ProjectRef } from './document-types';
 
 export type TrackedScanStatus = 'pending' | 'running' | 'ok' | 'failed';
 
@@ -112,8 +112,16 @@ export function isUpToDate(report: ScanReport): boolean {
  * a re-synced or missing path is an existing row the list already holds, so it is
  * skipped here (its own per-row poll reflects the re-sync). Entries without a
  * document id (a failed path) are skipped; duplicates by id collapse to one.
+ *
+ * `project` is the tracked repo's project (the page's project): the API files
+ * every scan-imported doc under it, so the materialized row must carry it too —
+ * otherwise its chip reads "Unfiled" and a home-list settle pins it there until a
+ * reload. Null only on a workspace with no project (the panel is project-scoped).
  */
-export function reportImportingRows(report: ScanReport | null): DocumentListItem[] {
+export function reportImportingRows(
+  report: ScanReport | null,
+  project: ProjectRef | null = null,
+): DocumentListItem[] {
   if (report === null) return [];
 
   const rows: DocumentListItem[] = [];
@@ -133,9 +141,9 @@ export function reportImportingRows(report: ScanReport | null): DocumentListItem
       lifecycle_status: 'draft',
       open_threads_count: 0,
       synced_at: null,
-      // A scan-imported doc is filed into the repo's project by the API; the row
-      // already lives on that project's list, so the chip is implicit.
-      project: null,
+      // The row carries the repo's project so its chip is correct on sight and a
+      // settle never re-buckets it to Unfiled.
+      project,
       created_at: null,
     });
   }

@@ -51,7 +51,7 @@ export default async function ProjectPage({
       <ProjectHeader project={project} />
 
       <ProjectDocuments
-        projectId={project.id}
+        project={{ id: project.id, name: project.name }}
         initialPage={documents.page}
         projects={projects}
         initialTrackedRepos={trackedRepos.trackedRepos}

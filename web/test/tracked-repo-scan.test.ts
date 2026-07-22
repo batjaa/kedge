@@ -81,6 +81,23 @@ describe('reportImportingRows', () => {
 
     expect(rows).toHaveLength(1);
   });
+
+  it('stamps rows with the tracked repo project so their chip is correct (B1)', () => {
+    const rows = reportImportingRows(
+      report([{ path: 'docs/spec.md', outcome: 'import_queued', document_id: 7, reason: null }]),
+      { id: 10, name: 'Anchoring' },
+    );
+
+    expect(rows[0].project).toEqual({ id: 10, name: 'Anchoring' });
+  });
+
+  it('defaults the row project to null when none is given', () => {
+    const rows = reportImportingRows(
+      report([{ path: 'docs/spec.md', outcome: 'import_queued', document_id: 7, reason: null }]),
+    );
+
+    expect(rows[0].project).toBeNull();
+  });
 });
 
 describe('isUpToDate', () => {

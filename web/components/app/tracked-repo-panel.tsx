@@ -3,7 +3,7 @@
 import { useCallback, useState, type FormEvent } from 'react';
 import { createTrackedRepo, previewTrackedRepo } from '@/lib/tracked-repos-client';
 import { reportImportingRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
-import type { DocumentListItem } from '@/lib/document-types';
+import type { DocumentListItem, ProjectRef } from '@/lib/document-types';
 import { TrackedRepoPreview, type PreviewView } from './tracked-repo-preview';
 import { TrackedRepoList } from './tracked-repo-list';
 
@@ -25,15 +25,17 @@ const FIELD_CLASS =
 const LABEL_CLASS = 'block text-xs font-medium text-zinc-700 dark:text-zinc-300';
 
 export function TrackedRepoPanel({
-  projectId,
+  project,
   initialRepos,
   onMaterialize,
 }: {
-  projectId: number;
+  /** The page's project — scopes create/preview AND stamps materialized rows (B1). */
+  project: ProjectRef;
   initialRepos: TrackedRepo[];
   /** Merge scan-reported importing rows into the project island (story 22). */
   onMaterialize: (rows: DocumentListItem[]) => void;
 }) {
+  const projectId = project.id;
   const [repoUrl, setRepoUrl] = useState('');
   const [ref, setRef] = useState('');
   const [pattern, setPattern] = useState('');
@@ -94,10 +96,11 @@ export function TrackedRepoPanel({
   const handleScanned = useCallback(
     (repo: TrackedRepo) => {
       setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
-      // A settled scan's queued imports appear as importing rows on the island.
-      onMaterialize(reportImportingRows(repo.last_scan_report));
+      // A settled scan's queued imports appear as importing rows on the island,
+      // stamped with this page's project so their chips read correctly (B1).
+      onMaterialize(reportImportingRows(repo.last_scan_report, project));
     },
-    [onMaterialize],
+    [onMaterialize, project],
   );
 
   // A re-scan just triggered: replace the record with its (optimistically in-flight)
