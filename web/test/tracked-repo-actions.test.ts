@@ -70,6 +70,28 @@ describe('runRescan', () => {
     });
     expect(rescan).not.toHaveBeenCalled();
   });
+
+  it('clears pending and surfaces a message when the fetch REJECTS (no wedge)', async () => {
+    const setPending = vi.fn();
+    const setError = vi.fn();
+    const onRescanned = vi.fn();
+
+    await runRescan({
+      id: 3,
+      pending: false,
+      rescan: async () => {
+        throw new Error('network down');
+      },
+      setPending,
+      setError,
+      onRescanned,
+    });
+
+    expect(onRescanned).not.toHaveBeenCalled();
+    // The row must not stay stuck spinning — pending clears despite the rejection.
+    expect(setPending).toHaveBeenLastCalledWith(false);
+    expect(setError).toHaveBeenLastCalledWith(expect.stringContaining('re-scan'));
+  });
 });
 
 describe('runDelete', () => {
@@ -120,5 +142,26 @@ describe('runDelete', () => {
       onRemoved: vi.fn(),
     });
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('clears pending and surfaces a message when the fetch REJECTS (no wedge)', async () => {
+    const setPending = vi.fn();
+    const setError = vi.fn();
+    const onRemoved = vi.fn();
+
+    await runDelete({
+      id: 3,
+      pending: false,
+      remove: async () => {
+        throw new Error('network down');
+      },
+      setPending,
+      setError,
+      onRemoved,
+    });
+
+    expect(onRemoved).not.toHaveBeenCalled();
+    expect(setPending).toHaveBeenLastCalledWith(false);
+    expect(setError).toHaveBeenLastCalledWith(expect.stringContaining('remove'));
   });
 });

@@ -55,42 +55,52 @@ export function TrackedRepoPanel({
     setConfirmError(null);
     setView({ kind: 'loading' });
 
-    const outcome = await previewTrackedRepo({
-      repo_url: repoUrl.trim(),
-      ref: ref.trim() === '' ? undefined : ref.trim(),
-      path_pattern: pattern.trim(),
-      project_id: projectId,
-    });
-
-    setView(toView(outcome));
-    setPreviewing(false);
+    try {
+      const outcome = await previewTrackedRepo({
+        repo_url: repoUrl.trim(),
+        ref: ref.trim() === '' ? undefined : ref.trim(),
+        path_pattern: pattern.trim(),
+        project_id: projectId,
+      });
+      setView(toView(outcome));
+    } catch {
+      // A rejected fetch (network blip) must not leave the button stuck spinning.
+      setView({ kind: 'error', message: 'Something went wrong checking the repository. Please try again.' });
+    } finally {
+      setPreviewing(false);
+    }
   }
 
   async function onConfirm() {
     setConfirming(true);
     setConfirmError(null);
 
-    const outcome = await createTrackedRepo({
-      repo_url: repoUrl.trim(),
-      ref: ref.trim() === '' ? undefined : ref.trim(),
-      path_pattern: pattern.trim(),
-      project_id: projectId,
-    });
+    try {
+      const outcome = await createTrackedRepo({
+        repo_url: repoUrl.trim(),
+        ref: ref.trim() === '' ? undefined : ref.trim(),
+        path_pattern: pattern.trim(),
+        project_id: projectId,
+      });
 
-    setConfirming(false);
+      if (!outcome.ok) {
+        setConfirmError(outcome.message);
+        return;
+      }
 
-    if (!outcome.ok) {
-      setConfirmError(outcome.message);
-      return;
+      // The record joins the list (pending → the poll takes over); reset the form so
+      // the panel is ready for the next repo.
+      setRepos((prev) => [outcome.trackedRepo, ...prev]);
+      setView(null);
+      setRepoUrl('');
+      setRef('');
+      setPattern('');
+    } catch {
+      // A rejected fetch must not leave the confirm button stuck on "Starting scan…".
+      setConfirmError('Something went wrong starting the scan. Please try again.');
+    } finally {
+      setConfirming(false);
     }
-
-    // The record joins the list (pending → the poll takes over); reset the form so
-    // the panel is ready for the next repo.
-    setRepos((prev) => [outcome.trackedRepo, ...prev]);
-    setView(null);
-    setRepoUrl('');
-    setRef('');
-    setPattern('');
   }
 
   const handleScanned = useCallback(

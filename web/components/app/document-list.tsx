@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
 import { readDocument } from '@/lib/documents-client';
 import { assignDocumentProject } from '@/lib/projects-client';
+import { runProjectAssign } from '@/lib/assign-project';
 import { shouldPoll } from '@/lib/document-list-live';
 import { groupDocumentsByProject, hasNamedGroups } from '@/lib/document-groups';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
@@ -308,34 +309,51 @@ function RowProjectChip({
   onAssigned: (doc: Document) => void;
 }) {
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const currentId = item.project?.id ?? null;
 
-  async function onChange(event: ChangeEvent<HTMLSelectElement>) {
+  function onChange(event: ChangeEvent<HTMLSelectElement>) {
     const raw = event.target.value;
-    const nextId = raw === '' ? null : Number(raw);
-    if (nextId === currentId) return;
-
-    setPending(true);
-    const outcome = await assignDocumentProject(item.id, nextId);
-    setPending(false);
-    if (outcome.ok) onAssigned(outcome.document);
+    // The move failure surfaces (role=alert, like RowRetry's) and leaves `item`
+    // unchanged, so the controlled <select> snaps back to the real project. The
+    // pure core owns the try/finally so a rejected fetch can't wedge pending.
+    void runProjectAssign({
+      documentId: item.id,
+      nextId: raw === '' ? null : Number(raw),
+      currentId,
+      pending,
+      assign: assignDocumentProject,
+      setPending,
+      setError,
+      onAssigned,
+    });
   }
 
   return (
-    <select
-      aria-label={`Project for ${item.title}`}
-      value={currentId === null ? '' : String(currentId)}
-      disabled={pending}
-      onChange={onChange}
-      className="max-w-[9rem] truncate rounded-full bg-zinc-100 px-2.5 py-1 font-mono text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-900/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
-    >
-      <option value="">Unfiled</option>
-      {projects.map((project) => (
-        <option key={project.id} value={project.id}>
-          {project.name}
-        </option>
-      ))}
-    </select>
+    <div className="flex flex-col items-end gap-1">
+      <select
+        aria-label={`Project for ${item.title}`}
+        value={currentId === null ? '' : String(currentId)}
+        disabled={pending}
+        onChange={onChange}
+        className="max-w-[9rem] truncate rounded-full bg-zinc-100 px-2.5 py-1 font-mono text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-900/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
+      >
+        <option value="">Unfiled</option>
+        {projects.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.name}
+          </option>
+        ))}
+      </select>
+      {error ? (
+        <span
+          role="alert"
+          className="max-w-[9rem] text-right text-[10px] leading-tight text-rose-600 dark:text-rose-400"
+        >
+          {error}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
