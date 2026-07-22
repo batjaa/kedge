@@ -43,9 +43,13 @@ class TrackedRepoPreviewService
     }
 
     /**
-     * Flag each matched path that another tracked repo in the workspace already
-     * holds (10A). One query — the workspace's tracked documents whose path is in
-     * the matched set — keeps it O(1) round-trips regardless of match count.
+     * Flag each matched path that a document in the workspace already holds under
+     * some tracked repo — or once did, now orphaned (10A). Matching on `tracked_path`
+     * alone (not `tracked_repo_id`) catches both a currently-tracked path and a path
+     * whose repo was deleted (the deleter keeps `tracked_path` precisely so this
+     * warning survives), so re-tracking can't silently mint duplicates. `DISTINCT`
+     * so the count is of overlapping PATHS, not documents — two repos holding the
+     * same path is one flagged file, not two. One query regardless of match count.
      *
      * @param  list<string>  $matched
      */
@@ -54,8 +58,9 @@ class TrackedRepoPreviewService
         $overlapping = $matched === []
             ? []
             : $workspace->documents()
-                ->whereNotNull('tracked_repo_id')
+                ->whereNotNull('tracked_path')
                 ->whereIn('tracked_path', $matched)
+                ->distinct()
                 ->pluck('tracked_path')
                 ->all();
 

@@ -40,12 +40,14 @@ class TrackedRepoDeleteTest extends TestCase
         // The record is gone…
         $this->assertDatabaseMissing('tracked_repos', ['id' => $repo->id]);
 
-        // …but both documents remain, with the full provenance quartet cleared.
-        foreach ([$a, $b] as $document) {
+        // …but both documents remain: the repo link and the stale re-scan baseline
+        // are cleared, while tracked_path is KEPT so the orphan stays visible to the
+        // overlap warning (10A) and re-tracking can't silently duplicate it.
+        foreach ([[$a, 'docs/a.md'], [$b, 'docs/b.md']] as [$document, $expectedPath]) {
             $document->refresh();
             $this->assertNull($document->tracked_repo_id);
-            $this->assertNull($document->tracked_path);
             $this->assertNull($document->tracked_blob_sha);
+            $this->assertSame($expectedPath, $document->tracked_path);
             // Untouched otherwise — still in the workspace, still filed where it was.
             $this->assertSame($user->personalWorkspace()->id, $document->workspace_id);
         }
@@ -71,8 +73,9 @@ class TrackedRepoDeleteTest extends TestCase
     public function test_two_docs_from_the_same_repo_survive_delete_without_a_unique_collision(): void
     {
         // The composite unique index is on (tracked_repo_id, tracked_path). Nulling
-        // both on every doc turns them all into (null, null); SQL treats NULLs as
-        // distinct, so many orphaned docs coexist — the delete must not trip it.
+        // tracked_repo_id turns each orphan into (null, path); SQL treats a NULL
+        // member as distinct, so many orphaned docs coexist — the delete must not
+        // trip it even when two share a path.
         $user = $this->registerUser();
         $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
         $this->heldDoc($user, $repo, 'docs/a.md');
@@ -83,7 +86,30 @@ class TrackedRepoDeleteTest extends TestCase
             ->deleteJson("/api/v1/tracked-repos/{$repo->id}")
             ->assertNoContent();
 
-        $this->assertSame(3, Document::query()->whereNull('tracked_repo_id')->whereNull('tracked_path')->count());
+        // All three orphaned (repo link cleared) but each keeps its path.
+        $this->assertSame(3, Document::query()->whereNull('tracked_repo_id')->whereNotNull('tracked_path')->count());
+    }
+
+    public function test_a_second_repo_deleting_the_same_path_does_not_collide(): void
+    {
+        // The strongest form of the NULL-distinctness guarantee: two deleted repos
+        // that each held docs/spec.md leave two (null, 'docs/spec.md') orphans.
+        $user = $this->registerUser();
+        $repoA = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $repoB = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $this->heldDoc($user, $repoA, 'docs/spec.md');
+        $this->heldDoc($user, $repoB, 'docs/spec.md');
+
+        foreach ([$repoA, $repoB] as $repo) {
+            $this->actingAs($user)->fromWebApp()
+                ->deleteJson("/api/v1/tracked-repos/{$repo->id}")
+                ->assertNoContent();
+        }
+
+        $this->assertSame(
+            2,
+            Document::query()->whereNull('tracked_repo_id')->where('tracked_path', 'docs/spec.md')->count(),
+        );
     }
 
     public function test_delete_is_a_409_while_a_scan_is_running(): void

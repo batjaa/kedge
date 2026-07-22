@@ -12,13 +12,14 @@ use Illuminate\Support\Facades\DB;
  * document it imported stays — provenance cleared, review history intact.
  * Deleting a tracked repo is reversible organization, never data loss (story 16).
  *
- * The FK's `nullOnDelete` would clear `tracked_repo_id` on its own, but the diff
- * key is the pair `(tracked_repo_id, tracked_path)`, so this nulls **both** in one
- * bulk update before deleting — a document whose repo is gone carries no dangling
- * repo-relative path either. The composite unique index tolerates the result:
- * every orphaned document becomes `(null, null)`, and SQL treats NULLs as distinct,
- * so many `(null, null)` rows coexist exactly as ordinary hand-imported documents
- * always have.
+ * The FK's `nullOnDelete` clears `tracked_repo_id`; this additionally clears
+ * `tracked_blob_sha` (a stale re-scan baseline for a repo that no longer exists)
+ * but deliberately **keeps `tracked_path`**. Keeping the path is what lets the
+ * workspace-wide overlap warning (10A) still see an orphaned document: re-tracking
+ * a repo whose files these once were would otherwise silently mint duplicates. The
+ * composite unique index `(tracked_repo_id, tracked_path)` tolerates the orphan —
+ * `tracked_repo_id` is null, and SQL treats a NULL member as distinct, so any
+ * number of `(null, path)` rows coexist (even the same path from two deleted repos).
  */
 class TrackedRepoDeleter
 {
@@ -29,12 +30,12 @@ class TrackedRepoDeleter
     public function delete(TrackedRepo $repo, ?User $actor, ?string $ip = null): void
     {
         $orphaned = DB::transaction(function () use ($repo): int {
-            // One bulk update, not N per-document writes: clear the whole provenance
-            // pair so the pre-delete state is the same as the post-`nullOnDelete`
-            // state, minus the dangling tracked_path.
+            // One bulk update, not N per-document writes: drop the repo link and the
+            // stale re-scan baseline, but KEEP tracked_path so the orphan stays
+            // visible to the overlap warning (10A) — re-tracking must not silently
+            // duplicate what these documents already hold.
             $count = $repo->documents()->update([
                 'tracked_repo_id' => null,
-                'tracked_path' => null,
                 'tracked_blob_sha' => null,
             ]);
 
