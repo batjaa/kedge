@@ -8,7 +8,7 @@ namespace App\Services\TrackedRepos;
  * flagged with whether it overlaps a path already held by another tracked repo in
  * the workspace (10A, so overlapping globs can't silently mint duplicate docs).
  * Read-only: computed, never persisted. The over-cap and truncation failures are
- * {@see Exceptions\PreviewException}s, not this object.
+ * {@see Exceptions\DiscoveryException}s, not this object.
  */
 final class TrackedRepoPreview
 {

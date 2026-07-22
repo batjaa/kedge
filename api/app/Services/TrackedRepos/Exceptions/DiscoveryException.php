@@ -5,13 +5,16 @@ namespace App\Services\TrackedRepos\Exceptions;
 use RuntimeException;
 
 /**
- * A tracked-repo preview cannot be offered (SPEC §16, M3.6). Every case is a
- * loud, explicit failure the author can act on — a bad repo URL, a non-branch ref
- * (2A), an over-cap match count naming the number (story 18), or a truncated
- * upstream listing (4A, never a silent partial match). The controller renders it
- * as a 422 with a stable `error` discriminator the preview panel switches on.
+ * Repo discovery cannot proceed (SPEC §16, M3.6). Thrown by the shared
+ * {@see \App\Services\TrackedRepos\RepoDiscoveryService} that BOTH preview and scan
+ * run, so it names the failures of either — hence "discovery", not "preview". Every
+ * case is a loud, explicit failure the author can act on: a bad repo URL, a
+ * non-branch ref (2A), an over-cap match count naming the number (story 18), or a
+ * truncated upstream listing (4A, never a silent partial match). Preview renders it
+ * as a 422 with a stable `error` discriminator the panel switches on; scan records
+ * it as the record's repo-level failure with the same code.
  */
-class PreviewException extends RuntimeException
+class DiscoveryException extends RuntimeException
 {
     /**
      * @param  string  $error  Stable machine code the web panel switches on.

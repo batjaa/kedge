@@ -19,9 +19,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * project. Reachable only within its workspace ({@see TrackedRepoPolicy} + the
  * controller's workspace scoping); an id in a URL is never an access path.
  *
- * READ-ONLY milestone: this ticket only previews (no scan, no persistence beyond
- * the columns). `last_scan_status` starts `pending` (never scanned); the scan
- * pipeline (#93) writes the outcome and the per-file report.
+ * `last_scan_status` starts `pending` (born queued / never scanned); the scan
+ * pipeline ({@see TrackedRepoScanService}) claims it `running`, then writes the
+ * terminal outcome (`ok`/`failed`), the per-file report, and any repo-level error.
  */
 #[Fillable([
     'workspace_id', 'project_id', 'integration_id', 'repo_url', 'ref', 'path_pattern',

@@ -4,7 +4,7 @@ namespace App\Services\TrackedRepos;
 
 use App\Models\Integration;
 use App\Models\Workspace;
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 
 /**
  * Computes a tracked-repo preview read-only (SPEC §16, M3.6, decisions 2A/4A/9A/
@@ -13,7 +13,7 @@ use App\Services\TrackedRepos\Exceptions\PreviewException;
  * against the workspace's other tracked repos. No persistence, no import — the
  * scan (#93) runs the same discovery, then diffs and imports.
  *
- * Every unusable outcome is an explicit {@see PreviewException} (loud failure,
+ * Every unusable outcome is an explicit {@see DiscoveryException} (loud failure,
  * never a silent partial), so a bad glob or a huge repo costs one glance.
  */
 class TrackedRepoPreviewService
@@ -33,9 +33,9 @@ class TrackedRepoPreviewService
         string $pathPattern,
     ): TrackedRepoPreview {
         $repo = RepoRef::fromUrl($repoUrl)
-            ?? throw PreviewException::unsupportedRepo();
+            ?? throw DiscoveryException::unsupportedRepo();
 
-        $cap = (int) config('kedge.tracked_repos.file_cap', 200);
+        $cap = $this->discovery->fileCap();
 
         $discovery = $this->discovery->discover($repo, $ref, $integration?->token(), $pathPattern, $cap);
 

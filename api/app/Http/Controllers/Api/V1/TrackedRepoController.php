@@ -11,7 +11,7 @@ use App\Models\TrackedRepo;
 use App\Policies\TrackedRepoPolicy;
 use App\Services\AuditLogger;
 use App\Services\Documents\DocumentProjectAssignment;
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 use App\Services\TrackedRepos\TrackedRepoDeleter;
 use App\Services\TrackedRepos\TrackedRepoPreviewService;
 use App\Services\TrackedRepos\TrackedRepoScanService;
@@ -88,7 +88,7 @@ class TrackedRepoController extends Controller
                 $request->filled('ref') ? trim((string) $request->validated('ref')) : null,
                 (string) $request->validated('path_pattern'),
             );
-        } catch (PreviewException $e) {
+        } catch (DiscoveryException $e) {
             return response()->json($e->toArray(), 422);
         }
 
@@ -144,13 +144,15 @@ class TrackedRepoController extends Controller
     /**
      * GET /api/v1/tracked-repos/{trackedRepo} — the record, its running state, and
      * its last-scan report (the poll target; the panel settles when the status
-     * leaves `running`). A foreign id is denied (403), never confirmed to exist.
+     * leaves `running`). `detailed()`: the settled read carries the full per-file
+     * report the panel materializes rows from, while in-flight polls stay lean
+     * (C11). A foreign id is denied (403), never confirmed to exist.
      */
     public function show(TrackedRepo $trackedRepo): TrackedRepoResource
     {
         $this->authorize('view', $trackedRepo);
 
-        return TrackedRepoResource::make($trackedRepo);
+        return TrackedRepoResource::make($trackedRepo)->detailed();
     }
 
     /**

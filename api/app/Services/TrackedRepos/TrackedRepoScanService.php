@@ -13,7 +13,7 @@ use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Import\TitleSynthesizer;
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
@@ -82,7 +82,7 @@ class TrackedRepoScanService
 
         try {
             if ($ref === null) {
-                throw PreviewException::unsupportedRepo();
+                throw DiscoveryException::unsupportedRepo();
             }
 
             $discovery = $this->discovery->discover(
@@ -90,9 +90,9 @@ class TrackedRepoScanService
                 $repo->ref,
                 $repo->integration?->token(),
                 $repo->path_pattern,
-                (int) config('kedge.tracked_repos.file_cap', 200),
+                $this->discovery->fileCap(),
             );
-        } catch (PreviewException $e) {
+        } catch (DiscoveryException $e) {
             $this->completeRepoFailure($repo, $now, $claim->staleTakeover, $e, $actorId);
 
             return;
@@ -280,7 +280,7 @@ class TrackedRepoScanService
         TrackedRepo $repo,
         CarbonImmutable $startedAt,
         bool $staleTakeover,
-        PreviewException $e,
+        DiscoveryException $e,
         ?int $actorId,
     ): void {
         $finishedAt = CarbonImmutable::now();

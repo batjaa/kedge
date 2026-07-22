@@ -483,6 +483,66 @@ class TrackedRepoScanTest extends TestCase
             ->assertJsonPath('data.last_scan_status', 'running');
     }
 
+    // ---- lean poll payload (C11) -------------------------------------------
+
+    public function test_the_show_target_carries_the_full_report_when_settled(): void
+    {
+        $trackedRepo = $this->scan(['docs/a.md', 'docs/b.md']);
+        $user = $trackedRepo->workspace->members()->firstOrFail();
+
+        // The settled poll read is what the panel materializes rows from — it must
+        // carry the per-file entries (with document ids).
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk();
+
+        $this->assertCount(2, $response->json('data.last_scan_report.files'));
+        $this->assertNotNull($response->json('data.last_scan_report.files.0.document_id'));
+    }
+
+    public function test_the_index_omits_per_file_entries_keeping_the_summary_counts(): void
+    {
+        $trackedRepo = $this->scan(['docs/a.md', 'docs/b.md']);
+        $user = $trackedRepo->workspace->members()->firstOrFail();
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/tracked-repos')
+            ->assertOk();
+
+        // Summary counts survive; the potentially-large per-file array is slimmed away.
+        $this->assertSame(2, $response->json('data.0.last_scan_report.counts.import_queued'));
+        $this->assertSame(2, $response->json('data.0.last_scan_report.matched'));
+        $this->assertSame([], $response->json('data.0.last_scan_report.files'));
+    }
+
+    public function test_show_omits_per_file_entries_while_a_scan_is_in_flight(): void
+    {
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Running,
+            'last_scan_report' => [
+                'status' => 'ok',
+                'ref' => 'main',
+                'matched' => 1,
+                'counts' => ['import_queued' => 1, 'resync_queued' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
+                'files' => [['path' => 'docs/a.md', 'outcome' => 'import_queued', 'document_id' => 7, 'reason' => null]],
+                'error' => null,
+                'stale_takeover' => false,
+            ],
+        ]);
+
+        // While running, the poll only needs the status — the stale per-file entries
+        // are slimmed away so repeated reads stay lean.
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk()
+            ->assertJsonPath('data.last_scan_status', 'running');
+
+        $this->assertSame([], $response->json('data.last_scan_report.files'));
+        // Summary still rides along.
+        $this->assertSame(1, $response->json('data.last_scan_report.counts.import_queued'));
+    }
+
     // ---- re-scan trigger idempotency (story 15) ----------------------------
 
     public function test_the_scan_endpoint_is_an_idempotent_202(): void

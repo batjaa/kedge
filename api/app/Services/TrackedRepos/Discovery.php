@@ -6,7 +6,7 @@ namespace App\Services\TrackedRepos;
  * The read-only result of resolving a tracked repo against GitHub (SPEC §16,
  * M3.6): the concrete branch a scan/preview ran at, and the repo-relative paths
  * that matched the pattern AND carry an importable extension. Everything unusable
- * (bad ref, truncated listing, over-cap) is a thrown {@see Exceptions\PreviewException},
+ * (bad ref, truncated listing, over-cap) is a thrown {@see Exceptions\DiscoveryException},
  * never a partial {@see Discovery} — so a caller can trust {@see $paths} whole.
  */
 final class Discovery
