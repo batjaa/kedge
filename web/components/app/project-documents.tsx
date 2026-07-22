@@ -3,24 +3,31 @@
 import { useCallback } from 'react';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
+import { TrackedRepoPanel } from './tracked-repo-panel';
 import { hasMorePages } from '@/lib/document-list-live';
+import { mergeReportedRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
-import type { Document, DocumentListPage, Project } from '@/lib/document-types';
+import type { Document, DocumentListItem, DocumentListPage, Project } from '@/lib/document-types';
 
 // A project page's live document surface (SPEC §16 story 6, M3.6) — the M3.5
 // home re-scoped to one project: the same row components, per-row polling, retry
 // affordance, and Load more, filtered to this project (the clamp/pagination
 // convention carried by the shared hook). The import box here targets the
 // project, so a paste lands filed. Reassigning a doc OUT of this project (or to
-// Unfiled) removes its row; the row chip is how that move is made.
+// Unfiled) removes its row; the row chip is how that move is made. The tracked-repo
+// panel sits above it inside the SAME island, so a scan's reported imports
+// materialize as importing rows here and settle through the existing per-row path
+// (this closes the M3.5 out-of-band-liveness TODO, story 22).
 export function ProjectDocuments({
   projectId,
   initialPage,
   projects,
+  initialTrackedRepos = [],
 }: {
   projectId: number;
   initialPage: DocumentListPage | null;
   projects: Project[];
+  initialTrackedRepos?: TrackedRepo[];
 }) {
   const {
     degraded,
@@ -35,6 +42,19 @@ export function ProjectDocuments({
     handleLoadMore,
     handleRetried,
   } = useLiveDocumentList({ initialPage, projectFilter: projectId });
+
+  // A settled scan's queued imports appear as importing rows, deduped by id like
+  // the prepend path — then settle through the existing per-row poller.
+  const handleScanMaterialize = useCallback(
+    (rows: DocumentListItem[]) => {
+      const added = rows.filter((row) => !items.some((item) => item.id === row.id)).length;
+      setItems((prev) => mergeReportedRows(prev, rows));
+      if (added > 0) {
+        setMeta((prev) => (prev ? { ...prev, total: prev.total + added } : prev));
+      }
+    },
+    [items, setItems, setMeta],
+  );
 
   const handleAssigned = useCallback(
     (doc: Document) => {
@@ -55,6 +75,12 @@ export function ProjectDocuments({
 
   return (
     <>
+      <TrackedRepoPanel
+        projectId={projectId}
+        initialRepos={initialTrackedRepos}
+        onMaterialize={handleScanMaterialize}
+      />
+
       <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
           Import into this project

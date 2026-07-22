@@ -4,23 +4,57 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PreviewTrackedRepoRequest;
+use App\Http\Requests\StoreTrackedRepoRequest;
+use App\Http\Resources\V1\TrackedRepoResource;
+use App\Jobs\ScanTrackedRepoJob;
 use App\Models\TrackedRepo;
 use App\Policies\TrackedRepoPolicy;
+use App\Services\AuditLogger;
 use App\Services\Documents\DocumentProjectAssignment;
 use App\Services\TrackedRepos\Exceptions\PreviewException;
 use App\Services\TrackedRepos\TrackedRepoPreviewService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
- * Tracked repos (SPEC §16, M3.6). This milestone is READ-ONLY: `preview` lists
- * exactly which files a scan would import — matches, per-path overlap warnings
- * (10A), and loud over-cap (story 18) / truncation (4A) failures — with no
- * persistence and no import (the scan is #93). Every action authorizes through
+ * Tracked repos (SPEC §16, M3.6). `preview` lists what a scan would import with no
+ * side effects (#92); `store` persists the record and dispatches its first scan
+ * (#93); `show` is the scan poll target (record + running state + last report);
+ * `scan` re-triggers, idempotently. Every action authorizes through
  * {@see TrackedRepoPolicy}: an id in a URL is never an access path, and a
- * workspace-less reviewer is refused 403 (never a 500).
+ * workspace-less reviewer is refused 403 (never a 500). Scans are queued — every
+ * write returns 202 so a slow GitHub listing never blocks the UI.
  */
 class TrackedRepoController extends Controller
 {
+    public function __construct(
+        private readonly AuditLogger $audit,
+    ) {}
+
+    /**
+     * GET /api/v1/tracked-repos — the workspace's tracked repos, newest first, with
+     * an optional `?project=` filter (a numeric id scopes to that project). The
+     * query is workspace-scoped, so an id is never an access path and a foreign
+     * project id simply matches nothing. The project page reads this to render each
+     * record's state + last report.
+     */
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $this->authorize('viewAny', TrackedRepo::class);
+
+        $query = $request->user()->personalWorkspace()->trackedRepos();
+
+        $project = $request->query('project');
+        if ($project !== null && $project !== '') {
+            $query->where('project_id', (int) $project);
+        }
+
+        return TrackedRepoResource::collection(
+            $query->latest('id')->get(),
+        );
+    }
+
     /**
      * POST /api/v1/tracked-repos/preview — {repo_url, ref?, path_pattern, project_id?}.
      * Read-only. Auth reuses single-file import's posture: the workspace PAT when
@@ -56,5 +90,79 @@ class TrackedRepoController extends Controller
         }
 
         return response()->json($preview->toArray());
+    }
+
+    /**
+     * POST /api/v1/tracked-repos — persist the record and dispatch its first scan
+     * (SPEC §16, #93). Validated like preview (branch-only ref is the scan's job,
+     * 2A; a foreign project id 404s, 8A). The workspace PAT is bound now so the scan
+     * authenticates exactly as single-file import does. 202 with the pending record
+     * — the panel polls {@see show} until the scan settles.
+     */
+    public function store(
+        StoreTrackedRepoRequest $request,
+        DocumentProjectAssignment $projects,
+    ): JsonResponse {
+        $this->authorize('create', TrackedRepo::class);
+
+        $user = $request->user();
+        $workspace = $user->personalWorkspace();
+
+        $project = $projects->resolve(
+            $workspace,
+            $request->filled('project_id') ? (int) $request->validated('project_id') : null,
+        );
+
+        $trackedRepo = $workspace->trackedRepos()->create([
+            'project_id' => $project?->id,
+            'integration_id' => $workspace->githubPatIntegration()?->id,
+            'repo_url' => (string) $request->validated('repo_url'),
+            'ref' => $request->filled('ref') ? trim((string) $request->validated('ref')) : null,
+            'path_pattern' => (string) $request->validated('path_pattern'),
+            'created_by' => $user->id,
+        ]);
+
+        $this->audit->record(
+            $workspace,
+            $user,
+            'tracked_repo.created',
+            $trackedRepo,
+            ['repo_url' => $trackedRepo->repo_url, 'path_pattern' => $trackedRepo->path_pattern],
+            $request->ip(),
+        );
+
+        ScanTrackedRepoJob::dispatch($trackedRepo, $user->id);
+
+        return TrackedRepoResource::make($trackedRepo)
+            ->response()
+            ->setStatusCode(202);
+    }
+
+    /**
+     * GET /api/v1/tracked-repos/{trackedRepo} — the record, its running state, and
+     * its last-scan report (the poll target; the panel settles when the status
+     * leaves `running`). A foreign id is denied (403), never confirmed to exist.
+     */
+    public function show(TrackedRepo $trackedRepo): TrackedRepoResource
+    {
+        $this->authorize('view', $trackedRepo);
+
+        return TrackedRepoResource::make($trackedRepo);
+    }
+
+    /**
+     * POST /api/v1/tracked-repos/{trackedRepo}/scan — re-trigger a scan. Idempotent
+     * (202): the service's atomic claim collapses a double-click or a race onto one
+     * scan (5A), so pressing the button twice is safe.
+     */
+    public function scan(Request $request, TrackedRepo $trackedRepo): JsonResponse
+    {
+        $this->authorize('scan', $trackedRepo);
+
+        ScanTrackedRepoJob::dispatch($trackedRepo, $request->user()->id);
+
+        return TrackedRepoResource::make($trackedRepo)
+            ->response()
+            ->setStatusCode(202);
     }
 }

@@ -3,9 +3,9 @@ import { notFound, redirect } from 'next/navigation';
 import { PageContainer } from '@/components/app/page-container';
 import { ProjectHeader } from '@/components/app/project-header';
 import { ProjectDocuments } from '@/components/app/project-documents';
-import { TrackedRepoAdd } from '@/components/app/tracked-repo-add';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
+import { getTrackedRepos } from '@/lib/tracked-repos';
 
 // A project page (SPEC §16 story 6, M3.6): its description header plus its
 // documents rendered with the SAME live rows as home, filtered to this project.
@@ -35,6 +35,10 @@ export default async function ProjectPage({
   const documents = await getDocuments(1, project.id);
   if (documents.status === 401 || documents.status === 403) redirect('/signin');
 
+  // The project's tracked repos, so each record's state + last report renders on
+  // load (a refused/unreachable read yields an empty panel, never a crash).
+  const trackedRepos = await getTrackedRepos(project.id);
+
   return (
     <PageContainer>
       <Link
@@ -46,12 +50,11 @@ export default async function ProjectPage({
 
       <ProjectHeader project={project} />
 
-      <TrackedRepoAdd projectId={project.id} />
-
       <ProjectDocuments
         projectId={project.id}
         initialPage={documents.page}
         projects={projects}
+        initialTrackedRepos={trackedRepos.trackedRepos}
       />
     </PageContainer>
   );

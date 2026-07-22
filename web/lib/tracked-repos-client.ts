@@ -1,11 +1,12 @@
-// Client-side tracked-repo preview (SPEC §16, M3.6). Runs in the browser and
-// POSTs to the API directly with credentials + the X-XSRF-TOKEN header — the same
-// Sanctum SPA pattern as projects-client.ts / documents-client.ts. Preview is a
-// POST but READ-ONLY (no persistence): it lists exactly which files a scan would
-// import. Nothing here imports — the confirm/scan wiring arrives with #93.
+// Client-side tracked-repo calls (SPEC §16, M3.6). Runs in the browser and POSTs
+// to the API directly with credentials + the X-XSRF-TOKEN header — the same
+// Sanctum SPA pattern as projects-client.ts / documents-client.ts. `preview` is a
+// POST but READ-ONLY; `createTrackedRepo` persists the record and kicks off its
+// first scan (202); `readTrackedRepo` is the scan poll target (#93).
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
+import type { TrackedRepo } from './tracked-repo-scan';
 
 /** One file a scan would import, flagged if another tracked repo already holds it (10A). */
 export interface PreviewFile {
@@ -126,4 +127,90 @@ function firstFieldError(errors?: Record<string, string[]>): string | undefined 
     if (messages.length > 0) return messages[0];
   }
   return undefined;
+}
+
+/** The create outcome — the persisted record on success, else a structured failure. */
+export type CreateTrackedRepoOutcome =
+  | { ok: true; trackedRepo: TrackedRepo }
+  | { ok: false; kind: 'not-found' | 'validation' | 'rate-limited' | 'error'; message: string };
+
+interface TrackedRepoEnvelope {
+  data: TrackedRepo;
+}
+
+function sendCreate(body: PreviewInput): Promise<Response> {
+  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      ...xsrfHeader(),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /api/v1/tracked-repos — persist the tracked repo and start its first scan.
+ * 202 with the pending record; the panel then polls {@link readTrackedRepo} until
+ * the scan settles. A foreign project id 404s (8A).
+ */
+export async function createTrackedRepo(input: PreviewInput): Promise<CreateTrackedRepoOutcome> {
+  await ensureCsrfCookie();
+  let res = await sendCreate(input);
+
+  if (res.status === 419) {
+    await refreshCsrfCookie();
+    res = await sendCreate(input);
+  }
+
+  if (res.ok) {
+    const body = (await res.json()) as TrackedRepoEnvelope;
+    return { ok: true, trackedRepo: body.data };
+  }
+
+  if (res.status === 404) {
+    return { ok: false, kind: 'not-found', message: 'That project is no longer available.' };
+  }
+
+  if (res.status === 422) {
+    const body = (await res.json().catch(() => null)) as PreviewErrorBody | null;
+    return {
+      ok: false,
+      kind: 'validation',
+      message:
+        body?.message ??
+        firstFieldError(body?.errors) ??
+        'Please check the repository details and try again.',
+    };
+  }
+
+  if (res.status === 429) {
+    return { ok: false, kind: 'rate-limited', message: 'Too many requests. Wait a minute, then try again.' };
+  }
+
+  return { ok: false, kind: 'error', message: 'Something went wrong starting the scan. Please try again.' };
+}
+
+/**
+ * GET /api/v1/tracked-repos/{id} — the scan poll target. Returns the record on a
+ * 200, or null on any hiccup so the poll loop stays alive (the document-poller
+ * convention). The caller's {@link scanSettled} decides when to stop.
+ */
+export async function readTrackedRepo(id: number): Promise<TrackedRepo | null> {
+  try {
+    const res = await fetch(`${publicApiBaseUrl}/api/v1/tracked-repos/${id}`, {
+      credentials: 'include',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as TrackedRepoEnvelope;
+    return body.data;
+  } catch {
+    return null;
+  }
 }
