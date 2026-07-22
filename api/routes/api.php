@@ -112,13 +112,30 @@ Route::prefix('v1')->group(function () {
         Route::patch('/projects/{project}', [ProjectController::class, 'update'])
             ->name('api.v1.projects.update');
 
-        // Tracked repos (SPEC §16, M3.6), behind TrackedRepoPolicy. READ-ONLY this
-        // milestone: preview lists what a scan would import with no side effects.
-        // Under the import limiter — it drives 2–3 outbound GitHub calls per hit,
-        // the same fetch-budget concern as an import (#93 adds create/scan/show).
+        // Tracked repos (SPEC §16, M3.6), behind TrackedRepoPolicy. Preview lists
+        // what a scan would import with no side effects; create persists + runs the
+        // first scan; show is the scan poll target; scan re-triggers. List and show
+        // are free reads (the panel polls show); preview/create/scan drive outbound
+        // GitHub calls, so they share the import limiter. The static `preview` path
+        // is registered before the dynamic `{trackedRepo}` so it is never captured
+        // as an id.
+        Route::get('/tracked-repos', [TrackedRepoController::class, 'index'])
+            ->name('api.v1.tracked-repos.index');
+
         Route::post('/tracked-repos/preview', [TrackedRepoController::class, 'preview'])
             ->middleware('throttle:imports')
             ->name('api.v1.tracked-repos.preview');
+
+        Route::post('/tracked-repos', [TrackedRepoController::class, 'store'])
+            ->middleware('throttle:imports')
+            ->name('api.v1.tracked-repos.store');
+
+        Route::get('/tracked-repos/{trackedRepo}', [TrackedRepoController::class, 'show'])
+            ->name('api.v1.tracked-repos.show');
+
+        Route::post('/tracked-repos/{trackedRepo}/scan', [TrackedRepoController::class, 'scan'])
+            ->middleware('throttle:imports')
+            ->name('api.v1.tracked-repos.scan');
 
         // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
         // (import, retry) share a per-user limiter so a runaway paste loop or a
