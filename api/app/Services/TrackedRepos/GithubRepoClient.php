@@ -180,14 +180,15 @@ class GithubRepoClient
     }
 
     /**
-     * `https://{host}/repos/{owner}/{repo}{suffix}` — host from config (the test
-     * seam), owner/repo rawurlencoded so an odd slug can't break the path.
+     * `{base}/repos/{owner}/{repo}{suffix}` — base from config (`https://api.github.com`
+     * in production; the loopback fixture base only in the E2E test seam), owner/repo
+     * rawurlencoded so an odd slug can't break the path.
      */
     private function apiUrl(RepoRef $repo, string $suffix): string
     {
         return sprintf(
-            'https://%s/repos/%s/%s%s',
-            (string) config('kedge.github.api_host', 'api.github.com'),
+            '%s/repos/%s/%s%s',
+            (string) config('kedge.github.api_base', 'https://api.github.com'),
             rawurlencode($repo->owner),
             rawurlencode($repo->repo),
             $suffix,

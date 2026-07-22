@@ -53,6 +53,16 @@ export APP_ENV=e2e
 #                           the fixture server (e2e/serve-fixtures.mjs) binds,
 #                           so the pasted fixture URL survives the guard. Never
 #                           set this outside this throwaway env.
+#   GITHUB_API_HOST         the TEST-ONLY GitHub API base (config/kedge.php,
+#                           M3.6 seam): points every GitHub REST call at the same
+#                           loopback fixture host, which emulates the minimal
+#                           repo/branches/tree/contents endpoints for the
+#                           tracked-repo journey (#95). Carries an http:// scheme
+#                           so the call reaches the plain-http fixture server —
+#                           admitted by the same FETCH_ALLOW_HOSTS loopback
+#                           exemption. Production defaults to api.github.com
+#                           (https); never set this outside this throwaway env.
+#                           The port MUST match e2e/fixture-doc.ts (FIXTURE_PORT).
 #
 # The journey-pack (#39) adds one more:
 #   CACHE_STORE=array       the pack drives every shipped surface as many unique
@@ -89,6 +99,7 @@ export APP_ENV=e2e
   echo "PROJECTION_URL=http://127.0.0.1:${WEB_PORT:-3000}"
   echo "KROKI_URL=${KROKI_URL:-https://kroki.io}"
   echo "FETCH_ALLOW_HOSTS=127.0.0.1"
+  echo "GITHUB_API_HOST=http://127.0.0.1:${FIXTURE_PORT:-4801}"
 } >"${ENV_FILE}"
 
 php artisan key:generate --force

@@ -14,6 +14,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { handleGithubFixtureRequest } from './github-fixture.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('./fixtures/', import.meta.url)));
 const HOST = '127.0.0.1';
@@ -48,6 +49,15 @@ const server = createServer(async (req, res) => {
   if (pathname === '/status/500') {
     res.writeHead(500, { 'content-type': 'text/plain' });
     res.end('deliberate upstream error');
+    return;
+  }
+
+  // The tracked-repo journey (#95): emulate the minimal GitHub REST endpoints the
+  // scan pipeline calls (repo metadata, branches, recursive tree, raw contents)
+  // plus the two mutation-control routes it flips between scans. Owns any
+  // /repos/kedge-fixtures/… GET and /__fixture/github/* POST; everything else
+  // falls through to the static fixture serving below.
+  if (handleGithubFixtureRequest(req, res)) {
     return;
   }
 
