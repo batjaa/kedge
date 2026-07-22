@@ -8,9 +8,11 @@ import { TrackedRepoPreview, type PreviewView } from '@/components/app/tracked-r
 // prop, so each state renders from props alone — no async, no network.
 
 function render(view: PreviewView): string {
-  // The container always wires onConfirm (#93); pass a no-op so the confirm
-  // affordance renders in its active shape.
-  return renderToStaticMarkup(<TrackedRepoPreview view={view} onConfirm={() => {}} />);
+  // The container always wires onConfirm + confirm state (#93, now required, C8);
+  // pass a no-op so the confirm affordance renders in its active shape.
+  return renderToStaticMarkup(
+    <TrackedRepoPreview view={view} onConfirm={() => {}} confirmPending={false} confirmError={null} />,
+  );
 }
 
 describe('TrackedRepoPreview', () => {
@@ -40,19 +42,26 @@ describe('TrackedRepoPreview', () => {
   it('offers an active confirm and surfaces a confirm error', () => {
     const view: PreviewView = { kind: 'matches', overlapCount: 0, files: [{ path: 'docs/a.md', overlap: false }] };
 
-    const active = renderToStaticMarkup(<TrackedRepoPreview view={view} onConfirm={() => {}} />);
-    // With a handler wired the button carries no disabled attribute (the
-    // `disabled:` Tailwind class is always present, so match the attribute).
+    const active = renderToStaticMarkup(
+      <TrackedRepoPreview view={view} onConfirm={() => {}} confirmPending={false} confirmError={null} />,
+    );
+    // Not pending the button carries no disabled attribute (the `disabled:`
+    // Tailwind class is always present, so match the attribute).
     expect(active).not.toContain('disabled=""');
 
     const pending = renderToStaticMarkup(
-      <TrackedRepoPreview view={view} onConfirm={() => {}} confirmPending />,
+      <TrackedRepoPreview view={view} onConfirm={() => {}} confirmPending confirmError={null} />,
     );
     expect(pending).toContain('Starting scan');
     expect(pending).toContain('disabled=""');
 
     const failed = renderToStaticMarkup(
-      <TrackedRepoPreview view={view} onConfirm={() => {}} confirmError="Something went wrong starting the scan." />,
+      <TrackedRepoPreview
+        view={view}
+        onConfirm={() => {}}
+        confirmPending={false}
+        confirmError="Something went wrong starting the scan."
+      />,
     );
     expect(failed).toContain('Something went wrong starting the scan.');
     expect(failed).toContain('role="alert"');

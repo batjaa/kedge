@@ -1,4 +1,5 @@
 import type { PreviewFile } from '@/lib/tracked-repos-client';
+import { EMERALD_BUTTON, PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles';
 
 // The preview result surface (SPEC §16, M3.6, stories 8 + 9) — a pure view of one
 // preview outcome, so every state renders from props alone (statically testable,
@@ -16,22 +17,21 @@ export type PreviewView =
   | { kind: 'truncated'; message: string }
   | { kind: 'error'; message: string };
 
-const ERROR_CLASS = 'mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20';
+const ERROR_CLASS = `mt-4 p-4 ${ROSE_PANEL}`;
 
-const CONFIRM_CLASS =
-  'rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
+const CONFIRM_CLASS = `px-4 py-1.5 ${EMERALD_BUTTON}`;
 
 export function TrackedRepoPreview({
   view,
   onConfirm,
-  confirmPending = false,
-  confirmError = null,
+  confirmPending,
+  confirmError,
 }: {
   view: PreviewView;
-  /** Persist the tracked repo and run its first scan (#93). */
-  onConfirm?: () => void;
-  confirmPending?: boolean;
-  confirmError?: string | null;
+  /** Persist the tracked repo and run its first scan (#93). Always wired by the panel. */
+  onConfirm: () => void;
+  confirmPending: boolean;
+  confirmError: string | null;
 }) {
   if (view.kind === 'loading') {
     return (
@@ -81,7 +81,7 @@ export function TrackedRepoPreview({
             {file.overlap ? (
               <span
                 title="Another tracked repo in this workspace already imports this path — importing here would duplicate it."
-                className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-400/10 dark:text-amber-300"
+                className={`${PILL_BASE} bg-amber-100 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300`}
               >
                 Already tracked
               </span>
@@ -94,7 +94,7 @@ export function TrackedRepoPreview({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={confirmPending || !onConfirm}
+          disabled={confirmPending}
           className={CONFIRM_CLASS}
         >
           {confirmPending ? 'Starting scan…' : 'Add & scan'}

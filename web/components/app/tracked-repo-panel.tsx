@@ -6,6 +6,7 @@ import { reportImportingRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
 import type { DocumentListItem, ProjectRef } from '@/lib/document-types';
 import { TrackedRepoPreview, type PreviewView } from './tracked-repo-preview';
 import { TrackedRepoList } from './tracked-repo-list';
+import { EMERALD_BUTTON } from '@/lib/tracked-repo-styles';
 
 // The "Track a repository" panel on a project page (SPEC §16, M3.6, stories
 // 7/8/9/12/22). A member pastes a repo URL + path pattern and previews exactly
@@ -16,8 +17,7 @@ import { TrackedRepoList } from './tracked-repo-list';
 // island — settling through the existing per-row path (this closes the M3.5
 // out-of-band-liveness TODO). DESIGN.md panel tokens.
 
-const BUTTON_CLASS =
-  'shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
+const BUTTON_CLASS = `shrink-0 px-4 py-2 ${EMERALD_BUTTON}`;
 
 const FIELD_CLASS =
   'mt-1.5 w-full rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10';
@@ -184,6 +184,13 @@ export function TrackedRepoPanel({
           <code className="font-mono">?</code> one character — case-sensitive. Only{' '}
           <code className="font-mono">.md</code>, <code className="font-mono">.mdx</code>, and{' '}
           <code className="font-mono">.html</code> files import.
+        </p>
+
+        {/* PAT recommendation (spec 4A): unauthenticated GitHub allows only 60
+            requests/hour, so a large public repo can exhaust the quota mid-scan. */}
+        <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
+          Tracking a large public repo? Connect the workspace GitHub PAT in Settings for a higher
+          rate limit — unauthenticated GitHub allows only 60 requests an hour.
         </p>
 
         <div className="mt-3">
