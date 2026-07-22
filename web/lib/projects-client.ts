@@ -2,8 +2,7 @@
 // the API directly with credentials + the X-XSRF-TOKEN header — the same Sanctum
 // SPA mutation pattern as documents-client.ts.
 
-import { publicApiBaseUrl } from './config';
-import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
+import { csrfSend } from './csrf-client';
 import type { Document, Project } from './document-types';
 import type { ValidationErrorBody } from './auth-types';
 
@@ -17,32 +16,12 @@ interface ProjectEnvelope {
   data: Project;
 }
 
-function send(method: 'POST' | 'PATCH', path: string, body: Record<string, unknown>): Promise<Response> {
-  return fetch(`${publicApiBaseUrl}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      ...xsrfHeader(),
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 async function mutateProject(
   method: 'POST' | 'PATCH',
   path: string,
   body: Record<string, unknown>,
 ): Promise<ProjectOutcome> {
-  await ensureCsrfCookie();
-  let res = await send(method, path, body);
-
-  // 419 = stale/absent CSRF token. Refresh once and retry before giving up.
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await send(method, path, body);
-  }
+  const res = await csrfSend(path, { method, body });
 
   if (res.ok) {
     const envelope = (await res.json()) as ProjectEnvelope;
@@ -96,14 +75,10 @@ export async function assignDocumentProject(
   id: number,
   projectId: number | null,
 ): Promise<AssignProjectOutcome> {
-  await ensureCsrfCookie();
-  const body = { project_id: projectId };
-  let res = await send('PATCH', `/api/v1/documents/${id}`, body);
-
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await send('PATCH', `/api/v1/documents/${id}`, body);
-  }
+  const res = await csrfSend(`/api/v1/documents/${id}`, {
+    method: 'PATCH',
+    body: { project_id: projectId },
+  });
 
   if (res.ok) {
     return { ok: true, document: (await res.json()) as Document };
