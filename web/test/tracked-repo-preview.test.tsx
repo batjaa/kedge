@@ -8,7 +8,9 @@ import { TrackedRepoPreview, type PreviewView } from '@/components/app/tracked-r
 // prop, so each state renders from props alone — no async, no network.
 
 function render(view: PreviewView): string {
-  return renderToStaticMarkup(<TrackedRepoPreview view={view} />);
+  // The container always wires onConfirm (#93); pass a no-op so the confirm
+  // affordance renders in its active shape.
+  return renderToStaticMarkup(<TrackedRepoPreview view={view} onConfirm={() => {}} />);
 }
 
 describe('TrackedRepoPreview', () => {
@@ -30,10 +32,30 @@ describe('TrackedRepoPreview', () => {
     expect(html).toContain('docs/spec.md');
     expect(html).toContain('docs/design.md');
     expect(html).toContain('2 files match');
-    // The import affordance is present but inert until the scan (#93).
+    // The confirm affordance is now active — it persists the repo and scans (#93).
     expect(html).toContain('Add &amp; scan');
-    expect(html).toContain('disabled');
-    expect(html).toContain('#93');
+    expect(html).not.toContain('#93');
+  });
+
+  it('offers an active confirm and surfaces a confirm error', () => {
+    const view: PreviewView = { kind: 'matches', overlapCount: 0, files: [{ path: 'docs/a.md', overlap: false }] };
+
+    const active = renderToStaticMarkup(<TrackedRepoPreview view={view} onConfirm={() => {}} />);
+    // With a handler wired the button carries no disabled attribute (the
+    // `disabled:` Tailwind class is always present, so match the attribute).
+    expect(active).not.toContain('disabled=""');
+
+    const pending = renderToStaticMarkup(
+      <TrackedRepoPreview view={view} onConfirm={() => {}} confirmPending />,
+    );
+    expect(pending).toContain('Starting scan');
+    expect(pending).toContain('disabled=""');
+
+    const failed = renderToStaticMarkup(
+      <TrackedRepoPreview view={view} onConfirm={() => {}} confirmError="Something went wrong starting the scan." />,
+    );
+    expect(failed).toContain('Something went wrong starting the scan.');
+    expect(failed).toContain('role="alert"');
   });
 
   it('flags a file already tracked elsewhere in the workspace (10A)', () => {

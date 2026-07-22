@@ -1,15 +1,20 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
-import { previewTrackedRepo } from '@/lib/tracked-repos-client';
+import { useCallback, useState, type FormEvent } from 'react';
+import { createTrackedRepo, previewTrackedRepo } from '@/lib/tracked-repos-client';
+import { reportImportingRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
+import type { DocumentListItem } from '@/lib/document-types';
 import { TrackedRepoPreview, type PreviewView } from './tracked-repo-preview';
+import { TrackedRepoList } from './tracked-repo-list';
 
-// The "Track a repository" affordance on a project page (SPEC §16, M3.6, stories
-// 7 + 8; DESIGN.md panel idiom). A member pastes a repo URL, an optional branch,
-// and a gitignore-style path pattern, then PREVIEWS exactly which files a scan
-// would import — matches with overlaps flagged inline (10A), a loud over-cap
-// (story 18) or truncation (4A) error, or an empty result. Nothing imports here:
-// the confirm/scan step arrives with #93, so the preview's action button is inert.
+// The "Track a repository" panel on a project page (SPEC §16, M3.6, stories
+// 7/8/9/12/22). A member pastes a repo URL + path pattern and previews exactly
+// which files a scan would import (matches, overlaps 10A, over-cap 18, truncation
+// 4A). Confirming persists the tracked repo and runs its first scan (#93): the new
+// record joins the list, the page polls it until the scan settles, and the
+// reported `import_queued` files materialize as importing rows on the project
+// island — settling through the existing per-row path (this closes the M3.5
+// out-of-band-liveness TODO). DESIGN.md panel tokens.
 
 const BUTTON_CLASS =
   'shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
@@ -19,20 +24,33 @@ const FIELD_CLASS =
 
 const LABEL_CLASS = 'block text-xs font-medium text-zinc-700 dark:text-zinc-300';
 
-export function TrackedRepoAdd({ projectId }: { projectId: number }) {
+export function TrackedRepoPanel({
+  projectId,
+  initialRepos,
+  onMaterialize,
+}: {
+  projectId: number;
+  initialRepos: TrackedRepo[];
+  /** Merge scan-reported importing rows into the project island (story 22). */
+  onMaterialize: (rows: DocumentListItem[]) => void;
+}) {
   const [repoUrl, setRepoUrl] = useState('');
   const [ref, setRef] = useState('');
   const [pattern, setPattern] = useState('');
-  const [pending, setPending] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [view, setView] = useState<PreviewView | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [repos, setRepos] = useState<TrackedRepo[]>(initialRepos);
 
-  const canSubmit = repoUrl.trim() !== '' && pattern.trim() !== '' && !pending;
+  const canPreview = repoUrl.trim() !== '' && pattern.trim() !== '' && !previewing;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!canPreview) return;
 
-    setPending(true);
+    setPreviewing(true);
+    setConfirmError(null);
     setView({ kind: 'loading' });
 
     const outcome = await previewTrackedRepo({
@@ -43,15 +61,51 @@ export function TrackedRepoAdd({ projectId }: { projectId: number }) {
     });
 
     setView(toView(outcome));
-    setPending(false);
+    setPreviewing(false);
   }
+
+  async function onConfirm() {
+    setConfirming(true);
+    setConfirmError(null);
+
+    const outcome = await createTrackedRepo({
+      repo_url: repoUrl.trim(),
+      ref: ref.trim() === '' ? undefined : ref.trim(),
+      path_pattern: pattern.trim(),
+      project_id: projectId,
+    });
+
+    setConfirming(false);
+
+    if (!outcome.ok) {
+      setConfirmError(outcome.message);
+      return;
+    }
+
+    // The record joins the list (pending → the poll takes over); reset the form so
+    // the panel is ready for the next repo.
+    setRepos((prev) => [outcome.trackedRepo, ...prev]);
+    setView(null);
+    setRepoUrl('');
+    setRef('');
+    setPattern('');
+  }
+
+  const handleScanned = useCallback(
+    (repo: TrackedRepo) => {
+      setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
+      // A settled scan's queued imports appear as importing rows on the island.
+      onMaterialize(reportImportingRows(repo.last_scan_report));
+    },
+    [onMaterialize],
+  );
 
   return (
     <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
       <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Track a repository</h2>
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Point at a GitHub repo and a path pattern, then preview exactly which files would import.
-        Nothing imports yet — the scan lands next.
+        Point at a GitHub repo and a path pattern, preview exactly which files match, then import them
+        all into this project — kept tracked for a re-scan later.
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-3">
@@ -110,13 +164,22 @@ export function TrackedRepoAdd({ projectId }: { projectId: number }) {
         </p>
 
         <div className="mt-3">
-          <button type="submit" disabled={!canSubmit} className={BUTTON_CLASS}>
-            {pending ? 'Previewing…' : 'Preview files'}
+          <button type="submit" disabled={!canPreview} className={BUTTON_CLASS}>
+            {previewing ? 'Previewing…' : 'Preview files'}
           </button>
         </div>
       </form>
 
-      {view ? <TrackedRepoPreview view={view} /> : null}
+      {view ? (
+        <TrackedRepoPreview
+          view={view}
+          onConfirm={onConfirm}
+          confirmPending={confirming}
+          confirmError={confirmError}
+        />
+      ) : null}
+
+      <TrackedRepoList repos={repos} onScanned={handleScanned} />
     </div>
   );
 }

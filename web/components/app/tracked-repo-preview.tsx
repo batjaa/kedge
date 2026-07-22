@@ -1,10 +1,12 @@
 import type { PreviewFile } from '@/lib/tracked-repos-client';
 
-// The preview result surface (SPEC §16, M3.6, story 8) — a pure view of one
+// The preview result surface (SPEC §16, M3.6, stories 8 + 9) — a pure view of one
 // preview outcome, so every state renders from props alone (statically testable,
-// no async). Nothing here imports: matches show what a scan WOULD bring in, with
-// overlaps flagged inline (10A); over-cap (story 18) and truncation (4A) are loud
-// blocking errors. DESIGN.md panel tokens; mirrors the import-form error idiom.
+// no async). Matches show what a scan WOULD bring in, with overlaps flagged inline
+// (10A); over-cap (story 18) and truncation (4A) are loud blocking errors. The
+// matches state carries an active "Add & scan" confirm (wired by the container,
+// #93): pressing it persists the tracked repo and runs the first scan. DESIGN.md
+// panel tokens; mirrors the import-form error idiom.
 
 /** The derived view-model the container hands this component. */
 export type PreviewView =
@@ -16,7 +18,21 @@ export type PreviewView =
 
 const ERROR_CLASS = 'mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20';
 
-export function TrackedRepoPreview({ view }: { view: PreviewView }) {
+const CONFIRM_CLASS =
+  'rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
+
+export function TrackedRepoPreview({
+  view,
+  onConfirm,
+  confirmPending = false,
+  confirmError = null,
+}: {
+  view: PreviewView;
+  /** Persist the tracked repo and run its first scan (#93). */
+  onConfirm?: () => void;
+  confirmPending?: boolean;
+  confirmError?: string | null;
+}) {
   if (view.kind === 'loading') {
     return (
       <p role="status" className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
@@ -75,20 +91,24 @@ export function TrackedRepoPreview({ view }: { view: PreviewView }) {
       </ul>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {/* Importing arrives with the scan (#93) — the affordance is present but
-            inert so the flow reads end-to-end. */}
         <button
           type="button"
-          disabled
-          aria-disabled="true"
-          className="rounded-full bg-zinc-900/40 px-4 py-1.5 text-sm font-medium text-white/80 dark:bg-white/10 dark:text-white/60"
+          onClick={onConfirm}
+          disabled={confirmPending || !onConfirm}
+          className={CONFIRM_CLASS}
         >
-          Add &amp; scan
+          {confirmPending ? 'Starting scan…' : 'Add & scan'}
         </button>
         <span className="text-xs text-zinc-500 dark:text-zinc-500">
-          Next: scan imports these files into the project (arrives with #93).
+          Imports these files into the project and keeps the repo tracked.
         </span>
       </div>
+
+      {confirmError ? (
+        <p role="alert" className={ERROR_CLASS}>
+          {confirmError}
+        </p>
+      ) : null}
     </div>
   );
 }
