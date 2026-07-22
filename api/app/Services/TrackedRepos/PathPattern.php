@@ -49,9 +49,13 @@ final class PathPattern
 
     public function matches(string $pattern, string $path): bool
     {
-        if (str_starts_with($path, '/')) {
-            $path = substr($path, 1);
-        }
+        // Normalize a leading slash off BOTH sides: git tree paths are repo-relative
+        // with no leading slash, but an author naturally writes `/docs/*.md` to mean
+        // "from the repo root". Stripping only the candidate (not the pattern) left
+        // the anchored regex demanding a leading slash the path never has, so a
+        // rooted pattern silently matched nothing.
+        $pattern = ltrim($pattern, '/');
+        $path = ltrim($path, '/');
 
         return preg_match($this->toRegex($pattern), $path) === 1;
     }
