@@ -13,7 +13,7 @@ use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Import\TitleSynthesizer;
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
@@ -82,7 +82,7 @@ class TrackedRepoScanService
 
         try {
             if ($ref === null) {
-                throw PreviewException::unsupportedRepo();
+                throw DiscoveryException::unsupportedRepo();
             }
 
             $discovery = $this->discovery->discover(
@@ -90,9 +90,9 @@ class TrackedRepoScanService
                 $repo->ref,
                 $repo->integration?->token(),
                 $repo->path_pattern,
-                (int) config('kedge.tracked_repos.file_cap', 200),
+                $this->discovery->fileCap(),
             );
-        } catch (PreviewException $e) {
+        } catch (DiscoveryException $e) {
             $this->completeRepoFailure($repo, $now, $claim->staleTakeover, $e, $actorId);
 
             return;
@@ -133,6 +133,39 @@ class TrackedRepoScanService
             ]);
 
         return new ScanClaim(claimed: $affected === 1, staleTakeover: $staleTakeover);
+    }
+
+    /**
+     * Flip a settled (or stale-running) record to `pending` so the SERVER owns "a
+     * scan is queued" the instant the re-scan trigger returns (A5). Without this,
+     * on an async queue the panel's first poll (~1.5s) can read the still-terminal
+     * record and settle on the PREVIOUS report before the worker even claims —
+     * "optimistic running" settling on a stale report. One atomic conditional
+     * update: a losing claimant (a genuinely running scan within the stale bound)
+     * no-ops, so a double-press collapses to one queued scan; the report and error
+     * are left intact for the panel to keep showing until the scan completes. The
+     * job's {@see claim} then advances pending → running.
+     */
+    public function queue(TrackedRepo $repo, ?CarbonImmutable $now = null): bool
+    {
+        $now ??= CarbonImmutable::now();
+        $staleBefore = $now->subMinutes(self::STALE_MINUTES);
+
+        $affected = TrackedRepo::query()
+            ->whereKey($repo->getKey())
+            ->where(function ($query) use ($staleBefore) {
+                $query->where('last_scan_status', '!=', TrackedScanStatus::Running->value)
+                    ->orWhere('last_scanned_at', '<', $staleBefore);
+            })
+            ->update([
+                'last_scan_status' => TrackedScanStatus::Pending->value,
+                // Stamps when the scan was queued — the stale bound measures pending
+                // liveness against this too (the delete guard's finite wait, A4).
+                'last_scanned_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        return $affected === 1;
     }
 
     /**
@@ -247,7 +280,7 @@ class TrackedRepoScanService
         TrackedRepo $repo,
         CarbonImmutable $startedAt,
         bool $staleTakeover,
-        PreviewException $e,
+        DiscoveryException $e,
         ?int $actorId,
     ): void {
         $finishedAt = CarbonImmutable::now();
@@ -359,7 +392,7 @@ class TrackedRepoScanService
      */
     private function createDocument(TrackedRepo $repo, RepoRef $ref, string $branch, string $path, string $blobSha): Document
     {
-        $blobUrl = 'https://github.com/'.$ref->owner.'/'.$ref->repo.'/blob/'.$branch.'/'.$path;
+        $blobUrl = $this->blobUrl($ref, $branch, $path);
 
         $sourceType = $repo->integration_id !== null
             ? SourceType::GithubPat
@@ -379,6 +412,29 @@ class TrackedRepoScanService
             'status' => DocumentStatus::Importing,
             'created_by' => $repo->created_by,
         ]);
+    }
+
+    /**
+     * The `github.com/{owner}/{repo}/blob/{branch}/{path}` URL a scan-minted
+     * document is sourced at. The branch and path are URL-encoded per `/`-split
+     * segment (slashes preserved as separators): a git path may legitimately hold
+     * a `#`, `?`, or space, and a raw concatenation would truncate the doc's
+     * source at {@see parse_url} — the import fetch would then permanently 404 on a
+     * short path. The blob connector's {@see AbstractGithubBlobConnector} decodes
+     * each segment back, so this round-trips exactly to the contents API URL.
+     */
+    private function blobUrl(RepoRef $ref, string $branch, string $path): string
+    {
+        // owner/repo stay raw: the blob connector reads them without decoding and
+        // encodes them itself, so encoding here would double-encode.
+        return 'https://github.com/'.$ref->owner.'/'.$ref->repo.'/blob/'
+            .$this->encodeSegments($branch).'/'.$this->encodeSegments($path);
+    }
+
+    /** rawurlencode each `/`-delimited segment, keeping the slashes as separators. */
+    private function encodeSegments(string $value): string
+    {
+        return implode('/', array_map('rawurlencode', explode('/', $value)));
     }
 
     /**

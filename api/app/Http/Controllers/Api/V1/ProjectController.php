@@ -9,10 +9,10 @@ use App\Http\Resources\V1\ProjectResource;
 use App\Models\Project;
 use App\Policies\ProjectPolicy;
 use App\Services\AuditLogger;
+use App\Services\Projects\ProjectSlugger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Str;
 
 /**
  * Projects — free containers for grouping a workspace's documents (SPEC §16,
@@ -52,7 +52,7 @@ class ProjectController extends Controller
      * The name rules (required, ≤100, unique per workspace) are enforced by
      * {@see StoreProjectRequest} with a friendly 422 (6A).
      */
-    public function store(StoreProjectRequest $request): JsonResponse
+    public function store(StoreProjectRequest $request, ProjectSlugger $slugger): JsonResponse
     {
         $this->authorize('create', Project::class);
 
@@ -62,7 +62,7 @@ class ProjectController extends Controller
         $name = (string) $request->validated('name');
         $project = $workspace->projects()->create([
             'name' => $name,
-            'slug' => $this->uniqueSlug($workspace->id, $name),
+            'slug' => $slugger->uniqueSlug($workspace->id, $name),
             'description' => $request->validated('description'),
             'created_by' => $user->id,
         ]);
@@ -102,28 +102,5 @@ class ProjectController extends Controller
         );
 
         return ProjectResource::make($project->loadCount('documents'));
-    }
-
-    /**
-     * A slug unique within the workspace, derived from the name. The `(workspace,
-     * slug)` unique index is the hard guarantee; this keeps the common case a
-     * clean handle and only suffixes on a genuine collision.
-     */
-    private function uniqueSlug(int $workspaceId, string $name): string
-    {
-        $base = Str::slug($name);
-
-        // A name of only punctuation/emoji slugs to '' — fall back so the handle
-        // is never empty.
-        if ($base === '') {
-            $base = 'project';
-        }
-
-        $slug = $base;
-        while (Project::where('workspace_id', $workspaceId)->where('slug', $slug)->exists()) {
-            $slug = $base.'-'.Str::lower(Str::random(6));
-        }
-
-        return $slug;
     }
 }

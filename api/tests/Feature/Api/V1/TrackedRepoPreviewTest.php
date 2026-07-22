@@ -195,6 +195,64 @@ class TrackedRepoPreviewTest extends TestCase
         $this->assertFalse($files['docs/design.md']['overlap']);
     }
 
+    public function test_overlap_warns_on_an_orphaned_path_from_a_deleted_repo(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        // A document whose tracked repo was deleted: tracked_repo_id nulled, but the
+        // deleter KEEPS tracked_path (10A) so re-tracking still warns of the overlap.
+        Document::factory()->for($workspace)->create([
+            'tracked_repo_id' => null,
+            'tracked_path' => 'docs/spec.md',
+        ]);
+
+        $transport = $this->bindGithub();
+        $transport->respond(200, [], $this->metadata('main'));
+        $transport->respond(200, [], $this->tree(false, ['docs/spec.md', 'docs/design.md']));
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/tracked-repos/preview', [
+                'repo_url' => self::REPO_URL,
+                'path_pattern' => 'docs/**',
+            ]);
+
+        $response->assertOk()->assertJsonPath('overlap_count', 1);
+        $files = collect($response->json('files'))->keyBy('path');
+        $this->assertTrue($files['docs/spec.md']['overlap']);
+    }
+
+    public function test_overlap_count_is_distinct_paths_not_documents(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        // Two tracked repos in the workspace both already hold docs/spec.md. The
+        // overlap is ONE flagged file, not two — the count must match the badges.
+        foreach ([TrackedRepo::factory()->for($workspace)->create(), TrackedRepo::factory()->for($workspace)->create()] as $other) {
+            Document::factory()->for($workspace)->create([
+                'tracked_repo_id' => $other->id,
+                'tracked_path' => 'docs/spec.md',
+            ]);
+        }
+
+        $transport = $this->bindGithub();
+        $transport->respond(200, [], $this->metadata('main'));
+        $transport->respond(200, [], $this->tree(false, ['docs/spec.md', 'docs/design.md']));
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/tracked-repos/preview', [
+                'repo_url' => self::REPO_URL,
+                'path_pattern' => 'docs/**',
+            ]);
+
+        // One distinct overlapping path, even though two documents hold it.
+        $response->assertOk()->assertJsonPath('overlap_count', 1);
+        $files = collect($response->json('files'))->keyBy('path');
+        $this->assertTrue($files['docs/spec.md']['overlap']);
+        $this->assertFalse($files['docs/design.md']['overlap']);
+    }
+
     // ---- auth posture -------------------------------------------------------
 
     public function test_the_workspace_pat_authenticates_the_listing_when_connected(): void

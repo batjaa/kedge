@@ -8,6 +8,19 @@ export interface DocumentGroup {
 }
 
 /**
+ * The canonical project ordering (14A): alphabetical by name, case-insensitive,
+ * with the id as a stable tiebreaker so equal names never reshuffle between
+ * renders. Shared by the home's group headers and its chip/selector list so both
+ * read the same order.
+ */
+export function compareProjectsByName(
+  a: { name: string; id: number },
+  b: { name: string; id: number },
+): number {
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id - b.id;
+}
+
+/**
  * Group the home list by project (SPEC 11 + decision 14A). Named project groups
  * come first, alphabetical by name (case-insensitive, id as a stable tiebreaker
  * so equal names never reshuffle between renders); the Unfiled bucket — the
@@ -31,11 +44,7 @@ export function groupDocumentsByProject(items: DocumentListItem[]): DocumentGrou
     }
   }
 
-  const groups = [...named.values()].sort(
-    (a, b) =>
-      a.project!.name.localeCompare(b.project!.name, undefined, { sensitivity: 'base' }) ||
-      a.project!.id - b.project!.id,
-  );
+  const groups = [...named.values()].sort((a, b) => compareProjectsByName(a.project!, b.project!));
 
   // Unfiled always last (14A), and only when it actually holds rows.
   if (unfiled.length > 0) {

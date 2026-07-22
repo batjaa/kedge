@@ -20,12 +20,20 @@ use Illuminate\Foundation\Queue\Queueable;
  * infra fault — retrying would only hit the no-op claim path. The record is left
  * `running` and recovered by the stale-running reclaim (5A) or a manual re-scan,
  * never wedged.
+ *
+ * `deleteWhenMissingModels`: the tracked repo can be un-tracked between dispatch
+ * and run (A4). When the worker can't restore the serialized record, the job is
+ * discarded quietly rather than failing into failed_jobs — un-tracking a repo has
+ * no scan to run. (A delete racing an in-flight claim is separately blocked by the
+ * deleter's atomic guard; this covers the queued-then-deleted case.)
  */
 class ScanTrackedRepoJob implements ShouldQueue
 {
     use Queueable;
 
     public int $tries = 1;
+
+    public bool $deleteWhenMissingModels = true;
 
     public function __construct(
         public readonly TrackedRepo $trackedRepo,

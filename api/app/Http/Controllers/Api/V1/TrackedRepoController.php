@@ -11,9 +11,10 @@ use App\Models\TrackedRepo;
 use App\Policies\TrackedRepoPolicy;
 use App\Services\AuditLogger;
 use App\Services\Documents\DocumentProjectAssignment;
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 use App\Services\TrackedRepos\TrackedRepoDeleter;
 use App\Services\TrackedRepos\TrackedRepoPreviewService;
+use App\Services\TrackedRepos\TrackedRepoScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -87,7 +88,7 @@ class TrackedRepoController extends Controller
                 $request->filled('ref') ? trim((string) $request->validated('ref')) : null,
                 (string) $request->validated('path_pattern'),
             );
-        } catch (PreviewException $e) {
+        } catch (DiscoveryException $e) {
             return response()->json($e->toArray(), 422);
         }
 
@@ -143,27 +144,34 @@ class TrackedRepoController extends Controller
     /**
      * GET /api/v1/tracked-repos/{trackedRepo} — the record, its running state, and
      * its last-scan report (the poll target; the panel settles when the status
-     * leaves `running`). A foreign id is denied (403), never confirmed to exist.
+     * leaves `running`). `detailed()`: the settled read carries the full per-file
+     * report the panel materializes rows from, while in-flight polls stay lean
+     * (C11). A foreign id is denied (403), never confirmed to exist.
      */
     public function show(TrackedRepo $trackedRepo): TrackedRepoResource
     {
         $this->authorize('view', $trackedRepo);
 
-        return TrackedRepoResource::make($trackedRepo);
+        return TrackedRepoResource::make($trackedRepo)->detailed();
     }
 
     /**
      * POST /api/v1/tracked-repos/{trackedRepo}/scan — re-trigger a scan. Idempotent
-     * (202): the service's atomic claim collapses a double-click or a race onto one
-     * scan (5A), so pressing the button twice is safe.
+     * (202): the trigger atomically flips the record to `pending` so the SERVER owns
+     * "a scan is queued" before the job runs (A5) — the panel then can't settle on
+     * the stale report while an async worker catches up. The service's atomic claim
+     * collapses a double-click or a race onto one scan (5A), so pressing twice is
+     * safe. The pending record (report intact) rides back in the 202.
      */
-    public function scan(Request $request, TrackedRepo $trackedRepo): JsonResponse
+    public function scan(Request $request, TrackedRepo $trackedRepo, TrackedRepoScanService $scanner): JsonResponse
     {
         $this->authorize('scan', $trackedRepo);
 
+        $scanner->queue($trackedRepo);
+
         ScanTrackedRepoJob::dispatch($trackedRepo, $request->user()->id);
 
-        return TrackedRepoResource::make($trackedRepo)
+        return TrackedRepoResource::make($trackedRepo->refresh())
             ->response()
             ->setStatusCode(202);
     }
@@ -171,15 +179,17 @@ class TrackedRepoController extends Controller
     /**
      * DELETE /api/v1/tracked-repos/{trackedRepo} — un-track the repo (7A). Every
      * document it imported stays; only its provenance is cleared. Blocked with a
-     * 409 while a scan is running (the stale bound keeps that wait finite), so a
-     * delete can't race a scan mid-import. Policy-gated and audit-logged; a foreign
-     * id is denied 403, never confirmed to exist.
+     * 409 while a scan is in flight — running OR queued/pending (the stale bound
+     * keeps that wait finite), so a delete can't race a scan mid-import. This
+     * pre-check is the fast path; the deleter re-verifies atomically inside its
+     * transaction to close the pre-check → delete race (A4). Policy-gated and
+     * audit-logged; a foreign id is denied 403, never confirmed to exist.
      */
     public function destroy(Request $request, TrackedRepo $trackedRepo, TrackedRepoDeleter $deleter): Response
     {
         $this->authorize('delete', $trackedRepo);
 
-        if ($trackedRepo->hasRunningScan()) {
+        if ($trackedRepo->hasActiveScan()) {
             abort(409, 'A scan is running — wait for it to finish, then delete.');
         }
 

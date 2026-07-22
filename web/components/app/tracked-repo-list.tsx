@@ -7,6 +7,7 @@ import { runDelete, runRescan } from '@/lib/tracked-repo-actions';
 import {
   isScanInFlight,
   isUpToDate,
+  isZeroMatch,
   scanSettled,
   type ScanOutcome,
   type ScanReport,
@@ -14,6 +15,7 @@ import {
 } from '@/lib/tracked-repo-scan';
 import { importNeedsReconnect } from '@/lib/import-retry';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
+import { PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles';
 
 // The tracked repos on a project page (SPEC §16, M3.6, stories 10/11/12/14/16/22):
 // each record's state, last-scan report, and its Re-scan / Delete actions. A
@@ -26,8 +28,7 @@ import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 // (never a reconnect-only dead end). Pure view apart from the poller and the row's
 // own action state.
 
-const ERROR_CLASS =
-  'mt-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20';
+const ERROR_CLASS = `mt-2 p-3 ${ROSE_PANEL}`;
 
 const ACTION_CLASS =
   'rounded-full px-3 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/15 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:text-zinc-200 dark:ring-white/15 dark:hover:bg-white/10';
@@ -225,7 +226,15 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
 
   return (
     <div className="mt-2">
-      {isUpToDate(report) ? (
+      {isZeroMatch(report) ? (
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          <span className="font-medium text-amber-700 dark:text-amber-400">0 files matched</span>
+          {' — adjust the pattern.'}
+          {report.stale_takeover ? (
+            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+          ) : null}
+        </p>
+      ) : isUpToDate(report) ? (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           <span className="font-medium text-emerald-700 dark:text-emerald-400">Already up to date</span>
           {unchanged > 0 ? ` · ${unchanged} file${unchanged === 1 ? '' : 's'} unchanged` : null}
@@ -278,7 +287,7 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
   );
 }
 
-const BADGE_BASE = 'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium';
+const BADGE_BASE = PILL_BASE;
 
 function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: string | null }) {
   if (outcome === 'import_queued') {

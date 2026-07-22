@@ -5,7 +5,7 @@
 // first scan (202); `readTrackedRepo` is the scan poll target (#93).
 
 import { publicApiBaseUrl } from './config';
-import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
+import { csrfSend } from './csrf-client';
 import type { TrackedRepo } from './tracked-repo-scan';
 
 /** One file a scan would import, flagged if another tracked repo already holds it (10A). */
@@ -49,29 +49,9 @@ interface PreviewErrorBody {
   errors?: Record<string, string[]>;
 }
 
-function send(body: PreviewInput): Promise<Response> {
-  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos/preview`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      ...xsrfHeader(),
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 /** POST /api/v1/tracked-repos/preview — list matching files, read-only. */
 export async function previewTrackedRepo(input: PreviewInput): Promise<PreviewOutcome> {
-  await ensureCsrfCookie();
-  let res = await send(input);
-
-  // 419 = stale/absent CSRF token. Refresh once and retry before giving up.
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await send(input);
-  }
+  const res = await csrfSend('/api/v1/tracked-repos/preview', { body: input });
 
   if (res.ok) {
     return { ok: true, preview: (await res.json()) as PreviewMatches };
@@ -138,32 +118,13 @@ interface TrackedRepoEnvelope {
   data: TrackedRepo;
 }
 
-function sendCreate(body: PreviewInput): Promise<Response> {
-  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      ...xsrfHeader(),
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 /**
  * POST /api/v1/tracked-repos — persist the tracked repo and start its first scan.
  * 202 with the pending record; the panel then polls {@link readTrackedRepo} until
  * the scan settles. A foreign project id 404s (8A).
  */
 export async function createTrackedRepo(input: PreviewInput): Promise<CreateTrackedRepoOutcome> {
-  await ensureCsrfCookie();
-  let res = await sendCreate(input);
-
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await sendCreate(input);
-  }
+  const res = await csrfSend('/api/v1/tracked-repos', { body: input });
 
   if (res.ok) {
     const body = (await res.json()) as TrackedRepoEnvelope;
@@ -198,14 +159,6 @@ export type RescanOutcome =
   | { ok: true; trackedRepo: TrackedRepo }
   | { ok: false; message: string };
 
-function sendScan(id: number): Promise<Response> {
-  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos/${id}/scan`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { accept: 'application/json', ...xsrfHeader() },
-  });
-}
-
 /**
  * POST /api/v1/tracked-repos/{id}/scan — re-trigger a scan (#94). Idempotent (the
  * API's atomic claim collapses a double-press onto one scan), 202 with the record.
@@ -213,13 +166,7 @@ function sendScan(id: number): Promise<Response> {
  * scan settles. A rate-limit is the only distinct copy; everything else is generic.
  */
 export async function rescanTrackedRepo(id: number): Promise<RescanOutcome> {
-  await ensureCsrfCookie();
-  let res = await sendScan(id);
-
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await sendScan(id);
-  }
+  const res = await csrfSend(`/api/v1/tracked-repos/${id}/scan`);
 
   if (res.ok) {
     const body = (await res.json()) as TrackedRepoEnvelope;
@@ -242,14 +189,6 @@ export type DeleteTrackedRepoOutcome =
   | { ok: true }
   | { ok: false; kind: 'conflict' | 'error'; message: string };
 
-function sendDelete(id: number): Promise<Response> {
-  return fetch(`${publicApiBaseUrl}/api/v1/tracked-repos/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: { accept: 'application/json', ...xsrfHeader() },
-  });
-}
-
 /**
  * DELETE /api/v1/tracked-repos/{id} — un-track the repo (7A); its documents remain
  * (provenance cleared on the API). 204 on success; a 409 while a scan is running is
@@ -257,13 +196,7 @@ function sendDelete(id: number): Promise<Response> {
  * running" rather than a generic error.
  */
 export async function deleteTrackedRepo(id: number): Promise<DeleteTrackedRepoOutcome> {
-  await ensureCsrfCookie();
-  let res = await sendDelete(id);
-
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await sendDelete(id);
-  }
+  const res = await csrfSend(`/api/v1/tracked-repos/${id}`, { method: 'DELETE' });
 
   if (res.ok) {
     return { ok: true };

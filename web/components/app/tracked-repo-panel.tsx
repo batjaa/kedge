@@ -3,9 +3,10 @@
 import { useCallback, useState, type FormEvent } from 'react';
 import { createTrackedRepo, previewTrackedRepo } from '@/lib/tracked-repos-client';
 import { reportImportingRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
-import type { DocumentListItem } from '@/lib/document-types';
+import type { DocumentListItem, ProjectRef } from '@/lib/document-types';
 import { TrackedRepoPreview, type PreviewView } from './tracked-repo-preview';
 import { TrackedRepoList } from './tracked-repo-list';
+import { EMERALD_BUTTON } from '@/lib/tracked-repo-styles';
 
 // The "Track a repository" panel on a project page (SPEC §16, M3.6, stories
 // 7/8/9/12/22). A member pastes a repo URL + path pattern and previews exactly
@@ -16,8 +17,7 @@ import { TrackedRepoList } from './tracked-repo-list';
 // island — settling through the existing per-row path (this closes the M3.5
 // out-of-band-liveness TODO). DESIGN.md panel tokens.
 
-const BUTTON_CLASS =
-  'shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
+const BUTTON_CLASS = `shrink-0 px-4 py-2 ${EMERALD_BUTTON}`;
 
 const FIELD_CLASS =
   'mt-1.5 w-full rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10';
@@ -25,15 +25,17 @@ const FIELD_CLASS =
 const LABEL_CLASS = 'block text-xs font-medium text-zinc-700 dark:text-zinc-300';
 
 export function TrackedRepoPanel({
-  projectId,
+  project,
   initialRepos,
   onMaterialize,
 }: {
-  projectId: number;
+  /** The page's project — scopes create/preview AND stamps materialized rows (B1). */
+  project: ProjectRef;
   initialRepos: TrackedRepo[];
   /** Merge scan-reported importing rows into the project island (story 22). */
   onMaterialize: (rows: DocumentListItem[]) => void;
 }) {
+  const projectId = project.id;
   const [repoUrl, setRepoUrl] = useState('');
   const [ref, setRef] = useState('');
   const [pattern, setPattern] = useState('');
@@ -53,51 +55,62 @@ export function TrackedRepoPanel({
     setConfirmError(null);
     setView({ kind: 'loading' });
 
-    const outcome = await previewTrackedRepo({
-      repo_url: repoUrl.trim(),
-      ref: ref.trim() === '' ? undefined : ref.trim(),
-      path_pattern: pattern.trim(),
-      project_id: projectId,
-    });
-
-    setView(toView(outcome));
-    setPreviewing(false);
+    try {
+      const outcome = await previewTrackedRepo({
+        repo_url: repoUrl.trim(),
+        ref: ref.trim() === '' ? undefined : ref.trim(),
+        path_pattern: pattern.trim(),
+        project_id: projectId,
+      });
+      setView(toView(outcome));
+    } catch {
+      // A rejected fetch (network blip) must not leave the button stuck spinning.
+      setView({ kind: 'error', message: 'Something went wrong checking the repository. Please try again.' });
+    } finally {
+      setPreviewing(false);
+    }
   }
 
   async function onConfirm() {
     setConfirming(true);
     setConfirmError(null);
 
-    const outcome = await createTrackedRepo({
-      repo_url: repoUrl.trim(),
-      ref: ref.trim() === '' ? undefined : ref.trim(),
-      path_pattern: pattern.trim(),
-      project_id: projectId,
-    });
+    try {
+      const outcome = await createTrackedRepo({
+        repo_url: repoUrl.trim(),
+        ref: ref.trim() === '' ? undefined : ref.trim(),
+        path_pattern: pattern.trim(),
+        project_id: projectId,
+      });
 
-    setConfirming(false);
+      if (!outcome.ok) {
+        setConfirmError(outcome.message);
+        return;
+      }
 
-    if (!outcome.ok) {
-      setConfirmError(outcome.message);
-      return;
+      // The record joins the list (pending → the poll takes over); reset the form so
+      // the panel is ready for the next repo.
+      setRepos((prev) => [outcome.trackedRepo, ...prev]);
+      setView(null);
+      setRepoUrl('');
+      setRef('');
+      setPattern('');
+    } catch {
+      // A rejected fetch must not leave the confirm button stuck on "Starting scan…".
+      setConfirmError('Something went wrong starting the scan. Please try again.');
+    } finally {
+      setConfirming(false);
     }
-
-    // The record joins the list (pending → the poll takes over); reset the form so
-    // the panel is ready for the next repo.
-    setRepos((prev) => [outcome.trackedRepo, ...prev]);
-    setView(null);
-    setRepoUrl('');
-    setRef('');
-    setPattern('');
   }
 
   const handleScanned = useCallback(
     (repo: TrackedRepo) => {
       setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
-      // A settled scan's queued imports appear as importing rows on the island.
-      onMaterialize(reportImportingRows(repo.last_scan_report));
+      // A settled scan's queued imports appear as importing rows on the island,
+      // stamped with this page's project so their chips read correctly (B1).
+      onMaterialize(reportImportingRows(repo.last_scan_report, project));
     },
-    [onMaterialize],
+    [onMaterialize, project],
   );
 
   // A re-scan just triggered: replace the record with its (optimistically in-flight)
@@ -171,6 +184,13 @@ export function TrackedRepoPanel({
           <code className="font-mono">?</code> one character — case-sensitive. Only{' '}
           <code className="font-mono">.md</code>, <code className="font-mono">.mdx</code>, and{' '}
           <code className="font-mono">.html</code> files import.
+        </p>
+
+        {/* PAT recommendation (spec 4A): unauthenticated GitHub allows only 60
+            requests/hour, so a large public repo can exhaust the quota mid-scan. */}
+        <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
+          Tracking a large public repo? Connect the workspace GitHub PAT in Settings for a higher
+          rate limit — unauthenticated GitHub allows only 60 requests an hour.
         </p>
 
         <div className="mt-3">

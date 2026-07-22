@@ -46,7 +46,7 @@ describe('ProjectCreate', () => {
 describe('ProjectDocuments', () => {
   it('renders the project import box and the filtered document rows', () => {
     const html = renderToStaticMarkup(
-      <ProjectDocuments projectId={10} initialPage={page()} projects={[project({})]} />,
+      <ProjectDocuments project={{ id: 10, name: 'Anchoring' }} initialPage={page()} projects={[project({})]} />,
     );
 
     expect(html).toContain('Import into this project');
@@ -58,7 +58,7 @@ describe('ProjectDocuments', () => {
 
   it('shows the empty state pointing at import and assignment', () => {
     const html = renderToStaticMarkup(
-      <ProjectDocuments projectId={10} initialPage={emptyPage()} projects={[project({})]} />,
+      <ProjectDocuments project={{ id: 10, name: 'Anchoring' }} initialPage={emptyPage()} projects={[project({})]} />,
     );
 
     expect(html).toContain('No documents in this project yet');
@@ -67,7 +67,7 @@ describe('ProjectDocuments', () => {
 
   it('degrades the list area alone when the project read was unreachable', () => {
     const html = renderToStaticMarkup(
-      <ProjectDocuments projectId={10} initialPage={null} projects={[project({})]} />,
+      <ProjectDocuments project={{ id: 10, name: 'Anchoring' }} initialPage={null} projects={[project({})]} />,
     );
 
     // The import box still renders; only the list area falls back (3A).

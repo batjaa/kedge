@@ -4,7 +4,7 @@ namespace App\Services\TrackedRepos;
 
 use App\Models\Integration;
 use App\Models\Workspace;
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 
 /**
  * Computes a tracked-repo preview read-only (SPEC §16, M3.6, decisions 2A/4A/9A/
@@ -13,7 +13,7 @@ use App\Services\TrackedRepos\Exceptions\PreviewException;
  * against the workspace's other tracked repos. No persistence, no import — the
  * scan (#93) runs the same discovery, then diffs and imports.
  *
- * Every unusable outcome is an explicit {@see PreviewException} (loud failure,
+ * Every unusable outcome is an explicit {@see DiscoveryException} (loud failure,
  * never a silent partial), so a bad glob or a huge repo costs one glance.
  */
 class TrackedRepoPreviewService
@@ -33,9 +33,9 @@ class TrackedRepoPreviewService
         string $pathPattern,
     ): TrackedRepoPreview {
         $repo = RepoRef::fromUrl($repoUrl)
-            ?? throw PreviewException::unsupportedRepo();
+            ?? throw DiscoveryException::unsupportedRepo();
 
-        $cap = (int) config('kedge.tracked_repos.file_cap', 200);
+        $cap = $this->discovery->fileCap();
 
         $discovery = $this->discovery->discover($repo, $ref, $integration?->token(), $pathPattern, $cap);
 
@@ -43,9 +43,13 @@ class TrackedRepoPreviewService
     }
 
     /**
-     * Flag each matched path that another tracked repo in the workspace already
-     * holds (10A). One query — the workspace's tracked documents whose path is in
-     * the matched set — keeps it O(1) round-trips regardless of match count.
+     * Flag each matched path that a document in the workspace already holds under
+     * some tracked repo — or once did, now orphaned (10A). Matching on `tracked_path`
+     * alone (not `tracked_repo_id`) catches both a currently-tracked path and a path
+     * whose repo was deleted (the deleter keeps `tracked_path` precisely so this
+     * warning survives), so re-tracking can't silently mint duplicates. `DISTINCT`
+     * so the count is of overlapping PATHS, not documents — two repos holding the
+     * same path is one flagged file, not two. One query regardless of match count.
      *
      * @param  list<string>  $matched
      */
@@ -54,8 +58,9 @@ class TrackedRepoPreviewService
         $overlapping = $matched === []
             ? []
             : $workspace->documents()
-                ->whereNotNull('tracked_repo_id')
+                ->whereNotNull('tracked_path')
                 ->whereIn('tracked_path', $matched)
+                ->distinct()
                 ->pluck('tracked_path')
                 ->all();
 

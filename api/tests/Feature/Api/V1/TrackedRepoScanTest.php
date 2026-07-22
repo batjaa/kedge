@@ -137,6 +137,35 @@ class TrackedRepoScanTest extends TestCase
         $this->assertSame('Bearer '.self::TOKEN, $transport->requests[0]->headers['Authorization']);
     }
 
+    public function test_a_matched_path_with_url_special_characters_mints_an_encoded_blob_source(): void
+    {
+        Queue::fake([ImportDocumentJob::class]);
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'repo_url' => self::REPO_URL,
+            'ref' => null,
+            'path_pattern' => 'docs/**',
+        ]);
+
+        $transport = $this->bindGithub();
+        $transport->respond(200, [], $this->metadata('main'));
+        // A git filename may legitimately hold a '#' or a space — concatenated raw
+        // into the blob URL, parse_url would truncate the source at the fragment and
+        // the import would 404 forever. Each path segment must be URL-encoded.
+        $transport->respond(200, [], $this->tree(false, ['docs/RFC #12.md']));
+
+        app(TrackedRepoScanService::class)->scan($trackedRepo->fresh(), $user->id);
+
+        $document = Document::query()->where('tracked_repo_id', $trackedRepo->id)->firstOrFail();
+        $this->assertSame('docs/RFC #12.md', $document->tracked_path);
+        // Per-segment rawurlencode, slashes preserved as separators — the blob
+        // connector decodes this back and re-encodes to the same contents API URL.
+        $this->assertSame(
+            'https://github.com/kedgehq/kedge/blob/main/docs/RFC%20%2312.md',
+            $document->source_url,
+        );
+    }
+
     // ---- report = discovery outcomes, written atomically -------------------
 
     public function test_the_report_records_discovery_outcomes_with_counts_and_duration(): void
@@ -368,6 +397,32 @@ class TrackedRepoScanTest extends TestCase
         $this->assertTrue($trackedRepo->last_scan_report['stale_takeover']);
     }
 
+    public function test_a_scan_job_for_a_deleted_record_is_discarded_without_failing(): void
+    {
+        // A re-scan queued, then the repo un-tracked before the worker runs: the
+        // serialized record can't be restored. `deleteWhenMissingModels` discards the
+        // job quietly (no failed_jobs noise) rather than throwing (A4).
+        config(['queue.default' => 'database']);
+        $user = $this->registerUser();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+
+        ScanTrackedRepoJob::dispatch($repo, $user->id);
+        $repo->delete();
+
+        $connection = app('queue')->connection('database');
+        $job = $connection->pop();
+        $this->assertNotNull($job);
+
+        // Fire it exactly as the worker would: the missing model is caught and the
+        // job deleted (not failed) — no throw escapes, nothing lands in failed_jobs.
+        $job->fire();
+
+        $this->assertTrue($job->isDeleted());
+        $this->assertFalse($job->hasFailed());
+        $this->assertNull($connection->pop());
+        $this->assertDatabaseCount('failed_jobs', 0);
+    }
+
     // ---- logging + audit (story 20) ----------------------------------------
 
     public function test_a_scan_is_audit_logged(): void
@@ -428,6 +483,66 @@ class TrackedRepoScanTest extends TestCase
             ->assertJsonPath('data.last_scan_status', 'running');
     }
 
+    // ---- lean poll payload (C11) -------------------------------------------
+
+    public function test_the_show_target_carries_the_full_report_when_settled(): void
+    {
+        $trackedRepo = $this->scan(['docs/a.md', 'docs/b.md']);
+        $user = $trackedRepo->workspace->members()->firstOrFail();
+
+        // The settled poll read is what the panel materializes rows from — it must
+        // carry the per-file entries (with document ids).
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk();
+
+        $this->assertCount(2, $response->json('data.last_scan_report.files'));
+        $this->assertNotNull($response->json('data.last_scan_report.files.0.document_id'));
+    }
+
+    public function test_the_index_omits_per_file_entries_keeping_the_summary_counts(): void
+    {
+        $trackedRepo = $this->scan(['docs/a.md', 'docs/b.md']);
+        $user = $trackedRepo->workspace->members()->firstOrFail();
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/tracked-repos')
+            ->assertOk();
+
+        // Summary counts survive; the potentially-large per-file array is slimmed away.
+        $this->assertSame(2, $response->json('data.0.last_scan_report.counts.import_queued'));
+        $this->assertSame(2, $response->json('data.0.last_scan_report.matched'));
+        $this->assertSame([], $response->json('data.0.last_scan_report.files'));
+    }
+
+    public function test_show_omits_per_file_entries_while_a_scan_is_in_flight(): void
+    {
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Running,
+            'last_scan_report' => [
+                'status' => 'ok',
+                'ref' => 'main',
+                'matched' => 1,
+                'counts' => ['import_queued' => 1, 'resync_queued' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
+                'files' => [['path' => 'docs/a.md', 'outcome' => 'import_queued', 'document_id' => 7, 'reason' => null]],
+                'error' => null,
+                'stale_takeover' => false,
+            ],
+        ]);
+
+        // While running, the poll only needs the status — the stale per-file entries
+        // are slimmed away so repeated reads stay lean.
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk()
+            ->assertJsonPath('data.last_scan_status', 'running');
+
+        $this->assertSame([], $response->json('data.last_scan_report.files'));
+        // Summary still rides along.
+        $this->assertSame(1, $response->json('data.last_scan_report.counts.import_queued'));
+    }
+
     // ---- re-scan trigger idempotency (story 15) ----------------------------
 
     public function test_the_scan_endpoint_is_an_idempotent_202(): void
@@ -441,6 +556,61 @@ class TrackedRepoScanTest extends TestCase
             ->assertStatus(202);
 
         Queue::assertPushed(ScanTrackedRepoJob::class, 1);
+    }
+
+    public function test_the_scan_trigger_flips_an_ok_record_to_pending_with_the_report_intact(): void
+    {
+        // The server must own "a scan is queued" before the worker claims (A5) —
+        // otherwise an async queue's first poll settles on the previous report.
+        Queue::fake([ImportDocumentJob::class, ScanTrackedRepoJob::class]);
+        $user = $this->registerUser();
+        $priorReport = [
+            'status' => 'ok',
+            'ref' => 'main',
+            'matched' => 3,
+            'counts' => ['import_queued' => 2, 'resync_queued' => 0, 'unchanged' => 1, 'missing' => 0, 'failed' => 0],
+            'files' => [],
+            'error' => null,
+            'stale_takeover' => false,
+        ];
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Ok,
+            'last_scanned_at' => CarbonImmutable::now()->subHour(),
+            'last_scan_report' => $priorReport,
+        ]);
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->postJson("/api/v1/tracked-repos/{$trackedRepo->id}/scan");
+
+        $response->assertStatus(202)
+            ->assertJsonPath('data.last_scan_status', 'pending')
+            // The prior report rides back so the panel keeps showing it while pending.
+            ->assertJsonPath('data.last_scan_report.matched', 3);
+
+        // The record is genuinely pending server-side, report untouched.
+        $trackedRepo->refresh();
+        $this->assertSame(TrackedScanStatus::Pending, $trackedRepo->last_scan_status);
+        $this->assertSame(3, $trackedRepo->last_scan_report['matched']);
+        Queue::assertPushed(ScanTrackedRepoJob::class, 1);
+    }
+
+    public function test_the_scan_trigger_does_not_disturb_a_genuinely_running_scan(): void
+    {
+        // A fresh `running` claim (a scan mid-flight): the trigger's flip loses, so
+        // the record stays running — the job's atomic claim is the source of truth.
+        Queue::fake([ImportDocumentJob::class, ScanTrackedRepoJob::class]);
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Running,
+            'last_scanned_at' => CarbonImmutable::now(),
+        ]);
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson("/api/v1/tracked-repos/{$trackedRepo->id}/scan")
+            ->assertStatus(202)
+            ->assertJsonPath('data.last_scan_status', 'running');
+
+        $this->assertSame(TrackedScanStatus::Running, $trackedRepo->refresh()->last_scan_status);
     }
 
     // ---- policy / IDOR -----------------------------------------------------

@@ -5,6 +5,7 @@ import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import { ProjectCreate } from './project-create';
 import { hasMorePages } from '@/lib/document-list-live';
+import { compareProjectsByName } from '@/lib/document-groups';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
 import type { Document, DocumentListPage, Project } from '@/lib/document-types';
 
@@ -43,14 +44,10 @@ export function WorkspaceHome({
   } = useLiveDocumentList({ initialPage });
   const [projects, setProjects] = useState<Project[]>(initialProjects);
 
-  // A new project joins the chips and headers immediately, name-sorted so the
-  // selectors read the same order the grouped list will.
+  // A new project joins the chips and headers immediately, name-sorted (the shared
+  // 14A comparator) so the selectors read the same order the grouped list will.
   const handleCreated = useCallback((project: Project) => {
-    setProjects((prev) =>
-      [...prev, project].sort(
-        (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id - b.id,
-      ),
-    );
+    setProjects((prev) => [...prev, project].sort(compareProjectsByName));
   }, []);
 
   // A row was re-filed (or cleared): update its project so the grouped list

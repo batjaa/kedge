@@ -63,5 +63,14 @@ final class PathPatternTest extends TestCase
         yield 'plain pattern rejects a different path' => ['docs/SPEC.md', 'docs/OTHER.md', false];
 
         yield 'one leading slash on a candidate is tolerated' => ['*.md', '/a.md', true];
+
+        // A rooted pattern (leading slash = "from the repo root") must normalize the
+        // same way the candidate does — otherwise the anchored regex demands a
+        // leading slash the repo-relative tree path never carries and matches nothing.
+        yield 'leading slash on the pattern matches a root file' => ['/docs/*.md', 'docs/a.md', true];
+        yield 'leading slash on the pattern still respects segments' => ['/docs/*.md', 'docs/sub/a.md', false];
+        yield 'leading slash on the pattern with double star' => ['/docs/**/*.md', 'docs/x/y/a.md', true];
+        yield 'leading slash on both pattern and candidate' => ['/docs/*.md', '/docs/a.md', true];
+        yield 'rooted single-segment glob matches a root file' => ['/*.md', 'README.md', true];
     }
 }

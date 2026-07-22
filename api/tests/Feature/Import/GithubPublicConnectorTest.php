@@ -122,6 +122,24 @@ class GithubPublicConnectorTest extends TestCase
         );
     }
 
+    public function test_round_trips_a_scan_minted_path_with_special_characters(): void
+    {
+        $this->transport->respond(200, ['Content-Type' => 'text/plain'], '# RFC 12');
+
+        // The exact per-segment-encoded blob URL a tracked-repo scan mints for a
+        // file named `docs/RFC #12.md`. The connector must decode it and re-encode
+        // to the contents API — the '#'/space must never truncate the path.
+        $fetched = $this->connector()->fetch(new DocumentSource(
+            url: 'https://github.com/kedgehq/kedge/blob/main/docs/RFC%20%2312.md',
+        ));
+
+        $this->assertSame('# RFC 12', $fetched->content);
+        $this->assertSame(
+            'https://api.github.com/repos/kedgehq/kedge/contents/docs/RFC%20%2312.md?ref=main',
+            $this->transport->lastRequest()->url,
+        );
+    }
+
     // --- Rate limiting (SPEC 19) --------------------------------------------
 
     public function test_429_with_retry_after_backs_off_for_that_many_seconds(): void

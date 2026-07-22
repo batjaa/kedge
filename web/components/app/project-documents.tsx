@@ -7,7 +7,13 @@ import { TrackedRepoPanel } from './tracked-repo-panel';
 import { hasMorePages } from '@/lib/document-list-live';
 import { mergeReportedRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
-import type { Document, DocumentListItem, DocumentListPage, Project } from '@/lib/document-types';
+import type {
+  Document,
+  DocumentListItem,
+  DocumentListPage,
+  Project,
+  ProjectRef,
+} from '@/lib/document-types';
 
 // A project page's live document surface (SPEC §16 story 6, M3.6) — the M3.5
 // home re-scoped to one project: the same row components, per-row polling, retry
@@ -19,16 +25,18 @@ import type { Document, DocumentListItem, DocumentListPage, Project } from '@/li
 // materialize as importing rows here and settle through the existing per-row path
 // (this closes the M3.5 out-of-band-liveness TODO, story 22).
 export function ProjectDocuments({
-  projectId,
+  project,
   initialPage,
   projects,
   initialTrackedRepos = [],
 }: {
-  projectId: number;
+  /** This page's project — scopes the list and stamps scan-materialized rows (B1). */
+  project: ProjectRef;
   initialPage: DocumentListPage | null;
   projects: Project[];
   initialTrackedRepos?: TrackedRepo[];
 }) {
+  const projectId = project.id;
   const {
     degraded,
     items,
@@ -44,16 +52,27 @@ export function ProjectDocuments({
   } = useLiveDocumentList({ initialPage, projectFilter: projectId });
 
   // A settled scan's queued imports appear as importing rows, deduped by id like
-  // the prepend path — then settle through the existing per-row poller.
+  // the prepend path — then settle through the existing per-row poller. The merge
+  // and the actually-added count are computed together inside ONE functional
+  // updater, against `prev` (never a stale `items` closure), so concurrent settles
+  // chain correctly and a Load more that already surfaced these rows can't inflate
+  // the count. `items` is intentionally OUT of the deps: keeping it here churned
+  // this callback's identity on every list mutation, tearing down and restarting
+  // the scan poller each time a row settled.
   const handleScanMaterialize = useCallback(
     (rows: DocumentListItem[]) => {
-      const added = rows.filter((row) => !items.some((item) => item.id === row.id)).length;
-      setItems((prev) => mergeReportedRows(prev, rows));
-      if (added > 0) {
-        setMeta((prev) => (prev ? { ...prev, total: prev.total + added } : prev));
-      }
+      let added = 0;
+      setItems((prev) => {
+        const merged = mergeReportedRows(prev, rows);
+        added = merged.added; // idempotent assignment — StrictMode-safe
+        return merged.items;
+      });
+      // The items updater runs before the meta updater in the same render (items is
+      // declared first in useLiveDocumentList), so `added` is set by the time this
+      // reads it; bump the total by exactly the new rows, once.
+      setMeta((prev) => (prev && added > 0 ? { ...prev, total: prev.total + added } : prev));
     },
-    [items, setItems, setMeta],
+    [setItems, setMeta],
   );
 
   const handleAssigned = useCallback(
@@ -76,7 +95,7 @@ export function ProjectDocuments({
   return (
     <>
       <TrackedRepoPanel
-        projectId={projectId}
+        project={project}
         initialRepos={initialTrackedRepos}
         onMaterialize={handleScanMaterialize}
       />

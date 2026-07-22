@@ -88,6 +88,15 @@ describe('TrackedRepoRow', () => {
     expect(html).not.toContain('0 queued');
   });
 
+  it('signals a zero-match ok scan distinctly, not "already up to date" (B3)', () => {
+    const html = render(repo('ok', report([])));
+
+    expect(html).toContain('0 files matched');
+    expect(html).toContain('adjust the pattern');
+    // The empty scan must NOT reassure the author that nothing changed.
+    expect(html).not.toContain('Already up to date');
+  });
+
   it('notes a stale-running takeover in the summary', () => {
     const html = render(
       repo('ok', {

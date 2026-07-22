@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { PageContainer } from '@/components/app/page-container';
 import { ProjectHeader } from '@/components/app/project-header';
 import { ProjectDocuments } from '@/components/app/project-documents';
+import { StatePanel } from '@/components/app/state-panel';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 import { getTrackedRepos } from '@/lib/tracked-repos';
@@ -27,6 +28,22 @@ export default async function ProjectPage({
   // home's convention), never dress it up as "API unreachable".
   if (status === 401 || status === 403) redirect('/signin');
 
+  // An unreachable / erroring API (5xx, or a network failure surfaced as 502)
+  // returns the SAME empty list as a genuinely-missing id. Distinguish them by
+  // status: an outage degrades the page body (3A), it must never masquerade as a
+  // 404 — only a real 200-with-absent-id below is a notFound().
+  if (status !== 200) {
+    return (
+      <PageContainer>
+        <BackLink />
+        <StatePanel
+          title="Couldn't load this project"
+          body="The API is unreachable right now — refresh in a moment."
+        />
+      </PageContainer>
+    );
+  }
+
   const project = projects.find((candidate) => String(candidate.id) === id);
   // Unknown / foreign / non-numeric id: not in this workspace's set → 404. An id
   // in a URL never reveals whether a project exists elsewhere (SPEC §13).
@@ -41,21 +58,29 @@ export default async function ProjectPage({
 
   return (
     <PageContainer>
-      <Link
-        href="/"
-        className="inline-flex text-sm text-emerald-600 hover:text-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
-      >
-        ← Review queue
-      </Link>
+      <BackLink />
 
       <ProjectHeader project={project} />
 
       <ProjectDocuments
-        projectId={project.id}
+        project={{ id: project.id, name: project.name }}
         initialPage={documents.page}
         projects={projects}
         initialTrackedRepos={trackedRepos.trackedRepos}
       />
     </PageContainer>
+  );
+}
+
+// The link back to the review queue, shared by the resolved page and its degraded
+// fallback so both offer the same way out.
+function BackLink() {
+  return (
+    <Link
+      href="/"
+      className="inline-flex text-sm text-emerald-600 hover:text-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
+    >
+      ← Review queue
+    </Link>
   );
 }

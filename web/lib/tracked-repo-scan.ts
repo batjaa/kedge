@@ -8,7 +8,7 @@
 // materializes — which is how the scan closes the M3.5 out-of-band-liveness TODO
 // (story 22). Both are pure so they test without a browser.
 
-import type { DocumentListItem } from './document-types';
+import type { DocumentListItem, ProjectRef } from './document-types';
 
 export type TrackedScanStatus = 'pending' | 'running' | 'ok' | 'failed';
 
@@ -90,19 +90,34 @@ export function scanSettled(repo: TrackedRepo | null): TrackedRepo | null {
 
 /**
  * Whether a completed scan changed nothing — the honest "already up to date"
- * no-op (story 11): a re-scan that queued no imports and no re-syncs, flagged
- * nothing missing, and failed no file. Only meaningful for an `ok` report (a
- * repo-level failure has no per-file outcomes to be up-to-date about).
+ * no-op (story 11): a re-scan that matched files and they were ALL unchanged
+ * (queued no imports/re-syncs, flagged nothing missing, failed no file). Requires
+ * `unchanged > 0` so a scan that matched NOTHING is not mislabelled "up to date"
+ * (that is {@link isZeroMatch}, a pattern problem, not a happy no-op). Only
+ * meaningful for an `ok` report (a repo-level failure has no per-file outcomes).
  */
 export function isUpToDate(report: ScanReport): boolean {
-  const { import_queued, resync_queued, missing, failed } = report.counts;
+  const { import_queued, resync_queued, unchanged, missing, failed } = report.counts;
   return (
     report.status === 'ok' &&
+    unchanged > 0 &&
     import_queued === 0 &&
     resync_queued === 0 &&
     missing === 0 &&
     failed === 0
   );
+}
+
+/**
+ * Whether a completed scan matched no files at all — an `ok` report whose summary
+ * counts nothing matched and nothing missing. This is a pattern problem ("0 files
+ * matched — adjust the pattern"), NOT the happy "already up to date" no-op, so the
+ * panel must signal it distinctly. Count-based, not `files.length` — the index and
+ * in-flight reads slim `files` to `[]` (C11) while keeping the summary, and an
+ * all-missing scan (matched 0 but files gone upstream) is its own thing.
+ */
+export function isZeroMatch(report: ScanReport): boolean {
+  return report.status === 'ok' && report.matched === 0 && report.counts.missing === 0;
 }
 
 /**
@@ -112,8 +127,16 @@ export function isUpToDate(report: ScanReport): boolean {
  * a re-synced or missing path is an existing row the list already holds, so it is
  * skipped here (its own per-row poll reflects the re-sync). Entries without a
  * document id (a failed path) are skipped; duplicates by id collapse to one.
+ *
+ * `project` is the tracked repo's project (the page's project): the API files
+ * every scan-imported doc under it, so the materialized row must carry it too —
+ * otherwise its chip reads "Unfiled" and a home-list settle pins it there until a
+ * reload. Null only on a workspace with no project (the panel is project-scoped).
  */
-export function reportImportingRows(report: ScanReport | null): DocumentListItem[] {
+export function reportImportingRows(
+  report: ScanReport | null,
+  project: ProjectRef | null = null,
+): DocumentListItem[] {
   if (report === null) return [];
 
   const rows: DocumentListItem[] = [];
@@ -133,9 +156,9 @@ export function reportImportingRows(report: ScanReport | null): DocumentListItem
       lifecycle_status: 'draft',
       open_threads_count: 0,
       synced_at: null,
-      // A scan-imported doc is filed into the repo's project by the API; the row
-      // already lives on that project's list, so the chip is implicit.
-      project: null,
+      // The row carries the repo's project so its chip is correct on sight and a
+      // settle never re-buckets it to Unfiled.
+      project,
       created_at: null,
     });
   }
@@ -143,19 +166,31 @@ export function reportImportingRows(report: ScanReport | null): DocumentListItem
   return rows;
 }
 
+/** The result of a merge: the (possibly unchanged) list and how many rows were new. */
+export interface MergeResult {
+  items: DocumentListItem[];
+  /** Rows that were actually new to `items` — the exact amount to bump the total by. */
+  added: number;
+}
+
 /**
  * Merge scan-reported importing rows into the island's items, deduped by id like
- * the prepend path: a row already present (e.g. a poll already settled it, or a
- * hand-import minted it) is left untouched — the freshly-reported ones prepend so
- * they show newest-first. Never mutates the input.
+ * the prepend path: a row already present (e.g. a poll already settled it, a
+ * hand-import minted it, or a Load more already appended it) is left untouched —
+ * the freshly-reported ones prepend so they show newest-first. Never mutates the
+ * input. Returns `added` — the count of genuinely-new rows — so the caller bumps
+ * the total by exactly that (never double-counting rows a Load more already
+ * surfaced), computed against the list actually merged into, not a stale closure.
  */
 export function mergeReportedRows(
   items: DocumentListItem[],
   rows: DocumentListItem[],
-): DocumentListItem[] {
+): MergeResult {
   const existing = new Set(items.map((item) => item.id));
   const fresh = rows.filter((row) => !existing.has(row.id));
-  return fresh.length === 0 ? items : [...fresh, ...items];
+  return fresh.length === 0
+    ? { items, added: 0 }
+    : { items: [...fresh, ...items], added: fresh.length };
 }
 
 /** A readable placeholder title from a repo-relative path (the import overwrites it). */

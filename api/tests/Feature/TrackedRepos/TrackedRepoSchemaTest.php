@@ -7,6 +7,7 @@ use App\Models\TrackedRepo;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -70,5 +71,39 @@ class TrackedRepoSchemaTest extends TestCase
         ]);
 
         $this->assertSame(3, Document::whereNull('tracked_repo_id')->count());
+    }
+
+    public function test_the_project_foreign_keys_are_indexed(): void
+    {
+        // `constrained()` declares only the FK — Postgres and SQLite do not index
+        // the referencing column off it, so the companion migration must, or the
+        // home list's `?project=` filter and the panel's project read scan.
+        $this->assertTrue(
+            $this->hasIndexOn('documents', 'project_id'),
+            'documents.project_id must be indexed (the home list filters on it).',
+        );
+        $this->assertTrue(
+            $this->hasIndexOn('tracked_repos', 'project_id'),
+            'tracked_repos.project_id must be indexed (the panel reads by project).',
+        );
+    }
+
+    public function test_the_overlap_query_column_is_indexed(): void
+    {
+        // The workspace-wide overlap query filters documents by tracked_path alone,
+        // so a standalone index must exist (the composite (tracked_repo_id,
+        // tracked_path) leads with the wrong column to serve it).
+        $this->assertTrue($this->hasIndexOn('documents', 'tracked_path'));
+    }
+
+    private function hasIndexOn(string $table, string $column): bool
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (in_array($column, $index['columns'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

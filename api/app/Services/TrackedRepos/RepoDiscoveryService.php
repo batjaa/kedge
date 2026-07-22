@@ -2,7 +2,7 @@
 
 namespace App\Services\TrackedRepos;
 
-use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 use App\Services\TrackedRepos\Exceptions\RepoListingException;
 use App\Services\TrackedRepos\Exceptions\RepoListingReason;
 
@@ -15,7 +15,7 @@ use App\Services\TrackedRepos\Exceptions\RepoListingReason;
  * overlaps) and the scan service (which then diffs + imports) share, so preview
  * and scan can never drift on which files a repo yields.
  *
- * Every unusable outcome is an explicit {@see PreviewException} — the same loud
+ * Every unusable outcome is an explicit {@see DiscoveryException} — the same loud
  * failure vocabulary the web already switches on (a truncated listing is a
  * repo-level failure, 4A, never a silent partial match; an over-cap match names
  * the count, story 18).
@@ -31,8 +31,18 @@ class RepoDiscoveryService
     ) {}
 
     /**
+     * The configured file-count cap — the single place the default lives, so
+     * preview and scan can't drift on the number (story 18). Both read it here
+     * before calling {@see discover}.
+     */
+    public function fileCap(): int
+    {
+        return (int) config('kedge.tracked_repos.file_cap', 200);
+    }
+
+    /**
      * Resolve $repo at $ref (or its default branch) and return the matched,
-     * importable paths under $cap. Throws {@see PreviewException} on any repo-level
+     * importable paths under $cap. Throws {@see DiscoveryException} on any repo-level
      * problem — the caller maps it to a preview 422 or a scan repo-level failure.
      *
      * @param  string|null  $token  The workspace PAT, or null for a public read (#23).
@@ -46,13 +56,13 @@ class RepoDiscoveryService
 
         // 4A: a truncated listing is a failure, never a silently partial match.
         if ($listing->truncated) {
-            throw PreviewException::truncated();
+            throw DiscoveryException::truncated();
         }
 
         $matched = $this->match($listing->paths, $pathPattern);
 
         if (count($matched) > $cap) {
-            throw PreviewException::overCap(count($matched), $cap);
+            throw DiscoveryException::overCap(count($matched), $cap);
         }
 
         // Carry only the matched paths' blob shas — the scan diff's change signal
@@ -72,7 +82,7 @@ class RepoDiscoveryService
     private function guardPattern(string $pattern): void
     {
         if (preg_match('~(^|/)\.\.(/|$)~', $pattern) === 1) {
-            throw PreviewException::invalidPattern();
+            throw DiscoveryException::invalidPattern();
         }
     }
 
@@ -108,14 +118,14 @@ class RepoDiscoveryService
         }
     }
 
-    private function mapListingFailure(RepoListingException $e, ?string $ref): PreviewException
+    private function mapListingFailure(RepoListingException $e, ?string $ref): DiscoveryException
     {
         return match ($e->reason) {
-            RepoListingReason::BranchNotFound => PreviewException::invalidRef((string) $ref),
-            RepoListingReason::NotFound => PreviewException::unreachable(),
-            RepoListingReason::Unauthorized => PreviewException::unauthorized(),
-            RepoListingReason::RateLimited => PreviewException::rateLimited(),
-            RepoListingReason::Unavailable => PreviewException::unreachable(),
+            RepoListingReason::BranchNotFound => DiscoveryException::invalidRef((string) $ref),
+            RepoListingReason::NotFound => DiscoveryException::unreachable(),
+            RepoListingReason::Unauthorized => DiscoveryException::unauthorized(),
+            RepoListingReason::RateLimited => DiscoveryException::rateLimited(),
+            RepoListingReason::Unavailable => DiscoveryException::unreachable(),
         };
     }
 
