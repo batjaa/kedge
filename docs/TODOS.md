@@ -208,5 +208,11 @@
 ## Known debt (M3.6 branch, 2026-07-21)
 
 - **Failed-import-then-changed path reads 'unchanged' forever** — a doc whose first import failed (no current version) is skipped by the re-scan change detector and reported unchanged even when upstream changed; recovery is the doc-level Retry only. Make the report honest (`import_failed` outcome) or re-attempt the import on re-scan. Surfaced by the #94 agent's self-review. (S)
-- **Optimistic 'running' can settle on a stale report under a backed-up async queue** — POST /scan 202s before the worker claims; the first poll (~1.5s) can read the old report and stop. Invisible on sync queues (self-host default, e2e). Fix candidates: server returns the claimed record from the trigger, or the panel polls until scanned_at advances. (S)
+- [x] ~~**Optimistic 'running' can settle on a stale report under a backed-up async queue**~~ — **RESOLVED (M3.6 branch review, 2026-07-21)**: the scan trigger now atomically flips the record to `pending` before dispatch, so the server owns "a scan is queued" and the poller can't settle on a stale terminal report.
 - **E2E diagram specs depend on hosted kroki.io when the render cache is cold** — kroki.io's mermaid backend outage mid-M3.6 forced a local container to green the pack; CI runs its own kroki service, but local cold runs flake. Consider a kroki fixture/stub for the pack or a documented `KROKI_URL` local-container step. (S)
+
+## Known debt (M3.6 branch review, 2026-07-21)
+
+- **GitHub response policy lives twice** — `GithubRepoClient` (tree listing) re-implements the blob connector's rate-limit classification, header block, per-segment encoding, and untrusted-message sanitizer; its docblock promises parity that only copies enforce. Extract a shared `Services/Github` collaborator/trait for both. (M)
+- **`usePollUntilSettled` deps are caller-owned** — each of four consumers supplies its own effect-deps array behind an eslint-disable; a wrong array silently polls stale closures. Internalize with refs-for-callbacks + a `key` param. (S)
+- **Scan status remains triple-encoded** — `last_scan_status` column, `scan_error` column, and `status`/`error` embedded in `last_scan_report`; web reads a mix. The pending-flip fix removed the dangerous seam; consolidating to one authoritative representation with derivations at the boundary is still worth doing. (S)
