@@ -90,19 +90,32 @@ export function scanSettled(repo: TrackedRepo | null): TrackedRepo | null {
 
 /**
  * Whether a completed scan changed nothing — the honest "already up to date"
- * no-op (story 11): a re-scan that queued no imports and no re-syncs, flagged
- * nothing missing, and failed no file. Only meaningful for an `ok` report (a
- * repo-level failure has no per-file outcomes to be up-to-date about).
+ * no-op (story 11): a re-scan that matched files and they were ALL unchanged
+ * (queued no imports/re-syncs, flagged nothing missing, failed no file). Requires
+ * `unchanged > 0` so a scan that matched NOTHING is not mislabelled "up to date"
+ * (that is {@link isZeroMatch}, a pattern problem, not a happy no-op). Only
+ * meaningful for an `ok` report (a repo-level failure has no per-file outcomes).
  */
 export function isUpToDate(report: ScanReport): boolean {
-  const { import_queued, resync_queued, missing, failed } = report.counts;
+  const { import_queued, resync_queued, unchanged, missing, failed } = report.counts;
   return (
     report.status === 'ok' &&
+    unchanged > 0 &&
     import_queued === 0 &&
     resync_queued === 0 &&
     missing === 0 &&
     failed === 0
   );
+}
+
+/**
+ * Whether a completed scan matched no files at all — an `ok` report with no
+ * per-file outcomes. This is a pattern problem ("0 files matched — adjust the
+ * pattern"), NOT the happy "already up to date" no-op, so the panel must signal it
+ * distinctly rather than reassure the author nothing changed.
+ */
+export function isZeroMatch(report: ScanReport): boolean {
+  return report.status === 'ok' && report.files.length === 0;
 }
 
 /**

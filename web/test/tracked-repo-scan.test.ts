@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isScanInFlight,
   isUpToDate,
+  isZeroMatch,
   mergeReportedRows,
   reportImportingRows,
   scanSettled,
@@ -117,6 +118,19 @@ describe('isUpToDate', () => {
     expect(isUpToDate(report([{ path: 'docs/c.md', outcome: 'resync_queued', document_id: 1, reason: null }]))).toBe(false);
     expect(isUpToDate(report([{ path: 'docs/g.md', outcome: 'missing', document_id: 1, reason: null }]))).toBe(false);
     expect(isUpToDate(report([{ path: 'docs/x.md', outcome: 'failed', document_id: null, reason: 'x' }]))).toBe(false);
+  });
+
+  it('is false when the scan matched NOTHING — that is a pattern problem, not up to date (B3)', () => {
+    expect(isUpToDate(report([]))).toBe(false);
+  });
+});
+
+describe('isZeroMatch', () => {
+  it('is true only for an ok scan with no matched files', () => {
+    expect(isZeroMatch(report([]))).toBe(true);
+    expect(
+      isZeroMatch(report([{ path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null }])),
+    ).toBe(false);
   });
 });
 

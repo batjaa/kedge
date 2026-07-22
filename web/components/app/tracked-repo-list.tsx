@@ -7,6 +7,7 @@ import { runDelete, runRescan } from '@/lib/tracked-repo-actions';
 import {
   isScanInFlight,
   isUpToDate,
+  isZeroMatch,
   scanSettled,
   type ScanOutcome,
   type ScanReport,
@@ -225,7 +226,15 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
 
   return (
     <div className="mt-2">
-      {isUpToDate(report) ? (
+      {isZeroMatch(report) ? (
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          <span className="font-medium text-amber-700 dark:text-amber-400">0 files matched</span>
+          {' — adjust the pattern.'}
+          {report.stale_takeover ? (
+            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+          ) : null}
+        </p>
+      ) : isUpToDate(report) ? (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           <span className="font-medium text-emerald-700 dark:text-emerald-400">Already up to date</span>
           {unchanged > 0 ? ` · ${unchanged} file${unchanged === 1 ? '' : 's'} unchanged` : null}
