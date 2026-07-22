@@ -137,6 +137,35 @@ class TrackedRepoScanTest extends TestCase
         $this->assertSame('Bearer '.self::TOKEN, $transport->requests[0]->headers['Authorization']);
     }
 
+    public function test_a_matched_path_with_url_special_characters_mints_an_encoded_blob_source(): void
+    {
+        Queue::fake([ImportDocumentJob::class]);
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'repo_url' => self::REPO_URL,
+            'ref' => null,
+            'path_pattern' => 'docs/**',
+        ]);
+
+        $transport = $this->bindGithub();
+        $transport->respond(200, [], $this->metadata('main'));
+        // A git filename may legitimately hold a '#' or a space — concatenated raw
+        // into the blob URL, parse_url would truncate the source at the fragment and
+        // the import would 404 forever. Each path segment must be URL-encoded.
+        $transport->respond(200, [], $this->tree(false, ['docs/RFC #12.md']));
+
+        app(TrackedRepoScanService::class)->scan($trackedRepo->fresh(), $user->id);
+
+        $document = Document::query()->where('tracked_repo_id', $trackedRepo->id)->firstOrFail();
+        $this->assertSame('docs/RFC #12.md', $document->tracked_path);
+        // Per-segment rawurlencode, slashes preserved as separators — the blob
+        // connector decodes this back and re-encodes to the same contents API URL.
+        $this->assertSame(
+            'https://github.com/kedgehq/kedge/blob/main/docs/RFC%20%2312.md',
+            $document->source_url,
+        );
+    }
+
     // ---- report = discovery outcomes, written atomically -------------------
 
     public function test_the_report_records_discovery_outcomes_with_counts_and_duration(): void

@@ -359,7 +359,7 @@ class TrackedRepoScanService
      */
     private function createDocument(TrackedRepo $repo, RepoRef $ref, string $branch, string $path, string $blobSha): Document
     {
-        $blobUrl = 'https://github.com/'.$ref->owner.'/'.$ref->repo.'/blob/'.$branch.'/'.$path;
+        $blobUrl = $this->blobUrl($ref, $branch, $path);
 
         $sourceType = $repo->integration_id !== null
             ? SourceType::GithubPat
@@ -379,6 +379,29 @@ class TrackedRepoScanService
             'status' => DocumentStatus::Importing,
             'created_by' => $repo->created_by,
         ]);
+    }
+
+    /**
+     * The `github.com/{owner}/{repo}/blob/{branch}/{path}` URL a scan-minted
+     * document is sourced at. The branch and path are URL-encoded per `/`-split
+     * segment (slashes preserved as separators): a git path may legitimately hold
+     * a `#`, `?`, or space, and a raw concatenation would truncate the doc's
+     * source at {@see parse_url} — the import fetch would then permanently 404 on a
+     * short path. The blob connector's {@see AbstractGithubBlobConnector} decodes
+     * each segment back, so this round-trips exactly to the contents API URL.
+     */
+    private function blobUrl(RepoRef $ref, string $branch, string $path): string
+    {
+        // owner/repo stay raw: the blob connector reads them without decoding and
+        // encodes them itself, so encoding here would double-encode.
+        return 'https://github.com/'.$ref->owner.'/'.$ref->repo.'/blob/'
+            .$this->encodeSegments($branch).'/'.$this->encodeSegments($path);
+    }
+
+    /** rawurlencode each `/`-delimited segment, keeping the slashes as separators. */
+    private function encodeSegments(string $value): string
+    {
+        return implode('/', array_map('rawurlencode', explode('/', $value)));
     }
 
     /**
