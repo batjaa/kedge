@@ -69,25 +69,32 @@ class TrackedRepo extends Model
 
     /**
      * Whether a scan is actively in flight (7A) — the DELETE-while-running guard.
-     * A `running` claim within the stale bound blocks deletion (409); once older
-     * than that bound it is reclaimable (a crashed worker), so it no longer blocks
-     * — the same {@see TrackedRepoScanService::STALE_MINUTES} that keeps the scan
-     * claim finite keeps the delete wait finite, so a wedged record is never
-     * un-deletable.
+     * Active means `running` (a claimed scan) OR `pending` (queued: a dispatched
+     * first scan, or a re-scan the trigger flipped, A5) — a delete during either
+     * would race a mid-import scan. A claim within the stale bound blocks deletion
+     * (409); once older than that bound it is reclaimable (a crashed worker or a
+     * wedged queue), so it no longer blocks — the same
+     * {@see TrackedRepoScanService::STALE_MINUTES} that keeps the scan claim finite
+     * keeps the delete wait finite, so a stuck record is never un-deletable.
+     *
+     * A queued `pending` carries `last_scanned_at` (stamped at the trigger/claim);
+     * a freshly-created `pending` has none, so its staleness measures from
+     * `created_at` — either way the wait is bounded.
      */
-    public function hasRunningScan(?CarbonImmutable $now = null): bool
+    public function hasActiveScan(?CarbonImmutable $now = null): bool
     {
-        if ($this->last_scan_status !== TrackedScanStatus::Running) {
+        if (! in_array($this->last_scan_status, [TrackedScanStatus::Running, TrackedScanStatus::Pending], true)) {
             return false;
         }
 
-        if ($this->last_scanned_at === null) {
+        $since = $this->last_scanned_at ?? $this->created_at;
+        if ($since === null) {
             return true;
         }
 
         $now ??= CarbonImmutable::now();
 
-        return $this->last_scanned_at->gt($now->subMinutes(TrackedRepoScanService::STALE_MINUTES));
+        return $since->gt($now->subMinutes(TrackedRepoScanService::STALE_MINUTES));
     }
 
     /**

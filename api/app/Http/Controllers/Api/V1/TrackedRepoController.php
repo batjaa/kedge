@@ -177,15 +177,17 @@ class TrackedRepoController extends Controller
     /**
      * DELETE /api/v1/tracked-repos/{trackedRepo} — un-track the repo (7A). Every
      * document it imported stays; only its provenance is cleared. Blocked with a
-     * 409 while a scan is running (the stale bound keeps that wait finite), so a
-     * delete can't race a scan mid-import. Policy-gated and audit-logged; a foreign
-     * id is denied 403, never confirmed to exist.
+     * 409 while a scan is in flight — running OR queued/pending (the stale bound
+     * keeps that wait finite), so a delete can't race a scan mid-import. This
+     * pre-check is the fast path; the deleter re-verifies atomically inside its
+     * transaction to close the pre-check → delete race (A4). Policy-gated and
+     * audit-logged; a foreign id is denied 403, never confirmed to exist.
      */
     public function destroy(Request $request, TrackedRepo $trackedRepo, TrackedRepoDeleter $deleter): Response
     {
         $this->authorize('delete', $trackedRepo);
 
-        if ($trackedRepo->hasRunningScan()) {
+        if ($trackedRepo->hasActiveScan()) {
             abort(409, 'A scan is running — wait for it to finish, then delete.');
         }
 

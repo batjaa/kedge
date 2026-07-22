@@ -8,9 +8,11 @@ use App\Models\Document;
 use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\RegistrationService;
+use App\Services\TrackedRepos\TrackedRepoDeleter;
 use App\Services\TrackedRepos\TrackedRepoScanService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -56,7 +58,9 @@ class TrackedRepoDeleteTest extends TestCase
     public function test_delete_is_audit_logged_with_the_orphaned_count(): void
     {
         $user = $this->registerUser();
-        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Ok,
+        ]);
         $this->heldDoc($user, $repo, 'docs/a.md');
         $this->heldDoc($user, $repo, 'docs/b.md');
 
@@ -77,7 +81,9 @@ class TrackedRepoDeleteTest extends TestCase
         // member as distinct, so many orphaned docs coexist — the delete must not
         // trip it even when two share a path.
         $user = $this->registerUser();
-        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Ok,
+        ]);
         $this->heldDoc($user, $repo, 'docs/a.md');
         $this->heldDoc($user, $repo, 'docs/b.md');
         $this->heldDoc($user, $repo, 'docs/c.md');
@@ -95,8 +101,8 @@ class TrackedRepoDeleteTest extends TestCase
         // The strongest form of the NULL-distinctness guarantee: two deleted repos
         // that each held docs/spec.md leave two (null, 'docs/spec.md') orphans.
         $user = $this->registerUser();
-        $repoA = TrackedRepo::factory()->for($user->personalWorkspace())->create();
-        $repoB = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $repoA = TrackedRepo::factory()->for($user->personalWorkspace())->create(['last_scan_status' => TrackedScanStatus::Ok]);
+        $repoB = TrackedRepo::factory()->for($user->personalWorkspace())->create(['last_scan_status' => TrackedScanStatus::Ok]);
         $this->heldDoc($user, $repoA, 'docs/spec.md');
         $this->heldDoc($user, $repoB, 'docs/spec.md');
 
@@ -128,6 +134,75 @@ class TrackedRepoDeleteTest extends TestCase
         // Nothing was touched — the record and its provenance survive the refusal.
         $this->assertDatabaseHas('tracked_repos', ['id' => $repo->id]);
         $this->assertSame($repo->id, $doc->fresh()->tracked_repo_id);
+    }
+
+    public function test_delete_is_a_409_while_a_first_scan_is_queued_pending(): void
+    {
+        // A dispatched-not-yet-claimed scan sits at `pending` — a delete now would
+        // race the mid-import scan just as `running` would, so it is refused (A4).
+        $user = $this->registerUser();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Pending,
+            'last_scanned_at' => null, // never scanned; staleness measures from created_at
+        ]);
+        $doc = $this->heldDoc($user, $repo, 'docs/a.md');
+
+        $this->actingAs($user)->fromWebApp()
+            ->deleteJson("/api/v1/tracked-repos/{$repo->id}")
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('tracked_repos', ['id' => $repo->id]);
+        $this->assertSame($repo->id, $doc->fresh()->tracked_repo_id);
+    }
+
+    public function test_a_stale_pending_scan_no_longer_blocks_delete(): void
+    {
+        // The stale bound applies to a queued-too-long pending the same way it does
+        // to a wedged running — a backed-up queue never makes a repo un-deletable.
+        $user = $this->registerUser();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Pending,
+            'last_scanned_at' => CarbonImmutable::now()->subMinutes(TrackedRepoScanService::STALE_MINUTES + 5),
+        ]);
+
+        $this->actingAs($user)->fromWebApp()
+            ->deleteJson("/api/v1/tracked-repos/{$repo->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('tracked_repos', ['id' => $repo->id]);
+    }
+
+    public function test_the_deleter_aborts_atomically_when_a_scan_claims_between_the_precheck_and_the_delete(): void
+    {
+        // The controller's pre-check saw a settled record; the deleter re-verifies
+        // in-flight status ATOMICALLY inside its transaction. If a scan claimed the
+        // record meanwhile (→ running), the conditional delete matches 0 rows and
+        // the transaction rolls back — provenance intact, record intact.
+        $user = $this->registerUser();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Ok,
+        ]);
+        $doc = $this->heldDoc($user, $repo, 'docs/a.md');
+
+        // Simulate the racing claim landing after the pre-check.
+        TrackedRepo::query()->whereKey($repo->id)->update([
+            'last_scan_status' => TrackedScanStatus::Running->value,
+            'last_scanned_at' => CarbonImmutable::now(),
+        ]);
+
+        try {
+            app(TrackedRepoDeleter::class)->delete($repo->fresh(), $user);
+            $this->fail('Expected a 409 abort from the atomic re-verify.');
+        } catch (HttpException $e) {
+            $this->assertSame(409, $e->getStatusCode());
+        }
+
+        // Nothing was destroyed: the provenance-nulling rolled back with the abort.
+        $this->assertDatabaseHas('tracked_repos', ['id' => $repo->id]);
+        $doc->refresh();
+        $this->assertSame($repo->id, $doc->tracked_repo_id);
+        $this->assertSame('docs/a.md', $doc->tracked_path);
+        $this->assertNotNull($doc->tracked_blob_sha);
     }
 
     public function test_a_stale_running_claim_no_longer_blocks_delete(): void

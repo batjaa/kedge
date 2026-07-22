@@ -2,9 +2,11 @@
 
 namespace App\Services\TrackedRepos;
 
+use App\Enums\TrackedScanStatus;
 use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\AuditLogger;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,7 +31,9 @@ class TrackedRepoDeleter
 
     public function delete(TrackedRepo $repo, ?User $actor, ?string $ip = null): void
     {
-        $orphaned = DB::transaction(function () use ($repo): int {
+        $staleBefore = CarbonImmutable::now()->subMinutes(TrackedRepoScanService::STALE_MINUTES);
+
+        $orphaned = DB::transaction(function () use ($repo, $staleBefore): int {
             // One bulk update, not N per-document writes: drop the repo link and the
             // stale re-scan baseline, but KEEP tracked_path so the orphan stays
             // visible to the overlap warning (10A) — re-tracking must not silently
@@ -39,7 +43,23 @@ class TrackedRepoDeleter
                 'tracked_blob_sha' => null,
             ]);
 
-            $repo->delete();
+            // Atomic re-verify (A4): a scan could have claimed the record between
+            // the controller's pre-check and here. Delete only when NO scan is in
+            // flight (running/pending within the stale bound) — a claim-style
+            // conditional whose affected-rows is the verdict, not a pre-read. A scan
+            // that claimed meanwhile leaves 0 rows, so we abort 409 and the
+            // transaction rolls the provenance-nulling above back.
+            $deleted = TrackedRepo::query()
+                ->whereKey($repo->getKey())
+                ->where(function ($query) use ($staleBefore) {
+                    $query->whereNotIn('last_scan_status', [
+                        TrackedScanStatus::Running->value,
+                        TrackedScanStatus::Pending->value,
+                    ])->orWhereRaw('COALESCE(last_scanned_at, created_at) < ?', [$staleBefore]);
+                })
+                ->delete();
+
+            abort_if($deleted === 0, 409, 'A scan is running — wait for it to finish, then delete.');
 
             return $count;
         });

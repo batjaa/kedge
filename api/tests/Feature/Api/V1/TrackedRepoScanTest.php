@@ -397,6 +397,32 @@ class TrackedRepoScanTest extends TestCase
         $this->assertTrue($trackedRepo->last_scan_report['stale_takeover']);
     }
 
+    public function test_a_scan_job_for_a_deleted_record_is_discarded_without_failing(): void
+    {
+        // A re-scan queued, then the repo un-tracked before the worker runs: the
+        // serialized record can't be restored. `deleteWhenMissingModels` discards the
+        // job quietly (no failed_jobs noise) rather than throwing (A4).
+        config(['queue.default' => 'database']);
+        $user = $this->registerUser();
+        $repo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+
+        ScanTrackedRepoJob::dispatch($repo, $user->id);
+        $repo->delete();
+
+        $connection = app('queue')->connection('database');
+        $job = $connection->pop();
+        $this->assertNotNull($job);
+
+        // Fire it exactly as the worker would: the missing model is caught and the
+        // job deleted (not failed) — no throw escapes, nothing lands in failed_jobs.
+        $job->fire();
+
+        $this->assertTrue($job->isDeleted());
+        $this->assertFalse($job->hasFailed());
+        $this->assertNull($connection->pop());
+        $this->assertDatabaseCount('failed_jobs', 0);
+    }
+
     // ---- logging + audit (story 20) ----------------------------------------
 
     public function test_a_scan_is_audit_logged(): void
