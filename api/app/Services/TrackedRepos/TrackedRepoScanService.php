@@ -136,6 +136,39 @@ class TrackedRepoScanService
     }
 
     /**
+     * Flip a settled (or stale-running) record to `pending` so the SERVER owns "a
+     * scan is queued" the instant the re-scan trigger returns (A5). Without this,
+     * on an async queue the panel's first poll (~1.5s) can read the still-terminal
+     * record and settle on the PREVIOUS report before the worker even claims —
+     * "optimistic running" settling on a stale report. One atomic conditional
+     * update: a losing claimant (a genuinely running scan within the stale bound)
+     * no-ops, so a double-press collapses to one queued scan; the report and error
+     * are left intact for the panel to keep showing until the scan completes. The
+     * job's {@see claim} then advances pending → running.
+     */
+    public function queue(TrackedRepo $repo, ?CarbonImmutable $now = null): bool
+    {
+        $now ??= CarbonImmutable::now();
+        $staleBefore = $now->subMinutes(self::STALE_MINUTES);
+
+        $affected = TrackedRepo::query()
+            ->whereKey($repo->getKey())
+            ->where(function ($query) use ($staleBefore) {
+                $query->where('last_scan_status', '!=', TrackedScanStatus::Running->value)
+                    ->orWhere('last_scanned_at', '<', $staleBefore);
+            })
+            ->update([
+                'last_scan_status' => TrackedScanStatus::Pending->value,
+                // Stamps when the scan was queued — the stale bound measures pending
+                // liveness against this too (the delete guard's finite wait, A4).
+                'last_scanned_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        return $affected === 1;
+    }
+
+    /**
      * Diff the discovered paths against what the repo already holds and write the
      * completed (ok) report atomically. New paths import, changed paths re-sync,
      * unchanged paths no-op, and held paths gone from the tree are flagged missing

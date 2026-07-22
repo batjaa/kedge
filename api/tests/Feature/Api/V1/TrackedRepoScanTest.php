@@ -472,6 +472,61 @@ class TrackedRepoScanTest extends TestCase
         Queue::assertPushed(ScanTrackedRepoJob::class, 1);
     }
 
+    public function test_the_scan_trigger_flips_an_ok_record_to_pending_with_the_report_intact(): void
+    {
+        // The server must own "a scan is queued" before the worker claims (A5) —
+        // otherwise an async queue's first poll settles on the previous report.
+        Queue::fake([ImportDocumentJob::class, ScanTrackedRepoJob::class]);
+        $user = $this->registerUser();
+        $priorReport = [
+            'status' => 'ok',
+            'ref' => 'main',
+            'matched' => 3,
+            'counts' => ['import_queued' => 2, 'resync_queued' => 0, 'unchanged' => 1, 'missing' => 0, 'failed' => 0],
+            'files' => [],
+            'error' => null,
+            'stale_takeover' => false,
+        ];
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Ok,
+            'last_scanned_at' => CarbonImmutable::now()->subHour(),
+            'last_scan_report' => $priorReport,
+        ]);
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->postJson("/api/v1/tracked-repos/{$trackedRepo->id}/scan");
+
+        $response->assertStatus(202)
+            ->assertJsonPath('data.last_scan_status', 'pending')
+            // The prior report rides back so the panel keeps showing it while pending.
+            ->assertJsonPath('data.last_scan_report.matched', 3);
+
+        // The record is genuinely pending server-side, report untouched.
+        $trackedRepo->refresh();
+        $this->assertSame(TrackedScanStatus::Pending, $trackedRepo->last_scan_status);
+        $this->assertSame(3, $trackedRepo->last_scan_report['matched']);
+        Queue::assertPushed(ScanTrackedRepoJob::class, 1);
+    }
+
+    public function test_the_scan_trigger_does_not_disturb_a_genuinely_running_scan(): void
+    {
+        // A fresh `running` claim (a scan mid-flight): the trigger's flip loses, so
+        // the record stays running — the job's atomic claim is the source of truth.
+        Queue::fake([ImportDocumentJob::class, ScanTrackedRepoJob::class]);
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create([
+            'last_scan_status' => TrackedScanStatus::Running,
+            'last_scanned_at' => CarbonImmutable::now(),
+        ]);
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson("/api/v1/tracked-repos/{$trackedRepo->id}/scan")
+            ->assertStatus(202)
+            ->assertJsonPath('data.last_scan_status', 'running');
+
+        $this->assertSame(TrackedScanStatus::Running, $trackedRepo->refresh()->last_scan_status);
+    }
+
     // ---- policy / IDOR -----------------------------------------------------
 
     public function test_a_foreign_tracked_repo_is_denied(): void

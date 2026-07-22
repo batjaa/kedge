@@ -14,6 +14,7 @@ use App\Services\Documents\DocumentProjectAssignment;
 use App\Services\TrackedRepos\Exceptions\PreviewException;
 use App\Services\TrackedRepos\TrackedRepoDeleter;
 use App\Services\TrackedRepos\TrackedRepoPreviewService;
+use App\Services\TrackedRepos\TrackedRepoScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -154,16 +155,21 @@ class TrackedRepoController extends Controller
 
     /**
      * POST /api/v1/tracked-repos/{trackedRepo}/scan — re-trigger a scan. Idempotent
-     * (202): the service's atomic claim collapses a double-click or a race onto one
-     * scan (5A), so pressing the button twice is safe.
+     * (202): the trigger atomically flips the record to `pending` so the SERVER owns
+     * "a scan is queued" before the job runs (A5) — the panel then can't settle on
+     * the stale report while an async worker catches up. The service's atomic claim
+     * collapses a double-click or a race onto one scan (5A), so pressing twice is
+     * safe. The pending record (report intact) rides back in the 202.
      */
-    public function scan(Request $request, TrackedRepo $trackedRepo): JsonResponse
+    public function scan(Request $request, TrackedRepo $trackedRepo, TrackedRepoScanService $scanner): JsonResponse
     {
         $this->authorize('scan', $trackedRepo);
 
+        $scanner->queue($trackedRepo);
+
         ScanTrackedRepoJob::dispatch($trackedRepo, $request->user()->id);
 
-        return TrackedRepoResource::make($trackedRepo)
+        return TrackedRepoResource::make($trackedRepo->refresh())
             ->response()
             ->setStatusCode(202);
     }
