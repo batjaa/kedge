@@ -28,10 +28,24 @@ return [
     | must never be changed in production — the outbound fetch still runs the full
     | SSRF guard, and a listed FETCH_ALLOW_HOSTS entry is what admits the loopback.
     |
+    | `api_base` is the full base URL those calls are built on. Production and every
+    | real deployment resolve it to `https://api.github.com` (byte-identical to the
+    | old hardcoded scheme + host). GITHUB_API_HOST may carry a scheme in the E2E
+    | seam ONLY (e.g. `http://127.0.0.1:4801`) so the Playwright journey reaches the
+    | loopback fixture server over plain http — the same FETCH_ALLOW_HOSTS exemption
+    | that admits it (the guard only ever lets http through for an allowlisted host).
+    | A bare host keeps the https default, so nothing changes for a real deployment.
+    |
     */
 
     'github' => [
         'api_host' => (string) env('GITHUB_API_HOST', 'api.github.com'),
+
+        'api_base' => (static function (): string {
+            $host = trim((string) env('GITHUB_API_HOST', 'api.github.com'));
+
+            return str_contains($host, '://') ? rtrim($host, '/') : 'https://'.$host;
+        })(),
     ],
 
     /*
