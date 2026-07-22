@@ -2,11 +2,12 @@
 
 namespace App\Services\TrackedRepos\Exceptions;
 
+use App\Services\TrackedRepos\RepoDiscoveryService;
 use RuntimeException;
 
 /**
  * Repo discovery cannot proceed (SPEC §16, M3.6). Thrown by the shared
- * {@see \App\Services\TrackedRepos\RepoDiscoveryService} that BOTH preview and scan
+ * {@see RepoDiscoveryService} that BOTH preview and scan
  * run, so it names the failures of either — hence "discovery", not "preview". Every
  * case is a loud, explicit failure the author can act on: a bad repo URL, a
  * non-branch ref (2A), an over-cap match count naming the number (story 18), or a
