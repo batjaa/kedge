@@ -109,13 +109,15 @@ export function isUpToDate(report: ScanReport): boolean {
 }
 
 /**
- * Whether a completed scan matched no files at all — an `ok` report with no
- * per-file outcomes. This is a pattern problem ("0 files matched — adjust the
- * pattern"), NOT the happy "already up to date" no-op, so the panel must signal it
- * distinctly rather than reassure the author nothing changed.
+ * Whether a completed scan matched no files at all — an `ok` report whose summary
+ * counts nothing matched and nothing missing. This is a pattern problem ("0 files
+ * matched — adjust the pattern"), NOT the happy "already up to date" no-op, so the
+ * panel must signal it distinctly. Count-based, not `files.length` — the index and
+ * in-flight reads slim `files` to `[]` (C11) while keeping the summary, and an
+ * all-missing scan (matched 0 but files gone upstream) is its own thing.
  */
 export function isZeroMatch(report: ScanReport): boolean {
-  return report.status === 'ok' && report.files.length === 0;
+  return report.status === 'ok' && report.matched === 0 && report.counts.missing === 0;
 }
 
 /**

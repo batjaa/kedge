@@ -132,6 +132,26 @@ describe('isZeroMatch', () => {
       isZeroMatch(report([{ path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null }])),
     ).toBe(false);
   });
+
+  it('is count-based, so a slimmed report (files: []) with matches is NOT a zero-match (C11)', () => {
+    // The index/in-flight reads slim `files` to [] but keep the summary — a report
+    // that matched 2 files must never read as "0 files matched".
+    const slimmed: ScanReport = {
+      ...report([]),
+      matched: 2,
+      counts: { import_queued: 2, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 },
+    };
+    expect(isZeroMatch(slimmed)).toBe(false);
+  });
+
+  it('is false for an all-missing scan (matched 0 but files gone upstream)', () => {
+    const allMissing: ScanReport = {
+      ...report([]),
+      matched: 0,
+      counts: { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 3, failed: 0 },
+    };
+    expect(isZeroMatch(allMissing)).toBe(false);
+  });
 });
 
 describe('mergeReportedRows', () => {
