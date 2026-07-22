@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\TrackedScanStatus;
 use App\Policies\TrackedRepoPolicy;
+use App\Services\TrackedRepos\TrackedRepoScanService;
+use Carbon\CarbonImmutable;
 use Database\Factories\TrackedRepoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -63,6 +65,29 @@ class TrackedRepo extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Whether a scan is actively in flight (7A) — the DELETE-while-running guard.
+     * A `running` claim within the stale bound blocks deletion (409); once older
+     * than that bound it is reclaimable (a crashed worker), so it no longer blocks
+     * — the same {@see TrackedRepoScanService::STALE_MINUTES} that keeps the scan
+     * claim finite keeps the delete wait finite, so a wedged record is never
+     * un-deletable.
+     */
+    public function hasRunningScan(?CarbonImmutable $now = null): bool
+    {
+        if ($this->last_scan_status !== TrackedScanStatus::Running) {
+            return false;
+        }
+
+        if ($this->last_scanned_at === null) {
+            return true;
+        }
+
+        $now ??= CarbonImmutable::now();
+
+        return $this->last_scanned_at->gt($now->subMinutes(TrackedRepoScanService::STALE_MINUTES));
     }
 
     /**

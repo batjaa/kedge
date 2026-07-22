@@ -14,9 +14,13 @@ final class Discovery
     /**
      * @param  string  $branch  The concrete branch the listing ran at.
      * @param  list<string>  $paths  Sorted matched, importable blob paths.
+     * @param  array<string, string>  $blobShas  Matched path → git blob sha, the
+     *                                           re-scan change signal (#94). Keyed
+     *                                           by every path in {@see $paths}.
      */
     public function __construct(
         public readonly string $branch,
         public readonly array $paths,
+        public readonly array $blobShas = [],
     ) {}
 }

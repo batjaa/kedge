@@ -137,6 +137,12 @@ Route::prefix('v1')->group(function () {
             ->middleware('throttle:imports')
             ->name('api.v1.tracked-repos.scan');
 
+        // Un-track (7A): delete the record, leave its documents (provenance
+        // nulled). A free mutation — no outbound GitHub call — so no import limiter;
+        // 409 while a scan is running.
+        Route::delete('/tracked-repos/{trackedRepo}', [TrackedRepoController::class, 'destroy'])
+            ->name('api.v1.tracked-repos.destroy');
+
         // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
         // (import, retry) share a per-user limiter so a runaway paste loop or a
         // retry hammer can't flood the fetch queue (SPEC 13).

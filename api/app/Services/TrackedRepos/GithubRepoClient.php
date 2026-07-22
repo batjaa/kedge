@@ -81,15 +81,22 @@ class GithubRepoClient
         $tree = is_array($body['tree'] ?? null) ? $body['tree'] : [];
 
         $paths = [];
+        $blobShas = [];
         foreach ($tree as $entry) {
             if (is_array($entry) && ($entry['type'] ?? null) === 'blob' && is_string($entry['path'] ?? null)) {
                 $paths[] = $entry['path'];
+                // The git blob sha — the re-scan change signal (#94). Absent shas
+                // read as an empty string so a held path with an unknowable sha is
+                // treated as changed (a re-sync that content-hash no-ops), never
+                // silently skipped.
+                $blobShas[$entry['path']] = is_string($entry['sha'] ?? null) ? $entry['sha'] : '';
             }
         }
 
         return new TreeListing(
             paths: array_values($paths),
             truncated: (bool) ($body['truncated'] ?? false),
+            blobShas: $blobShas,
         );
     }
 

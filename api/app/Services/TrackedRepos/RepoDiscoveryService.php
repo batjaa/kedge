@@ -55,7 +55,14 @@ class RepoDiscoveryService
             throw PreviewException::overCap(count($matched), $cap);
         }
 
-        return new Discovery($branch, $matched);
+        // Carry only the matched paths' blob shas — the scan diff's change signal
+        // (#94). Preview ignores them; every matched path is present.
+        $blobShas = [];
+        foreach ($matched as $path) {
+            $blobShas[$path] = $listing->blobShas[$path] ?? '';
+        }
+
+        return new Discovery($branch, $matched, $blobShas);
     }
 
     /**

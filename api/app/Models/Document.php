@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * failure, `last_sync_status` + `sync_error`.
  */
 #[Fillable([
-    'workspace_id', 'project_id', 'tracked_repo_id', 'tracked_path', 'integration_id',
+    'workspace_id', 'project_id', 'tracked_repo_id', 'tracked_path', 'tracked_blob_sha', 'integration_id',
     'source_type', 'source_url', 'source_meta',
     'title', 'format', 'current_version_id', 'status', 'last_sync_status',
     'sync_error', 'lifecycle_status', 'expires_at', 'created_by',

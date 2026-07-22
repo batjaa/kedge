@@ -54,6 +54,15 @@ class TrackedRepoPolicy
         return $this->memberOfWorkspace($user, $trackedRepo);
     }
 
+    /**
+     * Un-track (delete the record; its documents remain, provenance nulled — 7A).
+     * Same workspace scope — a foreign id is denied 403, never an access path.
+     */
+    public function delete(User $user, TrackedRepo $trackedRepo): bool
+    {
+        return $this->memberOfWorkspace($user, $trackedRepo);
+    }
+
     private function memberOfWorkspace(User $user, TrackedRepo $trackedRepo): bool
     {
         return $user->workspaces()

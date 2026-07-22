@@ -148,7 +148,10 @@ class TrackedRepoScanTest extends TestCase
         $this->assertSame('ok', $report['status']);
         $this->assertSame('main', $report['ref']);
         $this->assertSame(2, $report['matched']);
-        $this->assertSame(['import_queued' => 2, 'unchanged' => 0, 'failed' => 0], $report['counts']);
+        $this->assertSame(
+            ['import_queued' => 2, 'resync_queued' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
+            $report['counts'],
+        );
         $this->assertIsInt($report['duration_ms']);
         $this->assertGreaterThanOrEqual(0, $report['duration_ms']);
         $this->assertArrayHasKey('started_at', $report);
@@ -172,10 +175,12 @@ class TrackedRepoScanTest extends TestCase
             'ref' => null,
             'path_pattern' => 'docs/**',
         ]);
-        // A document this repo already imported from docs/a.md.
+        // A document this repo already imported from docs/a.md, its recorded blob
+        // sha matching the tree's — so the diff reads it as genuinely unchanged.
         $existing = Document::factory()->for($user->personalWorkspace())->create([
             'tracked_repo_id' => $trackedRepo->id,
             'tracked_path' => 'docs/a.md',
+            'tracked_blob_sha' => sha1('docs/a.md'),
             'status' => DocumentStatus::Ready,
         ]);
 
@@ -186,7 +191,10 @@ class TrackedRepoScanTest extends TestCase
         app(TrackedRepoScanService::class)->scan($trackedRepo->fresh(), $user->id);
 
         $report = $trackedRepo->fresh()->last_scan_report;
-        $this->assertSame(['import_queued' => 1, 'unchanged' => 1, 'failed' => 0], $report['counts']);
+        $this->assertSame(
+            ['import_queued' => 1, 'resync_queued' => 0, 'unchanged' => 1, 'missing' => 0, 'failed' => 0],
+            $report['counts'],
+        );
 
         $outcomes = collect($report['files'])->keyBy('path');
         $this->assertSame('unchanged', $outcomes['docs/a.md']['outcome']);
@@ -570,14 +578,20 @@ class TrackedRepoScanTest extends TestCase
     }
 
     /**
+     * A git-tree listing fixture. Each blob carries a deterministic git blob sha
+     * (sha1 of its path) so the re-scan diff has a stable change signal; pass
+     * `$shas` to override a path's sha and simulate an upstream change (#94).
+     *
      * @param  list<string>  $paths
+     * @param  array<string, string>  $shas
      */
-    private function tree(bool $truncated, array $paths): string
+    private function tree(bool $truncated, array $paths, array $shas = []): string
     {
         $entries = array_map(
             fn (string $path): array => [
                 'path' => $path,
                 'type' => str_contains($path, '.') ? 'blob' : 'tree',
+                'sha' => $shas[$path] ?? sha1($path),
             ],
             $paths,
         );
