@@ -12,7 +12,16 @@ import type { DocumentListItem } from './document-types';
 
 export type TrackedScanStatus = 'pending' | 'running' | 'ok' | 'failed';
 
-export type ScanOutcome = 'import_queued' | 'unchanged' | 'failed';
+// A re-scan (#94) resolves each held path to one of these: a new file imports, a
+// changed file re-syncs (comments survive the ladder), an unchanged file no-ops, a
+// held file gone from the tree is flagged missing (never deleted), or a path fails
+// to become a document at discovery time.
+export type ScanOutcome =
+  | 'import_queued'
+  | 'resync_queued'
+  | 'unchanged'
+  | 'missing'
+  | 'failed';
 
 /** One matched path's discovery-time outcome (3A). */
 export interface ScanFileOutcome {
@@ -22,12 +31,21 @@ export interface ScanFileOutcome {
   reason: string | null;
 }
 
+/** Per-outcome tallies (mirrors ScanReport::counts on the API). */
+export interface ScanCounts {
+  import_queued: number;
+  resync_queued: number;
+  unchanged: number;
+  missing: number;
+  failed: number;
+}
+
 /** The denormalized last-scan report — the panel's poll payload (3A). */
 export interface ScanReport {
   status: 'ok' | 'failed';
   ref: string | null;
   matched: number;
-  counts: { import_queued: number; unchanged: number; failed: number };
+  counts: ScanCounts;
   files: ScanFileOutcome[];
   /** Set only on a repo-level failure (bad ref, truncation, over-cap, …). */
   error: { code: string; message: string } | null;
@@ -71,10 +89,29 @@ export function scanSettled(repo: TrackedRepo | null): TrackedRepo | null {
 }
 
 /**
+ * Whether a completed scan changed nothing — the honest "already up to date"
+ * no-op (story 11): a re-scan that queued no imports and no re-syncs, flagged
+ * nothing missing, and failed no file. Only meaningful for an `ok` report (a
+ * repo-level failure has no per-file outcomes to be up-to-date about).
+ */
+export function isUpToDate(report: ScanReport): boolean {
+  const { import_queued, resync_queued, missing, failed } = report.counts;
+  return (
+    report.status === 'ok' &&
+    import_queued === 0 &&
+    resync_queued === 0 &&
+    missing === 0 &&
+    failed === 0
+  );
+}
+
+/**
  * The `import_queued` outcomes of a settled report, projected into importing
  * document rows the project island can render immediately — each then settles
- * through the existing per-row poll path (story 22). Entries without a document id
- * (a failed/unchanged path) are skipped; duplicates by id collapse to one.
+ * through the existing per-row poll path (story 22). Only new imports materialize:
+ * a re-synced or missing path is an existing row the list already holds, so it is
+ * skipped here (its own per-row poll reflects the re-sync). Entries without a
+ * document id (a failed path) are skipped; duplicates by id collapse to one.
  */
 export function reportImportingRows(report: ScanReport | null): DocumentListItem[] {
   if (report === null) return [];

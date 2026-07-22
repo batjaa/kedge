@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isScanInFlight,
+  isUpToDate,
   mergeReportedRows,
   reportImportingRows,
   scanSettled,
@@ -58,6 +59,18 @@ describe('reportImportingRows', () => {
     expect(rows[0]).toMatchObject({ id: 7, title: 'spec.md', status: 'importing' });
   });
 
+  it('skips re-synced and missing outcomes — those are existing rows, not new imports', () => {
+    const rows = reportImportingRows(
+      report([
+        { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 4, reason: null },
+        { path: 'docs/gone.md', outcome: 'missing', document_id: 5, reason: null },
+        { path: 'docs/new.md', outcome: 'import_queued', document_id: 6, reason: null },
+      ]),
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([6]);
+  });
+
   it('dedupes by document id', () => {
     const rows = reportImportingRows(
       report([
@@ -67,6 +80,26 @@ describe('reportImportingRows', () => {
     );
 
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe('isUpToDate', () => {
+  it('is true when a completed scan changed nothing (all unchanged)', () => {
+    expect(
+      isUpToDate(
+        report([
+          { path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null },
+          { path: 'docs/b.md', outcome: 'unchanged', document_id: 2, reason: null },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when anything was imported, re-synced, missing, or failed', () => {
+    expect(isUpToDate(report([{ path: 'docs/new.md', outcome: 'import_queued', document_id: 1, reason: null }]))).toBe(false);
+    expect(isUpToDate(report([{ path: 'docs/c.md', outcome: 'resync_queued', document_id: 1, reason: null }]))).toBe(false);
+    expect(isUpToDate(report([{ path: 'docs/g.md', outcome: 'missing', document_id: 1, reason: null }]))).toBe(false);
+    expect(isUpToDate(report([{ path: 'docs/x.md', outcome: 'failed', document_id: null, reason: 'x' }]))).toBe(false);
   });
 });
 
@@ -102,13 +135,13 @@ function repo(status: TrackedScanStatus): TrackedRepo {
 }
 
 function report(files: ScanReport['files']): ScanReport {
-  const counts = { import_queued: 0, unchanged: 0, failed: 0 };
+  const counts = { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 };
   for (const file of files) counts[file.outcome] += 1;
 
   return {
     status: 'ok',
     ref: 'main',
-    matched: files.length,
+    matched: files.length - counts.missing,
     counts,
     files,
     error: null,

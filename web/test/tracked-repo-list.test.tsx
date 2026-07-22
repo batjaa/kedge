@@ -4,17 +4,27 @@ import { TrackedRepoList, TrackedRepoRow } from '@/components/app/tracked-repo-l
 import type { ScanReport, TrackedRepo, TrackedScanStatus } from '@/lib/tracked-repo-scan';
 
 // Static-markup coverage for the tracked-repo panel's per-record states (SPEC §16,
-// M3.6, stories 12/14/22): a running scan, a completed report (counts + expandable
-// per-file outcomes), and a repo-level failure. Each row is a pure view apart from
-// its poller (which renders nothing), so every state renders from props alone.
+// M3.6, stories 10/11/12/14/16/22): a running scan, a completed report (counts +
+// expandable per-file outcomes, incl. re-synced/missing), the "already up to date"
+// no-op, a repo-level failure with the dead-PAT reconnect branch, and the Re-scan /
+// Delete actions. Each row is a pure view apart from its poller (which renders
+// nothing) and its own action state, so every state renders from props alone.
+
+const noop = () => {};
 
 function render(repo: TrackedRepo): string {
-  return renderToStaticMarkup(<TrackedRepoRow repo={repo} onScanned={() => {}} />);
+  return renderToStaticMarkup(
+    <TrackedRepoRow repo={repo} onScanned={noop} onRescanned={noop} onRemoved={noop} />,
+  );
 }
 
 describe('TrackedRepoList', () => {
   it('renders nothing when there are no tracked repos', () => {
-    expect(renderToStaticMarkup(<TrackedRepoList repos={[]} onScanned={() => {}} />)).toBe('');
+    expect(
+      renderToStaticMarkup(
+        <TrackedRepoList repos={[]} onScanned={noop} onRescanned={noop} onRemoved={noop} />,
+      ),
+    ).toBe('');
   });
 });
 
@@ -46,11 +56,54 @@ describe('TrackedRepoRow', () => {
     expect(html).toContain('Unchanged');
   });
 
+  it('surfaces re-synced and missing counts with their badges (#94)', () => {
+    const html = render(
+      repo('ok', report([
+        { path: 'docs/new.md', outcome: 'import_queued', document_id: 1, reason: null },
+        { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, reason: null },
+        { path: 'docs/same.md', outcome: 'unchanged', document_id: 3, reason: null },
+        { path: 'docs/gone.md', outcome: 'missing', document_id: 4, reason: null },
+      ])),
+    );
+
+    expect(html).toContain('1 re-synced');
+    expect(html).toContain('1 missing');
+    // Matched excludes the missing path (3 scanned), and the summary flags it.
+    expect(html).toContain('3 files scanned');
+    expect(html).toContain('Re-synced');
+    expect(html).toContain('Missing');
+  });
+
+  it('reads "already up to date" when a re-scan changed nothing (story 11)', () => {
+    const html = render(
+      repo('ok', report([
+        { path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null },
+        { path: 'docs/b.md', outcome: 'unchanged', document_id: 2, reason: null },
+      ])),
+    );
+
+    expect(html).toContain('Already up to date');
+    expect(html).toContain('2 files unchanged');
+    // No queued/failed noise in the honest no-op.
+    expect(html).not.toContain('0 queued');
+  });
+
   it('notes a stale-running takeover in the summary', () => {
     const html = render(
-      repo('ok', { ...report([]), stale_takeover: true }),
+      repo('ok', {
+        ...report([{ path: 'docs/new.md', outcome: 'import_queued', document_id: 1, reason: null }]),
+        stale_takeover: true,
+      }),
     );
     expect(html).toContain('recovered a stalled scan');
+  });
+
+  it('offers Re-scan and Delete on a settled row', () => {
+    const html = render(
+      repo('ok', report([{ path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null }])),
+    );
+    expect(html).toContain('Re-scan');
+    expect(html).toContain('Delete');
   });
 
   it('surfaces a repo-level failure message with an alert', () => {
@@ -61,6 +114,21 @@ describe('TrackedRepoRow', () => {
     const html = render(failed);
     expect(html).toContain('find a branch named');
     expect(html).toContain('role="alert"');
+    // A recoverable ref failure retries via scan — no reconnect prompt.
+    expect(html).toContain('Retry scan');
+    expect(html).not.toContain('Reconnect GitHub');
+  });
+
+  it('adds a Reconnect link on a dead-PAT scan failure, additive to Retry (never a dead end)', () => {
+    const failed = repo('failed');
+    failed.scan_error = 'GitHub rejected the token — reconnect the integration in Settings.';
+    failed.last_scan_report = { ...report([]), status: 'failed', error: { code: 'unauthorized', message: 'x' } };
+
+    const html = render(failed);
+    // Retry is ALWAYS offered; the dead PAT ADDITIONALLY offers reconnect.
+    expect(html).toContain('Retry scan');
+    expect(html).toContain('Reconnect GitHub');
+    expect(html).toContain('href="/settings"');
   });
 });
 
@@ -80,13 +148,13 @@ function repo(status: TrackedScanStatus, lastReport: ScanReport | null = null): 
 }
 
 function report(files: ScanReport['files']): ScanReport {
-  const counts = { import_queued: 0, unchanged: 0, failed: 0 };
+  const counts = { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 };
   for (const file of files) counts[file.outcome] += 1;
 
   return {
     status: 'ok',
     ref: 'main',
-    matched: files.length,
+    matched: files.length - counts.missing,
     counts,
     files,
     error: null,

@@ -12,10 +12,12 @@ use App\Policies\TrackedRepoPolicy;
 use App\Services\AuditLogger;
 use App\Services\Documents\DocumentProjectAssignment;
 use App\Services\TrackedRepos\Exceptions\PreviewException;
+use App\Services\TrackedRepos\TrackedRepoDeleter;
 use App\Services\TrackedRepos\TrackedRepoPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 /**
  * Tracked repos (SPEC §16, M3.6). `preview` lists what a scan would import with no
@@ -164,5 +166,25 @@ class TrackedRepoController extends Controller
         return TrackedRepoResource::make($trackedRepo)
             ->response()
             ->setStatusCode(202);
+    }
+
+    /**
+     * DELETE /api/v1/tracked-repos/{trackedRepo} — un-track the repo (7A). Every
+     * document it imported stays; only its provenance is cleared. Blocked with a
+     * 409 while a scan is running (the stale bound keeps that wait finite), so a
+     * delete can't race a scan mid-import. Policy-gated and audit-logged; a foreign
+     * id is denied 403, never confirmed to exist.
+     */
+    public function destroy(Request $request, TrackedRepo $trackedRepo, TrackedRepoDeleter $deleter): Response
+    {
+        $this->authorize('delete', $trackedRepo);
+
+        if ($trackedRepo->hasRunningScan()) {
+            abort(409, 'A scan is running — wait for it to finish, then delete.');
+        }
+
+        $deleter->delete($trackedRepo, $request->user(), $request->ip());
+
+        return response()->noContent();
     }
 }
