@@ -23,9 +23,6 @@ use App\Services\Import\FetchedContent;
  */
 abstract class AbstractGithubBlobConnector implements Connector
 {
-    /** GitHub's contents API host — always public, always the pinned target. */
-    private const API_HOST = 'api.github.com';
-
     /** The raw media type: the response body is the file itself, no base64 JSON. */
     private const ACCEPT = 'application/vnd.github.raw';
 
@@ -150,8 +147,11 @@ abstract class AbstractGithubBlobConnector implements Connector
         $encodedPath = implode('/', array_map('rawurlencode', explode('/', $parts['path'])));
 
         return sprintf(
-            'https://%s/repos/%s/%s/contents/%s?ref=%s',
-            self::API_HOST,
+            '%s/repos/%s/%s/contents/%s?ref=%s',
+            // The GitHub API base — `https://api.github.com` in production,
+            // env-overridable only as the test seam (config/kedge.php, shared with
+            // the tree lister); a bare GITHUB_API_HOST keeps the https default.
+            (string) config('kedge.github.api_base', 'https://api.github.com'),
             rawurlencode($parts['owner']),
             rawurlencode($parts['repo']),
             $encodedPath,

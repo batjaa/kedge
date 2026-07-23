@@ -36,12 +36,20 @@ export interface DocumentsReadResult {
  * The workspace document list for the authenticated home (SPEC 11). Reads page
  * `page` (default 1) through the BFF cookie-forwarding path — the same seam as
  * {@link getDocument}. A non-200 leaves `page` null so the home can degrade the
- * list area alone without ever throwing.
+ * list area alone without ever throwing. `project` scopes the read to one
+ * project (an id) or the Unfiled bucket (`'unfiled'`) — the project page's
+ * filter (M3.6).
  */
-export async function getDocuments(page = 1): Promise<DocumentsReadResult> {
+export async function getDocuments(
+  page = 1,
+  project?: string | number,
+): Promise<DocumentsReadResult> {
+  const query = new URLSearchParams({ page: String(page) });
+  if (project !== undefined && project !== '') query.set('project', String(project));
+
   const { status, data } = await forwardApiGet<DocumentListPage>(
     await headers(),
-    `/api/v1/documents?page=${encodeURIComponent(page)}`,
+    `/api/v1/documents?${query.toString()}`,
   );
   return { status, page: data };
 }

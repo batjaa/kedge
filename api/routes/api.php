@@ -10,11 +10,13 @@ use App\Http\Controllers\Api\V1\DocumentVersionController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MentionSuggestionController;
+use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ReviewerMagicLinkController;
 use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\SharedDocumentController;
 use App\Http\Controllers\Api\V1\ThreadCommentController;
 use App\Http\Controllers\Api\V1\ThreadController;
+use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
@@ -99,6 +101,47 @@ Route::prefix('v1')->group(function () {
         // limiter.
         Route::get('/documents', [DocumentController::class, 'index'])
             ->name('api.v1.documents.index');
+
+        // Projects (SPEC §16, M3.6), all behind ProjectPolicy. List and create
+        // are scoped to the caller's own workspace; update resolves a row by id.
+        // No delete this milestone. Rare mutations, so no dedicated limiter.
+        Route::get('/projects', [ProjectController::class, 'index'])
+            ->name('api.v1.projects.index');
+        Route::post('/projects', [ProjectController::class, 'store'])
+            ->name('api.v1.projects.store');
+        Route::patch('/projects/{project}', [ProjectController::class, 'update'])
+            ->name('api.v1.projects.update');
+
+        // Tracked repos (SPEC §16, M3.6), behind TrackedRepoPolicy. Preview lists
+        // what a scan would import with no side effects; create persists + runs the
+        // first scan; show is the scan poll target; scan re-triggers. List and show
+        // are free reads (the panel polls show); preview/create/scan drive outbound
+        // GitHub calls, so they share the import limiter. The static `preview` path
+        // is registered before the dynamic `{trackedRepo}` so it is never captured
+        // as an id.
+        Route::get('/tracked-repos', [TrackedRepoController::class, 'index'])
+            ->name('api.v1.tracked-repos.index');
+
+        Route::post('/tracked-repos/preview', [TrackedRepoController::class, 'preview'])
+            ->middleware('throttle:imports')
+            ->name('api.v1.tracked-repos.preview');
+
+        Route::post('/tracked-repos', [TrackedRepoController::class, 'store'])
+            ->middleware('throttle:imports')
+            ->name('api.v1.tracked-repos.store');
+
+        Route::get('/tracked-repos/{trackedRepo}', [TrackedRepoController::class, 'show'])
+            ->name('api.v1.tracked-repos.show');
+
+        Route::post('/tracked-repos/{trackedRepo}/scan', [TrackedRepoController::class, 'scan'])
+            ->middleware('throttle:imports')
+            ->name('api.v1.tracked-repos.scan');
+
+        // Un-track (7A): delete the record, leave its documents (provenance
+        // nulled). A free mutation — no outbound GitHub call — so no import limiter;
+        // 409 while a scan is running.
+        Route::delete('/tracked-repos/{trackedRepo}', [TrackedRepoController::class, 'destroy'])
+            ->name('api.v1.tracked-repos.destroy');
 
         // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
         // (import, retry) share a per-user limiter so a runaway paste loop or a

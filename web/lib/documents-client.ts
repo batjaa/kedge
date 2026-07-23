@@ -78,19 +78,27 @@ async function mutate(
   };
 }
 
-/** POST /api/v1/documents — begin importing a document from a URL. */
-export function importUrl(url: string): Promise<ImportOutcome> {
-  return mutate('/api/v1/documents', { url });
+/**
+ * POST /api/v1/documents — begin importing a document from a URL. `projectId`
+ * files the new document under a project (the import box on a project page,
+ * M3.6); a foreign id 404s at the API (8A).
+ */
+export function importUrl(url: string, projectId?: number): Promise<ImportOutcome> {
+  const body: Record<string, unknown> = { url };
+  if (projectId != null) body.project_id = projectId;
+  return mutate('/api/v1/documents', body);
 }
 
 /** POST /api/v1/documents — begin importing directly pasted content (#22). */
 export function importPaste(
   content: string,
   title?: string,
+  projectId?: number,
 ): Promise<ImportOutcome> {
   const body: Record<string, unknown> = { content };
   const trimmedTitle = title?.trim();
   if (trimmedTitle) body.title = trimmedTitle;
+  if (projectId != null) body.project_id = projectId;
   return mutate('/api/v1/documents', body);
 }
 
@@ -119,10 +127,20 @@ export async function readDocument(id: number): Promise<Document | null> {
   }
 }
 
-/** GET page N of the workspace document list via the same-origin BFF route (#86). */
-export async function readDocumentPage(page: number): Promise<DocumentListPage | null> {
+/**
+ * GET page N of the workspace document list via the same-origin BFF route (#86).
+ * `project` scopes the read to one project (id) or the Unfiled bucket
+ * (`'unfiled'`) so a project page's Load more stays filtered (M3.6).
+ */
+export async function readDocumentPage(
+  page: number,
+  project?: string | number,
+): Promise<DocumentListPage | null> {
   try {
-    const res = await fetch(`/api/bff/documents?page=${encodeURIComponent(String(page))}`, {
+    const query = new URLSearchParams({ page: String(page) });
+    if (project !== undefined && project !== '') query.set('project', String(project));
+
+    const res = await fetch(`/api/bff/documents?${query.toString()}`, {
       credentials: 'same-origin',
       headers: { accept: 'application/json' },
       cache: 'no-store',

@@ -1,0 +1,239 @@
+import { describe, expect, it } from 'vitest';
+import {
+  isScanInFlight,
+  isUpToDate,
+  isZeroMatch,
+  mergeReportedRows,
+  reportImportingRows,
+  scanSettled,
+  type ScanReport,
+  type TrackedRepo,
+  type TrackedScanStatus,
+} from '@/lib/tracked-repo-scan';
+import type { DocumentListItem } from '@/lib/document-types';
+
+// Pure coverage for the scan liveness projections (SPEC §16, M3.6, #93): the poll
+// predicate that decides when a scan has settled, and the report → importing-row
+// materialization that closes the M3.5 out-of-band-liveness TODO (story 22).
+
+describe('isScanInFlight', () => {
+  it('is true while pending or running, false once settled', () => {
+    expect(isScanInFlight('pending')).toBe(true);
+    expect(isScanInFlight('running')).toBe(true);
+    expect(isScanInFlight('ok')).toBe(false);
+    expect(isScanInFlight('failed')).toBe(false);
+  });
+});
+
+describe('scanSettled', () => {
+  it('keeps polling on a fetch hiccup (null)', () => {
+    expect(scanSettled(null)).toBeNull();
+  });
+
+  it('keeps polling while the scan is in flight', () => {
+    expect(scanSettled(repo('running'))).toBeNull();
+    expect(scanSettled(repo('pending'))).toBeNull();
+  });
+
+  it('settles on a terminal status, returning the record', () => {
+    const ok = repo('ok');
+    expect(scanSettled(ok)).toBe(ok);
+    expect(scanSettled(repo('failed'))?.last_scan_status).toBe('failed');
+  });
+});
+
+describe('reportImportingRows', () => {
+  it('returns nothing for a null report', () => {
+    expect(reportImportingRows(null)).toEqual([]);
+  });
+
+  it('projects only import_queued outcomes with a document id into importing rows', () => {
+    const rows = reportImportingRows(
+      report([
+        { path: 'docs/spec.md', outcome: 'import_queued', document_id: 7, reason: null },
+        { path: 'docs/old.md', outcome: 'unchanged', document_id: 3, reason: null },
+        { path: 'docs/bad.md', outcome: 'failed', document_id: null, reason: 'nope' },
+      ]),
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 7, title: 'spec.md', status: 'importing' });
+  });
+
+  it('skips re-synced and missing outcomes — those are existing rows, not new imports', () => {
+    const rows = reportImportingRows(
+      report([
+        { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 4, reason: null },
+        { path: 'docs/gone.md', outcome: 'missing', document_id: 5, reason: null },
+        { path: 'docs/new.md', outcome: 'import_queued', document_id: 6, reason: null },
+      ]),
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([6]);
+  });
+
+  it('dedupes by document id', () => {
+    const rows = reportImportingRows(
+      report([
+        { path: 'docs/a.md', outcome: 'import_queued', document_id: 9, reason: null },
+        { path: 'docs/a.md', outcome: 'import_queued', document_id: 9, reason: null },
+      ]),
+    );
+
+    expect(rows).toHaveLength(1);
+  });
+
+  it('stamps rows with the tracked repo project so their chip is correct (B1)', () => {
+    const rows = reportImportingRows(
+      report([{ path: 'docs/spec.md', outcome: 'import_queued', document_id: 7, reason: null }]),
+      { id: 10, name: 'Anchoring' },
+    );
+
+    expect(rows[0].project).toEqual({ id: 10, name: 'Anchoring' });
+  });
+
+  it('defaults the row project to null when none is given', () => {
+    const rows = reportImportingRows(
+      report([{ path: 'docs/spec.md', outcome: 'import_queued', document_id: 7, reason: null }]),
+    );
+
+    expect(rows[0].project).toBeNull();
+  });
+});
+
+describe('isUpToDate', () => {
+  it('is true when a completed scan changed nothing (all unchanged)', () => {
+    expect(
+      isUpToDate(
+        report([
+          { path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null },
+          { path: 'docs/b.md', outcome: 'unchanged', document_id: 2, reason: null },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when anything was imported, re-synced, missing, or failed', () => {
+    expect(isUpToDate(report([{ path: 'docs/new.md', outcome: 'import_queued', document_id: 1, reason: null }]))).toBe(false);
+    expect(isUpToDate(report([{ path: 'docs/c.md', outcome: 'resync_queued', document_id: 1, reason: null }]))).toBe(false);
+    expect(isUpToDate(report([{ path: 'docs/g.md', outcome: 'missing', document_id: 1, reason: null }]))).toBe(false);
+    expect(isUpToDate(report([{ path: 'docs/x.md', outcome: 'failed', document_id: null, reason: 'x' }]))).toBe(false);
+  });
+
+  it('is false when the scan matched NOTHING — that is a pattern problem, not up to date (B3)', () => {
+    expect(isUpToDate(report([]))).toBe(false);
+  });
+});
+
+describe('isZeroMatch', () => {
+  it('is true only for an ok scan with no matched files', () => {
+    expect(isZeroMatch(report([]))).toBe(true);
+    expect(
+      isZeroMatch(report([{ path: 'docs/a.md', outcome: 'unchanged', document_id: 1, reason: null }])),
+    ).toBe(false);
+  });
+
+  it('is count-based, so a slimmed report (files: []) with matches is NOT a zero-match (C11)', () => {
+    // The index/in-flight reads slim `files` to [] but keep the summary — a report
+    // that matched 2 files must never read as "0 files matched".
+    const slimmed: ScanReport = {
+      ...report([]),
+      matched: 2,
+      counts: { import_queued: 2, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 },
+    };
+    expect(isZeroMatch(slimmed)).toBe(false);
+  });
+
+  it('is false for an all-missing scan (matched 0 but files gone upstream)', () => {
+    const allMissing: ScanReport = {
+      ...report([]),
+      matched: 0,
+      counts: { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 3, failed: 0 },
+    };
+    expect(isZeroMatch(allMissing)).toBe(false);
+  });
+});
+
+describe('mergeReportedRows', () => {
+  it('prepends fresh rows and drops ones already in the list, without mutating', () => {
+    const items = [item(1), item(2)];
+    const { items: merged, added } = mergeReportedRows(items, [item(2), item(3)]);
+
+    expect(merged.map((row) => row.id)).toEqual([3, 1, 2]);
+    expect(added).toBe(1); // only id 3 was new
+    expect(merged).not.toBe(items);
+    expect(items.map((row) => row.id)).toEqual([1, 2]);
+  });
+
+  it('returns the same array reference and zero added when nothing is new', () => {
+    const items = [item(1)];
+    const result = mergeReportedRows(items, [item(1)]);
+    expect(result.items).toBe(items);
+    expect(result.added).toBe(0);
+  });
+
+  it('reports zero added when a Load more already appended the materialized rows', () => {
+    // The double-count guard (B4): a mid-scan Load more surfaced ids 10 and 11
+    // (and bumped meta.total from the server). Re-materializing the same report
+    // must add nothing, so the total is never bumped twice for the same docs.
+    const items = [item(1), item(10), item(11)];
+    const { items: merged, added } = mergeReportedRows(items, [item(10), item(11)]);
+
+    expect(added).toBe(0);
+    expect(merged).toBe(items);
+  });
+
+  it('counts only the genuinely new rows when a report partly overlaps the list', () => {
+    const items = [item(10)]; // id 10 already surfaced
+    const { added } = mergeReportedRows(items, [item(10), item(11), item(12)]);
+    expect(added).toBe(2); // 11 and 12 are new; 10 is not re-counted
+  });
+});
+
+function repo(status: TrackedScanStatus): TrackedRepo {
+  return {
+    id: 1,
+    project_id: 10,
+    repo_url: 'https://github.com/kedgehq/kedge',
+    ref: 'main',
+    path_pattern: 'docs/**',
+    last_scan_status: status,
+    scan_error: null,
+    last_scanned_at: null,
+    last_scan_report: null,
+    created_at: null,
+  };
+}
+
+function report(files: ScanReport['files']): ScanReport {
+  const counts = { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 };
+  for (const file of files) counts[file.outcome] += 1;
+
+  return {
+    status: 'ok',
+    ref: 'main',
+    matched: files.length - counts.missing,
+    counts,
+    files,
+    error: null,
+    stale_takeover: false,
+    started_at: '2026-07-21T00:00:00+00:00',
+    finished_at: '2026-07-21T00:00:01+00:00',
+    duration_ms: 1000,
+  };
+}
+
+function item(id: number): DocumentListItem {
+  return {
+    id,
+    title: `Doc ${id}`,
+    status: 'ready',
+    last_sync_status: 'ok',
+    sync_error: null,
+    lifecycle_status: 'draft',
+    open_threads_count: 0,
+    synced_at: null,
+    project: null,
+    created_at: null,
+  };
+}

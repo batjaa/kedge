@@ -115,6 +115,18 @@ describe('document list live state', () => {
 
       expect(result[1]).toBe(untouched);
     });
+
+    it("preserves the row's project so a settle can't revert a concurrent assignment (M3.6)", () => {
+      // The row was filed under Anchoring while importing; the settling poll doc
+      // — an in-flight read that may predate the assignment — must not clobber it.
+      const items = [
+        item({ id: 1, status: 'importing', project: { id: 10, name: 'Anchoring' } }),
+      ];
+
+      const result = mergeSettled(items, document({ id: 1, status: 'ready' }));
+
+      expect(result[0].project).toEqual({ id: 10, name: 'Anchoring' });
+    });
   });
 
   describe('markRetrying', () => {
@@ -312,6 +324,7 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     lifecycle_status: 'draft',
     open_threads_count: 0,
     synced_at: null,
+    project: null,
     created_at: null,
     ...overrides,
   };

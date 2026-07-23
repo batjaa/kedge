@@ -42,6 +42,7 @@ import {
   type ReplyToThreadInput,
 } from '@/lib/comments-client';
 import { readDocument, resyncDocument, updateDocumentLifecycle } from '@/lib/documents-client';
+import { assignDocumentProject } from '@/lib/projects-client';
 import {
   decorateAnchorHighlights,
   firstAnchorHighlightForThread,
@@ -62,7 +63,7 @@ import {
 } from '@/lib/review-surface-layout';
 import { cn } from '@/lib/cn';
 import { approveDocument, revokeApproval } from '@/lib/approvals-client';
-import type { Approval, Document, DocumentVersion, LifecycleStatus, SyncStatus } from '@/lib/document-types';
+import type { Approval, Document, DocumentVersion, LifecycleStatus, Project, SyncStatus } from '@/lib/document-types';
 import { versionLabel as displayVersionLabel } from '@/lib/version-label';
 import type { AnchorSelector } from '@/lib/anchor-capture-core';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
@@ -88,6 +89,8 @@ export function DocumentReviewSurface({
   approvals = [],
   currentUserId = null,
   canUpdateLifecycle = false,
+  projects = [],
+  projectId = null,
   backHref,
   backLabel,
   plainText,
@@ -110,6 +113,10 @@ export function DocumentReviewSurface({
   approvals?: Approval[];
   currentUserId?: number | null;
   canUpdateLifecycle?: boolean;
+  /** The workspace's projects for the assignment selector (M3.6). */
+  projects?: Project[];
+  /** The document's current project, or null for Unfiled. */
+  projectId?: number | null;
   backHref?: string | null;
   backLabel?: string | null;
   plainText: string | null;
@@ -146,6 +153,8 @@ export function DocumentReviewSurface({
   const [approvalPending, setApprovalPending] = useState(false);
   const [lifecycleValue, setLifecycleValue] = useState<LifecycleStatus | null>(lifecycleStatus ?? null);
   const [lifecyclePending, setLifecyclePending] = useState(false);
+  const [projectValue, setProjectValue] = useState<number | null>(projectId);
+  const [projectPending, setProjectPending] = useState(false);
   const [pendingReattachThreadId, setPendingReattachThreadId] = useState<number | null>(null);
   const [reattachingThreadId, setReattachingThreadId] = useState<number | null>(null);
   const [reattachStatus, setReattachStatus] = useState<ReattachStatus | null>(null);
@@ -256,6 +265,10 @@ export function DocumentReviewSurface({
   useEffect(() => {
     setLifecycleValue(lifecycleStatus ?? null);
   }, [lifecycleStatus]);
+
+  useEffect(() => {
+    setProjectValue(projectId);
+  }, [projectId]);
 
   useEffect(() => {
     const currentVersion = versions.find((version) => version.id === currentVersionId) ?? null;
@@ -752,6 +765,49 @@ export function DocumentReviewSurface({
     }
   }
 
+  async function changeProject(nextId: number | null) {
+    if (projectPending || projectValue === nextId) return;
+
+    const previousId = projectValue;
+    setProjectValue(nextId);
+    setProjectPending(true);
+    setHeaderMessage(null);
+
+    try {
+      const outcome = await assignDocumentProject(documentId, nextId);
+      if (!outcome.ok) {
+        setProjectValue(previousId);
+        setHeaderMessage(outcome.message);
+        return;
+      }
+
+      setProjectValue(outcome.document.project?.id ?? null);
+      router.refresh();
+    } finally {
+      setProjectPending(false);
+    }
+  }
+
+  // Assignment is capability-gated exactly like lifecycle (author only, M3.6);
+  // with no projects to file under, the selector would offer only Unfiled, so it
+  // stays hidden until the workspace has at least one project.
+  const projectControl = canUpdateLifecycle && projects.length > 0 ? (
+    <select
+      aria-label="Project"
+      value={projectValue === null ? '' : String(projectValue)}
+      disabled={projectPending}
+      onChange={(event) => void changeProject(event.target.value === '' ? null : Number(event.target.value))}
+      className="h-8 max-w-[12rem] truncate rounded-full bg-zinc-100 px-3 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
+    >
+      <option value="">Unfiled</option>
+      {projects.map((project) => (
+        <option key={project.id} value={project.id}>
+          {project.name}
+        </option>
+      ))}
+    </select>
+  ) : null;
+
   const lifecycleControl = canUpdateLifecycle && lifecycleValue ? (
     <select
       aria-label="Lifecycle status"
@@ -810,9 +866,10 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
-  const headerActions = versionSwitcher || lifecycleControl || approvalControl || resyncControl ? (
+  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl ? (
     <>
       {versionSwitcher}
+      {projectControl}
       {lifecycleControl}
       {approvalControl}
       {resyncControl}

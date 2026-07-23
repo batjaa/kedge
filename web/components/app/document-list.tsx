@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { type ChangeEvent, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { MetaChip } from './meta-chip';
@@ -9,19 +9,25 @@ import { StatusChip } from './status-chip';
 import { cn } from '@/lib/cn';
 import { relativeTime } from '@/lib/relative-time';
 import { readDocument } from '@/lib/documents-client';
-import { POLL_INTERVAL_MS, shouldPoll } from '@/lib/document-list-live';
+import { assignDocumentProject } from '@/lib/projects-client';
+import { runProjectAssign } from '@/lib/assign-project';
+import { shouldPoll } from '@/lib/document-list-live';
+import { groupDocumentsByProject, hasNamedGroups } from '@/lib/document-groups';
+import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { useImportRetry } from '@/lib/import-retry';
-import type { Document, DocumentListItem } from '@/lib/document-types';
+import type { Document, DocumentListItem, Project, ProjectRef } from '@/lib/document-types';
 
-// The workspace document list on the authenticated home (SPEC 11). The client
-// island (WorkspaceHome) owns the row state; this renders it live: prepend-on-
-// submit rows arrive importing and each settles in place to ready/failed (2A),
-// only importing rows poll and they stop the moment they settle. It owns the
-// three read outcomes — rows, the empty state, and the degraded "API
-// unreachable" state (the home never 500s over the list) — plus a polite live
-// region that announces each settle for assistive tech (10A). DESIGN.md panel
-// idiom: divide-y rows in a rounded-2xl hairline card, mono chips, status hues
-// in chips only; rows stay real links.
+// The workspace document list on the authenticated home (SPEC 11) and, re-scoped
+// with `grouped={false}`, a project page (M3.6). The client island owns the row
+// state; this renders it live: prepend-on-submit rows arrive importing and each
+// settles in place to ready/failed (2A), only importing rows poll and they stop
+// the moment they settle. It owns the three read outcomes — rows, the empty
+// state, and the degraded "API unreachable" state (the list never 500s) — plus a
+// polite live region that announces each settle (10A). At M3.6 it also groups by
+// project (headers alphabetical, Unfiled last — 14A) and carries a per-row
+// project chip that doubles as the assignment selector. DESIGN.md panel idiom:
+// divide-y rows in a rounded-2xl hairline card, mono chips, status hues in chips
+// only; the title stays a real link.
 export function DocumentList({
   items,
   total,
@@ -32,6 +38,12 @@ export function DocumentList({
   announcement,
   onSettled,
   onRetried,
+  projects = [],
+  onAssigned = () => {},
+  grouped = false,
+  heading = 'Your documents',
+  emptyTitle = 'No documents yet',
+  emptyBody = 'Import a spec or RFC with the box above and it lands here — every document in your workspace, newest first.',
 }: {
   items: DocumentListItem[];
   total: number;
@@ -42,10 +54,27 @@ export function DocumentList({
   announcement: string;
   onSettled: (doc: Document) => void;
   onRetried: (id: number) => void;
+  /** The workspace's projects — populate the row chip selector; empty hides it. */
+  projects?: Project[];
+  /** A row was re-filed (or cleared): the island updates/regroups/removes it. */
+  onAssigned?: (doc: Document) => void;
+  /** Render project group headers (home). Off on a single-project page. */
+  grouped?: boolean;
+  heading?: string;
+  emptyTitle?: string;
+  emptyBody?: string;
 }) {
   // Degraded wins only while we have nothing to show; a successful import gives
   // us a real row, so the StatePanel yields to it rather than hiding it.
   const showDegraded = degraded && items.length === 0;
+
+  // Group only when asked (home); a project page is one implicit group. Headers
+  // appear only when a project is actually assigned — a workspace with none reads
+  // exactly as it did before projects existed (single implicit group, 14A).
+  const groups = grouped
+    ? groupDocumentsByProject(items)
+    : [{ project: null as ProjectRef | null, items }];
+  const showHeaders = grouped && hasNamedGroups(groups);
 
   return (
     <section className="mt-10" aria-labelledby="documents-heading">
@@ -54,7 +83,7 @@ export function DocumentList({
           id="documents-heading"
           className="text-base font-semibold text-zinc-900 dark:text-white"
         >
-          Your documents
+          {heading}
         </h2>
         {!showDegraded && items.length > 0 ? <MetaChip>{total}</MetaChip> : null}
       </div>
@@ -74,7 +103,7 @@ export function DocumentList({
           body="The API is unreachable right now. Your import box above still works — refresh in a moment."
         />
       ) : items.length === 0 ? (
-        <EmptyState />
+        <EmptyState title={emptyTitle} body={emptyBody} />
       ) : (
         <>
           {/* Degraded, but a live prepend gave us rows to show: the StatePanel
@@ -82,18 +111,29 @@ export function DocumentList({
               workspace could otherwise present as this session's imports alone).
               A slim inline warning keeps it visible above the rows (C2). */}
           {degraded ? <DegradedNotice /> : null}
-          <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-            <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
-              {items.map((item) => (
-                <DocumentRow
-                  key={item.id}
-                  item={item}
+          {showHeaders ? (
+            groups.map((group) => (
+              <div key={group.project?.id ?? 'unfiled'}>
+                <GroupHeader project={group.project} count={group.items.length} />
+                <RowCard
+                  items={group.items}
+                  projects={projects}
                   onSettled={onSettled}
                   onRetried={onRetried}
+                  onAssigned={onAssigned}
                 />
-              ))}
-            </ul>
-          </div>
+              </div>
+            ))
+          ) : (
+            <RowCard
+              className="mt-4"
+              items={items}
+              projects={projects}
+              onSettled={onSettled}
+              onRetried={onRetried}
+              onAssigned={onAssigned}
+            />
+          )}
         </>
       )}
 
@@ -114,6 +154,65 @@ export function DocumentList({
   );
 }
 
+// One project's (or Unfiled's) group header (14A): the project name links to its
+// page; Unfiled is plain, always last. The count rides the mono chip idiom.
+function GroupHeader({ project, count }: { project: ProjectRef | null; count: number }) {
+  return (
+    <div className="mb-3 mt-8 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {project ? (
+        <Link
+          href={`/projects/${project.id}`}
+          className="text-sm font-semibold text-zinc-900 hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:text-emerald-400"
+        >
+          {project.name}
+        </Link>
+      ) : (
+        <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">Unfiled</h3>
+      )}
+      <MetaChip>{count}</MetaChip>
+    </div>
+  );
+}
+
+// The rounded-2xl hairline card holding one group's divide-y rows (DESIGN.md).
+function RowCard({
+  items,
+  projects,
+  onSettled,
+  onRetried,
+  onAssigned,
+  className,
+}: {
+  items: DocumentListItem[];
+  projects: Project[];
+  onSettled: (doc: Document) => void;
+  onRetried: (id: number) => void;
+  onAssigned: (doc: Document) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10',
+        className,
+      )}
+    >
+      <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
+        {items.map((item) => (
+          <DocumentRow
+            key={item.id}
+            item={item}
+            projects={projects}
+            onSettled={onSettled}
+            onRetried={onRetried}
+            onAssigned={onAssigned}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // The degraded-but-not-empty signal (C2): a slim amber warning shown above the
 // rows when the server-side list read failed yet this session's live prepends
 // give us something to render — so the failure never silently disappears.
@@ -128,15 +227,12 @@ function DegradedNotice() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="mt-4 rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-        No documents yet
-      </h3>
+      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{title}</h3>
       <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Import a spec or RFC with the box above and it lands here — every document
-        in your workspace, newest first.
+        {body}
       </p>
     </div>
   );
@@ -144,20 +240,27 @@ function EmptyState() {
 
 function DocumentRow({
   item,
+  projects,
   onSettled,
   onRetried,
+  onAssigned,
 }: {
   item: DocumentListItem;
+  projects: Project[];
   onSettled: (doc: Document) => void;
   onRetried: (id: number) => void;
+  onAssigned: (doc: Document) => void;
 }) {
   return (
     <li>
-      <Link
-        href={`/documents/${item.id}`}
-        className="flex items-center gap-4 px-4 py-4 transition hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 dark:hover:bg-white/[.02] sm:px-6"
-      >
-        <div className="min-w-0 flex-1">
+      {/* The row is a flex container, not one big anchor: the title links to the
+          document, while the project selector on the right is interactive and so
+          must live OUTSIDE the anchor (no nested interactives). */}
+      <div className="flex items-center gap-3 px-4 py-4 transition hover:bg-zinc-50 dark:hover:bg-white/[.02] sm:px-6">
+        <Link
+          href={`/documents/${item.id}`}
+          className="min-w-0 flex-1 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+        >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <StatusChip status={item.lifecycle_status} />
             <SyncState item={item} />
@@ -165,9 +268,14 @@ function DocumentRow({
           <p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-white">
             {item.title}
           </p>
+        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {projects.length > 0 ? (
+            <RowProjectChip item={item} projects={projects} onAssigned={onAssigned} />
+          ) : null}
+          <OpenThreads count={item.open_threads_count} />
         </div>
-        <OpenThreads count={item.open_threads_count} />
-      </Link>
+      </div>
       {/* Recovery lives outside the row link (an anchor can't wrap a button):
           a failed row shows its error and the shared retry affordance inline (7A),
           so recovery starts where the failure is seen. */}
@@ -183,6 +291,69 @@ function DocumentRow({
         <RowPoller id={item.id} onSettled={onSettled} />
       ) : null}
     </li>
+  );
+}
+
+// The per-row project chip AND assignment selector (M3.6): shows the document's
+// project (or Unfiled) as its value — the reserved M3.5 chip slot filled — and
+// re-files it on change. Rendered as a compact pill mirroring the header's
+// lifecycle selector; optimistic hand-off to the island via onAssigned, which
+// owns regrouping (home) or removal (a project page it was moved out of).
+function RowProjectChip({
+  item,
+  projects,
+  onAssigned,
+}: {
+  item: DocumentListItem;
+  projects: Project[];
+  onAssigned: (doc: Document) => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const currentId = item.project?.id ?? null;
+
+  function onChange(event: ChangeEvent<HTMLSelectElement>) {
+    const raw = event.target.value;
+    // The move failure surfaces (role=alert, like RowRetry's) and leaves `item`
+    // unchanged, so the controlled <select> snaps back to the real project. The
+    // pure core owns the try/finally so a rejected fetch can't wedge pending.
+    void runProjectAssign({
+      documentId: item.id,
+      nextId: raw === '' ? null : Number(raw),
+      currentId,
+      pending,
+      assign: assignDocumentProject,
+      setPending,
+      setError,
+      onAssigned,
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <select
+        aria-label={`Project for ${item.title}`}
+        value={currentId === null ? '' : String(currentId)}
+        disabled={pending}
+        onChange={onChange}
+        className="max-w-[9rem] truncate rounded-full bg-zinc-100 px-2.5 py-1 font-mono text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-900/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
+      >
+        <option value="">Unfiled</option>
+        {projects.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.name}
+          </option>
+        ))}
+      </select>
+      {error ? (
+        <span
+          role="alert"
+          className="max-w-[9rem] text-right text-[10px] leading-tight text-rose-600 dark:text-rose-400"
+        >
+          {error}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -241,34 +412,22 @@ function RowRetry({
 }
 
 // One importing row's poll loop (2A) — the per-document sibling of the doc
-// page's DocumentPoller. Reads the existing per-doc BFF route on the shared
-// cadence; on the first non-importing read it settles the row in place and
-// stops. A transient failure (readDocument → null) keeps the last state and
-// retries next tick. Renders nothing: it is behaviour, not markup.
+// page's DocumentPoller, on the same shared usePollUntilSettled skeleton (12A).
+// Reads the existing per-doc BFF route on the shared cadence; the first
+// non-importing read settles the row in place and stops. A transient failure
+// (readDocument → null) keeps the last state and retries next tick. Renders
+// nothing: it is behaviour, not markup.
 function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) => void }) {
-  useEffect(() => {
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function tick() {
+  usePollUntilSettled({
+    // readDocument already maps a transient failure to null; a still-importing
+    // read stays null too, so only a settled doc becomes the payload.
+    poll: async (): Promise<Document | null> => {
       const doc = await readDocument(id);
-      if (stopped) return;
-
-      if (doc && doc.status !== 'importing') {
-        stopped = true;
-        onSettled(doc);
-        return;
-      }
-
-      timer = setTimeout(tick, POLL_INTERVAL_MS);
-    }
-
-    timer = setTimeout(tick, POLL_INTERVAL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [id, onSettled]);
+      return doc && doc.status !== 'importing' ? doc : null;
+    },
+    onSettled,
+    deps: [id, onSettled],
+  });
 
   return null;
 }

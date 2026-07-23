@@ -7,6 +7,30 @@ export type SyncStatus = 'ok' | 'failed';
 export type LifecycleStatus = 'draft' | 'in_review' | 'approved' | 'superseded';
 export type DocumentFormat = 'md' | 'mdx' | 'html';
 
+/**
+ * A project — a workspace container documents are grouped under (SPEC §16,
+ * M3.6). Keep in sync with api/app/Http/Resources/V1/ProjectResource.php.
+ */
+export interface Project {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  /** Present when the list query counted it; omitted otherwise. */
+  documents_count?: number;
+  created_at: string | null;
+}
+
+/**
+ * The lean project identity a document row / header carries for its chip and
+ * selector — id + name only (the reserved M3.5 slot, filled at M3.6). Null is
+ * Unfiled. Mirrors the `project` key on the document list + document resources.
+ */
+export interface ProjectRef {
+  id: number;
+  name: string;
+}
+
 export interface Approval {
   id: number;
   user: {
@@ -95,6 +119,8 @@ export interface Document {
   last_sync_status: SyncStatus;
   sync_error: string | null;
   lifecycle_status: LifecycleStatus;
+  /** The document's project (M3.6); null is Unfiled. Present on show/update. */
+  project?: ProjectRef | null;
   approvals?: Approval[];
   capabilities?: DocumentCapabilities;
   /** Present (non-null) once the import lands a version; absent while importing. */
@@ -119,6 +145,8 @@ export interface DocumentListItem {
   open_threads_count: number;
   /** The current version's sync time; null while a doc is still importing. */
   synced_at: string | null;
+  /** The document's project (M3.6) for the row chip; null is Unfiled. */
+  project: ProjectRef | null;
   created_at: string | null;
 }
 

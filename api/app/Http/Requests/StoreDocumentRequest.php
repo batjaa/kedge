@@ -32,6 +32,10 @@ class StoreDocumentRequest extends FormRequest
             'url' => ['required_without:content', 'prohibits:content', 'string', 'url:http,https', 'max:2048'],
             'content' => ['required_without:url', 'string', $this->withinPasteCap()],
             'title' => ['nullable', 'string', 'max:255'],
+            // Optional target project (the import form on a project page, M3.6).
+            // Shape only — the controller resolves it within the workspace and
+            // 404s a foreign id (8A).
+            'project_id' => ['sometimes', 'nullable', 'integer'],
         ];
     }
 

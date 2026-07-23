@@ -189,7 +189,7 @@
 
 ## Open TODOs (from M3.5 eng review, 2026-07-21)
 
-- **Out-of-band import liveness** (M3.6 speccing): the home list live-updates only rows it already renders (per-row polling — eng-review decision 2A rejected list re-fetch for scroll churn and page×tick fan-out). Docs created outside the page (future MCP agent imports, and especially M3.6 tracked-repo scans minting N docs while the user watches) appear only on next visit. M3.6's scan UX must own an appearance mechanism — the sketched shape is polling the tracked-repo scan status (`GET /tracked-repos/{id}` per-file outcome) rather than resurrecting list re-fetch. (S)
+- [x] ~~**Out-of-band import liveness**~~ — **RESOLVED (M3.6 #93, 2026-07-21)**: the tracked-repo scan report drives row materialization on the project page (poll the record, merge reported docs into the island, settle via the shared per-row path) — the exact shape sketched here. 
 
 ## Known debt (M3.5 branch review, 2026-07-21)
 
@@ -204,3 +204,15 @@
 
 - ✅ **Term pinned: Tracked Repo** (user decision, resolving the /domain-modeling flag from the wedge log): the repo-level record is a *tracked repo*; per-document Source stays file-granular; "tracked" means remembered-and-re-scannable, pull-based until M6's webhook. CONTEXT.md entry added; SPEC §5.1/§16/§17/§21 renamed from the `repo source` working name.
 - ✅ **M3.6 testing seams agreed**: API PHPUnit (scan matrix with faked GitHub responses), web vitest (scan-report projection + page states), journey pack with ONE new test-only knob — env-configurable GitHub API host so serve-fixtures emulates minimal tree/contents endpoints (FETCH_ALLOW_HOSTS precedent). Spec: docs/specs/m3.6-projects-tracked-repos.md.
+
+## Known debt (M3.6 branch, 2026-07-21)
+
+- **Failed-import-then-changed path reads 'unchanged' forever** — a doc whose first import failed (no current version) is skipped by the re-scan change detector and reported unchanged even when upstream changed; recovery is the doc-level Retry only. Make the report honest (`import_failed` outcome) or re-attempt the import on re-scan. Surfaced by the #94 agent's self-review. (S)
+- [x] ~~**Optimistic 'running' can settle on a stale report under a backed-up async queue**~~ — **RESOLVED (M3.6 branch review, 2026-07-21)**: the scan trigger now atomically flips the record to `pending` before dispatch, so the server owns "a scan is queued" and the poller can't settle on a stale terminal report.
+- **E2E diagram specs depend on hosted kroki.io when the render cache is cold** — kroki.io's mermaid backend outage mid-M3.6 forced a local container to green the pack; CI runs its own kroki service, but local cold runs flake. Consider a kroki fixture/stub for the pack or a documented `KROKI_URL` local-container step. (S)
+
+## Known debt (M3.6 branch review, 2026-07-21)
+
+- **GitHub response policy lives twice** — `GithubRepoClient` (tree listing) re-implements the blob connector's rate-limit classification, header block, per-segment encoding, and untrusted-message sanitizer; its docblock promises parity that only copies enforce. Extract a shared `Services/Github` collaborator/trait for both. (M)
+- **`usePollUntilSettled` deps are caller-owned** — each of four consumers supplies its own effect-deps array behind an eslint-disable; a wrong array silently polls stale closures. Internalize with refs-for-callbacks + a `key` param. (S)
+- **Scan status remains triple-encoded** — `last_scan_status` column, `scan_error` column, and `status`/`error` embedded in `last_scan_report`; web reads a mix. The pending-flip fix removed the dangerous seam; consolidating to one authoritative representation with derivations at the boundary is still worth doing. (S)

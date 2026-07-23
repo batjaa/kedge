@@ -37,6 +37,12 @@ class DocumentListResource extends JsonResource
             'lifecycle_status' => $this->lifecycle_status->value,
             'open_threads_count' => (int) $this->open_threads_count,
             'synced_at' => $this->currentVersion?->synced_at,
+            // The row's project chip (SPEC 11's reserved slot; M3.6). Lean
+            // identity only — id + name — from the select-limited eager load;
+            // null is Unfiled.
+            'project' => $this->project
+                ? ['id' => $this->project->id, 'name' => $this->project->name]
+                : null,
             'created_at' => $this->created_at,
         ];
     }

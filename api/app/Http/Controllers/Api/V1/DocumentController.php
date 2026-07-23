@@ -15,11 +15,13 @@ use App\Http\Resources\V1\DocumentResource;
 use App\Jobs\ImportDocumentJob;
 use App\Jobs\ResyncDocumentJob;
 use App\Models\Document;
+use App\Models\Project;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Policies\DocumentPolicy;
 use App\Services\AuditLogger;
 use App\Services\Documents\DocumentLifecycleService;
+use App\Services\Documents\DocumentProjectAssignment;
 use App\Services\Import\ConnectorRegistry;
 use App\Services\Import\Connectors\UploadConnector;
 use App\Services\Import\TitleSynthesizer;
@@ -57,15 +59,34 @@ class DocumentController extends Controller
 
         $perPage = min(max((int) $request->integer('per_page', 20), 1), 50);
 
-        $documents = $request->user()->personalWorkspace()->documents()
-            ->with(['currentVersion' => fn ($query) => $query->select('id', 'document_id', 'synced_at')])
-            ->withCount(['threads as open_threads_count' => fn ($query) => $query->where('status', ThreadStatus::Open->value)])
+        $query = $request->user()->personalWorkspace()->documents()
+            ->with([
+                'currentVersion' => fn ($query) => $query->select('id', 'document_id', 'synced_at'),
+                // Lean identity for the row's project chip (id + name only).
+                'project' => fn ($query) => $query->select('id', 'name'),
+            ])
+            ->withCount(['threads as open_threads_count' => fn ($query) => $query->where('status', ThreadStatus::Open->value)]);
+
+        // Reserved `?project=` filter (SPEC §17, M3.6): a numeric id scopes to
+        // that project, the literal `unfiled` to the no-project bucket. The query
+        // is already workspace-scoped, so a foreign project id matches nothing —
+        // an empty page, never a leak.
+        $project = $request->query('project');
+        if ($project === 'unfiled') {
+            $query->whereNull('project_id');
+        } elseif ($project !== null && $project !== '') {
+            $query->where('project_id', (int) $project);
+        }
+
+        $documents = $query
             // `created_at` is second-precision, so a stable tiebreaker is required:
             // without it same-second rows can order differently between page reads,
             // and a row straddling a page boundary can permute or silently drop.
             ->latest()
             ->orderByDesc('id')
-            ->paginate($perPage);
+            ->paginate($perPage)
+            // Keep `?project=` on the paginator links so Load more stays scoped.
+            ->withQueryString();
 
         return DocumentListResource::collection($documents);
     }
@@ -78,15 +99,23 @@ class DocumentController extends Controller
         StoreDocumentRequest $request,
         ConnectorRegistry $registry,
         TitleSynthesizer $titles,
+        DocumentProjectAssignment $projects,
     ): JsonResponse {
         $this->authorize('create', Document::class);
 
         $user = $request->user();
         $workspace = $user->personalWorkspace();
 
+        // An optional target project (the import form on a project page, M3.6).
+        // Resolved up front so a foreign id 404s (8A) before a document is minted.
+        $project = $projects->resolve(
+            $workspace,
+            $request->filled('project_id') ? (int) $request->validated('project_id') : null,
+        );
+
         $document = $request->filled('content')
-            ? $this->createFromPaste($request, $workspace, $user)
-            : $this->createFromUrl($request, $workspace, $user, $registry, $titles);
+            ? $this->createFromPaste($request, $workspace, $user, $project)
+            : $this->createFromUrl($request, $workspace, $user, $registry, $titles, $project);
 
         $this->audit->record(
             $workspace,
@@ -99,7 +128,8 @@ class DocumentController extends Controller
 
         ImportDocumentJob::dispatch($document);
 
-        return DocumentResource::make($document)
+        // Load the project so a project-page import's 202 carries the chip.
+        return DocumentResource::make($document->load('project'))
             ->response()
             ->setStatusCode(202);
     }
@@ -118,6 +148,7 @@ class DocumentController extends Controller
         User $user,
         ConnectorRegistry $registry,
         TitleSynthesizer $titles,
+        ?Project $project,
     ): Document {
         $url = (string) $request->validated('url');
 
@@ -138,6 +169,7 @@ class DocumentController extends Controller
 
         return Document::create([
             'workspace_id' => $workspace->id,
+            'project_id' => $project?->id,
             'created_by' => $user->id,
             'integration_id' => $boundIntegration?->id,
             'source_type' => $connector->sourceType(),
@@ -158,11 +190,13 @@ class DocumentController extends Controller
         StoreDocumentRequest $request,
         Workspace $workspace,
         User $user,
+        ?Project $project,
     ): Document {
         $title = (string) $request->validated('title');
 
         return Document::create([
             'workspace_id' => $workspace->id,
+            'project_id' => $project?->id,
             'created_by' => $user->id,
             'source_type' => SourceType::Upload,
             'source_url' => null,
@@ -185,28 +219,48 @@ class DocumentController extends Controller
     {
         $this->authorize('view', $document);
 
-        return DocumentResource::make($document->loadCurrentVersionAndApprovals());
+        return DocumentResource::make($document->loadCurrentVersionAndApprovals()->load('project'));
     }
 
     /**
-     * PATCH /api/v1/documents/{document} — author-controlled lifecycle status.
+     * PATCH /api/v1/documents/{document} — author-controlled lifecycle status
+     * and/or project assignment (M3.6). Both mutations are capability-gated the
+     * same way (author only, via `updateLifecycle`); the request is partial, so a
+     * caller sends whichever field changed. A `project_id` of null moves the
+     * document back to Unfiled; a foreign project id 404s (8A).
      */
-    public function update(Request $request, Document $document, DocumentLifecycleService $lifecycle): DocumentResource
-    {
+    public function update(
+        Request $request,
+        Document $document,
+        DocumentLifecycleService $lifecycle,
+        DocumentProjectAssignment $projects,
+    ): DocumentResource {
         $this->authorize('updateLifecycle', $document);
 
         $validated = $request->validate([
-            'lifecycle_status' => ['required', Rule::enum(LifecycleStatus::class)],
+            'lifecycle_status' => ['sometimes', Rule::enum(LifecycleStatus::class)],
+            'project_id' => ['sometimes', 'nullable', 'integer'],
         ]);
 
-        $document = $lifecycle->update(
-            $document,
-            $request->user(),
-            LifecycleStatus::from((string) $validated['lifecycle_status']),
-            $request->ip(),
-        );
+        if (array_key_exists('project_id', $validated)) {
+            $document = $projects->assign(
+                $document,
+                $validated['project_id'] !== null ? (int) $validated['project_id'] : null,
+                $request->user(),
+                $request->ip(),
+            );
+        }
 
-        return DocumentResource::make($document);
+        if (array_key_exists('lifecycle_status', $validated)) {
+            $document = $lifecycle->update(
+                $document,
+                $request->user(),
+                LifecycleStatus::from((string) $validated['lifecycle_status']),
+                $request->ip(),
+            );
+        }
+
+        return DocumentResource::make($document->loadCurrentVersionAndApprovals()->load('project'));
     }
 
     /**

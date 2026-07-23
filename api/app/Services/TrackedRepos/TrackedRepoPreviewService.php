@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Services\TrackedRepos;
+
+use App\Models\Integration;
+use App\Models\Workspace;
+use App\Services\TrackedRepos\Exceptions\DiscoveryException;
+
+/**
+ * Computes a tracked-repo preview read-only (SPEC §16, M3.6, decisions 2A/4A/9A/
+ * 10A): run the shared {@see RepoDiscoveryService} (resolve ref → list tree →
+ * pattern ∩ importable allowlist → cap/truncation checks) and then flag overlaps
+ * against the workspace's other tracked repos. No persistence, no import — the
+ * scan (#93) runs the same discovery, then diffs and imports.
+ *
+ * Every unusable outcome is an explicit {@see DiscoveryException} (loud failure,
+ * never a silent partial), so a bad glob or a huge repo costs one glance.
+ */
+class TrackedRepoPreviewService
+{
+    public function __construct(
+        private readonly RepoDiscoveryService $discovery,
+    ) {}
+
+    /**
+     * @param  Integration|null  $integration  The workspace PAT, or null for a public read (#23).
+     */
+    public function preview(
+        Workspace $workspace,
+        ?Integration $integration,
+        string $repoUrl,
+        ?string $ref,
+        string $pathPattern,
+    ): TrackedRepoPreview {
+        $repo = RepoRef::fromUrl($repoUrl)
+            ?? throw DiscoveryException::unsupportedRepo();
+
+        $cap = $this->discovery->fileCap();
+
+        $discovery = $this->discovery->discover($repo, $ref, $integration?->token(), $pathPattern, $cap);
+
+        return $this->withOverlaps($workspace, $discovery->paths, $discovery->branch, $cap);
+    }
+
+    /**
+     * Flag each matched path that a document in the workspace already holds under
+     * some tracked repo — or once did, now orphaned (10A). Matching on `tracked_path`
+     * alone (not `tracked_repo_id`) catches both a currently-tracked path and a path
+     * whose repo was deleted (the deleter keeps `tracked_path` precisely so this
+     * warning survives), so re-tracking can't silently mint duplicates. `DISTINCT`
+     * so the count is of overlapping PATHS, not documents — two repos holding the
+     * same path is one flagged file, not two. One query regardless of match count.
+     *
+     * @param  list<string>  $matched
+     */
+    private function withOverlaps(Workspace $workspace, array $matched, string $branch, int $cap): TrackedRepoPreview
+    {
+        $overlapping = $matched === []
+            ? []
+            : $workspace->documents()
+                ->whereNotNull('tracked_path')
+                ->whereIn('tracked_path', $matched)
+                ->distinct()
+                ->pluck('tracked_path')
+                ->all();
+
+        $overlapSet = array_flip($overlapping);
+
+        $files = array_map(
+            fn (string $path): array => ['path' => $path, 'overlap' => isset($overlapSet[$path])],
+            $matched,
+        );
+
+        return new TrackedRepoPreview(
+            files: array_values($files),
+            ref: $branch,
+            overlapCount: count($overlapping),
+            cap: $cap,
+        );
+    }
+}
