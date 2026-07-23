@@ -26,6 +26,17 @@ class DocumentPolicy
     }
 
     /**
+     * List the workspace's documents (SPEC 11, the home list). Personal-workspace
+     * holders only — a magic-link reviewer has none and is refused 403, never a
+     * 500. Mirrors `create`; the controller separately scopes the query to that
+     * workspace, so authorization and the scope are both explicit.
+     */
+    public function viewAny(User $user): bool
+    {
+        return $this->hasPersonalWorkspace($user);
+    }
+
+    /**
      * Import a new document. Any authenticated user may — it lands in their own
      * personal workspace (M1 tenancy is invisible).
      */

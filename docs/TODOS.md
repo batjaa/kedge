@@ -189,4 +189,18 @@
 
 ## Open TODOs (from M3.5 eng review, 2026-07-21)
 
-- **Out-of-band import liveness** (M3.6 speccing): the home list live-updates only rows it already renders (per-row polling — eng-review decision 2A rejected list re-fetch for scroll churn and page×tick fan-out). Docs created outside the page (future MCP agent imports, and especially M3.6 repo-source scans minting N docs while the user watches) appear only on next visit. M3.6's scan UX must own an appearance mechanism — the sketched shape is polling the repo-source scan status (`GET /repo-sources/{id}` per-file outcome) rather than resurrecting list re-fetch. (S)
+- **Out-of-band import liveness** (M3.6 speccing): the home list live-updates only rows it already renders (per-row polling — eng-review decision 2A rejected list re-fetch for scroll churn and page×tick fan-out). Docs created outside the page (future MCP agent imports, and especially M3.6 tracked-repo scans minting N docs while the user watches) appear only on next visit. M3.6's scan UX must own an appearance mechanism — the sketched shape is polling the tracked-repo scan status (`GET /tracked-repos/{id}` per-file outcome) rather than resurrecting list re-fetch. (S)
+
+## Known debt (M3.5 branch review, 2026-07-21)
+
+- **Structured sync-error code** — dead-PAT detection is `/reconnect/i` over `sync_error` prose (single origin: TokenRevokedException's copy); the shared retry affordance now drives two surfaces off that regex, so a reword silently flips both. Emit a machine-readable `sync_error_code` in the document resources and key `importNeedsReconnect` off it, regex as fallback. (S)
+- **Poll-loop consolidation** — RowPoller / DocumentPoller / SharedDocumentPoller each own the setTimeout/settle/cleanup skeleton and the 1.5s cadence is written in three places. Extract one `usePollUntilSettled` hook + a single interval constant. (S)
+- **Lean settle read** — a list row's settle tick downloads content + plain_text + approvals it immediately discards (only 6 scalars survive into the row). Fine while concurrent imports are few; give the row poller a lean read when M3.6 bulk scans raise the fan-out. (S)
+- **Pre-existing `/me` 500 for workspace-less sessions** — CurrentUserResource null-derefs `personalWorkspace()`; today it self-shields (500 → session null → anonymous branch) but it's an ErrorException in the logs and blocks any future workspace-less surface. Outside the M3.5 diff. (S)
+- **Duplicate-import affordance** — `store()` has no source_url dedupe and the stay-home form re-enables immediately; a deliberate re-paste mints a twin document. Product decision (dedupe-and-warn vs allow) deferred to M3.6 tracked repos, whose re-scan needs dedupe machinery anyway. (S)
+- **Minor shape sweep** — paginator meta typed per resource (thread-types vs document-types); BFF relay envelope duplicated per route; EmptyState hand-rolls the panel StatePanel owns; per_page clamp inlined in DocumentController vs shared with CommentThreadService; settle-announcement round-trips through WorkspaceHome; ImportForm's onImported optional with an unreachable fallback branch. Sweep opportunistically alongside neighboring work. (S)
+
+## Decision log (M3.6 naming + seams, 2026-07-21)
+
+- ✅ **Term pinned: Tracked Repo** (user decision, resolving the /domain-modeling flag from the wedge log): the repo-level record is a *tracked repo*; per-document Source stays file-granular; "tracked" means remembered-and-re-scannable, pull-based until M6's webhook. CONTEXT.md entry added; SPEC §5.1/§16/§17/§21 renamed from the `repo source` working name.
+- ✅ **M3.6 testing seams agreed**: API PHPUnit (scan matrix with faked GitHub responses), web vitest (scan-report projection + page states), journey pack with ONE new test-only knob — env-configurable GitHub API host so serve-fixtures emulates minimal tree/contents endpoints (FETCH_ALLOW_HOSTS precedent). Spec: docs/specs/m3.6-projects-tracked-repos.md.

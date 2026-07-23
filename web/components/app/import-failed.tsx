@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { retryImport } from '@/lib/documents-client';
+import { useImportRetry } from '@/lib/import-retry';
 
 // The failed-import state (SPEC 19): shows why it failed and offers a retry CTA.
 // Retry re-queues the import on the API, then refreshes so the page re-enters the
 // importing/poll state. A token-revoked failure (#23) additionally surfaces a
 // reconnect link to Settings — retrying a dead PAT can't help until it is renewed.
+// The recovery behaviour (pending guard, dead-PAT branch, retry copy) lives in
+// useImportRetry, shared with the documents-list row (SPEC §11 M3.5, decision 7A).
 export function ImportFailed({
   id,
   error,
@@ -16,28 +17,14 @@ export function ImportFailed({
   id: number;
   error: string | null;
 }) {
-  // The API's token-revoked sync_error carries "reconnect" (SPEC §19). Match on it
-  // to offer the fix — reconnecting the integration — not just a futile retry.
-  const needsReconnect = Boolean(error && /reconnect/i.test(error));
+  // The doc page's success behaviour: refresh the route so it re-enters the
+  // importing/poll state (the row consumer flips its own row instead).
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [retryError, setRetryError] = useState<string | null>(null);
-
-  async function onRetry() {
-    if (pending) return;
-    setPending(true);
-    setRetryError(null);
-
-    const outcome = await retryImport(id);
-    if (outcome.ok) {
-      router.refresh();
-      setPending(false);
-      return;
-    }
-
-    setRetryError(outcome.message);
-    setPending(false);
-  }
+  const { needsReconnect, pending, retryError, onRetry } = useImportRetry({
+    id,
+    error,
+    onRetried: () => router.refresh(),
+  });
 
   return (
     <div className="mt-8 rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">

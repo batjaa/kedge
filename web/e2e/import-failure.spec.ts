@@ -7,9 +7,11 @@ import { register, uniqueIdentity } from './helpers';
 //
 //   1. SSRF-blocked URL — a private/reserved address the guard refuses. This is
 //      DETERMINISTIC, so the import job swallows it (no retry, no rethrow) and
-//      marks the document failed inline: the API answers 202, the browser lands
-//      on the document page, and it shows the friendly "URL not allowed" message
-//      with a working Retry CTA.
+//      marks the document failed inline: the API answers 202, and submit stays
+//      home (5A) — the failed import surfaces as a row on the "Your documents"
+//      list that settles to failed in place (2A). The shared retry affordance
+//      then reaches it from BOTH surfaces, each covered below: the doc page
+//      (click through → Retry), and the home row itself (inline Retry, #87).
 //
 //   2. Transient upstream error — a source that 500s. This bubbles out of the
 //      import as a non-deterministic failure. It surfaces as a friendly inline
@@ -40,8 +42,17 @@ test('SSRF-blocked URL fails fast with a friendly message and a working retry CT
   await page.getByLabel('Document URL', { exact: true }).fill(PRIVATE_ADDRESS_URL);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
 
-  // A deterministic block is marked failed inline, so the browser still lands on
-  // the document page — showing the failed state, not the importing spinner.
+  // Submit stays home (5A): the blocked import prepends a row that settles to
+  // failed in place (2A) — the failure surfaces on the home list, not by an
+  // automatic navigation.
+  const rows = page.getByRole('region', { name: 'Your documents' }).getByRole('link');
+  await expect(rows).toHaveCount(1, { timeout: 30_000 });
+  await expect(rows.first().getByText('Import failed')).toBeVisible({ timeout: 30_000 });
+
+  // The row is a real link (10A): click through to the review surface, where the
+  // shared retry affordance lives (inline row retry is #87). The failed document
+  // page shows the friendly failed state, not the importing spinner.
+  await rows.first().click();
   await expect(page).toHaveURL(/\/documents\/\d+$/, { timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Import failed' })).toBeVisible();
 
@@ -69,6 +80,60 @@ test('SSRF-blocked URL fails fast with a friendly message and a working retry CT
   await expect(
     page.getByText('URL not allowed (private address).'),
   ).toBeVisible();
+});
+
+test('a failed home row recovers INLINE — retry flips it to importing and settles in place, never leaving home (#87)', async ({
+  page,
+}) => {
+  await register(page, uniqueIdentity('fail-inline'));
+
+  await page.goto('/');
+  await page.getByLabel('Document URL', { exact: true }).fill(PRIVATE_ADDRESS_URL);
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+
+  const documents = page.getByRole('region', { name: 'Your documents' });
+  const rows = documents.getByRole('link');
+  // The blocked import prepends one row that settles to failed in place (5A + 2A).
+  await expect(rows).toHaveCount(1, { timeout: 30_000 });
+
+  // Recovery is offered ON THE ROW, not by clicking through: the shared affordance
+  // renders inline as a real, enabled Retry button (transient branch — a blocked
+  // URL is not a dead PAT, so no reconnect link). We never left home.
+  const retry = documents.getByRole('button', { name: 'Retry import', exact: true });
+  await expect(retry).toBeVisible({ timeout: 30_000 });
+  await expect(retry).toBeEnabled();
+  await expect(documents.getByRole('link', { name: 'Reconnect GitHub' })).toHaveCount(0);
+  await expect(page).toHaveURL('/');
+
+  // Park the per-row poll — only /api/bff/documents/<id>, never the list route —
+  // so the retried row is observably "Importing" before it settles: the
+  // synchronous queue re-fails the blocked URL immediately, so without parking the
+  // first 1.5s poll could settle it back to failed before this assertion runs, a
+  // deterministic race under retries:0. Unrouting lets the real (failed) settle go.
+  const perRowPoll = /\/api\/bff\/documents\/\d+(?:\?.*)?$/;
+  await page.route(perRowPoll, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'importing' }),
+    }),
+  );
+
+  // Inline retry re-runs the import IN PLACE: the row flips back to importing
+  // (proof onRetry wires into the row's status so the RowPoller resumes)…
+  await retry.click();
+  await expect(documents.getByText('Importing')).toBeVisible({ timeout: 30_000 });
+  await page.unroute(perRowPoll);
+
+  // …and settles again in place — still one row, still on home, no navigation.
+  // A blocked URL is deterministic, so it re-settles to failed and offers Retry
+  // again (proof the inline mechanism is real end-to-end, without pretending a
+  // permanent block can heal — the "retry → ready" heal is covered by the API
+  // feature tests under the async queue and by the markRetrying/affordance unit
+  // tests; see the sync-queue note above).
+  await expect(retry).toBeVisible({ timeout: 30_000 });
+  await expect(rows).toHaveCount(1);
+  await expect(page).toHaveURL('/');
 });
 
 test('a transient upstream 500 surfaces a friendly inline error, no crash', async ({

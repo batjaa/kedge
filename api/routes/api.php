@@ -94,6 +94,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
 
+        // The workspace document list — the authenticated home (SPEC 11). A free
+        // read like show/poll; only the write endpoints below carry the import
+        // limiter.
+        Route::get('/documents', [DocumentController::class, 'index'])
+            ->name('api.v1.documents.index');
+
         // Import & render (SPEC 5.3). Reads poll freely; the write endpoints
         // (import, retry) share a per-user limiter so a runaway paste loop or a
         // retry hammer can't flood the fetch queue (SPEC 13).

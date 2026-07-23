@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
 import { DemoHome } from '@/components/app/demo-home';
-import { ImportForm } from '@/components/app/import-form';
+import { WorkspaceHome } from '@/components/app/workspace-home';
+import { getDocuments } from '@/lib/documents';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
@@ -42,14 +43,26 @@ function firstNameOf(name: string): string {
 }
 
 // The authenticated landing surface — the review queue's home, with the
-// paste-a-URL import entry point (#17). Panel-based, DESIGN.md tokens.
-function ReviewQueue({
+// paste-a-URL import entry point (#17) and, under it, the workspace document
+// list (SPEC 11). Page 1 is read server-side and seeds the live client island
+// (WorkspaceHome), which owns submit-stays-home + per-row polling (#85); a
+// failed read degrades the list area alone (the import box always renders).
+// Panel-based, DESIGN.md tokens.
+async function ReviewQueue({
   firstName,
   workspace,
 }: {
   firstName: string;
   workspace: Workspace;
 }) {
+  const documents = await getDocuments();
+
+  // A refused list read is an auth problem, not an outage: the session lapsed
+  // between the /me guard and this fetch, or a workspace-less reviewer reached
+  // here. Route to sign-in rather than dressing it up as "API unreachable". A
+  // 5xx/network read (page === null with a 502) still degrades the list area.
+  if (documents.status === 401 || documents.status === 403) redirect('/signin');
+
   return (
     <PageContainer>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -64,15 +77,7 @@ function ReviewQueue({
         Welcome, {firstName}. This is {workspace.name} — your personal workspace.
       </p>
 
-      <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-          Import a document
-        </h2>
-        <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paste a link to a spec or RFC and get a rendered page you can review.
-        </p>
-        <ImportForm />
-      </div>
+      <WorkspaceHome initialPage={documents.page} />
     </PageContainer>
   );
 }

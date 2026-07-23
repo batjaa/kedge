@@ -31,6 +31,15 @@ Where a document's content comes from: a repo file, a raw URL, pasted content,
 a Confluence page. Every document has exactly one.
 _Avoid_: origin, upstream, integration
 
+**Tracked Repo**:
+A workspace-owned record — repo URL + ref + path pattern — that Kedge scans on
+demand to discover and import matching files into a project (pinned 2026-07-21).
+Tracked means remembered and re-scannable, not watched: pull-based (manual
+Re-scan) until the M6 App webhook drives the same record. Documents it imports
+keep their own file-level Source; the tracked repo is provenance and refresh
+machinery, never the container.
+_Avoid_: repo source (a Source is file-granular), watcher, sync agent
+
 **Connector**:
 The code that knows how to fetch from one kind of source and (later) post back
 to it.

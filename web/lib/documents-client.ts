@@ -5,7 +5,7 @@
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
-import type { Document, LifecycleStatus } from './document-types';
+import type { Document, DocumentListPage, LifecycleStatus } from './document-types';
 import type { ValidationErrorBody } from './auth-types';
 
 export type ImportOutcome =
@@ -101,15 +101,42 @@ export function retryImport(id: number): Promise<ImportOutcome> {
 
 /** GET /api/v1/documents/{id} via the same-origin BFF poll route. */
 export async function readDocument(id: number): Promise<Document | null> {
-  const res = await fetch(`/api/bff/documents/${encodeURIComponent(String(id))}`, {
-    credentials: 'same-origin',
-    headers: { accept: 'application/json' },
-    cache: 'no-store',
-  });
+  try {
+    const res = await fetch(`/api/bff/documents/${encodeURIComponent(String(id))}`, {
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
 
-  if (!res.ok) return null;
+    if (!res.ok) return null;
 
-  return (await res.json()) as Document;
+    return (await res.json()) as Document;
+  } catch {
+    // A network blip rejects the fetch; treat it as a transient hiccup (→ null)
+    // like DocumentPoller does, so RowPoller keeps its last state and retries next
+    // tick rather than the rejection killing the poll chain (row stuck Importing).
+    return null;
+  }
+}
+
+/** GET page N of the workspace document list via the same-origin BFF route (#86). */
+export async function readDocumentPage(page: number): Promise<DocumentListPage | null> {
+  try {
+    const res = await fetch(`/api/bff/documents?page=${encodeURIComponent(String(page))}`, {
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+
+    return (await res.json()) as DocumentListPage;
+  } catch {
+    // Same transient-hiccup semantics: a rejected fetch here would leak an
+    // unhandled rejection out of handleLoadMore, so degrade to null and let Load
+    // more reappear for another try.
+    return null;
+  }
 }
 
 /** POST /api/v1/documents/{id}/resync — pull the source again. */
