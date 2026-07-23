@@ -333,6 +333,7 @@ The `reanchor.completed` event logs `{anchored, relocated, orphaned}` counts —
 
 - Every table carries `workspace_id`; v1 UX never shows workspaces (auto-created personal workspace per user). `workspace_members` + roles (`owner`/`member`) and `audit_logs` exist from day one, no UI.
 - Growth path (out of v1): team workspaces UI → WorkOS SSO/SAML + SCIM → IP allowlists, retention.
+- Intended shape when teams arrive (noted 2026-07-23; design preview `docs/designs/app-teams.html`, no v1 scope change): **account** (billing/SSO grouping; `workspaces.account_id` added only when billing exists; personal workspaces have none; a self-hosted instance *is* the account) → **workspace** (tenancy root, unchanged) → **teams** (`teams` + `team_members`) as people-groups for mentions, queue routing, and required-approval rules — never content containers (projects own content). Magic-link reviewers stay outside membership: a guest sees only the doc shared with them.
 
 ### 10.2 Access model
 
