@@ -8,6 +8,11 @@ const webRoot = dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
+  // Overridable build/dev output dir. Defaults to `.next`; the landing journey's
+  // self-hosted web instance (#109) sets NEXT_DIST_DIR so a second `next dev`
+  // from this same app directory compiles into its own dir instead of racing the
+  // primary server over `.next`. No effect on normal dev/build/CI.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   turbopack: {
     // Root inference can escape the monorepo; pin it to this app.
     root: webRoot,

@@ -25,6 +25,12 @@ import { FIXTURE_PORT } from './e2e/fixture-doc';
 
 const API_PORT = 8000;
 const WEB_PORT = 3000;
+// A second web instance for the landing journey's self-hosted branch (#109). It
+// points at the fixtures server's self_hosted:true /config stub instead of the
+// real (SaaS) API, so its anonymous root redirects to sign-in — the only way to
+// exercise a server-decided edition branch is a web process with that edition's
+// config source. Kept separate so the SaaS journeys keep the real API untouched.
+const WEB_SELFHOSTED_PORT = 3100;
 const isCI = !!process.env.CI;
 
 export default defineConfig({
@@ -109,6 +115,31 @@ export default defineConfig({
         // Server-side BFF hop stays on IPv4; browser hop stays on localhost.
         API_URL: `http://127.0.0.1:${API_PORT}`,
         NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}`,
+      },
+    },
+    {
+      name: 'web-selfhosted',
+      // The self-hosted edition under test (#109): a second `next dev` whose
+      // server-side capability read points at the fixtures server's
+      // self_hosted:true /config stub, not the real SaaS API. That is the only
+      // faithful way to exercise app/page.tsx's edition branch end-to-end — the
+      // edition is decided server-side from API_URL, fixed per web process. Its
+      // anonymous root therefore redirects to sign-in; the landing journey drives
+      // it to prove the marketing surface never leaks to a self-hosted instance.
+      // Readiness is /docs (static fumadocs, no API needed). NEXT_PUBLIC_API_URL
+      // rides along for parity though this branch never makes a client API call.
+      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`,
+      url: `http://127.0.0.1:${WEB_SELFHOSTED_PORT}/docs`,
+      reuseExistingServer: !isCI,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        API_URL: `http://127.0.0.1:${FIXTURE_PORT}`,
+        NEXT_PUBLIC_API_URL: `http://localhost:${FIXTURE_PORT}`,
+        // Own compile dir so this second dev server never races the primary
+        // web instance over `.next` (next.config.mjs reads NEXT_DIST_DIR).
+        NEXT_DIST_DIR: '.next-selfhosted',
       },
     },
   ],

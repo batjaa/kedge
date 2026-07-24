@@ -43,10 +43,13 @@ test('paste a URL → rendered doc with live diagram → share opens read-only �
   const email = `m1-${stamp}@kedge.test`;
   const password = 'correct-horse-battery-staple';
 
-  // 1. The anonymous SaaS home is the paste box (zero signup — the PLG wedge).
+  // 1. The anonymous SaaS home is the Open Harbor landing (#109); its hero hosts
+  //    the same zero-signup paste box (the PLG wedge). Selector churn only — the
+  //    hero heading changed, the "Document URL" field and "Render it" submit did
+  //    not.
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'See any spec, beautifully rendered.' }),
+    page.getByRole('heading', { name: /Paste a link\./, level: 1 }),
   ).toBeVisible();
 
   await page.getByLabel('Document URL', { exact: true }).fill(FIXTURE_DOC_URL);

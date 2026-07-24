@@ -41,6 +41,20 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Self-hosted edition stub for the landing journey (#109). The self-hosted web
+  // instance (playwright.config.ts's `web-selfhosted`) points its API_URL here so
+  // its server-side capability read (lib/capabilities → GET /api/v1/config) sees
+  // a genuine `self_hosted: true` edition — the real edition-read path, not the
+  // fail-closed fallback. That drives app/page.tsx's anonymous root to the
+  // sign-in branch, proving the landing never shows on a self-hosted instance.
+  // The real API's own /api/v1/config (the SaaS edition) is untouched; only this
+  // separate web instance consults this stub.
+  if (pathname === '/api/v1/config') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ auth: { github: false }, self_hosted: true }));
+    return;
+  }
+
   // Deterministic upstream server error (#39). A source at this path always
   // 500s, so the import-failure journey can exercise the non-2xx transient path
   // (RawUrlConnector → ImportFailedException) without a live flaky host. Also

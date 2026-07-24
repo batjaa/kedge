@@ -74,13 +74,19 @@ test('register → land on the shell → reload persists → sign out', async ({
   ).toBeVisible();
 
   // 5. Prove the session was really invalidated, not just navigated away from.
-  //    The SaaS anonymous home is now the public instant-demo paste box (#25),
-  //    so `/` shows the stranger surface — not the signed-in review queue.
+  //    The SaaS anonymous home is now the Open Harbor marketing landing (#109),
+  //    whose hero hosts the instant-demo paste box — so `/` shows the stranger
+  //    surface, not the signed-in review queue. `Review queue` is matched exactly:
+  //    the landing's roadmap has an "Inbox & review queue" card that a substring
+  //    match would otherwise collide with (selector churn only — the behaviour
+  //    asserted, that the authenticated queue heading is absent, is unchanged).
   await page.goto('/');
   await expect(
     page.getByRole('button', { name: 'Render it', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review queue' })).toBeHidden();
+  await expect(
+    page.getByRole('heading', { name: 'Review queue', exact: true }),
+  ).toBeHidden();
 
   //    And a guarded route still bounces an anonymous visitor back to sign-in —
   //    the actual proof the session is dead.
