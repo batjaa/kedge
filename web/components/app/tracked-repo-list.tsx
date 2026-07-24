@@ -341,7 +341,7 @@ function ScanPoller({ id, onScanned }: { id: number; onScanned: (repo: TrackedRe
   usePollUntilSettled<TrackedRepo>({
     poll: async () => scanSettled(await readTrackedRepo(id)),
     onSettled: onScanned,
-    deps: [id, onScanned],
+    key: id,
   });
 
   return null;

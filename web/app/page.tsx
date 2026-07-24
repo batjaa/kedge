@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
+import { MetaChip } from '@/components/app/meta-chip';
 import { DemoHome } from '@/components/app/demo-home';
 import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
+import { getWorkspaceSummary } from '@/lib/workspace';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
@@ -47,8 +49,9 @@ function firstNameOf(name: string): string {
 // paste-a-URL import entry point (#17) and, under it, the workspace document
 // list (SPEC 11). Page 1 is read server-side and seeds the live client island
 // (WorkspaceHome), which owns submit-stays-home + per-row polling (#85); a
-// failed read degrades the list area alone (the import box always renders).
-// Panel-based, DESIGN.md tokens.
+// failed read degrades the list area alone (the import box always renders). The
+// stats strip (SPEC §16, M3.7) is seeded the same way — its own read failing
+// degrades the strip to nothing (A1), never the list. Panel-based, DESIGN.md tokens.
 async function ReviewQueue({
   firstName,
   workspace,
@@ -56,7 +59,11 @@ async function ReviewQueue({
   firstName: string;
   workspace: Workspace;
 }) {
-  const [documents, projectsResult] = await Promise.all([getDocuments(), getProjects()]);
+  const [documents, projectsResult, summaryResult] = await Promise.all([
+    getDocuments(),
+    getProjects(),
+    getWorkspaceSummary(),
+  ]);
 
   // A refused list read is an auth problem, not an outage: the session lapsed
   // between the /me guard and this fetch, or a workspace-less reviewer reached
@@ -70,15 +77,18 @@ async function ReviewQueue({
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Review queue
         </h1>
-        <span className="rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-zinc-500 ring-1 ring-inset ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700">
-          {workspace.slug}
-        </span>
+        <MetaChip>{workspace.slug}</MetaChip>
       </div>
       <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-400">
         Welcome, {firstName}. This is {workspace.name} — your personal workspace.
       </p>
 
-      <WorkspaceHome initialPage={documents.page} initialProjects={projectsResult.projects} />
+      <WorkspaceHome
+        initialPage={documents.page}
+        initialProjects={projectsResult.projects}
+        initialProjectsDegraded={projectsResult.status !== 200}
+        initialSummary={summaryResult.summary}
+      />
     </PageContainer>
   );
 }

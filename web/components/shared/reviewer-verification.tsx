@@ -69,7 +69,7 @@ export function ReviewerVerification({
   }
 
   return (
-    <aside className="mt-10 rounded-lg bg-white p-5 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
+    <aside className="mt-10 rounded-2xl bg-white p-5 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
           <Mail className="h-4 w-4" aria-hidden="true" />
@@ -86,12 +86,12 @@ export function ReviewerVerification({
               autoComplete="email"
               placeholder="you@example.com"
               aria-label="Reviewer email"
-              className="min-w-0 flex-1 rounded-lg border-0 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500 dark:bg-zinc-950 dark:text-white dark:ring-zinc-700"
+              className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10"
             />
             <button
               type="submit"
               disabled={state === 'sending' || state === 'completing' || email.trim() === ''}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
             >
               <Send className="h-3.5 w-3.5" aria-hidden="true" />
               {state === 'completing' ? 'Verifying' : state === 'sending' ? 'Sending' : state === 'sent' ? 'Sent' : 'Send link'}

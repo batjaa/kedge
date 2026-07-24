@@ -15,7 +15,14 @@ import { shouldPoll } from '@/lib/document-list-live';
 import { groupDocumentsByProject, hasNamedGroups } from '@/lib/document-groups';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { useImportRetry } from '@/lib/import-retry';
-import type { Document, DocumentListItem, Project, ProjectRef } from '@/lib/document-types';
+import type {
+  Document,
+  DocumentLifecycleFilter,
+  DocumentListItem,
+  Project,
+  ProjectRef,
+  WorkspaceSummary,
+} from '@/lib/document-types';
 
 // The workspace document list on the authenticated home (SPEC 11) and, re-scoped
 // with `grouped={false}`, a project page (M3.6). The client island owns the row
@@ -41,7 +48,11 @@ export function DocumentList({
   projects = [],
   onAssigned = () => {},
   grouped = false,
+  filter,
+  onSelectFilter,
+  summary,
   heading = 'Your documents',
+  className = 'mt-10',
   emptyTitle = 'No documents yet',
   emptyBody = 'Import a spec or RFC with the box above and it lands here — every document in your workspace, newest first.',
 }: {
@@ -60,7 +71,16 @@ export function DocumentList({
   onAssigned?: (doc: Document) => void;
   /** Render project group headers (home). Off on a single-project page. */
   grouped?: boolean;
+  /** The active lifecycle chip (5A). Chips render only when onSelectFilter is set. */
+  filter?: DocumentLifecycleFilter;
+  /** Select a lifecycle chip — the dashboard only (#103); omit to hide chips. */
+  onSelectFilter?: (filter: DocumentLifecycleFilter) => void;
+  /** Chip counts (SPEC §16, M3.7); null keeps the chips but drops the counts (A1). */
+  summary?: WorkspaceSummary | null;
   heading?: string;
+  /** The root section's spacing — default `mt-10`; the dashboard grid (#104)
+   *  zeroes it so the list aligns with the projects rail beside it. */
+  className?: string;
   emptyTitle?: string;
   emptyBody?: string;
 }) {
@@ -76,8 +96,14 @@ export function DocumentList({
     : [{ project: null as ProjectRef | null, items }];
   const showHeaders = grouped && hasNamedGroups(groups);
 
+  // The lifecycle filter chips (SPEC §16, M3.7; #103) — dashboard only (a project
+  // page passes no onSelectFilter). Rendered once there's something to filter so a
+  // brand-new workspace's empty state stays clean; an active non-All chip keeps
+  // them visible even when its page is empty, so the way back is always there.
+  const showChips = !!onSelectFilter && !showDegraded && (items.length > 0 || filter !== 'all');
+
   return (
-    <section className="mt-10" aria-labelledby="documents-heading">
+    <section className={className} aria-labelledby="documents-heading">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2
           id="documents-heading"
@@ -86,6 +112,14 @@ export function DocumentList({
           {heading}
         </h2>
         {!showDegraded && items.length > 0 ? <MetaChip>{total}</MetaChip> : null}
+        {showChips && onSelectFilter ? (
+          <FilterChips
+            className="ml-auto"
+            active={filter ?? 'all'}
+            summary={summary ?? null}
+            onSelect={onSelectFilter}
+          />
+        ) : null}
       </div>
 
       {/* Settle announcements for screen readers (10A): a single polite region
@@ -151,6 +185,70 @@ export function DocumentList({
         </div>
       ) : null}
     </section>
+  );
+}
+
+// The dashboard lifecycle filter chips (SPEC §16, M3.7; #103; docs/designs/
+// app-dashboard.html). One chip per state the mockup surfaces — All, the three
+// editorial lifecycles, and the needs-attention composite — each carrying its
+// count from the workspace summary (7A: chip count == the total that state
+// narrows the list to). The active chip is the solid pill; the rest are hairline
+// outlines (the mockup's recipe). A null summary (A1) keeps the chips and their
+// filtering but drops the counts. Kept inside the list region so the rail+table
+// wrap (#104) stays clean. Selecting a chip refetches server-side (the hook),
+// never a client cull — so it is correct across pagination.
+const LIFECYCLE_CHIPS: ReadonlyArray<{
+  value: DocumentLifecycleFilter;
+  label: string;
+  count: (summary: WorkspaceSummary) => number;
+}> = [
+  { value: 'all', label: 'All', count: (s) => s.documents.total },
+  { value: 'in_review', label: 'In review', count: (s) => s.documents.lifecycle.in_review },
+  { value: 'approved', label: 'Approved', count: (s) => s.documents.lifecycle.approved },
+  { value: 'draft', label: 'Draft', count: (s) => s.documents.lifecycle.draft },
+  { value: 'needs_attention', label: 'Needs attention', count: (s) => s.documents.needs_attention },
+];
+
+function FilterChips({
+  active,
+  summary,
+  onSelect,
+  className,
+}: {
+  active: DocumentLifecycleFilter;
+  summary: WorkspaceSummary | null;
+  onSelect: (filter: DocumentLifecycleFilter) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Filter documents by lifecycle"
+      className={cn('flex flex-wrap items-center gap-1.5 text-xs', className)}
+    >
+      {LIFECYCLE_CHIPS.map((chip) => {
+        const isActive = chip.value === active;
+        return (
+          <button
+            key={chip.value}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onSelect(chip.value)}
+            className={cn(
+              'rounded-full px-2.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+              isActive
+                ? 'bg-zinc-900 font-medium text-white dark:bg-white/10 dark:text-zinc-200'
+                : 'text-zinc-500 ring-1 ring-inset ring-zinc-900/10 hover:bg-white dark:text-zinc-400 dark:ring-white/10 dark:hover:bg-white/5',
+            )}
+          >
+            {chip.label}
+            {summary ? (
+              <span className="ml-1 font-mono tabular-nums">· {chip.count(summary)}</span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -426,7 +524,7 @@ function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) =
       return doc && doc.status !== 'importing' ? doc : null;
     },
     onSettled,
-    deps: [id, onSettled],
+    key: id,
   });
 
   return null;

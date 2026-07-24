@@ -11,8 +11,8 @@ import { startDemo } from '@/lib/demo-client';
 // a stranger sees. Paste a public URL, hit "Render it", and land on the rendered
 // doc in seconds with zero signup. On success we navigate to the freshly-minted
 // share link the API hands back (the visitor's capability to watch it render and
-// come back to it). DESIGN.md tokens, dark-first, no webfonts. Roles/labels are
-// explicit so the M1 Playwright journey (#26) drives it cleanly.
+// come back to it). DESIGN.md tokens (Open Harbor light-first), no webfonts.
+// Roles/labels are explicit so the M1 Playwright journey (#26) drives it cleanly.
 export function DemoHome() {
   const router = useRouter();
   const [url, setUrl] = useState('');
@@ -51,7 +51,7 @@ export function DemoHome() {
     : 'ring-zinc-900/10 focus-visible:ring-emerald-500 dark:ring-white/10';
 
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-zinc-900">
       <header className="flex h-14 items-center justify-between px-6">
         <BrandMark />
         <div className="flex items-center gap-3">

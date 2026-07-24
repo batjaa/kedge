@@ -1,7 +1,64 @@
-import type { Document, DocumentListItem, DocumentListMeta } from './document-types';
+import type {
+  Document,
+  DocumentLifecycleFilter,
+  DocumentListItem,
+  DocumentListMeta,
+  DocumentListPage,
+} from './document-types';
 
 // The poll cadence moved to its single home in lib/use-poll-until-settled.ts (12A),
 // which now owns the timer/settle/cleanup skeleton every poller shares.
+
+/**
+ * The list endpoint's `lifecycle` query value for the active chip, or undefined
+ * for All so the request omits the parameter entirely (the server reads absent as
+ * All). Threaded into BOTH a filter selection and Load more so the server narrows
+ * the whole set across pagination, never just the loaded page (7A).
+ */
+export function lifecycleParam(filter: DocumentLifecycleFilter): string | undefined {
+  return filter === 'all' ? undefined : filter;
+}
+
+/**
+ * The live document list's client slice: the loaded rows, the paginator, and the
+ * active lifecycle chip. Held as one object so the 5A transitions below are pure
+ * and atomic — the hook owns exactly this.
+ */
+export interface LiveListState {
+  items: DocumentListItem[];
+  meta: DocumentListMeta | null;
+  filter: DocumentLifecycleFilter;
+}
+
+/**
+ * Fold a fresh import into the live list (5A): prepend the 202'd document as an
+ * importing row (deduped, newest first), bump the paginator total, and flip the
+ * chip back to All — so a submitted import is never hidden by an active lifecycle
+ * filter and its row stays watchable while it settles. The whole point of 5A:
+ * filtering never hides work in flight.
+ */
+export function applyImport(state: LiveListState, doc: Document): LiveListState {
+  return {
+    items: prependItem(state.items, toListItem(doc)),
+    meta: state.meta ? { ...state.meta, total: state.meta.total + 1 } : state.meta,
+    filter: 'all',
+  };
+}
+
+/**
+ * Fold a filter selection's server page into the live list (5A): replace the rows
+ * and paginator wholesale under the chosen chip. Filtering is a *refetch*, never a
+ * client cull — so a row that settled out of the new filter drops HERE, on the
+ * refetch, and not the instant it settled. That is precisely what lets a settled
+ * row keep its place (with its new chip) until the next filter change.
+ */
+export function applyFilterPage(
+  state: LiveListState,
+  page: DocumentListPage,
+  filter: DocumentLifecycleFilter,
+): LiveListState {
+  return { ...state, items: page.data, meta: page.meta, filter };
+}
 
 /** Turn the import response into the lean row the home list owns (5A). */
 export function toListItem(doc: Document): DocumentListItem {

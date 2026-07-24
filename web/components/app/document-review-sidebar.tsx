@@ -138,7 +138,7 @@ function ThreadStatusLabel({ thread }: { thread: ReviewThread }) {
 
 function LifecycleChip({ status }: { status: LifecycleStatus }) {
   return (
-    <span className="rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-amber-600 ring-1 ring-inset ring-amber-500/30 dark:text-amber-400">
+    <span className="rounded-lg bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/30">
       {status.replace('_', ' ')}
     </span>
   );

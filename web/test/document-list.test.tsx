@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DocumentList } from '@/components/app/document-list';
-import type { DocumentListItem, Project } from '@/lib/document-types';
+import type { DocumentListItem, Project, WorkspaceSummary } from '@/lib/document-types';
 
 // Static-markup coverage for the home document list (SPEC 11): the row anatomy,
 // the empty state, the degraded "API unreachable" state, and the polite live
@@ -401,6 +401,119 @@ describe('DocumentList', () => {
     expect(html).not.toContain('href="/projects/10"');
   });
 
+  // ---- M3.7: the lifecycle filter chips (#103, decisions 5A/7A/A1) ----------
+
+  it('renders the lifecycle chips with counts from the summary and marks the active one', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1, lifecycle_status: 'in_review' })]}
+        total={8}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        filter="in_review"
+        onSelectFilter={noop}
+        summary={summary()}
+      />,
+    );
+
+    // Every chip, in the mockup's order, each carrying its summary count (7A).
+    expect(html).toContain('All');
+    expect(html).toContain('· 8'); // documents.total
+    expect(html).toContain('In review');
+    expect(html).toContain('· 2'); // lifecycle.in_review
+    expect(html).toContain('Approved');
+    expect(html).toContain('· 3'); // lifecycle.approved
+    expect(html).toContain('Draft');
+    expect(html).toContain('Needs attention');
+    expect(html).toContain('· 4'); // documents.needs_attention
+
+    // The active chip is pressed (aria-pressed="true"); it is a real button group.
+    expect(html).toContain('aria-label="Filter documents by lifecycle"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('focus-visible:ring-emerald-500');
+  });
+
+  it('keeps the chips (and filtering) but drops the counts when the summary is null (A1)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1 })]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        filter="all"
+        onSelectFilter={noop}
+        summary={null}
+      />,
+    );
+
+    // The chips still render and still filter…
+    expect(html).toContain('aria-label="Filter documents by lifecycle"');
+    expect(html).toContain('Needs attention');
+    // …but with no counts (no "· N" segments) since the summary is unavailable.
+    expect(html).not.toContain('·');
+  });
+
+  it('renders NO chips on a surface that does not pass onSelectFilter (a project page)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 1 })]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+    );
+
+    expect(html).not.toContain('aria-label="Filter documents by lifecycle"');
+  });
+
+  it('hides the chips on a brand-new empty workspace, so the empty state reads clean', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[]}
+        total={0}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        filter="all"
+        onSelectFilter={noop}
+        summary={emptySummary()}
+      />,
+    );
+
+    // No rows and the All chip active → nothing to filter → no chip row, and the
+    // empty state still teaches the entry point.
+    expect(html).not.toContain('aria-label="Filter documents by lifecycle"');
+    expect(html).toContain('No documents yet');
+  });
+
+  it('keeps the chips visible when a non-All filter narrows to zero rows (the way back)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[]}
+        total={0}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        filter="approved"
+        onSelectFilter={noop}
+        summary={summary()}
+      />,
+    );
+
+    // An active Approved chip that matched nothing must still show all chips so the
+    // user can switch back to All — the empty state is fine underneath.
+    expect(html).toContain('aria-label="Filter documents by lifecycle"');
+    expect(html).toContain('No documents yet');
+  });
+
   it('shows the project-page empty state pointing at import and assignment', () => {
     const html = renderToStaticMarkup(
       <DocumentList
@@ -427,6 +540,32 @@ function projects(): Project[] {
     { id: 10, name: 'Anchoring', slug: 'anchoring', description: null, created_at: null },
     { id: 20, name: 'Zebra', slug: 'zebra', description: null, created_at: null },
   ];
+}
+
+function summary(): WorkspaceSummary {
+  return {
+    documents: {
+      total: 8,
+      importing: 1,
+      needs_attention: 4,
+      lifecycle: { draft: 1, in_review: 2, approved: 3, superseded: 0 },
+    },
+    threads: { open: 12, orphaned: 1 },
+    approvals: { stale: 2 },
+  };
+}
+
+function emptySummary(): WorkspaceSummary {
+  return {
+    documents: {
+      total: 0,
+      importing: 0,
+      needs_attention: 0,
+      lifecycle: { draft: 0, in_review: 0, approved: 0, superseded: 0 },
+    },
+    threads: { open: 0, orphaned: 0 },
+    approvals: { stale: 0 },
+  };
 }
 
 function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentListItem {

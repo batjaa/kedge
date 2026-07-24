@@ -66,7 +66,7 @@ export function DiagramSourceError({
       })}
     >
       <p className="mb-2 inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">
-        <span className="rounded-lg bg-rose-400/10 px-1.5 py-0.5 ring-1 ring-inset ring-rose-400/30">
+        <span className="rounded-lg bg-rose-500/10 px-1.5 py-0.5 text-rose-700 ring-1 ring-inset ring-rose-500/30 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/30">
           {engine}
         </span>
         render failed — showing source

@@ -67,9 +67,10 @@ export function ProjectDocuments({
         added = merged.added; // idempotent assignment — StrictMode-safe
         return merged.items;
       });
-      // The items updater runs before the meta updater in the same render (items is
-      // declared first in useLiveDocumentList), so `added` is set by the time this
-      // reads it; bump the total by exactly the new rows, once.
+      // setItems is invoked before setMeta and both enqueue updaters on the hook's
+      // one live-list slice, which React applies in enqueue order — so the items
+      // updater has set `added` by the time this meta updater reads it; bump the
+      // total by exactly the new rows, once.
       setMeta((prev) => (prev && added > 0 ? { ...prev, total: prev.total + added } : prev));
     },
     [setItems, setMeta],

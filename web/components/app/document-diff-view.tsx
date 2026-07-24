@@ -351,7 +351,7 @@ function DiffThreadCard({
         <span className="font-medium text-zinc-900 dark:text-white">
           Thread #{entry.thread.id}
         </span>
-        <span className="ml-auto rounded-md px-1.5 py-0.5 font-mono text-[10px] uppercase text-zinc-500 ring-1 ring-inset ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700">
+        <span className="ml-auto rounded-lg bg-zinc-400/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-zinc-500 ring-1 ring-inset ring-zinc-400/30 dark:text-zinc-400">
           {entry.thread.status}
         </span>
       </div>

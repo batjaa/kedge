@@ -2,12 +2,16 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\AnchorState;
+use App\Enums\LifecycleStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\ThreadType;
+use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -225,7 +229,149 @@ class DocumentListTest extends TestCase
         $this->assertNotContains($demo->id, array_column($response->json('data'), 'id'));
     }
 
+    // ---- M3.7: the server-side lifecycle filter (#103, decision 7A) ----------
+
+    public function test_lifecycle_filter_narrows_the_list_to_the_requested_state(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        $draft = Document::factory()->for($workspace)->create(['lifecycle_status' => LifecycleStatus::Draft]);
+        $inReview = Document::factory()->for($workspace)->create(['lifecycle_status' => LifecycleStatus::InReview]);
+        Document::factory()->for($workspace)->create(['lifecycle_status' => LifecycleStatus::Approved]);
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?lifecycle=in_review')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $inReview->id)
+            // The paginator counts the FILTERED query, not the loaded page.
+            ->assertJsonPath('meta.total', 1);
+
+        // The draft and approved docs are not in the in-review page.
+        $this->assertNotContains($draft->id, array_column($response->json('data'), 'id'));
+    }
+
+    public function test_all_and_an_absent_lifecycle_are_the_same_identity_page(): void
+    {
+        $user = $this->registerUser();
+        Document::factory()->count(3)->for($user->personalWorkspace())->create([
+            'lifecycle_status' => LifecycleStatus::Draft,
+        ]);
+        Document::factory()->for($user->personalWorkspace())->create([
+            'lifecycle_status' => LifecycleStatus::Approved,
+        ]);
+
+        // `?lifecycle=all` is the identity — the same total as no filter at all.
+        $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?lifecycle=all')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 4);
+    }
+
+    public function test_needs_attention_filter_returns_the_failed_orphan_and_stale_composite(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        // A failed first import.
+        $failed = Document::factory()->for($workspace)->failed()->create();
+
+        // A ready doc carrying an orphaned thread on its current version.
+        $orphaned = $this->readyDoc($workspace);
+        $this->orphanThreadOn($orphaned, $user);
+
+        // A ready doc with an active approval pinned to a superseded version.
+        $stale = $this->readyDoc($workspace);
+        $oldVersion = DocumentVersion::factory()->for($stale)->create();
+        Approval::factory()->for($stale)->create(['document_version_id' => $oldVersion->id]);
+
+        // Healthy docs that must NOT surface under Needs attention.
+        $this->readyDoc($workspace);
+        $this->readyDoc($workspace);
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?lifecycle=needs_attention')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 3);
+
+        $ids = array_column($response->json('data'), 'id');
+        $this->assertEqualsCanonicalizing([$failed->id, $orphaned->id, $stale->id], $ids);
+    }
+
+    public function test_lifecycle_filter_is_correct_across_pagination_not_just_the_loaded_page(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        // 25 approved docs spanning two 20-row pages, plus decoys in other states
+        // that must never leak into the filtered set.
+        $approvedIds = Document::factory()->count(25)->for($workspace)
+            ->create(['lifecycle_status' => LifecycleStatus::Approved])
+            ->pluck('id')
+            ->all();
+        Document::factory()->count(7)->for($workspace)->create(['lifecycle_status' => LifecycleStatus::Draft]);
+
+        $pageOne = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?lifecycle=approved&per_page=20')
+            ->assertOk()
+            // The total is the whole filtered set (7A), not the 20 loaded rows.
+            ->assertJsonPath('meta.total', 25)
+            ->assertJsonCount(20, 'data');
+        $pageTwo = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?lifecycle=approved&per_page=20&page=2')
+            ->assertOk()
+            ->assertJsonCount(5, 'data');
+
+        $seen = array_merge(
+            array_column($pageOne->json('data'), 'id'),
+            array_column($pageTwo->json('data'), 'id'),
+        );
+
+        // Every approved id exactly once across the two pages, and nothing else.
+        $this->assertCount(25, $seen);
+        $this->assertEqualsCanonicalizing($approvedIds, $seen);
+    }
+
+    public function test_an_unknown_lifecycle_value_is_rejected_not_silently_ignored(): void
+    {
+        $user = $this->registerUser();
+        Document::factory()->for($user->personalWorkspace())->create();
+
+        $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?lifecycle=bogus')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('lifecycle');
+    }
+
     // ---- helpers ------------------------------------------------------------
+
+    private function readyDoc(Workspace $workspace): Document
+    {
+        $document = Document::factory()->for($workspace)->ready()->create();
+        $version = DocumentVersion::factory()->for($document)->create();
+        $document->update(['current_version_id' => $version->id]);
+
+        return $document->refresh();
+    }
+
+    private function orphanThreadOn(Document $document, User $user): void
+    {
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => ThreadType::Inline->value,
+            'status' => ThreadStatus::Open->value,
+            'created_by' => $user->id,
+        ]);
+        $thread->anchors()->create([
+            'document_version_id' => $document->current_version_id,
+            'exact' => 'anchored text',
+            'start' => 0,
+            'end' => 12,
+            'projection_version' => '1',
+            'state' => AnchorState::Orphaned->value,
+        ]);
+    }
 
     private function registerUser(string $email = 'author@example.com'): User
     {

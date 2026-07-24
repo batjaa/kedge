@@ -13,6 +13,10 @@ import { expect, test } from '@playwright/test';
 // changes — notably an extra "Continue with GitHub" button arriving on the
 // sign-in page (ticket #6). "Sign in" is matched exactly so it never collides
 // with a "... with GitHub" label.
+//
+// It also pins the Open Harbor theme contract (m3.7): the shell opens light by
+// default, an explicit dark choice takes effect immediately, and that per-device
+// choice rides the same reload that proves the session persists.
 
 test('register → land on the shell → reload persists → sign out', async ({
   page,
@@ -44,12 +48,23 @@ test('register → land on the shell → reload persists → sign out', async ({
     page.getByRole('button', { name: 'Sign out', exact: true }),
   ).toBeVisible();
 
+  // The shell opens in the Open Harbor light register by default (DESIGN.md
+  // light-first): with no stored choice, <html> carries no `dark` class.
+  const html = page.locator('html');
+  await expect(html).not.toHaveClass(/\bdark\b/);
+
+  // An explicit dark choice from the header toggle takes effect immediately.
+  await page.getByRole('button', { name: 'Toggle theme' }).click();
+  await expect(html).toHaveClass(/\bdark\b/);
+
   // 3. Reload: a full navigation must re-read the session server-side and keep
   //    us on the shell (the cookie persists, not just client state).
   await page.reload();
   await expect(page).toHaveURL('/');
   await expect(page.getByRole('heading', { name: 'Review queue' })).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
+  // The dark choice is per-device and rides the reload alongside the session.
+  await expect(html).toHaveClass(/\bdark\b/);
 
   // 4. Sign out → back to the signed-out state.
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();

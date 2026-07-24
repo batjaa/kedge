@@ -7,9 +7,11 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\V1\ProjectResource;
 use App\Models\Project;
+use App\Models\Thread;
 use App\Policies\ProjectPolicy;
 use App\Services\AuditLogger;
 use App\Services\Projects\ProjectSlugger;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -31,15 +33,24 @@ class ProjectController extends Controller
 
     /**
      * GET /api/v1/projects — the workspace's projects, name-ordered (the home's
-     * grouping and the assignment selectors read this set). `documents_count`
-     * rides a withCount so the UI can label each project without an N+1.
+     * grouping and the assignment selectors read this set). Every count rides a
+     * `withCount` subquery — one correlated aggregate per project, never an N+1:
+     * `documents_count` labels each project, and the dashboard rail (#104) reads
+     * `open_threads_count` / `orphaned_threads_count`, each constraining
+     * {@see Project::threads()} with the ONE shared Thread predicate
+     * ({@see Thread::scopeOpen()} / {@see Thread::scopeOrphaned()})
+     * so a rail count can never re-encode or drift from what the summary reports (7A).
      */
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Project::class);
 
         $projects = $request->user()->personalWorkspace()->projects()
-            ->withCount('documents')
+            ->withCount([
+                'documents',
+                'threads as open_threads_count' => fn (Builder $query) => $query->open(),
+                'threads as orphaned_threads_count' => fn (Builder $query) => $query->orphaned(),
+            ])
             ->orderBy('name')
             ->orderBy('id')
             ->get();
