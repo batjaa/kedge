@@ -7,7 +7,6 @@ use App\Enums\DocumentStatus;
 use App\Enums\LifecycleStatus;
 use App\Enums\SourceType;
 use App\Enums\SyncStatus;
-use App\Enums\ThreadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Resources\V1\DocumentListResource;
@@ -65,7 +64,9 @@ class DocumentController extends Controller
                 // Lean identity for the row's project chip (id + name only).
                 'project' => fn ($query) => $query->select('id', 'name'),
             ])
-            ->withCount(['threads as open_threads_count' => fn ($query) => $query->where('status', ThreadStatus::Open->value)]);
+            // The per-row open-thread count reads the one shared "open" predicate
+            // (Thread::scopeOpen), the same one the workspace summary counts (7A).
+            ->withCount(['threads as open_threads_count' => fn ($query) => $query->open()]);
 
         // Reserved `?project=` filter (SPEC §17, M3.6): a numeric id scopes to
         // that project, the literal `unfiled` to the no-project bucket. The query
