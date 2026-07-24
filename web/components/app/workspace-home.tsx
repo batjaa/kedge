@@ -72,9 +72,15 @@ export function WorkspaceHome({
     [setItems],
   );
 
-  // Piggyback the summary refresh onto the three list callbacks (6A): each also
-  // re-reads the strip so its counts stay true as imports settle. Memoized so a
-  // stable identity flows down to the rows.
+  // Piggyback the summary refresh onto the list callbacks (6A): each also
+  // re-reads the strip so its counts stay true as imports settle. Import is
+  // included beyond 6A's settle/retry/refile trio so a submitted import bumps
+  // documents + "importing" at once (the mockup's live stat) rather than lying
+  // until the row settles. Memoized so a stable identity flows down to the rows.
+  const onImported = useMemo(
+    () => alsoRefresh(handleImported, refreshSummary),
+    [handleImported, refreshSummary],
+  );
   const onSettled = useMemo(
     () => alsoRefresh(handleSettled, refreshSummary),
     [handleSettled, refreshSummary],
@@ -97,7 +103,7 @@ export function WorkspaceHome({
         <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           Paste a link to a spec or RFC and get a rendered page you can review.
         </p>
-        <ImportForm onImported={handleImported} />
+        <ImportForm onImported={onImported} />
       </div>
 
       <StatsStrip summary={summary} />

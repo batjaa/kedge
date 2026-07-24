@@ -54,3 +54,23 @@ export function alsoRefresh<A extends unknown[]>(
     refresh();
   };
 }
+
+/**
+ * A latest-request-wins gate for the summary refresh. Several rows can settle in
+ * one tick, firing overlapping reads that may resolve out of order; without this
+ * an older snapshot could land last and stick with no later event to correct it.
+ * Each refresh takes a token from {@link begin}; only the newest token still
+ * {@link isCurrent} when its read resolves may write state.
+ */
+export interface LatestWinsGate {
+  begin: () => number;
+  isCurrent: (token: number) => boolean;
+}
+
+export function createLatestWinsGate(): LatestWinsGate {
+  let latest = 0;
+  return {
+    begin: () => ++latest,
+    isCurrent: (token: number) => token === latest,
+  };
+}

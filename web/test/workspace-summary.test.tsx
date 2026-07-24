@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StatsStrip } from '@/components/app/stats-strip';
-import { alsoRefresh, nextSummary, readWorkspaceSummary } from '@/lib/workspace-summary';
+import {
+  alsoRefresh,
+  createLatestWinsGate,
+  nextSummary,
+  readWorkspaceSummary,
+} from '@/lib/workspace-summary';
 import type { WorkspaceSummary } from '@/lib/document-types';
 
 // The stats strip's two spec lines (SPEC §16, M3.7): degradation (A1 — a null
@@ -76,6 +81,35 @@ describe('refresh-on-settle wiring (6A)', () => {
     wrapped(42);
 
     expect(retried).toHaveBeenCalledWith(42);
+  });
+});
+
+describe('createLatestWinsGate — overlapping refreshes (R)', () => {
+  it('only the newest token stays current', () => {
+    const gate = createLatestWinsGate();
+    const first = gate.begin();
+    const second = gate.begin();
+
+    expect(gate.isCurrent(first)).toBe(false);
+    expect(gate.isCurrent(second)).toBe(true);
+  });
+
+  it('drops an out-of-order response so the latest read wins, not the last to resolve', () => {
+    // Two refreshes fire in one tick; the LATER one (t2 → fresh) resolves first,
+    // then the earlier one (t1 → stale) resolves. The stale response must be
+    // dropped, so the fresh snapshot sticks with no later event to correct it.
+    const gate = createLatestWinsGate();
+    const fresh = summary({ documents: { ...summary().documents, total: 20 } });
+    const stale = summary({ documents: { ...summary().documents, total: 5 } });
+
+    const t1 = gate.begin();
+    const t2 = gate.begin();
+
+    let state: WorkspaceSummary | null = null;
+    if (gate.isCurrent(t2)) state = nextSummary(state, fresh); // later read resolves first
+    if (gate.isCurrent(t1)) state = nextSummary(state, stale); // earlier read resolves last — dropped
+
+    expect(state).toBe(fresh);
   });
 });
 
