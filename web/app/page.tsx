@@ -86,6 +86,7 @@ async function ReviewQueue({
       <WorkspaceHome
         initialPage={documents.page}
         initialProjects={projectsResult.projects}
+        initialProjectsDegraded={projectsResult.status !== 200}
         initialSummary={summaryResult.summary}
       />
     </PageContainer>

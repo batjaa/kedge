@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import { ProjectCreate } from './project-create';
@@ -11,7 +11,8 @@ import { hasMorePages } from '@/lib/document-list-live';
 import { compareProjectsByName } from '@/lib/document-groups';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
 import { useWorkspaceSummary } from '@/lib/use-workspace-summary';
-import { alsoRefresh } from '@/lib/workspace-summary';
+import { alsoRefresh, createLatestWinsGate } from '@/lib/workspace-summary';
+import { nextProjects, readProjects } from '@/lib/projects-live';
 import type { Document, DocumentListPage, Project, WorkspaceSummary } from '@/lib/document-types';
 
 // The authenticated home's live surface (SPEC 11; decisions 2A + 5A; M3.6). The
@@ -31,10 +32,18 @@ import type { Document, DocumentListPage, Project, WorkspaceSummary } from '@/li
 export function WorkspaceHome({
   initialPage,
   initialProjects = [],
+  initialProjectsDegraded = false,
   initialSummary = null,
 }: {
   initialPage: DocumentListPage | null;
   initialProjects?: Project[];
+  /**
+   * Whether the server's projects seed failed (non-200). A failed read returns an
+   * empty list indistinguishable from a genuinely project-less workspace, so the
+   * rail must not derive an Unfiled count from it (that would read every document
+   * as Unfiled). Cleared the moment a client refresh succeeds.
+   */
+  initialProjectsDegraded?: boolean;
   /** Server-seeded stats strip (SPEC §16, M3.7); null degrades the strip to nothing (A1). */
   initialSummary?: WorkspaceSummary | null;
 }) {
@@ -53,11 +62,38 @@ export function WorkspaceHome({
     handleRetried,
   } = useLiveDocumentList({ initialPage });
   const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [projectsDegraded, setProjectsDegraded] = useState(initialProjectsDegraded);
 
   // The stats strip's live state (6A): re-read whenever a row settles, retries,
   // or refiles — by piggybacking those existing callbacks, never a second poll
   // loop. A failed read leaves the strip null (renders nothing, A1).
   const { summary, refresh: refreshSummary } = useWorkspaceSummary(initialSummary);
+
+  // The projects rail's live state (6A generalized to the rail, #104): a refile
+  // changes per-project doc/open/orphan counts without moving the workspace
+  // totals, so the summary refresh alone can't repair them — the rail re-reads
+  // the projects list on the same callbacks. A failed refresh keeps the last-good
+  // rail (nextProjects) and its degraded flag; a successful one clears degradation.
+  // Overlapping refreshes are gated latest-wins, the summary's exact discipline.
+  const projectsGateRef = useRef(createLatestWinsGate());
+  const refreshProjects = useCallback(() => {
+    const token = projectsGateRef.current.begin();
+    void readProjects().then((fetched) => {
+      if (!projectsGateRef.current.isCurrent(token)) return;
+      // A transient miss (null) keeps the last-good rail and its degraded flag;
+      // only a real read replaces the counts and clears degradation.
+      setProjects((prev) => nextProjects(prev, fetched));
+      if (fetched !== null) setProjectsDegraded(false);
+    });
+  }, []);
+
+  // One dashboard refresh piggybacked on the list callbacks: the strip and the
+  // rail re-read together as rows settle/retry/refile/import (6A). Still no new
+  // poll loop — both reads ride the existing callbacks.
+  const refreshDashboard = useCallback(() => {
+    refreshSummary();
+    refreshProjects();
+  }, [refreshSummary, refreshProjects]);
 
   // A new project joins the chips and headers immediately, name-sorted (the shared
   // 14A comparator) so the selectors read the same order the grouped list will.
@@ -82,20 +118,20 @@ export function WorkspaceHome({
   // documents + "importing" at once (the mockup's live stat) rather than lying
   // until the row settles. Memoized so a stable identity flows down to the rows.
   const onImported = useMemo(
-    () => alsoRefresh(handleImported, refreshSummary),
-    [handleImported, refreshSummary],
+    () => alsoRefresh(handleImported, refreshDashboard),
+    [handleImported, refreshDashboard],
   );
   const onSettled = useMemo(
-    () => alsoRefresh(handleSettled, refreshSummary),
-    [handleSettled, refreshSummary],
+    () => alsoRefresh(handleSettled, refreshDashboard),
+    [handleSettled, refreshDashboard],
   );
   const onRetried = useMemo(
-    () => alsoRefresh(handleRetried, refreshSummary),
-    [handleRetried, refreshSummary],
+    () => alsoRefresh(handleRetried, refreshDashboard),
+    [handleRetried, refreshDashboard],
   );
   const onAssigned = useMemo(
-    () => alsoRefresh(handleAssigned, refreshSummary),
-    [handleAssigned, refreshSummary],
+    () => alsoRefresh(handleAssigned, refreshDashboard),
+    [handleAssigned, refreshDashboard],
   );
 
   return (
@@ -123,6 +159,7 @@ export function WorkspaceHome({
         <ProjectsRail
           projects={projects}
           summary={summary}
+          degraded={projectsDegraded}
           className="hidden lg:col-span-3 lg:block"
         />
 

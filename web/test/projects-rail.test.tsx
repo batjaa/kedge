@@ -104,6 +104,18 @@ describe('ProjectsRail', () => {
     // No derived count leaks — the bucket stands without a number.
     expect(html).not.toContain('2 docs');
   });
+
+  it('drops the Unfiled count when the projects read degraded — even with a healthy summary', () => {
+    // A failed projects seed returns [] (indistinguishable from an empty
+    // workspace). Deriving from it would read every document as Unfiled; the
+    // degraded flag suppresses the count so the rail never asserts a wrong total.
+    const html = renderToStaticMarkup(
+      <ProjectsRail projects={[]} summary={summary({ total: 8 })} degraded />,
+    );
+
+    expect(html).toContain('Unfiled');
+    expect(html).not.toContain('8 docs');
+  });
 });
 
 function summary(overrides: { total: number }): WorkspaceSummary {

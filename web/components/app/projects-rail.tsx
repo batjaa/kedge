@@ -17,14 +17,21 @@ import type { Project, WorkspaceSummary } from '@/lib/document-types';
 export function ProjectsRail({
   projects,
   summary,
+  degraded = false,
   className,
 }: {
   projects: Project[];
   /** Powers the Unfiled bucket's derived count; null (A1) drops that count. */
   summary: WorkspaceSummary | null;
+  /**
+   * The projects read failed, so this (empty) list is not authoritative — the
+   * Unfiled derivation would read every document as Unfiled. Drop the count
+   * rather than assert a wrong one; the card still stands.
+   */
+  degraded?: boolean;
   className?: string;
 }) {
-  const unfiled = unfiledDocumentCount(summary, projects);
+  const unfiled = degraded ? null : unfiledDocumentCount(summary, projects);
 
   return (
     <aside aria-label="Projects" className={cn('space-y-3', className)}>
