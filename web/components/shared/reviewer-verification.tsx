@@ -69,7 +69,7 @@ export function ReviewerVerification({
   }
 
   return (
-    <aside className="mt-10 rounded-lg bg-white p-5 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
+    <aside className="mt-10 rounded-2xl bg-white p-5 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
           <Mail className="h-4 w-4" aria-hidden="true" />

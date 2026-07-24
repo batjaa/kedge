@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { BrandMark } from '@/components/brand-mark';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { HeaderNav } from '@/components/app/header-nav';
 import { SignOutButton } from '@/components/app/sign-out-button';
 import { SessionMonitor } from '@/components/app/session-monitor';
 import type { User } from '@/lib/auth-types';
@@ -29,29 +30,7 @@ export function AppShell({
       <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-zinc-900/10 bg-stone-50/85 px-6 backdrop-blur dark:border-white/10 dark:bg-zinc-900/85">
         <BrandMark />
         <div className="ml-auto flex items-center gap-3 sm:gap-4">
-          <nav
-            aria-label="Primary"
-            className="hidden items-center gap-5 text-sm lg:flex"
-          >
-            <Link
-              href="/"
-              aria-current="page"
-              className="rounded-md font-medium text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white"
-            >
-              Documents
-            </Link>
-            {/* Honest roadmap ghosting: the review queue arrives with M5, so the
-                nav item is present but visibly inert (not a dead link). */}
-            <span
-              className="flex cursor-default items-center gap-1.5 text-zinc-400 dark:text-zinc-600"
-              title="Review queue arrives with M5"
-            >
-              Queue
-              <span className="rounded-lg bg-zinc-400/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-zinc-400 ring-1 ring-inset ring-zinc-400/30 dark:text-zinc-500">
-                M5
-              </span>
-            </span>
-          </nav>
+          <HeaderNav />
           <div
             aria-hidden="true"
             className="hidden h-5 w-px bg-zinc-900/10 lg:block dark:bg-white/15"
@@ -73,9 +52,12 @@ export function AppShell({
           >
             Settings
           </Link>
-          <div className="hidden items-center gap-2 sm:flex">
+          {/* The avatar is the persistent identity anchor and stays visible at
+              every width (locked mockup); only the email label collapses on
+              narrow viewports. */}
+          <div className="flex items-center gap-2">
             <Avatar name={user.name} avatarUrl={user.avatar_url} />
-            <span className="max-w-[12rem] truncate text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="hidden max-w-[12rem] truncate text-sm text-zinc-600 sm:inline dark:text-zinc-400">
               {user.email}
             </span>
           </div>
