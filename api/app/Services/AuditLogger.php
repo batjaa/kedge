@@ -61,12 +61,18 @@ class AuditLogger
         try {
             return $this->record($workspace, $actor, $action, $subject, $meta, $ip);
         } catch (Throwable $e) {
-            Log::warning('audit.write_failed', [
-                'action' => $action,
-                'workspace_id' => $workspace->id,
-                'user_id' => $actor?->id,
-                'exception' => $e->getMessage(),
-            ]);
+            // The failure handler must itself never throw — a dead log sink can't
+            // be allowed to fail the primary action the trail is a side effect of.
+            try {
+                Log::warning('audit.write_failed', [
+                    'action' => $action,
+                    'workspace_id' => $workspace->id,
+                    'user_id' => $actor?->id,
+                    'exception' => $e->getMessage(),
+                ]);
+            } catch (Throwable) {
+                // Swallowed: nothing left to do if even logging is unavailable.
+            }
 
             return null;
         }

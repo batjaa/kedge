@@ -19,9 +19,17 @@ use Illuminate\Validation\Rule;
  */
 class UpdateWorkspaceRequest extends FormRequest
 {
+    /**
+     * Owner-only, authorized BEFORE validation so an unauthorized caller never
+     * reaches the slug-uniqueness probe — otherwise a 422 ("already taken") vs a
+     * 403 would leak, to a non-owner, whether a global slug exists. Delegates to
+     * WorkspacePolicy (via the Gate), so this is a Policy check, not an inline one.
+     */
     public function authorize(): bool
     {
-        return true;
+        $workspace = $this->user()?->personalWorkspace();
+
+        return $workspace !== null && $this->user()->can('update', $workspace);
     }
 
     /**

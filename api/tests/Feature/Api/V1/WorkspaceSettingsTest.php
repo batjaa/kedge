@@ -10,8 +10,10 @@ use App\Policies\WorkspacePolicy;
 use App\Services\AuditLogger;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -114,17 +116,14 @@ class WorkspaceSettingsTest extends TestCase
         $user = $this->registerUser();
         $workspace = $user->personalWorkspace();
 
-        // The audit trail is a side effect: a thrown write is logged, never
-        // surfaced, so the rename still commits and still 200s (hard rule for the
-        // M3.8 feed this event feeds into).
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('recordSafely')
-            ->once()
-            ->andReturnUsing(function () {
-                Log::warning('audit.write_failed', ['action' => 'workspace.renamed']);
-
-                return null;
-            });
+        // End-to-end: the REAL recordSafely runs, but the underlying record()
+        // throws (a dead audit sink). The failure is swallowed and logged, so the
+        // committed rename still 200s — the hard rule for the M3.8 feed this event
+        // feeds into. Bind the partial mock after registration so registration's
+        // own audit writes used the real logger.
+        Log::spy();
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
         $this->app->instance(AuditLogger::class, $logger);
 
         $this->actingAs($user)->fromWebApp()
@@ -137,6 +136,9 @@ class WorkspaceSettingsTest extends TestCase
             'name' => 'Still Renamed',
             'slug' => 'still-renamed',
         ]);
+
+        // The swallowed failure was logged, not lost.
+        Log::shouldHaveReceived('warning')->with('audit.write_failed', Mockery::type('array'))->once();
     }
 
     public function test_record_safely_swallows_a_failing_write_and_logs_it(): void
@@ -155,6 +157,22 @@ class WorkspaceSettingsTest extends TestCase
         $this->assertNull($result);
         $this->assertSame(0, AuditLog::query()->count());
         Log::shouldHaveReceived('warning')->with('audit.write_failed', Mockery::type('array'))->once();
+    }
+
+    public function test_record_safely_never_throws_even_when_logging_itself_fails(): void
+    {
+        // The failure handler must not throw either: a dead log sink can't be
+        // allowed to fail the primary action. record() throws (null-id workspace),
+        // then the log write throws too — recordSafely still returns null cleanly.
+        Log::shouldReceive('warning')->andThrow(new RuntimeException('log sink down'));
+
+        $result = app(AuditLogger::class)->recordSafely(
+            new Workspace,
+            null,
+            'workspace.renamed',
+        );
+
+        $this->assertNull($result);
     }
 
     // ---- validation --------------------------------------------------------
@@ -243,7 +261,51 @@ class WorkspaceSettingsTest extends TestCase
             ->assertOk();
     }
 
+    public function test_a_slug_lost_to_a_concurrent_claim_is_rejected_inline_not_500(): void
+    {
+        $user = $this->registerUser();
+
+        // Simulate the race the DB unique index guards: a colliding workspace
+        // appears AFTER validation passes but BEFORE the write, so the update hits
+        // the index. The endpoint must translate that into the same inline 422, not
+        // an uncaught 500. The raw insert fires no model events (no recursion); the
+        // guard + slug check make the listener a no-op for every other test.
+        $injected = false;
+        Workspace::saving(function (Workspace $w) use (&$injected) {
+            if (! $injected && $w->slug === 'race-slug') {
+                $injected = true;
+                DB::table('workspaces')->insert([
+                    'name' => 'Racer',
+                    'slug' => 'race-slug',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $this->actingAs($user)->fromWebApp()
+            ->patchJson('/api/v1/workspace', ['slug' => 'race-slug'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['slug']);
+    }
+
     // ---- authorization -----------------------------------------------------
+
+    public function test_authorization_precedes_validation_so_a_non_owner_cannot_probe_slugs(): void
+    {
+        // A taken slug submitted by a workspace-less caller returns 403, NOT the
+        // 422 "already taken" — authorization runs before the uniqueness probe, so
+        // 422-vs-403 can never be used to enumerate which global slugs exist.
+        $owner = $this->registerUser('owner@example.com');
+        $owner->personalWorkspace()->update(['slug' => 'taken-slug']);
+
+        $reviewer = User::factory()->create();
+        $this->assertNull($reviewer->personalWorkspace());
+
+        $this->actingAs($reviewer)->fromWebApp()
+            ->patchJson('/api/v1/workspace', ['slug' => 'taken-slug'])
+            ->assertForbidden();
+    }
 
     public function test_a_workspaceless_reviewer_cannot_rename_and_gets_403_not_500(): void
     {
