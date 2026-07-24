@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { IntegrationsPanel } from '@/components/app/integrations-panel';
 import { WorkspaceGeneralCard } from '@/components/app/workspace-general-card';
+import { MetaChip } from '@/components/app/meta-chip';
 import { PageContainer } from '@/components/app/page-container';
 
 // Workspace settings. General (rename/slug, M3.7 decision 11A) sits above
@@ -28,9 +29,12 @@ export default async function SettingsPage() {
         >
           ← Review queue
         </Link>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          Workspace settings
-        </h1>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
+            Workspace settings
+          </h1>
+          <MetaChip>Personal</MetaChip>
+        </div>
         <p className="mt-1.5 text-sm leading-7 text-zinc-600 dark:text-zinc-400">
           Managing{' '}
           <span className="font-medium text-zinc-900 dark:text-white">{workspace.name}</span> — your

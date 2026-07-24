@@ -65,12 +65,7 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
 
   return (
     <section className="rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
-      <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">General</h2>
-        <span className="ml-auto rounded-lg bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-600/30 dark:text-emerald-400 dark:ring-emerald-400/30">
-          Personal
-        </span>
-      </div>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">General</h2>
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
         The name and handle for your workspace. The name shows across the app; the slug is its
         URL-safe handle.

@@ -20,9 +20,8 @@ describe('WorkspaceGeneralCard', () => {
       <WorkspaceGeneralCard workspace={{ id: 7, name: "Batjaa's workspace", slug: 'batjaa' }} />,
     );
 
-    // Panel anatomy: title + the "Personal" chip, per the app-workspace mockup.
+    // Panel title, per the app-workspace mockup.
     expect(html).toContain('General');
-    expect(html).toContain('Personal');
 
     // The editable fields carry the current values.
     expect(html).toContain('aria-label="Workspace name"');
