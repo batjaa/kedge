@@ -67,6 +67,10 @@ class WorkspaceController extends Controller
                 [
                     'from' => $before,
                     'to' => ['name' => $workspace->name, 'slug' => $workspace->slug],
+                    // The actor's name frozen at write (2A), so M3.8's feed renders
+                    // "{name} renamed the workspace…" from the row alone — never a
+                    // live user lookup at read time.
+                    'actor_name' => $request->user()->name,
                 ],
                 $request->ip(),
             );

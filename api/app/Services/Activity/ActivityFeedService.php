@@ -36,7 +36,7 @@ class ActivityFeedService
             ->paginate($perPage);
 
         // Resolve targets while the page is still AuditLog models, then project.
-        $targets = $this->targets->resolve($paginator->getCollection());
+        $targets = $this->targets->resolve($paginator->getCollection(), $workspace);
 
         return $paginator->through(
             fn (AuditLog $log): ActivityFeedEvent => ActivityFeedEvent::fromAuditLog(

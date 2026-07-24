@@ -262,17 +262,45 @@ class WorkspaceActivityTest extends TestCase
 
         AuditLog::factory()->for($workspace)->action(AuditEvent::WorkspaceRenamed)
             ->subject($workspace)
-            ->withMeta(['from' => ['name' => 'Old', 'slug' => 'old'], 'to' => ['name' => 'New Name', 'slug' => 'new']])
+            ->withMeta([
+                'from' => ['name' => 'Old', 'slug' => 'old'],
+                'to' => ['name' => 'New Name', 'slug' => 'new'],
+                'actor_name' => 'Doc Author',
+            ])
             ->create();
 
         $this->actingAs($user)->fromWebApp()
             ->getJson('/api/v1/workspace/activity')
             ->assertOk()
             ->assertJsonPath('data.0.type', 'workspace.renamed')
+            ->assertJsonPath('data.0.actor.name', 'Doc Author')
             ->assertJsonPath('data.0.context.workspace_name', 'New Name')
             ->assertJsonPath('data.0.target.type', 'workspace')
             // No slug, no `from` — only the projected new name.
             ->assertJsonMissingPath('data.0.context.workspace_slug');
+    }
+
+    public function test_a_target_in_another_workspace_is_never_linked(): void
+    {
+        $user = $this->registerUser();
+        $other = $this->registerUser('other@example.com');
+
+        // A row in the CALLER's trail whose subject document lives in another
+        // workspace: the row is the caller's, but the link must never resolve to a
+        // document they cannot open — an id is never an access path.
+        $foreignDocument = $this->readyDoc($other->personalWorkspace());
+        AuditLog::factory()->for($user->personalWorkspace())->action(AuditEvent::DocumentImported)
+            ->subject($foreignDocument)
+            ->withMeta(['document_title' => 'Not yours'])
+            ->create();
+
+        $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/workspace/activity')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            // The sentence still renders from the snapshot, but the link drops.
+            ->assertJsonPath('data.0.context.document_title', 'Not yours')
+            ->assertJsonPath('data.0.target', null);
     }
 
     public function test_it_paginates_newest_first(): void

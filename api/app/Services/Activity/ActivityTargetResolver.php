@@ -27,7 +27,7 @@ class ActivityTargetResolver
      * @param  Collection<int, AuditLog>  $logs
      * @return array<int, ActivityTarget|null> keyed by audit-log id
      */
-    public function resolve(Collection $logs): array
+    public function resolve(Collection $logs, Workspace $workspace): array
     {
         $documentClass = (new Document)->getMorphClass();
         $commentClass = (new Comment)->getMorphClass();
@@ -65,8 +65,11 @@ class ActivityTargetResolver
                 ->pluck('document_id', 'id')
                 ->all();
 
-        // A single existence sweep over every candidate document id: a document
-        // deleted since the event drops the link uniformly, whatever the subject.
+        // A single existence sweep over every candidate document id, scoped to the
+        // caller's workspace: a document deleted since the event — OR one that
+        // belongs to another workspace — drops the link uniformly, whatever the
+        // subject. Scoping here keeps "an id is never an access path" true for the
+        // link target, so the feed never surfaces a document the caller can't open.
         $candidateDocumentIds = collect($documentSubjectIds)
             ->merge(array_values($commentToDocument))
             ->merge(array_values($approvalToDocument))
@@ -79,7 +82,11 @@ class ActivityTargetResolver
         $existingDocuments = $candidateDocumentIds === []
             ? []
             : array_flip(
-                Document::query()->whereIn('id', $candidateDocumentIds)->pluck('id')->all()
+                Document::query()
+                    ->whereIn('id', $candidateDocumentIds)
+                    ->where('workspace_id', $workspace->id)
+                    ->pluck('id')
+                    ->all()
             );
 
         $documentTarget = static fn (?int $documentId): ?ActivityTarget => $documentId !== null
@@ -99,9 +106,12 @@ class ActivityTargetResolver
                 $approvalClass => $documentTarget(
                     isset($approvalToDocument[$subjectId]) ? (int) $approvalToDocument[$subjectId] : null,
                 ),
-                // The workspace is always the caller's own (the feed is scoped to
-                // it), so a rename always links to its settings page.
-                $workspaceClass => ActivityTarget::workspace(),
+                // A rename links to the workspace settings — but only when the
+                // subject really is the caller's own workspace (defence in depth;
+                // the feed is already workspace-scoped, so this always holds).
+                $workspaceClass => $subjectId === (int) $workspace->id
+                    ? ActivityTarget::workspace()
+                    : null,
                 default => null,
             };
         }
