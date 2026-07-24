@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { DocumentListItem, DocumentListPage } from '@/lib/document-types';
+import type {
+  DocumentListItem,
+  DocumentListPage,
+  WorkspaceSummary,
+} from '@/lib/document-types';
 
 // ImportForm calls useRouter, and there is no app-router context under
 // renderToStaticMarkup — stub next/navigation. We only assert static markup here
@@ -40,7 +44,42 @@ describe('WorkspaceHome', () => {
     expect(html).toContain('>40<');
     expect(html).not.toContain('>1<');
   });
+
+  it('renders the stats strip from a seeded summary (M3.7)', () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceHome initialPage={page()} initialSummary={summary()} />,
+    );
+
+    // Strip-only stat labels — proof it read the seed (not the list heading).
+    expect(html).toContain('open threads');
+    expect(html).toContain('approvals stale');
+  });
+
+  it('leaves the list rendering when the summary seed failed — strip absent, list intact (A1)', () => {
+    // A null summary degrades the strip to nothing; the documents list is never
+    // blocked by a summary outage.
+    const html = renderToStaticMarkup(
+      <WorkspaceHome initialPage={page()} initialSummary={null} />,
+    );
+
+    // No strip labels leak, but the list (its count chip) still renders.
+    expect(html).not.toContain('approvals stale');
+    expect(html).toContain('>40<');
+  });
 });
+
+function summary(): WorkspaceSummary {
+  return {
+    documents: {
+      total: 8,
+      importing: 1,
+      needs_attention: 2,
+      lifecycle: { draft: 3, in_review: 2, approved: 3, superseded: 0 },
+    },
+    threads: { open: 12, orphaned: 1 },
+    approvals: { stale: 2 },
+  };
+}
 
 function page(): DocumentListPage {
   return {
