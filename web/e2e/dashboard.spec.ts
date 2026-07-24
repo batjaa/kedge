@@ -42,9 +42,19 @@ async function importAndSetLifecycle(
   await importDocumentFromUrl(page, url);
   const select = page.getByLabel('Lifecycle status', { exact: true });
   await expect(select).toBeVisible();
-  await select.selectOption(status);
-  // The <select> commits to the PATCH's confirmed value only on success, so this
-  // waits out the round-trip before we navigate on to seed the next document.
+  // Wait for the lifecycle PATCH to actually persist (200) before we navigate on
+  // to seed the next document. The <select> flips its value OPTIMISTICALLY (ahead
+  // of the round-trip), so awaiting toHaveValue alone could pass before the write
+  // lands and a fast navigation could abort it — corrupting the seeded counts.
+  await Promise.all([
+    page.waitForResponse(
+      (res) =>
+        /\/api\/v1\/documents\/\d+$/.test(res.url()) &&
+        res.request().method() === 'PATCH' &&
+        res.ok(),
+    ),
+    select.selectOption(status),
+  ]);
   await expect(select).toHaveValue(status);
 }
 
@@ -83,7 +93,11 @@ test('the true dashboard: seeded stats, server-side filters, a live rail, and a 
   // (orphans / stale approvals / imports) stay hidden while zero.
   await expect(page.getByText('4 documents', { exact: true })).toBeVisible();
   await expect(page.getByText('0 open threads', { exact: true })).toBeVisible();
+  // None of the three alert stats render for a clean seed (they appear only when
+  // their count is > 0).
+  await expect(page.getByText('orphaned')).toHaveCount(0);
   await expect(page.getByText('approvals stale')).toHaveCount(0);
+  await expect(page.getByText('importing')).toHaveCount(0);
 
   // Chip counts match the seeds (7A: a chip's count is the total that state
   // narrows the list to).
@@ -181,6 +195,13 @@ test('the true dashboard: seeded stats, server-side filters, a live rail, and a 
   ]);
   await expect(documents.getByRole('listitem')).toHaveCount(1);
 
+  // A sentinel proves the flip + settle that follows is LIVE: a full reload would
+  // wipe this window property, so its survival rules out "the counts only looked
+  // right after a page load" — the settle-in-place path is what is under test.
+  await page.evaluate(() => {
+    (window as Window & { __noReload?: boolean }).__noReload = true;
+  });
+
   await page.getByLabel('Document URL', { exact: true }).fill(PLAIN_DOC.url);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
 
@@ -191,6 +212,10 @@ test('the true dashboard: seeded stats, server-side filters, a live rail, and a 
   await expect(documents.getByText('Importing')).toHaveCount(0);
   await expect(chips.getByRole('button', { name: /^All/ })).toContainText('· 5');
   await expect(chips.getByRole('button', { name: /Draft/ })).toContainText('· 2');
+  const survived = await page.evaluate(
+    () => (window as Window & { __noReload?: boolean }).__noReload === true,
+  );
+  expect(survived).toBe(true);
 
   // --- The toggled theme choice persists across a full reload -----------------
   await page.getByRole('button', { name: 'Toggle theme' }).click();
