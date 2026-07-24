@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import { ProjectCreate } from './project-create';
+import { ProjectsRail } from './projects-rail';
+import { ActivityFeedSlot } from './activity-feed-slot';
 import { StatsStrip } from './stats-strip';
 import { hasMorePages } from '@/lib/document-list-live';
 import { compareProjectsByName } from '@/lib/document-groups';
@@ -112,23 +114,41 @@ export function WorkspaceHome({
 
       <ProjectCreate onCreated={handleCreated} />
 
-      <DocumentList
-        items={items}
-        total={meta?.total ?? items.length}
-        hasMore={hasMorePages(meta)}
-        loadingMore={loadingMore}
-        onLoadMore={handleLoadMore}
-        degraded={degraded}
-        announcement={announcement}
-        onSettled={onSettled}
-        onRetried={onRetried}
-        projects={projects}
-        onAssigned={onAssigned}
-        filter={filter}
-        onSelectFilter={selectFilter}
-        summary={summary}
-        grouped
-      />
+      {/* The mocked dashboard (#104): the projects rail beside the documents
+          table at `lg`+, a single column below it. The rail is `hidden lg:block`,
+          so narrow viewports keep the current single-column grouped list unchanged
+          — its project group headers already navigate to the same pages. One live
+          list island either way, so polling/refiling is untouched by the layout. */}
+      <div className="mt-10 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
+        <ProjectsRail
+          projects={projects}
+          summary={summary}
+          className="hidden lg:col-span-3 lg:block"
+        />
+
+        <div className="lg:col-span-9">
+          <DocumentList
+            items={items}
+            total={meta?.total ?? items.length}
+            hasMore={hasMorePages(meta)}
+            loadingMore={loadingMore}
+            onLoadMore={handleLoadMore}
+            degraded={degraded}
+            announcement={announcement}
+            onSettled={onSettled}
+            onRetried={onRetried}
+            projects={projects}
+            onAssigned={onAssigned}
+            filter={filter}
+            onSelectFilter={selectFilter}
+            summary={summary}
+            className="mt-0"
+            grouped
+          />
+
+          <ActivityFeedSlot />
+        </div>
+      </div>
     </>
   );
 }

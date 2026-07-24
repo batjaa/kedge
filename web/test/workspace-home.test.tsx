@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   DocumentListItem,
   DocumentListPage,
+  Project,
   WorkspaceSummary,
 } from '@/lib/document-types';
 
@@ -53,6 +54,37 @@ describe('WorkspaceHome', () => {
     // Strip-only stat labels — proof it read the seed (not the list heading).
     expect(html).toContain('open threads');
     expect(html).toContain('approvals stale');
+  });
+
+  it('renders the projects rail beside the list — cards with counts + a derived Unfiled bucket (#104)', () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceHome
+        initialPage={page()}
+        initialProjects={[
+          {
+            id: 7,
+            name: 'Anchoring',
+            slug: 'anchoring',
+            description: null,
+            documents_count: 6,
+            open_threads_count: 11,
+            orphaned_threads_count: 1,
+            created_at: null,
+          } satisfies Project,
+        ]}
+        initialSummary={summary()}
+      />,
+    );
+
+    // The rail landmark, a project card linking to its page with its counts, and
+    // the Unfiled bucket derived from the summary (8 total − 6 filed = 2).
+    expect(html).toContain('aria-label="Projects"');
+    expect(html).toContain('href="/projects/7"');
+    expect(html).toContain('6 docs');
+    expect(html).toContain('Unfiled');
+    expect(html).toContain('2 docs');
+    // The ghosted queue card keeps the roadmap honest in-product.
+    expect(html).toContain('Review queue');
   });
 
   it('leaves the list rendering when the summary seed failed — strip absent, list intact (A1)', () => {

@@ -52,6 +52,7 @@ export function DocumentList({
   onSelectFilter,
   summary,
   heading = 'Your documents',
+  className = 'mt-10',
   emptyTitle = 'No documents yet',
   emptyBody = 'Import a spec or RFC with the box above and it lands here — every document in your workspace, newest first.',
 }: {
@@ -77,6 +78,9 @@ export function DocumentList({
   /** Chip counts (SPEC §16, M3.7); null keeps the chips but drops the counts (A1). */
   summary?: WorkspaceSummary | null;
   heading?: string;
+  /** The root section's spacing — default `mt-10`; the dashboard grid (#104)
+   *  zeroes it so the list aligns with the projects rail beside it. */
+  className?: string;
   emptyTitle?: string;
   emptyBody?: string;
 }) {
@@ -99,7 +103,7 @@ export function DocumentList({
   const showChips = !!onSelectFilter && !showDegraded && (items.length > 0 || filter !== 'all');
 
   return (
-    <section className="mt-10" aria-labelledby="documents-heading">
+    <section className={className} aria-labelledby="documents-heading">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2
           id="documents-heading"

@@ -61,6 +61,13 @@ export interface Project {
   description: string | null;
   /** Present when the list query counted it; omitted otherwise. */
   documents_count?: number;
+  /**
+   * The dashboard rail's per-project thread counts (#104) — present only on the
+   * projects INDEX read, where each rides a shared-scope `withCount`
+   * (Thread::scopeOpen / scopeOrphaned, 7A); the create/update payloads omit them.
+   */
+  open_threads_count?: number;
+  orphaned_threads_count?: number;
   created_at: string | null;
 }
 
