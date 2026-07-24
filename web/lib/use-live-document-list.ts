@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
+import { type Dispatch, type SetStateAction, useCallback, useRef, useState } from 'react';
 import {
   appendItems,
   applyFilterPage,
@@ -84,11 +84,11 @@ export function useLiveDocumentList({
   // import handler: an import's POST can resolve after the user has already
   // switched chips, and ImportForm calls the callback it captured at submit — so
   // handleImported must branch on the filter that is live now, not the one that
-  // was active when the submit began. Kept in sync each commit.
+  // was active when the submit began. Updated SYNCHRONOUSLY at the sole commit
+  // point (replaceWithFilter's success) — not via an effect, whose commit-to-flush
+  // gap a fast POST resolution could slip through — since the filter only ever
+  // changes there (setItems/setMeta preserve it, applyImport only ever sets All).
   const filterRef = useRef(state.filter);
-  useEffect(() => {
-    filterRef.current = state.filter;
-  }, [state.filter]);
 
   // Rows/paginator setters over the slice — the exposed interface each surface
   // uses for grouping and reassignment stays identical. Two separate setState
@@ -127,7 +127,12 @@ export function useLiveDocumentList({
       try {
         const page = await readDocumentPage(1, projectFilter, lifecycleParam(next));
         if (filterGenRef.current !== token) return; // superseded by a newer chip
-        if (page) setState((prev) => applyFilterPage(prev, page, next));
+        if (page) {
+          // Commit the chip WITH its rows, and mirror it into filterRef in the same
+          // tick so an import resolving right after branches on this filter.
+          filterRef.current = next;
+          setState((prev) => applyFilterPage(prev, page, next));
+        }
       } finally {
         // Only the still-current replace clears the flag; a superseded one leaves
         // it owned by the newer replace already in flight.
