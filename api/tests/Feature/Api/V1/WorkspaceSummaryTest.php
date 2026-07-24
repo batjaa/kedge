@@ -219,7 +219,7 @@ class WorkspaceSummaryTest extends TestCase
         ];
 
         foreach ($chipCounts as $value => $chipCount) {
-            // The list filter (M3.8, #103) applies the same predicate to a
+            // The list filter (M3.7, #103) applies the same predicate to a
             // workspace-scoped documents query — exactly this call.
             $filtered = DocumentLifecycleFilter::from($value)
                 ->apply(Document::query()->where('workspace_id', $workspace->id))
@@ -230,6 +230,15 @@ class WorkspaceSummaryTest extends TestCase
                 $chipCount,
                 "chip '{$value}' count ({$chipCount}) must equal the filtered list total ({$filtered})",
             );
+
+            // And the SAME predicate reached through the real list endpoint's
+            // `?lifecycle=` parameter (#103) yields the same `meta.total` — the
+            // paginator counts the filtered query, so the chip can never drift from
+            // the rows the list actually narrows to, across every page (7A).
+            $this->actingAs($user)->fromWebApp()
+                ->getJson("/api/v1/documents?lifecycle={$value}")
+                ->assertOk()
+                ->assertJsonPath('meta.total', $chipCount);
         }
     }
 

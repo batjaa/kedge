@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\DocumentFormat;
+use App\Enums\DocumentLifecycleFilter;
 use App\Enums\DocumentStatus;
 use App\Enums\LifecycleStatus;
 use App\Enums\SourceType;
@@ -56,6 +57,13 @@ class DocumentController extends Controller
     {
         $this->authorize('viewAny', Document::class);
 
+        // The lifecycle filter chips (SPEC §16, M3.7; #103). A closed set, so an
+        // unknown value is a 422 rather than a silent no-op — and `from()` below
+        // can never throw on garbage. Absent means All.
+        $validated = $request->validate([
+            'lifecycle' => ['sometimes', Rule::enum(DocumentLifecycleFilter::class)],
+        ]);
+
         $perPage = min(max((int) $request->integer('per_page', 20), 1), 50);
 
         $query = $request->user()->personalWorkspace()->documents()
@@ -79,7 +87,20 @@ class DocumentController extends Controller
             $query->where('project_id', (int) $project);
         }
 
-        $documents = $query
+        // Server-side lifecycle filter (SPEC §16, M3.7; #103) through the ONE
+        // shared predicate the summary counts each chip with (DocumentLifecycleFilter
+        // → the lifecycle scopes / needsAttention). Applied before pagination, so
+        // the filtered `meta.total` equals the chip's count across every page, not
+        // just the loaded one (7A) — never a re-encoded predicate here. Amends
+        // SPEC §16's old "no ?status=" note. `apply()` takes the relation's
+        // underlying Eloquent builder (the workspace-scope constraint already lives
+        // on it), the same Builder the summary's chip counts flow through.
+        $builder = $query->getQuery();
+        if (array_key_exists('lifecycle', $validated)) {
+            $builder = DocumentLifecycleFilter::from($validated['lifecycle'])->apply($builder);
+        }
+
+        $documents = $builder
             // `created_at` is second-precision, so a stable tiebreaker is required:
             // without it same-second rows can order differently between page reads,
             // and a row straddling a page boundary can permute or silently drop.
