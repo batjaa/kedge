@@ -156,6 +156,12 @@ export interface DocumentVersionDiff {
 
 export interface DocumentCapabilities {
   update_lifecycle: boolean;
+  /**
+   * Author-only manual content update for pasted/uploaded documents (#113). Pure
+   * authorization; the review surface additionally requires source_type ===
+   * 'upload' before showing the affordance.
+   */
+  update_content: boolean;
 }
 
 /** GET /api/v1/documents/{id} and the 202 from POST /api/v1/documents. */

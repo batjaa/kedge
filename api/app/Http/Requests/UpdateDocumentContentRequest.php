@@ -13,7 +13,8 @@ use Illuminate\Foundation\Http\FormRequest;
  * here — this only shapes the input, and it mirrors the paste side of
  * {@see StoreDocumentRequest}: `content` is required and byte-capped (the same
  * {@see CapsPastedContent} rule, so the update surface can never accept a larger
- * body than the original paste), with an optional replacement title.
+ * body than the original paste). This surface versions the body only — the
+ * document's title is preserved by the controller, not re-set here.
  */
 class UpdateDocumentContentRequest extends FormRequest
 {
@@ -31,7 +32,6 @@ class UpdateDocumentContentRequest extends FormRequest
     {
         return [
             'content' => ['required', 'string', $this->withinPasteCap()],
-            'title' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

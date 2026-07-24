@@ -73,6 +73,19 @@ class DocumentPolicy
     }
 
     /**
+     * Replace a pasted/uploaded document's content, minting a new version (#113).
+     * Author-only — the same gate as the editorial lifecycle (updateLifecycle):
+     * re-authoring the document is a stronger capability than reviewing it, so a
+     * plain workspace member (a future team seat) and a share reviewer can
+     * comment/approve but never overwrite the body. A magic-link reviewer holds no
+     * membership at all and is refused here too.
+     */
+    public function updateContent(User $user, Document $document): bool
+    {
+        return $this->authorOf($user, $document);
+    }
+
+    /**
      * Claim a demo document into your own workspace (SPEC §10.3, #25). Deliberately
      * NOT a membership check — the whole point is that the doc is *not* yours yet:
      * it lives in the reserved system workspace. Only a demo doc is claimable, so

@@ -379,10 +379,11 @@ class DocumentController extends Controller
      *
      * Only an upload-sourced document qualifies — a URL-sourced document re-pulls
      * its source through {@see resync} instead, so its content is never
-     * client-overwritten. The new body (and optional replacement title) overwrite
-     * `documents.source_meta`, so the shared {@see UploadConnector} re-imports the
-     * LATEST paste — including on a retry after a transient failure — and the
-     * queued {@see ResyncDocumentJob} runs normalization → content-hash dedupe →
+     * client-overwritten. The new body overwrites `documents.source_meta.content`
+     * (the author's title, if any, is preserved — this surface versions the body,
+     * not the name), so the shared {@see UploadConnector} re-imports the LATEST
+     * paste — including on a retry after a transient failure — and the queued
+     * {@see ResyncDocumentJob} runs normalization → content-hash dedupe →
      * re-anchor ladder → approval-staleness → the re-anchor digest unchanged
      * (M3.8). A failed update never disturbs the current version (SPEC §5.3): the
      * pipeline flips `current_version_id` only after the target version's anchors
@@ -395,7 +396,7 @@ class DocumentController extends Controller
      */
     public function updateContent(UpdateDocumentContentRequest $request, Document $document): JsonResponse
     {
-        $this->authorize('resync', $document);
+        $this->authorize('updateContent', $document);
 
         abort_unless(
             $document->source_type === SourceType::Upload,
@@ -409,11 +410,18 @@ class DocumentController extends Controller
             'Only a ready document can have its content updated.',
         );
 
+        // Preserve the author's title (this surface versions the body, not the
+        // name); a doc that never carried one keeps synthesizing it from the first
+        // heading. Clearing last_sync_status alongside — like retry() (SPEC §19) —
+        // stops the web's completion poll from immediately reading a PRIOR failed
+        // update's stale status as this attempt's outcome.
         $document->forceFill([
             'source_meta' => $this->pasteSourceMeta(
                 (string) $request->validated('content'),
-                (string) ($request->validated('title') ?? ''),
+                (string) ($document->source_meta['title'] ?? ''),
             ),
+            'last_sync_status' => SyncStatus::Ok,
+            'sync_error' => null,
         ])->save();
 
         ResyncDocumentJob::dispatch($document, $request->user()?->id);

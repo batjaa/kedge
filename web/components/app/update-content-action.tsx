@@ -7,11 +7,12 @@ import { updateDocumentContent } from '@/lib/documents-client';
 import { refreshSurfaceAfterResync, waitForResyncCompletion } from '@/lib/resync-polling';
 
 // The manual-versioning affordance for a pasted/uploaded document (#113): an
-// "Update content" button that opens a paste surface mirroring the import form's
-// paste mode (optional title + Markdown body). Submitting re-pastes the body,
-// which mints a new version through the same pipeline a re-sync uses — the
-// orchestration and its exhaustive outcomes live in lib/content-update.ts; this
-// component only owns the dialog + its transient state. DESIGN.md tokens only.
+// "Update content" button that opens a paste surface (the Markdown body — the
+// title is preserved server-side, so this surface versions the body only).
+// Submitting re-pastes the body, which mints a new version through the same
+// pipeline a re-sync uses — the orchestration and its exhaustive outcomes live in
+// lib/content-update.ts; this component only owns the dialog + its transient
+// state. DESIGN.md tokens only.
 const BUTTON_CLASS =
   'inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
 
@@ -28,7 +29,6 @@ export function UpdateContentAction({
 }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
-  const [title, setTitle] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -85,7 +85,6 @@ export function UpdateContentAction({
       const result = await runContentUpdate({
         documentId,
         content,
-        title,
         startingVersionLabel: currentVersionLabel,
         update: updateDocumentContent,
         waitForCompletion: waitForResyncCompletion,
@@ -96,7 +95,6 @@ export function UpdateContentAction({
       if (result.status === 'advanced') {
         // A new version landed and the surface refreshed: reset and dismiss.
         setContent('');
-        setTitle('');
         setOpen(false);
         return;
       }
@@ -164,28 +162,8 @@ export function UpdateContentAction({
 
             <form onSubmit={onSubmit} noValidate className="mt-4">
               <label
-                htmlFor="update-content-title"
-                className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Title{' '}
-                <span className="font-normal text-zinc-400 dark:text-zinc-500">— optional</span>
-              </label>
-              <input
-                id="update-content-title"
-                name="title"
-                type="text"
-                placeholder="Leave blank to keep the first heading"
-                value={title}
-                onChange={(event) => {
-                  setTitle(event.target.value);
-                  if (error) setError(null);
-                }}
-                className="mt-1.5 w-full rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10"
-              />
-
-              <label
                 htmlFor="update-content-body"
-                className="mt-3 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
               >
                 Content
               </label>

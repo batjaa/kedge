@@ -6,6 +6,7 @@ use App\Enums\AnchorState;
 use App\Enums\DocumentStatus;
 use App\Enums\SourceType;
 use App\Enums\SyncStatus;
+use App\Enums\WorkspaceRole;
 use App\Jobs\ResyncDocumentJob;
 use App\Models\Anchor;
 use App\Models\Approval;
@@ -44,10 +45,7 @@ class DocumentContentUpdateTest extends TestCase
         [$author, $document] = $this->uploadDocument();
 
         $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/documents/{$document->id}/content", [
-                'content' => self::NEW_CONTENT,
-                'title' => 'Renamed by author',
-            ])
+            ->postJson("/api/v1/documents/{$document->id}/content", ['content' => self::NEW_CONTENT])
             ->assertStatus(202)
             ->assertJsonPath('status', 'ready');
 
@@ -55,7 +53,6 @@ class DocumentContentUpdateTest extends TestCase
         // a retry after a transient failure — re-imports this body, not the old one.
         $document->refresh();
         $this->assertSame(self::NEW_CONTENT, $document->source_meta['content']);
-        $this->assertSame('Renamed by author', $document->source_meta['title']);
 
         Queue::assertPushed(
             ResyncDocumentJob::class,
@@ -63,10 +60,12 @@ class DocumentContentUpdateTest extends TestCase
         );
     }
 
-    public function test_an_absent_title_drops_from_source_meta_so_the_heading_resynthesizes(): void
+    public function test_content_update_preserves_the_authors_existing_title(): void
     {
+        // This surface versions the body, not the name: an author-set title
+        // survives a content update rather than being dropped or overwritten.
         Queue::fake();
-        [$author, $document] = $this->uploadDocument(sourceMeta: ['content' => "# Old\n\nOld.\n", 'title' => 'Old title']);
+        [$author, $document] = $this->uploadDocument(sourceMeta: ['content' => "# Old\n\nOld.\n", 'title' => 'Author title']);
 
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/content", ['content' => self::NEW_CONTENT])
@@ -74,7 +73,30 @@ class DocumentContentUpdateTest extends TestCase
 
         $document->refresh();
         $this->assertSame(self::NEW_CONTENT, $document->source_meta['content']);
-        $this->assertArrayNotHasKey('title', $document->source_meta);
+        $this->assertSame('Author title', $document->source_meta['title']);
+    }
+
+    public function test_a_prior_failed_status_is_cleared_before_the_new_attempt_dispatches(): void
+    {
+        // A doc left FAILED by an earlier update must reset to Ok before dispatch
+        // (like retry(), SPEC §19), so the web's completion poll never reads the
+        // stale failure as this attempt's outcome.
+        Queue::fake();
+        [$author, $document] = $this->uploadDocument();
+        $document->forceFill([
+            'last_sync_status' => SyncStatus::Failed,
+            'sync_error' => 'A previous update failed.',
+        ])->save();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/content", ['content' => self::NEW_CONTENT])
+            ->assertStatus(202)
+            ->assertJsonPath('last_sync_status', 'ok')
+            ->assertJsonPath('sync_error', null);
+
+        $document->refresh();
+        $this->assertSame(SyncStatus::Ok, $document->last_sync_status);
+        $this->assertNull($document->sync_error);
     }
 
     public function test_update_works_even_when_the_resync_rollout_flag_is_off(): void
@@ -165,6 +187,24 @@ class DocumentContentUpdateTest extends TestCase
         $this->assertNotNull($current);
 
         $this->actingAs($reviewer)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/content", ['content' => self::NEW_CONTENT])
+            ->assertForbidden();
+
+        Queue::assertNotPushed(ResyncDocumentJob::class);
+    }
+
+    public function test_a_same_workspace_non_author_member_is_forbidden(): void
+    {
+        // Author-only (updateContent policy): a plain workspace member — a future
+        // team seat — can review/comment/approve but never re-author the body, so a
+        // membership check alone is not enough. Distinguishes updateContent from the
+        // membership-gated resync.
+        Queue::fake();
+        [, $document] = $this->uploadDocument();
+        $member = User::factory()->create();
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $this->actingAs($member)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/content", ['content' => self::NEW_CONTENT])
             ->assertForbidden();
 

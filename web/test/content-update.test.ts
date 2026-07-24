@@ -12,7 +12,7 @@ import type { ResyncPollResult } from '@/lib/resync-polling';
 
 function harness(
   overrides: {
-    update?: (id: number, content: string, title?: string) => Promise<ImportOutcome>;
+    update?: (id: number, content: string) => Promise<ImportOutcome>;
     waitForCompletion?: (id: number, label: string | null | undefined) => Promise<ResyncPollResult>;
   } = {},
 ) {
@@ -32,7 +32,6 @@ function run(deps: ReturnType<typeof harness>) {
   return runContentUpdate({
     documentId: 7,
     content: '# New body',
-    title: 'A title',
     startingVersionLabel: 'v1',
     update: deps.update,
     waitForCompletion: deps.waitForCompletion,
@@ -47,7 +46,7 @@ describe('runContentUpdate', () => {
 
     const result = await run(deps);
 
-    expect(deps.update).toHaveBeenCalledWith(7, '# New body', 'A title');
+    expect(deps.update).toHaveBeenCalledWith(7, '# New body');
     expect(deps.waitForCompletion).toHaveBeenCalledWith(7, 'v1');
     expect(deps.onAdvanced).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ status: 'advanced' });

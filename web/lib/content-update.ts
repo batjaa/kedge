@@ -29,7 +29,6 @@ const UNCHANGED_MESSAGE = 'No new version — the content is identical to the cu
 export async function runContentUpdate({
   documentId,
   content,
-  title,
   startingVersionLabel,
   update,
   waitForCompletion,
@@ -38,9 +37,8 @@ export async function runContentUpdate({
 }: {
   documentId: number;
   content: string;
-  title: string;
   startingVersionLabel: string | null | undefined;
-  update: (id: number, content: string, title?: string) => Promise<ImportOutcome>;
+  update: (id: number, content: string) => Promise<ImportOutcome>;
   waitForCompletion: (
     id: number,
     label: string | null | undefined,
@@ -50,16 +48,13 @@ export async function runContentUpdate({
   /** Re-read server props after a failed or no-op update. */
   onServerRefresh: () => void;
 }): Promise<ContentUpdateResult> {
-  const outcome = await update(documentId, content, title);
+  const outcome = await update(documentId, content);
 
   if (!outcome.ok) {
     if (outcome.kind === 'validation') {
       return {
         status: 'validation',
-        message:
-          outcome.errors.content?.[0] ??
-          outcome.errors.title?.[0] ??
-          outcome.message,
+        message: outcome.errors.content?.[0] ?? outcome.message,
       };
     }
 
