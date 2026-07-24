@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
@@ -117,6 +118,14 @@ Route::prefix('v1')->group(function () {
         // degrades to nothing if it fails, so the list is never blocked (A1).
         Route::get('/workspace/summary', WorkspaceSummaryController::class)
             ->name('api.v1.workspace.summary');
+
+        // The dashboard's Recent activity feed (SPEC §16, M3.8 #111). A free,
+        // paginated, workspace-scoped read behind WorkspacePolicy; the panel loads
+        // page 1 once with no polling and degrades to nothing if it fails (A1), so
+        // the dashboard is never blocked. Only allowlisted event types with a
+        // user-facing sentence are ever projected (3A).
+        Route::get('/workspace/activity', ActivityController::class)
+            ->name('api.v1.workspace.activity');
 
         // Projects (SPEC §16, M3.6), all behind ProjectPolicy. List and create
         // are scoped to the caller's own workspace; update resolves a row by id.
