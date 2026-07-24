@@ -337,7 +337,7 @@ function OrphanedTray({
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />
         <h2 className="text-xs font-semibold text-rose-700 dark:text-rose-300">Orphaned tray</h2>
-        <span className="ml-auto rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-rose-600 ring-1 ring-inset ring-rose-400/30 dark:text-rose-400">
+        <span className="ml-auto rounded-lg bg-rose-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-rose-700 ring-1 ring-inset ring-rose-500/30 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/30">
           {threads.length === 0 ? 'empty' : threads.length}
         </span>
       </div>

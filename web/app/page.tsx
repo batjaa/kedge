@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
+import { MetaChip } from '@/components/app/meta-chip';
 import { DemoHome } from '@/components/app/demo-home';
 import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
@@ -70,9 +71,7 @@ async function ReviewQueue({
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Review queue
         </h1>
-        <span className="rounded-lg px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-zinc-500 ring-1 ring-inset ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700">
-          {workspace.slug}
-        </span>
+        <MetaChip>{workspace.slug}</MetaChip>
       </div>
       <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-400">
         Welcome, {firstName}. This is {workspace.name} — your personal workspace.
