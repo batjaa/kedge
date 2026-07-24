@@ -192,6 +192,14 @@ Route::prefix('v1')->group(function () {
                 ->middleware('resync.enabled')
                 ->name('api.v1.documents.resync');
 
+            // Manual content update for a pasted/uploaded document (#113): the
+            // spec-reserved manual-only versioning path (SPEC §5.1, §7). Rides the
+            // same ResyncDocumentJob pipeline as re-sync but is NOT behind
+            // resync.enabled — it spawns no outbound fetch and is an upload's only
+            // way to version. Shares the imports limiter (a paste-shaped write).
+            Route::post('/documents/{document}/content', [DocumentController::class, 'updateContent'])
+                ->name('api.v1.documents.content.update');
+
             // Claim a demo doc into my workspace (SPEC 10.3, #25). Edition-gated
             // like the anonymous demo import: absent entirely when self-hosted.
             Route::post('/documents/{document}/claim', ClaimDocumentController::class)

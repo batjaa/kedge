@@ -11,6 +11,7 @@ use App\Enums\SourceType;
 use App\Enums\SyncStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDocumentRequest;
+use App\Http\Requests\UpdateDocumentContentRequest;
 use App\Http\Resources\V1\DocumentListResource;
 use App\Http\Resources\V1\DocumentResource;
 use App\Jobs\ImportDocumentJob;
@@ -223,16 +224,31 @@ class DocumentController extends Controller
             'created_by' => $user->id,
             'source_type' => SourceType::Upload,
             'source_url' => null,
-            'source_meta' => array_filter([
-                'content' => (string) $request->validated('content'),
-                'title' => $title,
-            ], fn (string $value) => $value !== ''),
+            'source_meta' => $this->pasteSourceMeta((string) $request->validated('content'), $title),
             // A placeholder until the import synthesizes the real title from the
             // first heading; an explicit author title wins immediately.
             'title' => $title !== '' ? $title : 'Untitled document',
             'format' => DocumentFormat::Md,
             'status' => DocumentStatus::Importing,
         ]);
+    }
+
+    /**
+     * The `source_meta` shape a pasted/uploaded document carries (SPEC §5.1): the
+     * body — and an optional author title — so the {@see UploadConnector} (and any
+     * retry) re-imports identical bytes. Empty values are dropped so an absent
+     * title lets the importer synthesize one from the first heading. Shared by the
+     * initial paste import and a later manual content update (#113) so both persist
+     * an identical record of "the latest paste".
+     *
+     * @return array<string, string>
+     */
+    private function pasteSourceMeta(string $content, string $title): array
+    {
+        return array_filter([
+            'content' => $content,
+            'title' => $title,
+        ], static fn (string $value): bool => $value !== '');
     }
 
     /**
@@ -346,6 +362,59 @@ class DocumentController extends Controller
             409,
             'Only a ready document can be re-synced.',
         );
+
+        ResyncDocumentJob::dispatch($document, $request->user()?->id);
+
+        return DocumentResource::make($document)
+            ->response()
+            ->setStatusCode(202);
+    }
+
+    /**
+     * POST /api/v1/documents/{document}/content — replace a pasted/uploaded
+     * document's content, minting a new version through the SAME pipeline a
+     * re-sync uses (#113; SPEC §5.1 "manual-only versioning", §7 re-sync
+     * triggers). This is the spec-reserved manual versioning path an upload has
+     * had no trigger for until now.
+     *
+     * Only an upload-sourced document qualifies — a URL-sourced document re-pulls
+     * its source through {@see resync} instead, so its content is never
+     * client-overwritten. The new body (and optional replacement title) overwrite
+     * `documents.source_meta`, so the shared {@see UploadConnector} re-imports the
+     * LATEST paste — including on a retry after a transient failure — and the
+     * queued {@see ResyncDocumentJob} runs normalization → content-hash dedupe →
+     * re-anchor ladder → approval-staleness → the re-anchor digest unchanged
+     * (M3.8). A failed update never disturbs the current version (SPEC §5.3): the
+     * pipeline flips `current_version_id` only after the target version's anchors
+     * are durable.
+     *
+     * Deliberately NOT behind the `resync.enabled` rollout flag: that flag bounds
+     * outbound fetch/queue load, and a content update spawns no outbound fetch —
+     * it is the ONLY versioning path an upload has, so gating it there would
+     * strand pasted documents.
+     */
+    public function updateContent(UpdateDocumentContentRequest $request, Document $document): JsonResponse
+    {
+        $this->authorize('resync', $document);
+
+        abort_unless(
+            $document->source_type === SourceType::Upload,
+            409,
+            'Only a pasted or uploaded document can have its content updated. Re-sync a URL-sourced document instead.',
+        );
+
+        abort_unless(
+            $document->status === DocumentStatus::Ready && $document->current_version_id !== null,
+            409,
+            'Only a ready document can have its content updated.',
+        );
+
+        $document->forceFill([
+            'source_meta' => $this->pasteSourceMeta(
+                (string) $request->validated('content'),
+                (string) ($request->validated('title') ?? ''),
+            ),
+        ])->save();
 
         ResyncDocumentJob::dispatch($document, $request->user()?->id);
 
