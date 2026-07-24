@@ -128,16 +128,28 @@ export function useLiveDocumentList({
     [projectFilter],
   );
 
-  // A successful import prepends the 202'd document as an importing row (5A),
-  // bumps meta.total, AND flips the active chip to All so the new row is never
-  // hidden by a lifecycle filter. When a filter WAS active, the optimistic flip
-  // shows only the old filtered subset under All — so reconcile with the true All
-  // page 1 (which already carries this import), fixing the count and Load more.
+  // An import flips the active chip to All so the new row is never hidden (5A).
+  // First it supersedes any list fetch in flight (a Load more or a chip switch):
+  // bumping the generation drops that late result so it can't overwrite the
+  // import, restore a stale total, or hide the row under another filter; clearing
+  // the replace flag hands this fresh baseline ownership.
+  //
+  //   • Already on All → prepend the importing row instantly and bump the total
+  //     (the live-import path; correct as-is, All + 1).
+  //   • Under a filter → flip to All by refetching the true All page 1 (which
+  //     already carries this import) and committing the chip WITH its rows only on
+  //     success. No optimistic partial-All: a failed reconcile leaves the current
+  //     filter and rows untouched rather than a misleading list, and the row is one
+  //     retry (click All) away.
   const handleImported = useCallback(
     (doc: Document) => {
-      const wasFiltered = filter !== 'all';
-      setState((prev) => applyImport(prev, doc));
-      if (wasFiltered) void replaceWithFilter('all');
+      filterGenRef.current++;
+      replacingRef.current = false;
+      if (filter === 'all') {
+        setState((prev) => applyImport(prev, doc));
+      } else {
+        void replaceWithFilter('all');
+      }
     },
     [filter, replaceWithFilter],
   );
