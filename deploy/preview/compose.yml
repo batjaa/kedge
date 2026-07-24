@@ -30,7 +30,10 @@ x-api-env: &api-env
   SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-true}
   SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-}
   FRONTEND_URL: ${FRONTEND_URL:-}
-  SELF_HOSTED: ${SELF_HOSTED:-true}
+  # Preview shows the SaaS edition since M3.8 shipped the marketing landing +
+  # hero demo (both SaaS-only). Set SELF_HOSTED=true in the platform env to
+  # preview the self-hosted sign-in branch instead.
+  SELF_HOSTED: ${SELF_HOSTED:-false}
   GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
   GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
   PROJECTION_URL: http://web:3000

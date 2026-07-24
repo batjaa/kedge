@@ -26,7 +26,9 @@ Services: `proxy` (the domain points here), `api` + `worker` + `scheduler`
 
 Set in the deployment platform: `APP_URL`, `APP_KEY`, `DB_DATABASE`,
 `DB_USERNAME`, `DB_PASSWORD`. Optional: `GITHUB_CLIENT_ID`/`SECRET` (OAuth
-button hides when unset), `SELF_HOSTED` (defaults `true` here — no demo mode).
+button hides when unset), `SELF_HOSTED` (defaults `false` here since M3.8: the
+preview shows the SaaS edition — marketing landing + hero demo; set `true` in
+the platform env to preview the self-hosted sign-in branch).
 `SANCTUM_STATEFUL_DOMAINS` and `FRONTEND_URL` derive from `APP_URL` when
 unset. `NEXT_PUBLIC_API_URL` is a build arg baked empty — same-origin relative
 calls behind the proxy.
