@@ -2,8 +2,15 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\AnchorState;
+use App\Enums\ThreadStatus;
+use App\Enums\ThreadType;
+use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Project;
+use App\Models\Thread;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -159,6 +166,71 @@ class ProjectTest extends TestCase
         $this->fromWebApp()->getJson('/api/v1/projects')->assertUnauthorized();
     }
 
+    public function test_index_carries_per_project_document_open_and_orphan_counts(): void
+    {
+        // The dashboard rail (#104) reads three counts per project. Each rides a
+        // shared predicate: docs (withCount), open threads (Thread::scopeOpen),
+        // orphaned threads (Thread::scopeOrphaned) — the SAME definitions the
+        // summary counts with (7A), so a rail count can never re-encode them.
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+        $project = Project::factory()->for($workspace)->create(['name' => 'Anchoring']);
+
+        // Two docs in the project. One carries two open threads (one orphaned on
+        // its current version) plus a resolved thread that must not count.
+        $docA = $this->readyDoc($workspace, $project);
+        $docB = $this->readyDoc($workspace, $project);
+        $this->threadOn($docA, $user); // open, anchored elsewhere → open only
+        $orphan = $this->threadOn($docA, $user); // open AND orphaned
+        $this->anchor($orphan, $docA->currentVersion, AnchorState::Orphaned);
+        $this->threadOn($docB, $user, ThreadStatus::Resolved); // neither open nor counted
+
+        // A second project and an Unfiled doc with an orphaned thread: neither may
+        // bleed into Anchoring's counts (each subquery is keyed to its project).
+        $other = Project::factory()->for($workspace)->create(['name' => 'Zebra']);
+        $unfiled = $this->readyDoc($workspace, null);
+        $this->anchor($this->threadOn($unfiled, $user), $unfiled->currentVersion, AnchorState::Orphaned);
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/projects')
+            ->assertOk();
+
+        // Name-ordered: Anchoring first.
+        $response
+            ->assertJsonPath('data.0.name', 'Anchoring')
+            ->assertJsonPath('data.0.documents_count', 2)
+            ->assertJsonPath('data.0.open_threads_count', 2)
+            ->assertJsonPath('data.0.orphaned_threads_count', 1)
+            // The empty sibling project reports honest zeroes, never nulls.
+            ->assertJsonPath('data.1.name', 'Zebra')
+            ->assertJsonPath('data.1.documents_count', 0)
+            ->assertJsonPath('data.1.open_threads_count', 0)
+            ->assertJsonPath('data.1.orphaned_threads_count', 0);
+
+        $this->assertSame($other->id, $response->json('data.1.id'));
+    }
+
+    public function test_create_and_update_omit_the_rail_thread_counts(): void
+    {
+        // Only the index counts threads; create/update count documents alone, so
+        // the two rail aliases are absent (whenCounted) rather than a stale zero.
+        $user = $this->registerUser();
+
+        $created = $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/projects', ['name' => 'Anchoring'])
+            ->assertCreated();
+        $this->assertArrayHasKey('documents_count', $created->json('data'));
+        $this->assertArrayNotHasKey('open_threads_count', $created->json('data'));
+        $this->assertArrayNotHasKey('orphaned_threads_count', $created->json('data'));
+
+        $id = $created->json('data.id');
+        $updated = $this->actingAs($user)->fromWebApp()
+            ->patchJson("/api/v1/projects/{$id}", ['name' => 'Re-anchoring'])
+            ->assertOk();
+        $this->assertArrayNotHasKey('open_threads_count', $updated->json('data'));
+        $this->assertArrayNotHasKey('orphaned_threads_count', $updated->json('data'));
+    }
+
     // ---- update ------------------------------------------------------------
 
     public function test_renames_a_project_and_edits_its_description(): void
@@ -245,5 +317,39 @@ class ProjectTest extends TestCase
             email: $email,
             password: 'correct-horse-battery',
         );
+    }
+
+    /** A ready document on its own current version, optionally filed under a project. */
+    private function readyDoc(Workspace $workspace, ?Project $project): Document
+    {
+        $document = Document::factory()->for($workspace)->ready()->create([
+            'project_id' => $project?->id,
+        ]);
+        $version = DocumentVersion::factory()->for($document)->create();
+        $document->update(['current_version_id' => $version->id]);
+
+        return $document->refresh();
+    }
+
+    private function threadOn(Document $document, User $user, ThreadStatus $status = ThreadStatus::Open): Thread
+    {
+        return Thread::create([
+            'document_id' => $document->id,
+            'type' => ThreadType::Inline->value,
+            'status' => $status->value,
+            'created_by' => $user->id,
+        ]);
+    }
+
+    private function anchor(Thread $thread, DocumentVersion $version, AnchorState $state): void
+    {
+        $thread->anchors()->create([
+            'document_version_id' => $version->id,
+            'exact' => 'anchored text',
+            'start' => 0,
+            'end' => 12,
+            'projection_version' => '1',
+            'state' => $state->value,
+        ]);
     }
 }

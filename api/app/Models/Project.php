@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 /**
  * A project (SPEC §16, M3.6): a free container inside a workspace for what a
@@ -42,5 +43,21 @@ class Project extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    /**
+     * Threads on this project's documents (SPEC §16, decision 7A). A count-only
+     * read-through the dashboard rail's per-project open/orphaned counts ride via
+     * a `withCount` (#104): each count constrains this relation with the ONE
+     * shared Thread predicate — {@see Thread::scopeOpen()} / {@see Thread::scopeOrphaned()}
+     * — never a re-encoded one, so a rail count can never drift from what the
+     * summary and list report. Threads carry no `project_id`; they reach a project
+     * only through their document, exactly this join.
+     *
+     * @return HasManyThrough<Thread, Document, $this>
+     */
+    public function threads(): HasManyThrough
+    {
+        return $this->hasManyThrough(Thread::class, Document::class);
     }
 }
