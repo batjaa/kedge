@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
 import { MetaChip } from '@/components/app/meta-chip';
-import { DemoHome } from '@/components/app/demo-home';
+import { Landing } from '@/components/app/landing/landing';
 import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
@@ -34,11 +34,14 @@ export default async function RootPage() {
   }
 
   // Anonymous. The edition decides the surface — self-hosted keeps the sign-in
-  // redirect; the SaaS greets a stranger with the paste box.
+  // redirect; the SaaS greets a stranger with the Open Harbor marketing landing
+  // (the hero hosts the same zero-signup paste box). The edition read fails
+  // closed to self-hosted (lib/capabilities), so the landing never shows on an
+  // instance we can't confirm is the SaaS.
   const { selfHosted } = await getCapabilities();
   if (selfHosted) redirect('/signin');
 
-  return <DemoHome />;
+  return <Landing />;
 }
 
 function firstNameOf(name: string): string {
