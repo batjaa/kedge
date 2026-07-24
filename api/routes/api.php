@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\SharedDocumentController;
 use App\Http\Controllers\Api\V1\ThreadCommentController;
 use App\Http\Controllers\Api\V1\ThreadController;
 use App\Http\Controllers\Api\V1\TrackedRepoController;
+use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
@@ -95,6 +96,14 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
+
+        // Workspace settings — General (SPEC §16, M3.7 decision 11A). Rename /
+        // re-slug the caller's OWN personal workspace: no id in the URL
+        // (integrations-style scoping), owner-only via WorkspacePolicy, slug
+        // validated + globally unique with an inline 422 on a clash. A rare
+        // settings mutation, so no dedicated limiter (matches projects update).
+        Route::patch('/workspace', [WorkspaceController::class, 'update'])
+            ->name('api.v1.workspace.update');
 
         // The workspace document list — the authenticated home (SPEC 11). A free
         // read like show/poll; only the write endpoints below carry the import

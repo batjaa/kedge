@@ -12,6 +12,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class WorkspaceResource extends JsonResource
 {
     /**
+     * No "data" envelope — matches the M0/M1 house shape (CurrentUserResource,
+     * IntegrationResource). Nested inside CurrentUserResource today; the settings
+     * PATCH also returns it top-level, so the web reads one stable workspace shape.
+     *
+     * @var string|null
+     */
+    public static $wrap = null;
+
+    /**
      * Transform the resource into an array.
      *
      * @return array<string, mixed>
