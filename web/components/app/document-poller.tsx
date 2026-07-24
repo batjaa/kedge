@@ -24,7 +24,7 @@ export function DocumentPoller({ id }: { id: number }) {
       return doc && doc.status !== 'importing' ? doc : null;
     },
     onSettled: () => router.refresh(),
-    deps: [id, router],
+    key: id,
   });
 
   return (
