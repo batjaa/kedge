@@ -115,6 +115,9 @@ const ROADMAP: {
 ];
 
 const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+// The self-hosting guide lives in the repo (deploy/local/README.md), not on the
+// docs surface — link the real location rather than the generic docs index.
+const selfHostGuideUrl = `${githubUrl}/tree/${gitConfig.branch}/deploy/local`;
 
 // Shared link styling for the header/footer nav and CTAs.
 const NAV_LINK = 'rounded-md hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:text-white';
@@ -603,12 +606,12 @@ function SelfHostCta() {
               compose file.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/docs"
+              <a
+                href={selfHostGuideUrl}
                 className="rounded-full bg-emerald-400/10 px-5 py-2 text-sm font-medium text-emerald-400 ring-1 ring-inset ring-emerald-400/20 hover:bg-emerald-400/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900"
               >
                 Read the self-hosting guide
-              </Link>
+              </a>
               <a
                 href={githubUrl}
                 className="rounded-full bg-white/5 px-5 py-2 text-sm font-medium text-zinc-300 ring-1 ring-inset ring-white/10 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900"
@@ -617,21 +620,24 @@ function SelfHostCta() {
               </a>
             </div>
           </div>
+          {/* Honest static terminal shot: the real one-command flow from
+              deploy/local/README.md (`./deploy/local/up.sh`), not an invented
+              `docker compose up` path. */}
           <div
             aria-hidden="true"
             className="overflow-x-auto rounded-2xl bg-zinc-950/60 p-5 font-mono text-xs leading-7 text-zinc-300 ring-1 ring-inset ring-white/10"
           >
             <div>
-              <span className="select-none text-emerald-400">$</span> git clone {githubUrl}
+              <span className="select-none text-emerald-400">$</span> git clone {githubUrl}.git
             </div>
             <div>
-              <span className="select-none text-emerald-400">$</span> cd kedge/deploy &amp;&amp; docker compose up
+              <span className="select-none text-emerald-400">$</span> cd kedge &amp;&amp; ./deploy/local/up.sh
             </div>
-            <div className="text-zinc-500">✓ api · web · postgres · kroki</div>
+            <div className="text-zinc-500">✓ proxy · api · queue · web · postgres · kroki</div>
             <div className="text-zinc-500">
-              → http://localhost:8080 — importing <span className="text-zinc-300">docs/SPEC.md</span> via PAT
+              → <span className="text-zinc-300">http://localhost:8080</span> — sign in is the front door
             </div>
-            <div className="text-emerald-400">ready. nothing left the network.</div>
+            <div className="text-emerald-400">ready. nothing left the machine.</div>
           </div>
         </div>
       </div>
@@ -647,7 +653,7 @@ function LandingFooter() {
           <BrandMark />
           <span className="text-xs text-zinc-400 dark:text-zinc-500">— comments that keep their place.</span>
         </div>
-        <div className="flex items-center gap-5 text-xs text-zinc-500 sm:ml-auto">
+        <div className="flex items-center gap-5 text-xs text-zinc-500 sm:ml-auto dark:text-zinc-400">
           <a href={githubUrl} className={NAV_LINK}>
             GitHub
           </a>

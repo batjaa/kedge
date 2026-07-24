@@ -88,7 +88,12 @@ export function LandingHeroForm() {
           {error}
         </p>
       ) : (
-        <p id="demo-hint" className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400 dark:text-zinc-500">
+        <p id="demo-hint" className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {/* Honest to the demo's contract: the anonymous endpoint accepts only
+              public GitHub file links and raw Markdown/MDX/HTML URLs (private
+              repos via PAT are a signed-in feature, so not advertised here). */}
+          <span>Public GitHub &amp; raw URLs</span>
+          <span aria-hidden="true">·</span>
           <span>Markdown</span>
           <span aria-hidden="true">·</span>
           <span>MDX</span>
@@ -96,8 +101,6 @@ export function LandingHeroForm() {
           <span>HTML</span>
           <span aria-hidden="true">·</span>
           <span>PlantUML &amp; Mermaid via Kroki</span>
-          <span aria-hidden="true">·</span>
-          <span>private repos via PAT</span>
         </p>
       )}
     </form>

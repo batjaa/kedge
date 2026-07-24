@@ -40,9 +40,10 @@ describe('Landing (Open Harbor marketing home)', () => {
     expect(html).toContain('The harbor chart');
     expect(html).toContain('Import &amp; render');
     expect(html).toContain('AI &amp; agents');
-    // Self-host story.
+    // Self-host story — the honest one-command flow (deploy/local/up.sh), not an
+    // invented compose path.
     expect(html).toContain('Your specs never have to leave home');
-    expect(html).toContain('docker compose up');
+    expect(html).toContain('./deploy/local/up.sh');
   });
 
   it('anchors the in-page nav to real section ids', () => {
