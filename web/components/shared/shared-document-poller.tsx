@@ -37,7 +37,7 @@ export function SharedDocumentPoller({ token }: { token: string }) {
       return null;
     },
     onSettled: () => router.refresh(),
-    deps: [token, router],
+    key: token,
   });
 
   return (

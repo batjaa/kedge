@@ -217,7 +217,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 ## Known debt (M3.6 branch review, 2026-07-21)
 
 - **GitHub response policy lives twice** — `GithubRepoClient` (tree listing) re-implements the blob connector's rate-limit classification, header block, per-segment encoding, and untrusted-message sanitizer; its docblock promises parity that only copies enforce. Extract a shared `Services/Github` collaborator/trait for both. (M)
-- **`usePollUntilSettled` deps are caller-owned** — each of four consumers supplies its own effect-deps array behind an eslint-disable; a wrong array silently polls stale closures. Internalize with refs-for-callbacks + a `key` param. (S)
+- [x] ~~**`usePollUntilSettled` deps are caller-owned**~~ — **RESOLVED (#98, 2026-07-23)**: the hook now holds `poll`/`onSettled` in refs refreshed every render and reads them at tick time, and takes a single `key` (the poll target) as its only dependency. The stateful loop is extracted as `startPollLoop` (injected scheduler) so the no-stale-closure and restart-on-key-change guarantees are unit-tested without a DOM. All four consumers migrated to `key:`; the caller-owned effect-deps arrays and their eslint-disables are gone.
 - **Scan status remains triple-encoded** — `last_scan_status` column, `scan_error` column, and `status`/`error` embedded in `last_scan_report`; web reads a mix. The pending-flip fix removed the dangerous seam; consolidating to one authoritative representation with derivations at the boundary is still worth doing. (S)
 
 ## Decision log (design refresh — Open Harbor, 2026-07-23)

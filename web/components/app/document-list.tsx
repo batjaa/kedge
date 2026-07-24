@@ -426,7 +426,7 @@ function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) =
       return doc && doc.status !== 'importing' ? doc : null;
     },
     onSettled,
-    deps: [id, onSettled],
+    key: id,
   });
 
   return null;
