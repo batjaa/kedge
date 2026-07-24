@@ -16,8 +16,10 @@ import './global.css';
 // Open Harbor light-first (DESIGN.md): defaults to the warm light register.
 // next-themes is unavailable this far outside the provider tree, so a tiny inline
 // script re-applies a persisted dark choice before paint — the only way to keep
-// the toggle honest on a surface with no React context.
-const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='dark'||((!t||t==='system')&&matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`;
+// the toggle honest on a surface with no React context. An absent value stays
+// light (matching the app's defaultTheme: 'light'); only an explicit stored
+// 'system' choice consults the OS preference.
+const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`;
 
 export default function GlobalError({
   error,
