@@ -10,6 +10,7 @@ use App\Enums\SyncStatus;
 use App\Services\SystemWorkspace;
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -54,6 +55,41 @@ class Document extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * Documents with a specific editorial lifecycle (SPEC §16). The one predicate
+     * the summary's per-lifecycle counts and the list's lifecycle filter share so
+     * a chip count can never drift from the rows it filters (7A).
+     *
+     * @param  Builder<Document>  $query
+     * @return Builder<Document>
+     */
+    public function scopeWithLifecycle(Builder $query, LifecycleStatus $status): Builder
+    {
+        return $query->where('documents.lifecycle_status', $status->value);
+    }
+
+    /**
+     * Documents that need a human's attention (SPEC §16, decision 7A): a failed
+     * first import, OR an orphaned thread, OR a stale approval. Defined *once*
+     * here — composing {@see Thread::scopeOrphaned()} and
+     * {@see Approval::scopeStale()} — so the summary's needs-attention count and
+     * the "Attention" list filter can never diverge (the tracked-repo
+     * triple-encoding debt is the cautionary precedent). Each disjunct reuses its
+     * owning model's single predicate rather than re-encoding orphan/stale SQL.
+     *
+     * @param  Builder<Document>  $query
+     * @return Builder<Document>
+     */
+    public function scopeNeedsAttention(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query
+                ->where('documents.status', DocumentStatus::Failed->value)
+                ->orWhereHas('threads', fn (Builder $threads) => $threads->orphaned())
+                ->orWhereHas('approvals', fn (Builder $approvals) => $approvals->active()->stale());
+        });
     }
 
     /**

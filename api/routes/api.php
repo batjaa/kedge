@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\SharedDocumentController;
 use App\Http\Controllers\Api\V1\ThreadCommentController;
 use App\Http\Controllers\Api\V1\ThreadController;
 use App\Http\Controllers\Api\V1\TrackedRepoController;
+use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
@@ -101,6 +102,12 @@ Route::prefix('v1')->group(function () {
         // limiter.
         Route::get('/documents', [DocumentController::class, 'index'])
             ->name('api.v1.documents.index');
+
+        // The dashboard summary — stats strip + filter-chip counts (SPEC §16,
+        // M3.7). A free workspace-scoped read behind WorkspacePolicy; the strip
+        // degrades to nothing if it fails, so the list is never blocked (A1).
+        Route::get('/workspace/summary', WorkspaceSummaryController::class)
+            ->name('api.v1.workspace.summary');
 
         // Projects (SPEC §16, M3.6), all behind ProjectPolicy. List and create
         // are scoped to the caller's own workspace; update resolves a row by id.
