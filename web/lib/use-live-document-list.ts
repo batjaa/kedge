@@ -73,9 +73,13 @@ export function useLiveDocumentList({
   const [loadingMore, setLoadingMore] = useState(false);
   const loadingRef = useRef(false);
   const [announcement, setAnnouncement] = useState('');
-  // Latest-wins for filter fetches: a fast second chip click must not be
-  // overwritten by a slow first fetch resolving late.
-  const filterTokenRef = useRef(0);
+  // Generation for list-replacing fetches (chip select + import reconcile): a
+  // slow older read can't overwrite a newer chip, and a Load more captures it to
+  // drop a page that resolves after the filter changed under it (latest-wins).
+  const filterGenRef = useRef(0);
+  // True while a replace is in flight, so Load more won't append onto a list that
+  // is about to be wholesale-replaced.
+  const replacingRef = useRef(false);
 
   // Rows/paginator setters over the slice — the exposed interface each surface
   // uses for grouping and reassignment stays identical. Two separate setState
@@ -98,12 +102,45 @@ export function useLiveDocumentList({
     }));
   }, []);
 
+  // Refetch page 1 under a filter and REPLACE the list — the one path for a chip
+  // selection and for reconciling an import made under a filter (below). Two
+  // guards keep it honest: `filterGenRef` bumps on every replace so a slow older
+  // read can't overwrite a newer chip (latest-wins), and the filter is committed
+  // only WITH its rows (applyFilterPage) on success — a failed read leaves the
+  // current chip and rows untouched rather than stranding the new chip over the
+  // old rows. `replacingRef` blocks a Load more from appending onto a list that is
+  // about to be replaced. Filtering is a refetch, never a client cull, so it is
+  // correct across pagination (7A).
+  const replaceWithFilter = useCallback(
+    async (next: DocumentLifecycleFilter): Promise<void> => {
+      const token = ++filterGenRef.current;
+      replacingRef.current = true;
+      try {
+        const page = await readDocumentPage(1, projectFilter, lifecycleParam(next));
+        if (filterGenRef.current !== token) return; // superseded by a newer chip
+        if (page) setState((prev) => applyFilterPage(prev, page, next));
+      } finally {
+        // Only the still-current replace clears the flag; a superseded one leaves
+        // it owned by the newer replace already in flight.
+        if (filterGenRef.current === token) replacingRef.current = false;
+      }
+    },
+    [projectFilter],
+  );
+
   // A successful import prepends the 202'd document as an importing row (5A),
-  // bumps meta.total (the count chip's single source of truth), AND flips the
-  // active chip to All so the new row is never hidden by a lifecycle filter.
-  const handleImported = useCallback((doc: Document) => {
-    setState((prev) => applyImport(prev, doc));
-  }, []);
+  // bumps meta.total, AND flips the active chip to All so the new row is never
+  // hidden by a lifecycle filter. When a filter WAS active, the optimistic flip
+  // shows only the old filtered subset under All — so reconcile with the true All
+  // page 1 (which already carries this import), fixing the count and Load more.
+  const handleImported = useCallback(
+    (doc: Document) => {
+      const wasFiltered = filter !== 'all';
+      setState((prev) => applyImport(prev, doc));
+      if (wasFiltered) void replaceWithFilter('all');
+    },
+    [filter, replaceWithFilter],
+  );
 
   const handleSettled = useCallback((doc: Document) => {
     setItems((prev) => mergeSettled(prev, doc));
@@ -114,16 +151,20 @@ export function useLiveDocumentList({
   // The ref guards the synchronous double-click batched state cannot (#86); a
   // failed fetch keeps every loaded row and leaves meta untouched so Load more
   // reappears. The project filter keeps the appended page scoped (M3.6) and the
-  // active lifecycle chip keeps it narrowed (7A) — page 2 filters like page 1.
+  // active lifecycle chip keeps it narrowed (7A) — page 2 filters like page 1. The
+  // generation captured at the start is re-checked before applying, and a pending
+  // filter replace blocks the append outright, so a page that resolves after a
+  // chip change never contaminates the new filter's list.
   const handleLoadMore = useCallback(async () => {
-    if (loadingRef.current) return;
+    if (loadingRef.current || replacingRef.current) return;
     const next = nextLoadMorePage({ meta });
     if (next === null) return;
+    const token = filterGenRef.current;
     loadingRef.current = true;
     setLoadingMore(true);
     try {
       const page = await readDocumentPage(next, projectFilter, lifecycleParam(filter));
-      if (page) {
+      if (page && filterGenRef.current === token) {
         setItems((prev) => appendItems(prev, page.data));
         setMeta(page.meta);
       }
@@ -141,22 +182,14 @@ export function useLiveDocumentList({
     setItems((prev) => markRetrying(prev, id));
   }, [setItems]);
 
-  // Select a lifecycle chip (5A): highlight it at once, then refetch page 1 under
-  // it server-side and replace the list (applyFilterPage) — filtering is a
-  // refetch, never a client cull, so it is correct across pagination (7A). A
-  // failed/superseded read leaves the current rows in place. Latest-wins guards a
-  // rapid chip switch; the `prev.filter === next` check drops a resolve whose chip
-  // is no longer active.
+  // Select a lifecycle chip (5A): refetch page 1 under it and commit the chip WITH
+  // its rows on success (never before), so the active chip always reflects the
+  // rows on screen.
   const selectFilter = useCallback(
     (next: DocumentLifecycleFilter) => {
-      const token = ++filterTokenRef.current;
-      setState((prev) => ({ ...prev, filter: next }));
-      void readDocumentPage(1, projectFilter, lifecycleParam(next)).then((page) => {
-        if (page === null || filterTokenRef.current !== token) return;
-        setState((prev) => (prev.filter === next ? applyFilterPage(prev, page, next) : prev));
-      });
+      void replaceWithFilter(next);
     },
-    [projectFilter],
+    [replaceWithFilter],
   );
 
   return {

@@ -296,7 +296,10 @@ describe('document list live state', () => {
   describe('applyImport — a fresh import flips the chip to All (5A)', () => {
     it('prepends the importing row, bumps the total, AND resets the filter to All', () => {
       // Watching the Approved chip, a new import arrives (draft/importing). It must
-      // not be hidden: the chip flips to All so the row is always watchable.
+      // not be hidden: the chip flips to All at once so the row is instantly
+      // watchable. This is the OPTIMISTIC step — when a filter was active the hook
+      // follows it with a refetch of the true All page 1 (reconciling the count and
+      // Load more); when All was already active this IS the correct All + 1.
       const state: LiveListState = {
         items: [item({ id: 1, lifecycle_status: 'approved' })],
         meta: meta({ total: 3 }),
