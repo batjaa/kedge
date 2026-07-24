@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use Closure;
+use App\Http\Requests\Concerns\CapsPastedContent;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -16,6 +16,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class StoreDocumentRequest extends FormRequest
 {
+    use CapsPastedContent;
+
     public function authorize(): bool
     {
         return true;
@@ -37,22 +39,5 @@ class StoreDocumentRequest extends FormRequest
             // 404s a foreign id (8A).
             'project_id' => ['sometimes', 'nullable', 'integer'],
         ];
-    }
-
-    /**
-     * Byte-precise size cap for pasted content (config-driven). String `max:` counts
-     * characters, not bytes, so a multibyte paste could slip past a character cap —
-     * this enforces the real storage budget.
-     */
-    protected function withinPasteCap(): Closure
-    {
-        return function (string $attribute, mixed $value, Closure $fail): void {
-            $cap = (int) config('kedge.import.max_paste_bytes');
-
-            if (is_string($value) && strlen($value) > $cap) {
-                $mb = rtrim(rtrim(number_format($cap / (1024 * 1024), 1), '0'), '.');
-                $fail("The pasted content may not be larger than {$mb} MB.");
-            }
-        };
     }
 }

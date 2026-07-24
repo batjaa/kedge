@@ -170,6 +170,21 @@ export function resyncDocument(id: number): Promise<ImportOutcome> {
   );
 }
 
+/**
+ * POST /api/v1/documents/{id}/content — replace a pasted/uploaded document's
+ * content, minting a new version through the same pipeline a re-sync uses
+ * (#113). This surface versions the body only; the document's title is preserved
+ * server-side. Returns the shared ImportOutcome so the update surface can surface
+ * a size-cap 422 in place, exactly like the initial paste.
+ */
+export function updateDocumentContent(id: number, content: string): Promise<ImportOutcome> {
+  return mutate(
+    `/api/v1/documents/${id}/content`,
+    { content },
+    'Something went wrong updating the content. Please try again.',
+  );
+}
+
 export type DocumentMutationOutcome =
   | { ok: true; document: Document }
   | { ok: false; kind: 'validation' | 'rate-limited' | 'error'; message: string };

@@ -42,6 +42,11 @@ import {
   type ReplyToThreadInput,
 } from '@/lib/comments-client';
 import { readDocument, resyncDocument, updateDocumentLifecycle } from '@/lib/documents-client';
+import {
+  refreshSurfaceAfterResync,
+  waitForResyncCompletion,
+} from '@/lib/resync-polling';
+import { UpdateContentAction } from './update-content-action';
 import { assignDocumentProject } from '@/lib/projects-client';
 import {
   decorateAnchorHighlights,
@@ -70,8 +75,6 @@ import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from
 
 const SCROLL_SPY_OFFSET = 136;
 const MOBILE_BREAKPOINT = 1280;
-const RESYNC_POLL_INTERVAL_MS = 1500;
-const RESYNC_POLL_ATTEMPTS = 12;
 const NEW_VERSION_POLL_INTERVAL_MS = 15000;
 const LIFECYCLE_OPTIONS: LifecycleStatus[] = ['draft', 'in_review', 'approved', 'superseded'];
 
@@ -96,6 +99,7 @@ export function DocumentReviewSurface({
   plainText,
   projectionVersion,
   canResync = false,
+  canUpdateContent = false,
   lastSyncStatus = null,
   syncError = null,
   children,
@@ -122,6 +126,14 @@ export function DocumentReviewSurface({
   plainText: string | null;
   projectionVersion: string | null;
   canResync?: boolean;
+  /**
+   * Upload-sourced documents (#113): the author can re-paste the body to mint a
+   * new version through the same pipeline a re-sync uses. Mutually exclusive with
+   * `canResync` — a document has either a URL to re-pull or a body to re-paste,
+   * never both — and, like `canResync`, only ever true on the authenticated
+   * surface (the share surface passes neither).
+   */
+  canUpdateContent?: boolean;
   lastSyncStatus?: SyncStatus | null;
   syncError?: string | null;
   children: ReactNode;
@@ -857,6 +869,19 @@ export function DocumentReviewSurface({
     </button>
   ) : null;
 
+  // An upload-sourced document's manual-versioning affordance (#113): re-paste
+  // the body to mint a new version through the same pipeline. Owns its own dialog
+  // + polling state; it refreshes this surface's threads and server props on a
+  // successful flip, exactly as resync() does.
+  const updateContentControl = canUpdateContent ? (
+    <UpdateContentAction
+      documentId={documentId}
+      currentVersionLabel={currentVersionLabel}
+      refreshThreads={refreshLoadedThreads}
+      onServerRefresh={() => router.refresh()}
+    />
+  ) : null;
+
   const versionSwitcher = versions.length > 0 ? (
     <DocumentVersionSwitcher
       documentId={documentId}
@@ -866,13 +891,14 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
-  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl ? (
+  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl || updateContentControl ? (
     <>
       {versionSwitcher}
       {projectControl}
       {lifecycleControl}
       {approvalControl}
       {resyncControl}
+      {updateContentControl}
     </>
   ) : null;
 
@@ -1174,49 +1200,3 @@ function firstThreadIdFromTarget(target: EventTarget | null): number | null {
   return id ? Number(id) : null;
 }
 
-type ResyncPollResult =
-  | { status: 'advanced' }
-  | { status: 'failed'; message: string }
-  | { status: 'timeout' };
-
-async function waitForResyncCompletion(
-  documentId: number,
-  startingVersionLabel: string | null | undefined,
-): Promise<ResyncPollResult> {
-  for (let attempt = 0; attempt < RESYNC_POLL_ATTEMPTS; attempt++) {
-    await delay(RESYNC_POLL_INTERVAL_MS);
-
-    const document = await readDocument(documentId).catch(() => null);
-    if (!document) continue;
-
-    if (document.last_sync_status === 'failed') {
-      return {
-        status: 'failed',
-        message: document.sync_error ?? 'Sync failed. Showing last good version.',
-      };
-    }
-
-    const currentVersionLabel = documentVersionLabel(document);
-    if (currentVersionLabel !== null && currentVersionLabel !== (startingVersionLabel ?? null)) {
-      return { status: 'advanced' };
-    }
-  }
-
-  return { status: 'timeout' };
-}
-
-async function refreshSurfaceAfterResync(
-  refreshThreads: () => Promise<void>,
-  refreshServerProps: () => void,
-): Promise<void> {
-  await refreshThreads().catch(() => undefined);
-  refreshServerProps();
-}
-
-function documentVersionLabel(document: Document): string | null {
-  return displayVersionLabel(document.current_version);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

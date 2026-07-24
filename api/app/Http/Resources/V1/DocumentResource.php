@@ -54,6 +54,11 @@ class DocumentResource extends JsonResource
             'approvals' => ApprovalResource::collection($this->whenLoaded('activeApprovals')),
             'capabilities' => [
                 'update_lifecycle' => $request->user()?->can('updateLifecycle', $this->resource) ?? false,
+                // Author-only manual content update for pasted/uploaded docs (#113).
+                // Pure authorization here (authorOf); the web additionally gates the
+                // affordance on source_type === upload, and the endpoint 409s a
+                // URL-sourced document.
+                'update_content' => $request->user()?->can('updateContent', $this->resource) ?? false,
             ],
             'current_version' => $this->whenLoaded(
                 'currentVersion',
