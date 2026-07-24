@@ -130,15 +130,19 @@ export async function readDocument(id: number): Promise<Document | null> {
 /**
  * GET page N of the workspace document list via the same-origin BFF route (#86).
  * `project` scopes the read to one project (id) or the Unfiled bucket
- * (`'unfiled'`) so a project page's Load more stays filtered (M3.6).
+ * (`'unfiled'`) so a project page's Load more stays filtered (M3.6). `lifecycle`
+ * narrows to a dashboard chip's state (#103) — server-side, so it is correct
+ * across pagination; omit it (or pass undefined) for All.
  */
 export async function readDocumentPage(
   page: number,
   project?: string | number,
+  lifecycle?: string,
 ): Promise<DocumentListPage | null> {
   try {
     const query = new URLSearchParams({ page: String(page) });
     if (project !== undefined && project !== '') query.set('project', String(project));
+    if (lifecycle !== undefined && lifecycle !== '') query.set('lifecycle', lifecycle);
 
     const res = await fetch(`/api/bff/documents?${query.toString()}`, {
       credentials: 'same-origin',

@@ -8,6 +8,21 @@ export type LifecycleStatus = 'draft' | 'in_review' | 'approved' | 'superseded';
 export type DocumentFormat = 'md' | 'mdx' | 'html';
 
 /**
+ * The dashboard's lifecycle filter chips (SPEC §16, M3.7; #103). Mirrors the
+ * API's DocumentLifecycleFilter enum — the ONE place a chip value maps to its
+ * predicate lives server-side (7A); this is only the wire value the list endpoint
+ * accepts as `?lifecycle=`. `all` is the identity (no server filter); the three
+ * editorial states a chip surfaces; and the `needs_attention` composite (failed
+ * imports + orphaned threads + stale approvals). Superseded has no chip.
+ */
+export type DocumentLifecycleFilter =
+  | 'all'
+  | 'draft'
+  | 'in_review'
+  | 'approved'
+  | 'needs_attention';
+
+/**
  * The authenticated dashboard's at-a-glance state (SPEC §16, M3.7): the stats
  * strip reads the totals, orphans, stale approvals, and imports; the lifecycle
  * filter chips (#103) read `documents.total` (All), the three lifecycle buckets,

@@ -15,6 +15,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // page's Load more stays scoped to its project (M3.6).
   const project = request.nextUrl.searchParams.get('project');
   if (project) query.set('project', project);
+  // Forward the dashboard lifecycle filter chip (#103) so the server narrows the
+  // whole set — the API validates the value and applies the shared predicate (7A).
+  const lifecycle = request.nextUrl.searchParams.get('lifecycle');
+  if (lifecycle) query.set('lifecycle', lifecycle);
 
   const { status, data } = await forwardApiGet<DocumentListPage>(
     request.headers,

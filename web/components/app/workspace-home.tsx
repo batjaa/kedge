@@ -43,6 +43,8 @@ export function WorkspaceHome({
     meta,
     loadingMore,
     announcement,
+    filter,
+    selectFilter,
     handleImported,
     handleSettled,
     handleLoadMore,
@@ -122,6 +124,9 @@ export function WorkspaceHome({
         onRetried={onRetried}
         projects={projects}
         onAssigned={onAssigned}
+        filter={filter}
+        onSelectFilter={selectFilter}
+        summary={summary}
         grouped
       />
     </>

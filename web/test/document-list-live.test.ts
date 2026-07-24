@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendItems,
+  applyFilterPage,
+  applyImport,
   hasMorePages,
+  type LiveListState,
+  lifecycleParam,
   markRetrying,
   mergeSettled,
   nextLoadMorePage,
@@ -10,7 +14,12 @@ import {
   shouldPoll,
   toListItem,
 } from '@/lib/document-list-live';
-import type { Document, DocumentListItem, DocumentListMeta } from '@/lib/document-types';
+import type {
+  Document,
+  DocumentListItem,
+  DocumentListMeta,
+  DocumentListPage,
+} from '@/lib/document-types';
 
 describe('document list live state', () => {
   describe('prependItem', () => {
@@ -266,6 +275,112 @@ describe('document list live state', () => {
 
     it('is false for a null meta (degraded read has no pages to load)', () => {
       expect(hasMorePages(null)).toBe(false);
+    });
+  });
+
+  // ---- M3.7: lifecycle filter chips + live rows under a filter (5A / 7A) -----
+
+  describe('lifecycleParam', () => {
+    it('maps All to undefined so the request omits the param (the identity)', () => {
+      expect(lifecycleParam('all')).toBeUndefined();
+    });
+
+    it('passes each narrowing state through as its wire value', () => {
+      expect(lifecycleParam('draft')).toBe('draft');
+      expect(lifecycleParam('in_review')).toBe('in_review');
+      expect(lifecycleParam('approved')).toBe('approved');
+      expect(lifecycleParam('needs_attention')).toBe('needs_attention');
+    });
+  });
+
+  describe('applyImport — a fresh import flips the chip to All (5A)', () => {
+    it('prepends the importing row, bumps the total, AND resets the filter to All', () => {
+      // Watching the Approved chip, a new import arrives (draft/importing). It must
+      // not be hidden: the chip flips to All so the row is always watchable.
+      const state: LiveListState = {
+        items: [item({ id: 1, lifecycle_status: 'approved' })],
+        meta: meta({ total: 3 }),
+        filter: 'approved',
+      };
+
+      const next = applyImport(state, document({ id: 9, status: 'importing' }));
+
+      expect(next.filter).toBe('all');
+      expect(next.items.map(({ id }) => id)).toEqual([9, 1]);
+      expect(next.items[0].status).toBe('importing');
+      expect(next.meta?.total).toBe(4);
+    });
+
+    it('flips to All even when it was already All, and dedupes a re-imported id', () => {
+      const state: LiveListState = {
+        items: [item({ id: 9 }), item({ id: 1 })],
+        meta: meta({ total: 2 }),
+        filter: 'all',
+      };
+
+      const next = applyImport(state, document({ id: 9, status: 'importing', title: 'Re-run' }));
+
+      expect(next.filter).toBe('all');
+      // The re-imported row moves to the front without duplicating.
+      expect(next.items.map(({ id }) => id)).toEqual([9, 1]);
+      expect(next.items[0].title).toBe('Re-run');
+      expect(next.meta?.total).toBe(3);
+    });
+
+    it('leaves a degraded (null) paginator null — no total to bump', () => {
+      const state: LiveListState = { items: [], meta: null, filter: 'all' };
+
+      const next = applyImport(state, document({ id: 9, status: 'importing' }));
+
+      expect(next.meta).toBeNull();
+      expect(next.items.map(({ id }) => id)).toEqual([9]);
+    });
+  });
+
+  describe('applyFilterPage — a settled row keeps its place until refetch (5A)', () => {
+    it('replaces the rows and paginator wholesale under the chosen chip', () => {
+      const state: LiveListState = {
+        items: [item({ id: 1 }), item({ id: 2 })],
+        meta: meta({ total: 8, current_page: 1, last_page: 2 }),
+        filter: 'all',
+      };
+      const page: DocumentListPage = {
+        data: [item({ id: 5, lifecycle_status: 'approved' })],
+        meta: meta({ total: 3, current_page: 1, last_page: 1 }),
+      };
+
+      const next = applyFilterPage(state, page, 'approved');
+
+      expect(next.filter).toBe('approved');
+      expect(next.items.map(({ id }) => id)).toEqual([5]);
+      expect(next.meta?.total).toBe(3);
+    });
+
+    it('is the ONLY thing that drops a row settled out of the active filter', () => {
+      // The narrated 5A path: viewing Draft, an importing row settles to Approved.
+      // mergeSettled keeps it in place WITH its new chip (never culled on settle) —
+      // it is a client refetch (applyFilterPage), not the settle, that removes it.
+      const filtered: LiveListState = {
+        items: [item({ id: 1, status: 'importing', lifecycle_status: 'draft' })],
+        meta: meta({ total: 1 }),
+        filter: 'draft',
+      };
+
+      // The settle keeps the row, now Approved — it does NOT vanish under Draft.
+      const settledItems = mergeSettled(
+        filtered.items,
+        document({ id: 1, status: 'ready', lifecycle_status: 'approved' }),
+      );
+      expect(settledItems).toHaveLength(1);
+      expect(settledItems[0].lifecycle_status).toBe('approved');
+
+      // Only the next refetch (re-selecting Draft server-side) drops it.
+      const refetched = applyFilterPage(
+        { ...filtered, items: settledItems },
+        { data: [], meta: meta({ total: 0 }) },
+        'draft',
+      );
+      expect(refetched.items).toEqual([]);
     });
   });
 
