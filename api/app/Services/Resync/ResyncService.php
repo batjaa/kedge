@@ -3,9 +3,11 @@
 namespace App\Services\Resync;
 
 use App\Enums\AnchorState;
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Models\Anchor;
+use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
@@ -40,7 +42,7 @@ class ResyncService
             'document_id' => $document->id,
             'connector' => $document->source_type->value,
         ]);
-        $this->audit->record($document->workspace, $actor, 'resync.started', $document, [
+        $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ResyncStarted, $document, [
             'connector' => $document->source_type->value,
         ]);
 
@@ -53,7 +55,7 @@ class ResyncService
             ])->save();
 
             $this->logCompleted($document, $prepared->connector, $startedAt, deduped: true);
-            $this->audit->record($document->workspace, $actor, 'resync.completed', $document, [
+            $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
                 'connector' => $prepared->connector,
                 'duration' => $this->elapsedMs($startedAt),
                 'deduped' => true,
@@ -75,9 +77,36 @@ class ResyncService
         $this->ensureCompleteResults($currentAnchors, $results);
 
         $counts = ['anchored' => 0, 'relocated' => 0, 'orphaned' => 0];
+        // Thread ids grouped by their re-anchor outcome. The digest carries these
+        // so M5 can re-derive per-thread relevance from one row (1A) — never a row
+        // per thread. Counts above are the human-facing digest; these are its index.
+        $threadsByState = ['anchored' => [], 'relocated' => [], 'orphaned' => []];
         $anchorsByThread = $currentAnchors->keyBy(fn (Anchor $anchor) => (int) $anchor->thread_id);
 
-        DB::transaction(function () use ($document, $current, $target, $prepared, $results, $anchorsByThread, &$counts): void {
+        /** @var Collection<int, Approval> $goneStaleApprovals */
+        $goneStaleApprovals = collect();
+
+        DB::transaction(function () use ($document, $current, $target, $prepared, $results, $anchorsByThread, &$counts, &$threadsByState, &$goneStaleApprovals): void {
+            // Lock the document row so a concurrent approval (which also locks it,
+            // {@see ApprovalService::approveCurrent}) can't slip in between reading
+            // the stranded set and committing the flip. "Stale approval" is a
+            // derived state (Approval::staleFor) with no discrete domain action, so
+            // the spec-consistent write point is this flip — the moment
+            // current_version_id leaves the version they approved (M3.8 #108).
+            Document::query()->whereKey($document->id)->lockForUpdate()->first();
+
+            // Active approvals still pinned to the outgoing version, captured (and
+            // row-locked) inside the transaction so the set is consistent with the
+            // committed flip. The user relation rides along so the display snapshot
+            // survives a later reviewer deletion.
+            $goneStaleApprovals = Approval::query()
+                ->with('user:id,name')
+                ->where('document_id', $document->id)
+                ->where('document_version_id', $current->id)
+                ->whereNull('revoked_at')
+                ->lockForUpdate()
+                ->get();
+
             foreach ($results as $result) {
                 /** @var Anchor|null $sourceAnchor */
                 $sourceAnchor = $anchorsByThread->get($result['threadId']);
@@ -87,6 +116,7 @@ class ResyncService
 
                 $state = AnchorState::from($result['state']);
                 $counts[$state->value]++;
+                $threadsByState[$state->value][] = (int) $sourceAnchor->thread_id;
 
                 Anchor::create([
                     'thread_id' => $sourceAnchor->thread_id,
@@ -121,14 +151,53 @@ class ResyncService
             ]);
         });
 
-        $this->audit->record($document->workspace, $actor, 'reanchor.completed', $document, [
+        // The flip has committed. Every audit write below is a post-commit side
+        // effect through the never-throwing seam (recordSafely): a dead audit sink
+        // is logged and swallowed, never propagated back to fail the re-sync it
+        // merely narrates (M3.8 #110 AC — "audit failure never affects the re-sync
+        // itself"; #108 established this best-effort seam for the review side and
+        // left these resync-path writes to this ticket). Emitting them post-commit
+        // via record() would otherwise bubble a dead-sink throw out of resync(),
+        // failing the job for a retry that now dedups against the already-current
+        // content — silently dropping the digest and the gone-stale row forever.
+
+        // Every approval captured above is now stale (the flip left the version
+        // they approved). One aggregate row per re-sync (never one per approval)
+        // carries the affected approvers as a display snapshot (2A) so the feed
+        // renders each name even after a reviewer is deleted; M5 re-derives
+        // per-approver from meta. Emitted before the digest as the flip's first
+        // consequence.
+        if ($goneStaleApprovals->isNotEmpty()) {
+            $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ApprovalGoneStale, $document, [
+                'document_title' => $document->title,
+                'from_version_id' => $current->id,
+                'to_version_id' => $target->id,
+                'count' => $goneStaleApprovals->count(),
+                'approvals' => $goneStaleApprovals->map(fn (Approval $approval): array => array_filter([
+                    'id' => $approval->id,
+                    'approver_name' => $approval->user?->name,
+                ], static fn ($value): bool => $value !== null))->values()->all(),
+            ]);
+        }
+
+        // The re-anchor digest (M3.8 #110, decision 1A): ONE event per re-sync,
+        // never a row per thread, so a busy re-sync reads as a single feed line
+        // ("28 anchored, 2 relocated, 1 orphaned"). This reshapes the existing
+        // reanchor.completed case rather than minting a near-duplicate — it is
+        // already the per-flip aggregate, and the enum is M5's contract. Counts
+        // drive #111's sentence; the per-outcome thread ids let M5 re-derive
+        // per-thread relevance from meta; document_title is the 2A snapshot frozen
+        // at write. Matches the scan-report aggregate precedent.
+        $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ReanchorCompleted, $document, [
+            'document_title' => $document->title,
             'from_version_id' => $current->id,
             'to_version_id' => $target->id,
             ...$counts,
+            'threads' => $threadsByState,
         ]);
 
         $this->logCompleted($document, $prepared->connector, $startedAt, deduped: false);
-        $this->audit->record($document->workspace, $actor, 'resync.completed', $document, [
+        $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
             'connector' => $prepared->connector,
             'duration' => $this->elapsedMs($startedAt),
             'deduped' => false,

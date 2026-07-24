@@ -2,6 +2,7 @@
 
 namespace App\Services\TrackedRepos;
 
+use App\Enums\AuditEvent;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentStatus;
 use App\Enums\SourceType;
@@ -445,7 +446,7 @@ class TrackedRepoScanService
         $this->audit->record(
             $repo->workspace,
             $actorId !== null ? User::find($actorId) : null,
-            'tracked_repo.scanned',
+            AuditEvent::TrackedRepoScanned,
             $repo,
             ['status' => $status, ...$meta],
         );

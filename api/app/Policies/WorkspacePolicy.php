@@ -45,4 +45,15 @@ class WorkspacePolicy
     {
         return $this->hasPersonalWorkspace($user);
     }
+
+    /**
+     * Read the workspace's recent-activity feed (SPEC §16, M3.8 #111 — the
+     * dashboard panel). Same guard as the summary: any personal-workspace member
+     * may read their own trail; a workspace-less magic-link reviewer is refused
+     * 403, never a 500, and the feed then scopes to that workspace by construction.
+     */
+    public function viewActivity(User $user): bool
+    {
+        return $this->hasPersonalWorkspace($user);
+    }
 }

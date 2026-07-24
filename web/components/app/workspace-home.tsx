@@ -5,7 +5,7 @@ import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import { ProjectCreate } from './project-create';
 import { ProjectsRail } from './projects-rail';
-import { ActivityFeedSlot } from './activity-feed-slot';
+import { ActivityFeed } from './activity-feed';
 import { StatsStrip } from './stats-strip';
 import { hasMorePages } from '@/lib/document-list-live';
 import { compareProjectsByName } from '@/lib/document-groups';
@@ -14,6 +14,7 @@ import { useWorkspaceSummary } from '@/lib/use-workspace-summary';
 import { alsoRefresh, createLatestWinsGate } from '@/lib/workspace-summary';
 import { nextProjects, readProjects } from '@/lib/projects-live';
 import type { Document, DocumentListPage, Project, WorkspaceSummary } from '@/lib/document-types';
+import type { ActivityEvent } from '@/lib/activity-types';
 
 // The authenticated home's live surface (SPEC 11; decisions 2A + 5A; M3.6). The
 // one client island: it owns the row state so submit-stays-home and per-row
@@ -34,6 +35,7 @@ export function WorkspaceHome({
   initialProjects = [],
   initialProjectsDegraded = false,
   initialSummary = null,
+  initialActivity = null,
 }: {
   initialPage: DocumentListPage | null;
   initialProjects?: Project[];
@@ -46,6 +48,12 @@ export function WorkspaceHome({
   initialProjectsDegraded?: boolean;
   /** Server-seeded stats strip (SPEC §16, M3.7); null degrades the strip to nothing (A1). */
   initialSummary?: WorkspaceSummary | null;
+  /**
+   * Server-seeded Recent-activity feed (SPEC §16, M3.8 #111). Loaded once on page
+   * load — no polling (M5 owns liveness). null degrades the panel to nothing (A1);
+   * [] is an empty workspace's designed empty state.
+   */
+  initialActivity?: ActivityEvent[] | null;
 }) {
   const {
     degraded,
@@ -183,7 +191,7 @@ export function WorkspaceHome({
             grouped
           />
 
-          <ActivityFeedSlot />
+          <ActivityFeed events={initialActivity} />
         </div>
       </div>
     </>

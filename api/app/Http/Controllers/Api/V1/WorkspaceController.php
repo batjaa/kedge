@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateWorkspaceRequest;
 use App\Http\Resources\V1\WorkspaceResource;
@@ -61,11 +62,15 @@ class WorkspaceController extends Controller
             $this->audit->recordSafely(
                 $workspace,
                 $request->user(),
-                'workspace.renamed',
+                AuditEvent::WorkspaceRenamed,
                 $workspace,
                 [
                     'from' => $before,
                     'to' => ['name' => $workspace->name, 'slug' => $workspace->slug],
+                    // The actor's name frozen at write (2A), so M3.8's feed renders
+                    // "{name} renamed the workspace…" from the row alone — never a
+                    // live user lookup at read time.
+                    'actor_name' => $request->user()->name,
                 ],
                 $request->ip(),
             );

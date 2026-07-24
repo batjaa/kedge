@@ -7,10 +7,13 @@ use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Jobs\ResyncDocumentJob;
 use App\Models\Anchor;
+use App\Models\Approval;
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\Fetch\FetchResult;
 use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\Exceptions\ProjectionFailedException;
@@ -23,6 +26,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class DocumentResyncTest extends TestCase
@@ -185,6 +190,83 @@ class DocumentResyncTest extends TestCase
             && $context['deduped'] === false);
     }
 
+    public function test_a_resync_writes_one_reanchor_digest_with_counts_thread_ids_and_title_snapshot(): void
+    {
+        $oldContent = "# Doc\n\nAlpha survives.\n\nBeta deleted.\n\nMoved phrase.\n";
+        $oldPlain = "Alpha survives.\n\nBeta deleted.\n\nMoved phrase.";
+        $newContent = "# Doc\n\nAlpha survives.\n\nGamma new.\n\nMoved phrase.\n";
+        $newPlain = "Alpha survives.\n\nGamma new.\n\nMoved phrase.";
+        [$author, $document, $current] = $this->readyDocument($oldContent, $oldPlain);
+        $survives = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Alpha survives.');
+        $deleted = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Beta deleted.');
+        $moved = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Moved phrase.');
+
+        $this->fakeFetchReturns($newContent);
+        $this->fakeProjectionAndReanchor($newPlain, [
+            [
+                'threadId' => $survives->id,
+                'state' => 'anchored',
+                'exact' => 'Alpha survives.',
+                'prefix' => '',
+                'suffix' => "\n\nGamma new.\n\nMoved phrase.",
+                'start' => 0,
+                'end' => 15,
+            ],
+            [
+                'threadId' => $deleted->id,
+                'state' => 'orphaned',
+                ...$this->resultFromAnchor($deleted->anchors()->where('document_version_id', $current->id)->firstOrFail()),
+            ],
+            [
+                'threadId' => $moved->id,
+                'state' => 'relocated',
+                'exact' => 'Moved phrase.',
+                'prefix' => "Alpha survives.\n\nGamma new.\n\n",
+                'suffix' => '',
+                'start' => 29,
+                'end' => 42,
+            ],
+        ]);
+
+        $this->runResync($document, $author);
+
+        // Exactly one digest row for the whole re-sync — never a row per thread
+        // (1A): a busy re-sync must read as a single feed line.
+        $rows = AuditLog::query()->where('action', 'reanchor.completed')->get();
+        $this->assertCount(1, $rows);
+
+        $document->refresh();
+        $digest = $rows->first();
+        $this->assertSame($document->id, $digest->subject_id);
+        // 2A display snapshot, frozen at write (the post-flip title the feed shows).
+        $this->assertSame($document->title, $digest->meta['document_title']);
+        $this->assertSame($current->id, $digest->meta['from_version_id']);
+        $this->assertSame($document->current_version_id, $digest->meta['to_version_id']);
+        // Counts drive #111's one-line sentence ("1 anchored, 1 relocated, 1 orphaned").
+        $this->assertSame(1, $digest->meta['anchored']);
+        $this->assertSame(1, $digest->meta['relocated']);
+        $this->assertSame(1, $digest->meta['orphaned']);
+        // Thread ids grouped by outcome so M5 re-derives per-thread relevance from
+        // this one row instead of per-thread audit rows.
+        $this->assertSame([$survives->id], $digest->meta['threads']['anchored']);
+        $this->assertSame([$moved->id], $digest->meta['threads']['relocated']);
+        $this->assertSame([$deleted->id], $digest->meta['threads']['orphaned']);
+    }
+
+    public function test_a_deduped_resync_writes_no_reanchor_digest(): void
+    {
+        // A no-op re-sync produces no anchor movements, so it emits no digest —
+        // the feed line would otherwise read "0 anchored, 0 relocated, 0 orphaned".
+        $content = "# Stable\n\nSame content.\n";
+        [$author, $document] = $this->readyDocument($content, "Stable\n\nSame content.");
+        $this->fakeFetchReturns($content);
+        $this->fakeProjection("Stable\n\nSame content.");
+
+        $this->runResync($document, $author);
+
+        $this->assertSame(0, AuditLog::query()->where('action', 'reanchor.completed')->count());
+    }
+
     public function test_fetch_failure_keeps_current_version_and_reconnect_copy(): void
     {
         [$author, $document, $current] = $this->readyDocument();
@@ -329,6 +411,175 @@ class DocumentResyncTest extends TestCase
         $this->assertSame($current->id, $document->current_version_id);
         $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
         $this->assertStringContainsString('Sync failed', (string) $document->sync_error);
+    }
+
+    public function test_a_resync_flip_marks_prior_active_approvals_gone_stale_as_one_aggregate_row(): void
+    {
+        $oldContent = "# Doc\n\nAnchored text.\n";
+        $oldPlain = 'Anchored text.';
+        $newContent = "# Doc\n\nAnchored text edited.\n";
+        $newPlain = 'Anchored text edited.';
+        [$author, $document, $current] = $this->readyDocument($oldContent, $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+
+        // Two reviewers' active approvals pinned to the outgoing version.
+        $reviewer = User::factory()->create(['name' => 'Second Reviewer']);
+        $this->seedApproval($document, $current, $author);
+        $this->seedApproval($document, $current, $reviewer);
+
+        $this->fakeChangedResync($thread, $oldPlain, $newContent, $newPlain);
+        $this->runResync($document, $author);
+
+        // Exactly one aggregate row — never one per approval (matches the
+        // scan-report / re-anchor-digest precedent).
+        $rows = AuditLog::query()->where('action', 'approval.gone_stale')->get();
+        $this->assertCount(1, $rows);
+
+        $entry = $rows->first();
+        $this->assertSame($document->id, $entry->subject_id);
+        $this->assertSame($document->fresh()->title, $entry->meta['document_title']);
+        $this->assertSame($current->id, $entry->meta['from_version_id']);
+        $this->assertSame(2, $entry->meta['count']);
+        $this->assertEqualsCanonicalizing(
+            ['Doc Author', 'Second Reviewer'],
+            array_column($entry->meta['approvals'], 'approver_name'),
+        );
+    }
+
+    public function test_a_resync_flip_writes_no_gone_stale_without_active_approvals(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+        $this->runResync($document, $author);
+
+        $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_a_revoked_approval_is_not_reported_gone_stale(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+        $this->seedApproval($document, $current, $author)->forceFill(['revoked_at' => now()])->save();
+
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+        $this->runResync($document, $author);
+
+        $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_a_deduped_resync_leaves_approvals_active_and_writes_no_gone_stale(): void
+    {
+        $content = "# Stable\n\nSame content.\n";
+        [$author, $document, $current] = $this->readyDocument($content, "Stable\n\nSame content.");
+        $approval = $this->seedApproval($document, $current, $author);
+        $this->fakeFetchReturns($content);
+        $this->fakeProjection("Stable\n\nSame content.");
+
+        $this->runResync($document, $author);
+
+        // No new version → the approval stays on the current version, never stale.
+        $this->assertNull($approval->fresh()->revoked_at);
+        $this->assertSame($current->id, $document->fresh()->current_version_id);
+        $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_a_dead_audit_sink_never_fails_the_resync(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+        $this->seedApproval($document, $current, $author);
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+
+        // A fully dead audit sink: every record() throws. The whole resync path now
+        // writes exclusively through the never-throwing recordSafely seam (#110
+        // migrated resync.started/completed and the reanchor.completed digest off
+        // record()), so each throw is swallowed and the re-sync is untouched.
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
+        $this->app->instance(AuditLogger::class, $logger);
+
+        // No exception bubbles despite every audit write failing — the digest,
+        // gone-stale, and lifecycle writes all fail silently.
+        $this->runResync($document, $author);
+
+        // The version flip committed and the sync landed clean: the dead audit sink
+        // changed nothing about the domain outcome (AC — "audit failure never
+        // affects the re-sync itself"), and no resync-path row was written.
+        $document->refresh();
+        $this->assertNotSame($current->id, $document->current_version_id);
+        $this->assertSame(SyncStatus::Ok, $document->last_sync_status);
+        $this->assertNull($document->sync_error);
+        $this->assertSame(0, AuditLog::query()->whereIn('action', [
+            'resync.started',
+            'reanchor.completed',
+            'resync.completed',
+            'approval.gone_stale',
+        ])->count());
+    }
+
+    public function test_a_dead_audit_sink_never_disrupts_the_failure_path(): void
+    {
+        [$author, $document, $current] = $this->readyDocument();
+        $this->fakeFetchThrows(new TokenRevokedException('GitHub rejected the token.', 'Bad credentials'));
+
+        // markFailed() now writes resync.failed through the best-effort seam, from a
+        // catch block and again from the exhausted failed() callback. A dead sink
+        // must not throw back out of either or leave the failure half-applied.
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
+        $this->app->instance(AuditLogger::class, $logger);
+
+        // Handled failure path (catch block → markFailed): no exception bubbles.
+        $this->runResync($document, $author);
+
+        $document->refresh();
+        $this->assertSame(DocumentStatus::Ready, $document->status);
+        $this->assertSame($current->id, $document->current_version_id);
+        $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
+        $this->assertStringContainsString('reconnect the integration', (string) $document->sync_error);
+
+        // Exhausted-retries path (failed() callback → markFailed) stays clean too.
+        (new ResyncDocumentJob($document, $author->id))->failed(new RuntimeException('exhausted'));
+
+        $document->refresh();
+        $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
+        $this->assertStringContainsString('Sync failed', (string) $document->sync_error);
+
+        // No resync.failed row survived the dead sink — the write was swallowed.
+        $this->assertSame(0, AuditLog::query()->where('action', 'resync.failed')->count());
+    }
+
+    private function seedApproval(Document $document, DocumentVersion $version, User $user): Approval
+    {
+        return Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $version->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    /**
+     * A changed-content re-sync that relocates a single thread's anchor onto the
+     * new version — enough to drive the version flip that stales approvals.
+     */
+    private function fakeChangedResync(Thread $thread, string $oldPlain, string $newContent, string $newPlain): void
+    {
+        $this->fakeFetchReturns($newContent);
+        $this->fakeProjectionAndReanchor($newPlain, [[
+            'threadId' => $thread->id,
+            'state' => 'relocated',
+            'exact' => $oldPlain,
+            'prefix' => '',
+            'suffix' => ' edited.',
+            'start' => 0,
+            'end' => $this->utf16CodeUnitLength($oldPlain),
+        ]]);
     }
 
     /**

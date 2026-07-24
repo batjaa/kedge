@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentLifecycleFilter;
 use App\Enums\DocumentStatus;
@@ -142,7 +143,7 @@ class DocumentController extends Controller
         $this->audit->record(
             $workspace,
             $user,
-            'document.import_requested',
+            AuditEvent::DocumentImportRequested,
             $document,
             ['source_type' => $document->source_type->value, 'source_url' => $document->source_url],
             $request->ip(),
@@ -321,7 +322,7 @@ class DocumentController extends Controller
         $this->audit->record(
             $document->workspace,
             $request->user(),
-            'document.import_retried',
+            AuditEvent::DocumentImportRetried,
             $document,
             ip: $request->ip(),
         );

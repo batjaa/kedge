@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
@@ -81,7 +82,7 @@ class ProjectController extends Controller
         $this->audit->record(
             $workspace,
             $user,
-            'project.created',
+            AuditEvent::ProjectCreated,
             $project,
             ['name' => $project->name],
             $request->ip(),
@@ -106,7 +107,7 @@ class ProjectController extends Controller
         $this->audit->record(
             $project->workspace,
             $request->user(),
-            'project.updated',
+            AuditEvent::ProjectUpdated,
             $project,
             ['name' => $project->name],
             $request->ip(),

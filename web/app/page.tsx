@@ -2,11 +2,12 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
 import { MetaChip } from '@/components/app/meta-chip';
-import { DemoHome } from '@/components/app/demo-home';
+import { Landing } from '@/components/app/landing/landing';
 import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 import { getWorkspaceSummary } from '@/lib/workspace';
+import { getWorkspaceActivity } from '@/lib/activity';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
@@ -34,11 +35,14 @@ export default async function RootPage() {
   }
 
   // Anonymous. The edition decides the surface — self-hosted keeps the sign-in
-  // redirect; the SaaS greets a stranger with the paste box.
+  // redirect; the SaaS greets a stranger with the Open Harbor marketing landing
+  // (the hero hosts the same zero-signup paste box). The edition read fails
+  // closed to self-hosted (lib/capabilities), so the landing never shows on an
+  // instance we can't confirm is the SaaS.
   const { selfHosted } = await getCapabilities();
   if (selfHosted) redirect('/signin');
 
-  return <DemoHome />;
+  return <Landing />;
 }
 
 function firstNameOf(name: string): string {
@@ -50,8 +54,10 @@ function firstNameOf(name: string): string {
 // list (SPEC 11). Page 1 is read server-side and seeds the live client island
 // (WorkspaceHome), which owns submit-stays-home + per-row polling (#85); a
 // failed read degrades the list area alone (the import box always renders). The
-// stats strip (SPEC §16, M3.7) is seeded the same way — its own read failing
-// degrades the strip to nothing (A1), never the list. Panel-based, DESIGN.md tokens.
+// stats strip (SPEC §16, M3.7) and the Recent-activity feed (SPEC §16, M3.8) are
+// seeded the same way — each own read failing degrades that panel to nothing
+// (A1), never the list. The feed loads once here with no polling (M5 owns
+// liveness). Panel-based, DESIGN.md tokens.
 async function ReviewQueue({
   firstName,
   workspace,
@@ -59,10 +65,11 @@ async function ReviewQueue({
   firstName: string;
   workspace: Workspace;
 }) {
-  const [documents, projectsResult, summaryResult] = await Promise.all([
+  const [documents, projectsResult, summaryResult, activityResult] = await Promise.all([
     getDocuments(),
     getProjects(),
     getWorkspaceSummary(),
+    getWorkspaceActivity(),
   ]);
 
   // A refused list read is an auth problem, not an outage: the session lapsed
@@ -88,6 +95,7 @@ async function ReviewQueue({
         initialProjects={projectsResult.projects}
         initialProjectsDegraded={projectsResult.status !== 200}
         initialSummary={summaryResult.summary}
+        initialActivity={activityResult.events}
       />
     </PageContainer>
   );

@@ -29,9 +29,19 @@ export const getCapabilities = cache(async (): Promise<Capabilities> => {
       auth?: { github?: unknown };
       self_hosted?: unknown;
     };
+
+    // The edition MUST arrive as an explicit boolean. A 200 with a missing or
+    // wrongly-typed `self_hosted` (API/web version skew, a proxy mangling the
+    // body) is an unexpected shape — fail closed to self-hosted, never default
+    // the edition to SaaS. Defaulting to SaaS would leak the public demo landing
+    // onto a private instance; the spec requires this read to fail closed to
+    // self-hosted (SPEC m3.8 — Marketing landing), which is what this docblock
+    // already promises for an unexpected shape.
+    if (typeof data.self_hosted !== 'boolean') return FAIL_CLOSED;
+
     return {
       github: data.auth?.github === true,
-      selfHosted: data.self_hosted === true,
+      selfHosted: data.self_hosted,
     };
   } catch {
     return FAIL_CLOSED;
