@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kedge App — Version history</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: { fontFamily: { display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+}
+function toggleTheme(){ document.documentElement.classList.toggle('dark') }
+</script>
+</head>
+<!-- APP · VERSION HISTORY & DIFF — M3: version timeline with re-anchoring stats, diff view with
+     comment overlay (dark diff panel, signature), version-pinned approvals with staleness.
+     ADR 0001: a PR is a candidate version in the same lineage, not a separate document. -->
+<body class="bg-stone-50 dark:bg-zinc-900 antialiased font-sans text-zinc-600 dark:text-zinc-400">
+
+<!-- Header -->
+<header class="fixed inset-x-0 top-0 z-50 bg-stone-50/85 dark:bg-zinc-900/85 backdrop-blur border-b border-zinc-900/10 dark:border-white/10">
+  <div class="flex h-14 items-center gap-4 px-4 sm:px-6">
+    <a href="app-dashboard.html" class="flex items-center gap-2 shrink-0">
+      <svg class="h-5 w-5 rotate-[15deg] text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v13.5"/><path d="M8 10h8"/><path d="M5 14.5c0 3.6 3.2 5.5 7 5.5s7-1.9 7-5.5"/></svg>
+      <span class="font-display font-semibold tracking-tight text-zinc-900 dark:text-white hidden sm:inline">kedge</span>
+    </a>
+    <nav class="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500 min-w-0">
+      <a href="app-project.html" class="hover:text-zinc-900 dark:hover:text-white hidden sm:inline">Kedge v1</a>
+      <span class="hidden sm:inline">/</span>
+      <a href="app-document.html" class="font-mono hover:text-zinc-900 dark:hover:text-white truncate">SPEC.md</a>
+      <span>/</span>
+      <span class="text-zinc-700 dark:text-zinc-300">History</span>
+    </nav>
+    <div class="ml-auto"></div>
+    <button onclick="toggleTheme()" aria-label="Toggle theme" class="flex h-7 w-7 items-center justify-center rounded-full ring-1 ring-zinc-900/10 dark:ring-white/10 hover:bg-white dark:hover:bg-white/5">
+      <svg class="h-4 w-4 hidden dark:block text-zinc-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.7 14.4A9 9 0 1 1 9.6 2.3a7 7 0 1 0 12.1 12.1Z"/></svg>
+      <svg class="h-4 w-4 dark:hidden text-zinc-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <div class="hidden sm:flex -space-x-1.5">
+      <div class="h-7 w-7 rounded-full bg-emerald-500 text-[10px] text-white flex items-center justify-center ring-2 ring-stone-50 dark:ring-zinc-900" title="Marcus — approved v4">MO</div>
+      <div class="h-7 w-7 rounded-full bg-sky-600 text-[10px] text-white flex items-center justify-center ring-2 ring-stone-50 dark:ring-zinc-900 opacity-50" title="Sarah — approved v3 (stale)">SC</div>
+    </div>
+    <a href="app-document.html" class="rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Back to document</a>
+  </div>
+</header>
+
+<main class="mx-auto max-w-7xl px-4 sm:px-6 pt-24 pb-16">
+
+  <div class="flex flex-wrap items-center gap-3">
+    <h1 class="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Version history</h1>
+    <span class="font-mono text-xs text-zinc-400 dark:text-zinc-500">SPEC.md · 5 versions + 1 candidate</span>
+  </div>
+
+  <div class="mt-8 grid gap-6 lg:grid-cols-12 items-start">
+
+    <!-- Timeline -->
+    <aside class="lg:col-span-4">
+      <div class="relative border-l border-zinc-900/10 dark:border-white/10 ml-2 space-y-3 pb-1">
+
+        <!-- candidate (ADR 0001: PR = candidate version) -->
+        <div class="relative ml-5">
+          <span class="absolute -left-[27px] top-4 h-3 w-3 rounded-full ring-1 ring-inset ring-sky-500/60 dark:ring-sky-400/60 bg-stone-50 dark:bg-zinc-900 border-2 border-dashed border-transparent"></span>
+          <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-inset ring-sky-500/30 dark:ring-sky-400/20 border border-dashed border-transparent p-4">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/30 dark:ring-sky-400/30 bg-sky-500/10 dark:bg-sky-400/10 text-sky-700 dark:text-sky-400">Candidate</span>
+              <span class="text-xs font-medium text-zinc-800 dark:text-zinc-200">PR #94 — rewrite §6.2</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">open</span>
+            </div>
+            <p class="mt-2 text-[11px] leading-4 text-zinc-500">A PR is a candidate version in this lineage, not a separate doc. Merging promotes it to v6.</p>
+            <div class="mt-2 flex gap-3 text-xs"><a href="#" class="font-medium text-sky-700 dark:text-sky-400 hover:underline">Preview</a><a href="#" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300">Diff vs v4</a></div>
+          </div>
+        </div>
+
+        <!-- v5 (unsynced head) -->
+        <div class="relative ml-5">
+          <span class="absolute -left-[27px] top-4 h-3 w-3 rounded-full bg-amber-400 ring-4 ring-stone-50 dark:ring-zinc-900 animate-pulse"></span>
+          <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/20 p-4">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400">v5 · at source</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">20 min ago · <span class="normal-case">e41c2d0</span></span>
+            </div>
+            <p class="mt-2 text-[11px] leading-4 text-zinc-500">Pushed to <span class="font-mono">main</span> but not yet synced. Re-sync will re-anchor all 12 threads.</p>
+            <div class="mt-2.5 flex gap-2">
+              <button class="rounded-full bg-zinc-900 px-3 py-1 text-[11px] font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Re-sync now</button>
+              <button class="rounded-full bg-stone-100 dark:bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-600 dark:text-zinc-300 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10">Preview diff</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- v4 current -->
+        <div class="relative ml-5">
+          <span class="absolute -left-[27px] top-4 h-3 w-3 rounded-full bg-emerald-500 dark:bg-emerald-400 ring-4 ring-stone-50 dark:ring-zinc-900"></span>
+          <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-500/20 p-4">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">v4 · current</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">2 h ago · <span class="normal-case">255beec</span></span>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
+              <span class="text-emerald-700 dark:text-emerald-400">31 anchored</span>
+              <span class="text-amber-700 dark:text-amber-400">2 relocated</span>
+              <span class="text-rose-600 dark:text-rose-400">1 orphaned</span>
+            </div>
+            <div class="mt-2 flex items-center gap-2">
+              <div class="h-5 w-5 rounded-full bg-emerald-500 text-[9px] text-white flex items-center justify-center" title="Marcus approved v4">MO</div>
+              <span class="text-[11px] text-zinc-500">approved by Marcus</span>
+            </div>
+            <div class="mt-2 flex gap-3 text-xs"><a href="app-document.html" class="font-medium text-emerald-700 dark:text-emerald-400 hover:underline">Reading now</a><span class="text-zinc-300 dark:text-zinc-700">·</span><a href="#" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300">Diff vs v3 ↓</a></div>
+          </div>
+        </div>
+
+        <!-- v3 -->
+        <div class="relative ml-5">
+          <span class="absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-zinc-900/20 dark:ring-white/25 bg-stone-50 dark:bg-zinc-900"></span>
+          <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 p-4">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-zinc-400/30 bg-zinc-400/10 text-zinc-500 dark:text-zinc-400">v3</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">2026-07-18 · <span class="normal-case">3802fd8</span></span>
+            </div>
+            <div class="mt-2 flex items-center gap-2">
+              <div class="h-5 w-5 rounded-full bg-sky-600 text-[9px] text-white flex items-center justify-center opacity-60" title="Sarah approved v3 — now stale">SC</div>
+              <span class="text-[11px] text-zinc-500">Sarah's approval is pinned here — <span class="text-amber-700 dark:text-amber-400">stale vs v4</span></span>
+            </div>
+            <div class="mt-2 flex gap-3 text-xs"><a href="#" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300">View</a><a href="#" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300">Diff</a></div>
+          </div>
+        </div>
+
+        <!-- v2 / v1 condensed -->
+        <div class="relative ml-5">
+          <span class="absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-zinc-900/20 dark:ring-white/25 bg-stone-50 dark:bg-zinc-900"></span>
+          <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 px-4 py-3 flex items-center gap-2">
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-zinc-400/30 bg-zinc-400/10 text-zinc-500 dark:text-zinc-400">v2</span>
+            <span class="text-[11px] text-zinc-500">re-sync · all threads anchored</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">2026-07-15</span>
+          </div>
+        </div>
+        <div class="relative ml-5">
+          <span class="absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-zinc-900/20 dark:ring-white/25 bg-stone-50 dark:bg-zinc-900"></span>
+          <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 px-4 py-3 flex items-center gap-2">
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-zinc-400/30 bg-zinc-400/10 text-zinc-500 dark:text-zinc-400">v1</span>
+            <span class="text-[11px] text-zinc-500">imported from GitHub</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">2026-07-12</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Diff + approvals -->
+    <section class="lg:col-span-8 space-y-4">
+
+      <!-- Approvals panel -->
+      <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-sm p-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="font-display text-sm font-semibold text-zinc-900 dark:text-white">Approvals</h2>
+          <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-500">pinned to the version reviewed</span>
+          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-2 rounded-full bg-stone-50 dark:bg-white/5 px-3 py-1 ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10">
+              <div class="h-5 w-5 rounded-full bg-emerald-500 text-[9px] text-white flex items-center justify-center">MO</div>
+              <span class="text-xs text-zinc-700 dark:text-zinc-300">Marcus</span>
+              <span class="font-mono text-[9px] font-semibold uppercase text-emerald-700 dark:text-emerald-400">v4 ✓</span>
+            </span>
+            <span class="inline-flex items-center gap-2 rounded-full bg-stone-50 dark:bg-white/5 px-3 py-1 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30">
+              <div class="h-5 w-5 rounded-full bg-sky-600 text-[9px] text-white flex items-center justify-center opacity-60">SC</div>
+              <span class="text-xs text-zinc-700 dark:text-zinc-300">Sarah</span>
+              <span class="font-mono text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-400">v3 · stale</span>
+              <button class="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 hover:underline">Re-approve →</button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diff panel (dark in both themes) -->
+      <div class="rounded-2xl bg-zinc-900 dark:bg-white/[.03] ring-1 ring-inset ring-white/10 shadow-md overflow-hidden">
+        <div class="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2.5">
+          <span class="text-xs font-semibold text-zinc-200">Diff</span>
+          <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-zinc-400/30 bg-zinc-400/10 text-zinc-400">v3</span>
+          <svg class="h-3 w-3 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" d="M13.5 4.5 21 12l-7.5 7.5M21 12H3"/></svg>
+          <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-400/30 bg-emerald-400/10 text-emerald-400">v4</span>
+          <span class="ml-auto font-mono text-[10px] text-zinc-500">2 sections changed · 3 comments in range</span>
+        </div>
+
+        <!-- hunk 1 -->
+        <div class="flex items-center gap-2 bg-zinc-950/40 px-4 py-1.5 font-mono text-[10px] text-zinc-500">
+          <span class="text-emerald-400/70">@@ §6.1 Fallback behaviour @@</span>
+        </div>
+        <div class="px-0 py-1 font-mono text-xs leading-6 overflow-x-auto">
+          <div class="px-4 text-zinc-400"> The pipeline normalizes Markdown, MDX, and HTML into one</div>
+          <div class="px-4 bg-rose-500/10 text-rose-400/90"><span class="select-none mr-2">-</span>projection. Stages fail hard so errors surface early.</div>
+          <div class="px-4 bg-emerald-500/10 text-emerald-400"><span class="select-none mr-2">+</span>projection, and every stage fails soft: unknown fence</div>
+          <div class="px-4 bg-emerald-500/10 text-emerald-400"><span class="select-none mr-2">+</span>languages fall through to plain-text highlighting.</div>
+        </div>
+        <!-- comment overlay attached to hunk -->
+        <div class="mx-4 mb-3 rounded-xl bg-white dark:bg-zinc-900 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 p-3">
+          <div class="flex items-center gap-2">
+            <div class="h-5 w-5 rounded-full bg-sky-600 text-[9px] text-white flex items-center justify-center">SC</div>
+            <span class="text-xs font-medium text-zinc-800 dark:text-zinc-200">Sarah</span>
+            <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-600">on v3, § 6.1</span>
+            <span class="ml-auto font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400">Relocated</span>
+          </div>
+          <p class="mt-1.5 text-xs leading-5 text-zinc-600 dark:text-zinc-400">"fails hard" contradicted the never-crash rule — glad this hunk fixes it. This thread followed the passage here.</p>
+        </div>
+
+        <!-- hunk 2 -->
+        <div class="flex items-center gap-2 bg-zinc-950/40 px-4 py-1.5 font-mono text-[10px] text-zinc-500">
+          <span class="text-emerald-400/70">@@ §6.2 Diagrams @@</span>
+        </div>
+        <div class="px-0 py-1 font-mono text-xs leading-6 overflow-x-auto">
+          <div class="px-4 text-zinc-400"> Kroki is the sole diagram engine, self-hosted in both</div>
+          <div class="px-4 bg-emerald-500/10 text-emerald-400"><span class="select-none mr-2">+</span>editions; only the explicit engine allowlist is ever</div>
+          <div class="px-4 bg-emerald-500/10 text-emerald-400"><span class="select-none mr-2">+</span>forwarded to it. Render failures show a source panel.</div>
+          <div class="px-4 text-zinc-400"> Fenced blocks on the allowlist render server-side and</div>
+        </div>
+        <!-- agent comment overlay -->
+        <div class="mx-4 mb-4 rounded-xl bg-white dark:bg-zinc-900 ring-1 ring-inset ring-violet-600/30 dark:ring-violet-500/25 p-3">
+          <div class="flex items-center gap-2">
+            <div class="h-5 w-5 rounded-full bg-violet-500 text-[9px] text-white flex items-center justify-center">CL</div>
+            <span class="text-xs font-medium text-zinc-800 dark:text-zinc-200">Claude</span>
+            <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-600">on v4, § 6.2</span>
+            <span class="ml-auto font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-violet-600/30 dark:ring-violet-400/30 bg-violet-600/10 dark:bg-violet-400/10 text-violet-700 dark:text-violet-400">Agent · MCP</span>
+          </div>
+          <p class="mt-1.5 text-xs leading-5 text-zinc-600 dark:text-zinc-400">New wording still doesn't state the API re-validates the engine name server-side.</p>
+        </div>
+      </div>
+
+      <!-- Orphan note -->
+      <div class="rounded-2xl ring-1 ring-inset ring-rose-500/30 dark:ring-rose-400/20 bg-rose-500/5 dark:bg-rose-400/5 px-4 py-3 flex flex-wrap items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-rose-500 dark:bg-rose-400"></span>
+        <p class="text-xs text-rose-700 dark:text-rose-300">1 thread's passage (<span class="font-mono">old §6.4 note</span>) was removed in v4 — it's waiting in the orphan tray, history intact.</p>
+        <a href="app-document.html" class="ml-auto text-xs font-medium text-rose-700 dark:text-rose-400 hover:underline">Open tray →</a>
+      </div>
+
+      <!-- Approve current -->
+      <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-sm px-5 py-4 flex flex-wrap items-center gap-3">
+        <p class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Approve <span class="font-mono text-xs">v4</span> as reviewed?</p>
+        <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-600">your approval pins to this version and goes stale on the next sync</span>
+        <button class="ml-auto rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Approve v4 ✓</button>
+      </div>
+
+    </section>
+  </div>
+</main>
+
+</body>
+</html>

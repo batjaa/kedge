@@ -22,6 +22,9 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Versions, diff & approvals | L | Comments & suggestions | done (2026-07-20) | [specs/m3-versions-diff-approvals.md](specs/m3-versions-diff-approvals.md) · [#72](https://github.com/batjaa/kedge/issues/72) |
 | Documents list | S | Versions, diff & approvals | done (2026-07-21) | [specs/m3.5-documents-list.md](specs/m3.5-documents-list.md) · [#82](https://github.com/batjaa/kedge/issues/82) |
 | Projects & tracked repos | M | Documents list | done (2026-07-21) | [specs/m3.6-projects-tracked-repos.md](specs/m3.6-projects-tracked-repos.md) · [#89](https://github.com/batjaa/kedge/issues/89) |
+| Design refresh | M | Documents list · Projects & tracked repos | ticketed (2026-07-23) | [specs/m3.7-design-refresh.md](specs/m3.7-design-refresh.md) · [#97](https://github.com/batjaa/kedge/issues/97) |
+| Activity & landing | M | Design refresh | specced (2026-07-23) | [specs/m3.8-activity-landing.md](specs/m3.8-activity-landing.md) |
+| Web i18n | M | Activity & landing | specced (2026-07-23) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | specced (2026-07-20) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
@@ -36,6 +39,9 @@ Gists (full scope + demo criteria: SPEC §21):
 - **Versions, diff & approvals** (M3) — manual re-sync, re-anchoring ladder (hypothes.is port), version switcher, diff view with comment overlay, approvals lite with staleness.
 - **Documents list** (M3.5, wedge 2026-07-21) — authenticated home lists all workspace docs with lifecycle/threads/sync chips, live import-status polling, inline retry. Pulls the "Your docs" half of SPEC §11 forward from M5.
 - **Projects & tracked repos** (M3.6, wedge 2026-07-21) — projects as free containers with dedicated pages, doc assignment + Unfiled bucket; tracked repos (URL + ref + path pattern → preview → bulk import) with manual Re-scan; webhook watching stays M6. Term pinned 2026-07-21 (was "repo sources").
+- **Design refresh** (M3.7, wedge 2026-07-23) — the locked Open Harbor baseline product-wide (light-first, self-hosted Space Grotesk display, amended tokens); dashboard upgrade (projects rail, stats strip + workspace summary endpoint, server-side lifecycle filters on shared query scopes, poller-debt fix bundled); workspace General settings with audited rename.
+- **Activity & landing** (M3.8, wedge 2026-07-23) — audit-log activity feed (review-action instrumentation M5 will reuse; aggregate re-sync events; snapshot meta; allowlisted projection — never ip/raw meta); SaaS marketing landing with the demo import in the hero (self-host branch unchanged).
+- **Web i18n** (M3.9, wedge 2026-07-23) — en-US · es-US · mn-MN · de-DE via next-intl without locale routing (strict-allowlist cookie + negotiation, en-US merge fallback); mn-MN display font falls back to the system stack (no Cyrillic in Space Grotesk); chip strings as a constrained glossary; document content never translated.
 - **AI & agents** (M4) — digest, improve-prompt, reply drafts, comment split, thread summaries, `ai_runs` UI; MCP server with agent badges.
 - **Notifications & review queue** (M5) — in-app inbox, Postmark email, mentions, digest scheduling, per-user prefs, review-queue dashboard.
 - **Private sources & post-back** (M6) — GitHub App with push-webhook auto re-sync, Confluence import via API token, digest post-back to PR/Confluence.
@@ -65,6 +71,7 @@ Work these one per session (`/wayfinder` work mode):
 - **Sync-agent idea stays in the fog** (v1 is pull-based via connectors) — this charting, 2026-07-10.
 - **Web-side error reporting deferred to Launch** (SaaS has no public traffic before go-live; must be off/optional self-hosted either way) — Import & render speccing, 2026-07-11.
 - **Workspace UX wedge before M4** (M3.5 documents list → M3.6 projects & tracked repos) — dogfooding pain: invisible imports, no multi-import progress, no organization, one-by-one import; M4's agent flows demo far better against an organized repo-full of docs. TODOS.md decision log 2026-07-21.
+- **Design-refresh wedge before M4, split three ways** — the 2026-07-23 Open Harbor design lock turned into modules: restyle + dashboard/activity + SaaS landing + web-UI i18n, full scope user-directed at speccing; the one-L-module bundle was split M3.7/M3.8/M3.9 at eng review (2026-07-23) so each ends demoable with a small merge (the 74-commit M3.6 branch was the cautionary tale). Landing pulled forward from Launch; activity instrumentation front-runs M5's inbox deliberately; i18n runs last against stable strings.
 - **A PR is a candidate version, not a separate document** — constrains the Versions module's lineage schema (lineage-with-candidates, not linear-only) — [ADR 0001](adr/0001-pr-is-a-candidate-version.md), 2026-07-15.
 - **Organization language pinned: Project (container) + Source (origin)** — a repo is a source, never the container (monorepos and mixed-source efforts break the 1:1); issues attach as References, never import — CONTEXT.md, 2026-07-15.
 
