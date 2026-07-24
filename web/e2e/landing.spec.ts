@@ -34,18 +34,25 @@ test.describe('landing', () => {
 
     await page.goto('/');
 
-    // The marketing surface: hero, capability tour, roadmap, self-host CTA.
+    // The marketing surface: hero, proof shot, capability tour, roadmap,
+    // self-host CTA, and the closing email CTA (conversion pass 2026-07-24).
     await expect(
       page.getByRole('heading', { name: /Paste a link\./, level: 1 }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Comments that keep their place' }),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: /Review where the doc is readable/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'The harbor chart' }),
+      page.getByRole('heading', { name: 'Live today, charted next' }),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Your specs never have to leave home' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Start your first review in 60 seconds' }),
     ).toBeVisible();
 
     // The hero hosts the working, unchanged demo paste box: paste the fixture

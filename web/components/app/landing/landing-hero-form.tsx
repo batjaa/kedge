@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { startDemo } from '@/lib/demo-client';
+import { sharePath, startDemo } from '@/lib/demo-client';
+import { SampleDemoButton } from './landing-sample-demo';
 
 // The hero's working paste box — the PLG wedge, unchanged in behaviour from the
 // pre-landing DemoHome (SPEC §10.3, #25): paste a public URL, hit "Render it",
@@ -16,7 +17,7 @@ import { startDemo } from '@/lib/demo-client';
 // rounded-full pill with the solid-emerald hero CTA (DESIGN.md reserves that
 // variant for hero/approve actions). Roles/labels are explicit and stable so the
 // M1 demo journey (#26) and the new landing journey drive it cleanly.
-export function LandingHeroForm() {
+export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [pending, setPending] = useState(false);
@@ -34,7 +35,7 @@ export function LandingHeroForm() {
     if (outcome.ok) {
       // The share URL is absolute (API's FRONTEND_URL); navigate by its path so
       // the SPA transition stays same-origin.
-      router.push(safePath(outcome.shareUrl));
+      router.push(sharePath(outcome.shareUrl));
       return;
     }
 
@@ -103,17 +104,15 @@ export function LandingHeroForm() {
           <span>PlantUML &amp; Mermaid via Kroki</span>
         </p>
       )}
+
+      {/* The one-click path to the wow moment: no hunting for a URL before
+          seeing a render. Dogfooding doubles as social proof. */}
+      {sampleUrl ? (
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <span>No URL handy?</span>
+          <SampleDemoButton url={sampleUrl} label="Render Kedge’s own SPEC.md" variant="chip" />
+        </p>
+      ) : null}
     </form>
   );
-}
-
-// Only ever navigate to a same-origin path parsed from the API's share URL —
-// never trust it as a full destination.
-function safePath(shareUrl: string): string {
-  try {
-    const parsed = new URL(shareUrl);
-    return `${parsed.pathname}${parsed.search}`;
-  } catch {
-    return shareUrl.startsWith('/') ? shareUrl : '/';
-  }
 }

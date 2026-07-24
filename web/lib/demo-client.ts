@@ -83,7 +83,7 @@ export async function startDemo(url: string): Promise<DemoOutcome> {
     return {
       ok: false,
       kind: 'rate-limited',
-      message: 'Whoa — too many demos from here. Give it a minute and try again.',
+      message: 'Whoa, too many demos from here. Give it a minute and try again.',
     };
   }
 
@@ -92,6 +92,20 @@ export async function startDemo(url: string): Promise<DemoOutcome> {
     kind: 'error',
     message: 'Something went wrong rendering that. Please try again.',
   };
+}
+
+/**
+ * Same-origin path of the absolute share URL the API mints (its FRONTEND_URL).
+ * Demo surfaces navigate by this path so the SPA transition stays same-origin —
+ * the share URL is never trusted as a full destination.
+ */
+export function sharePath(shareUrl: string): string {
+  try {
+    const parsed = new URL(shareUrl);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return shareUrl.startsWith('/') ? shareUrl : '/';
+  }
 }
 
 /** POST /api/v1/documents/{id}/claim — move a demo doc into my workspace. */

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { signIn, signUp, type AuthOutcome } from '@/lib/auth-client';
+import { signupEmailHandoffKey } from '@/lib/shared';
 
 type Mode = 'signin' | 'signup';
 
@@ -71,6 +72,22 @@ export function AuthForm({
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  // The landing's email CTA hands its address off through sessionStorage (never
+  // the URL). Read once after mount — an effect, not a state initializer, so the
+  // server render and first client render agree and hydration stays clean.
+  useEffect(() => {
+    if (mode !== 'signup') return;
+    try {
+      const handed = sessionStorage.getItem(signupEmailHandoffKey);
+      if (handed) {
+        sessionStorage.removeItem(signupEmailHandoffKey);
+        setEmail((current) => current || handed);
+      }
+    } catch {
+      // Storage unavailable: the visitor just types their email again.
+    }
+  }, [mode]);
 
   function clearFieldError(field: string) {
     setFieldErrors((prev) => {
