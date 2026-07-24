@@ -522,6 +522,38 @@ class DocumentResyncTest extends TestCase
         ])->count());
     }
 
+    public function test_a_dead_audit_sink_never_disrupts_the_failure_path(): void
+    {
+        [$author, $document, $current] = $this->readyDocument();
+        $this->fakeFetchThrows(new TokenRevokedException('GitHub rejected the token.', 'Bad credentials'));
+
+        // markFailed() now writes resync.failed through the best-effort seam, from a
+        // catch block and again from the exhausted failed() callback. A dead sink
+        // must not throw back out of either or leave the failure half-applied.
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
+        $this->app->instance(AuditLogger::class, $logger);
+
+        // Handled failure path (catch block → markFailed): no exception bubbles.
+        $this->runResync($document, $author);
+
+        $document->refresh();
+        $this->assertSame(DocumentStatus::Ready, $document->status);
+        $this->assertSame($current->id, $document->current_version_id);
+        $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
+        $this->assertStringContainsString('reconnect the integration', (string) $document->sync_error);
+
+        // Exhausted-retries path (failed() callback → markFailed) stays clean too.
+        (new ResyncDocumentJob($document, $author->id))->failed(new RuntimeException('exhausted'));
+
+        $document->refresh();
+        $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
+        $this->assertStringContainsString('Sync failed', (string) $document->sync_error);
+
+        // No resync.failed row survived the dead sink — the write was swallowed.
+        $this->assertSame(0, AuditLog::query()->where('action', 'resync.failed')->count());
+    }
+
     private function seedApproval(Document $document, DocumentVersion $version, User $user): Approval
     {
         return Approval::create([
