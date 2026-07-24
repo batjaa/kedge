@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\Document;
+use App\Services\Documents\SourceDescriptor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -43,6 +44,12 @@ class DocumentListResource extends JsonResource
             'project' => $this->project
                 ? ['id' => $this->project->id, 'name' => $this->project->name]
                 : null,
+            // Where the doc came from (M3.10, SPEC §11) — a display-ready
+            // descriptor derived server-side in ONE place ({@see SourceDescriptor})
+            // so the web renders, never re-parses. `tracked_repo_id` rides along as
+            // the project page's bucketing key against its attached repos (#118).
+            'source' => SourceDescriptor::fromDocument($this->resource)->toArray(),
+            'tracked_repo_id' => $this->tracked_repo_id,
             'created_at' => $this->created_at,
         ];
     }

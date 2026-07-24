@@ -4,12 +4,14 @@ namespace Tests\Feature\Api\V1;
 
 use App\Enums\AnchorState;
 use App\Enums\LifecycleStatus;
+use App\Enums\SourceType;
 use App\Enums\ThreadStatus;
 use App\Enums\ThreadType;
 use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
+use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\RegistrationService;
@@ -57,9 +59,11 @@ class DocumentListTest extends TestCase
             ->assertJsonPath('data.1.id', $older->id);
 
         // The row is exactly the lean set — no more, no less. `project` (M3.6) is
-        // the reserved chip slot: id + name, or null for Unfiled.
+        // the reserved chip slot: id + name, or null for Unfiled. M3.10 adds ONLY
+        // `source` (the provenance descriptor) and `tracked_repo_id` (the project
+        // page's bucketing key) — nothing else grows (#117 AC).
         $this->assertEqualsCanonicalizing(
-            ['id', 'title', 'status', 'last_sync_status', 'sync_error', 'lifecycle_status', 'open_threads_count', 'synced_at', 'project', 'created_at'],
+            ['id', 'title', 'status', 'last_sync_status', 'sync_error', 'lifecycle_status', 'open_threads_count', 'synced_at', 'project', 'source', 'tracked_repo_id', 'created_at'],
             array_keys($response->json('data.0')),
         );
 
@@ -342,6 +346,109 @@ class DocumentListTest extends TestCase
             ->getJson('/api/v1/documents?lifecycle=bogus')
             ->assertStatus(422)
             ->assertJsonValidationErrorFor('lifecycle');
+    }
+
+    // ---- M3.10: the provenance descriptor on the row (#117, SPEC §11) --------
+
+    public function test_each_row_carries_the_server_derived_source_descriptor_per_kind(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        $repo = TrackedRepo::factory()->for($workspace)->create();
+        $tracked = Document::factory()->for($workspace)->create([
+            'source_type' => SourceType::GithubPublic,
+            'source_url' => 'https://github.com/kedgehq/kedge/blob/main/docs/rfcs/017-anchoring.md',
+            'tracked_repo_id' => $repo->id,
+            'tracked_path' => 'docs/rfcs/017-anchoring.md',
+        ]);
+        $github = Document::factory()->for($workspace)->create([
+            'source_type' => SourceType::GithubPublic,
+            'source_url' => 'https://github.com/kedgehq/kedge/blob/main/docs/spec.md',
+            'tracked_path' => null,
+        ]);
+        $rawUrl = Document::factory()->for($workspace)->create([
+            'source_type' => SourceType::RawUrl,
+            'source_url' => 'https://raw.example.test/specs/plan.md',
+            'tracked_path' => null,
+        ]);
+        $upload = Document::factory()->for($workspace)->create([
+            'source_type' => SourceType::Upload,
+            'source_url' => null,
+            'tracked_path' => null,
+        ]);
+        $unparseableGithub = Document::factory()->for($workspace)->create([
+            'source_type' => SourceType::GithubPublic,
+            'source_url' => 'https://github.com/kedgehq/kedge/tree/main/docs',
+            'tracked_path' => null,
+        ]);
+
+        $rows = $this->rowsById($user);
+
+        // Tracked → repo path (and the bucketing id rides along).
+        $this->assertSame(['kind' => 'repo', 'path' => 'docs/rfcs/017-anchoring.md'], $rows[$tracked->id]['source']);
+        $this->assertSame($repo->id, $rows[$tracked->id]['tracked_repo_id']);
+
+        // Standalone GitHub → owner/repo + blob path.
+        $this->assertSame(
+            ['kind' => 'github', 'path' => 'docs/spec.md', 'repo' => 'kedgehq/kedge'],
+            $rows[$github->id]['source'],
+        );
+        $this->assertNull($rows[$github->id]['tracked_repo_id']);
+
+        // Raw URL → host only, no path.
+        $this->assertSame(['kind' => 'url', 'host' => 'raw.example.test'], $rows[$rawUrl->id]['source']);
+
+        // Upload → pasted.
+        $this->assertSame(['kind' => 'upload'], $rows[$upload->id]['source']);
+
+        // An unparseable GitHub URL degrades to the host shape — never an error,
+        // never a null descriptor (untrusted input, SPEC §13).
+        $this->assertSame(['kind' => 'url', 'host' => 'github.com'], $rows[$unparseableGithub->id]['source']);
+    }
+
+    public function test_a_tracked_document_keeps_its_repo_path_chip_after_the_repo_is_deleted(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        $repo = TrackedRepo::factory()->for($workspace)->create();
+        $doc = Document::factory()->for($workspace)->create([
+            'source_type' => SourceType::GithubPublic,
+            'source_url' => 'https://github.com/kedgehq/kedge/blob/main/docs/adr/0001.md',
+            'tracked_repo_id' => $repo->id,
+            'tracked_path' => 'docs/adr/0001.md',
+        ]);
+
+        // Un-tracking / deleting the repo nulls tracked_repo_id (nullOnDelete) but
+        // keeps the document and its path column (story 5).
+        $repo->delete();
+
+        $rows = $this->rowsById($user);
+
+        $this->assertNull($rows[$doc->id]['tracked_repo_id']);
+        // Provenance survives: the path column still names the origin.
+        $this->assertSame(['kind' => 'repo', 'path' => 'docs/adr/0001.md'], $rows[$doc->id]['source']);
+    }
+
+    /**
+     * The list rows keyed by document id — order-independent lookup for the
+     * per-kind provenance assertions above.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function rowsById(User $user): array
+    {
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents')
+            ->assertOk();
+
+        $rows = [];
+        foreach ($response->json('data') as $row) {
+            $rows[$row['id']] = $row;
+        }
+
+        return $rows;
     }
 
     // ---- helpers ------------------------------------------------------------
