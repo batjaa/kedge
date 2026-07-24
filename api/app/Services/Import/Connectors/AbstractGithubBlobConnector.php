@@ -10,16 +10,17 @@ use App\Services\Import\Exceptions\ImportFailedException;
 use App\Services\Import\Exceptions\RateLimitedException;
 use App\Services\Import\Exceptions\TokenRevokedException;
 use App\Services\Import\FetchedContent;
+use App\Services\Import\GithubBlobUrl;
 
 /**
  * The GitHub-file import mechanics shared by the public reader ({@see GithubPublicConnector})
- * and the PAT reader ({@see GithubPatConnector}), SPEC §5.1. Both parse a
- * `github.com/{owner}/{repo}/blob/{ref}/{path}` link into the contents API,
- * request the raw media type through the one SSRF-guarded doorway, and honor
- * GitHub's rate-limit signals per the §19 registry. The subclasses differ only in
- * their source type, whether they authenticate, and how they treat an auth
- * rejection — kept as two small hooks so the parsing and back-off live in exactly
- * one place.
+ * and the PAT reader ({@see GithubPatConnector}), SPEC §5.1. Both interpret a
+ * `github.com/{owner}/{repo}/blob/{ref}/{path}` link via the shared
+ * {@see GithubBlobUrl} parser, resolve it to the contents API, request the raw
+ * media type through the one SSRF-guarded doorway, and honor GitHub's rate-limit
+ * signals per the §19 registry. The subclasses differ only in their source type,
+ * whether they authenticate, and how they treat an auth rejection — kept as two
+ * small hooks so the back-off lives in exactly one place.
  */
 abstract class AbstractGithubBlobConnector implements Connector
 {
@@ -39,18 +40,18 @@ abstract class AbstractGithubBlobConnector implements Connector
 
     public function matches(string $url): bool
     {
-        return $this->parseBlobUrl($url) !== null;
+        return GithubBlobUrl::fromUrl($url) !== null;
     }
 
     public function fetch(DocumentSource $source): FetchedContent
     {
-        $parts = $this->parseBlobUrl($source->url)
+        $blob = GithubBlobUrl::fromUrl($source->url)
             ?? throw new ImportFailedException('Not a recognizable GitHub blob URL.');
 
         // BlockedUrlException / other FetchExceptions propagate to the job, which
         // owns retry-vs-terminal (SPEC 19). Non-2xx is returned, not thrown, so we
         // can read Retry-After (and the PAT reader can read a 401) ourselves.
-        $result = $this->fetcher->fetch($this->contentsApiUrl($parts), $this->requestHeaders($source));
+        $result = $this->fetcher->fetch($this->contentsApiUrl($blob), $this->requestHeaders($source));
 
         if ($result->successful()) {
             return new FetchedContent(
@@ -109,42 +110,13 @@ abstract class AbstractGithubBlobConnector implements Connector
     protected function guardAuthentication(FetchResult $result): void {}
 
     /**
-     * Parse a GitHub blob URL into its parts, or null if it is not one.
-     *
-     * @return array{owner: string, repo: string, ref: string, path: string}|null
+     * The GitHub contents-API URL for a parsed blob reference. The blob-URL
+     * interpretation itself lives in {@see GithubBlobUrl}; this only re-encodes the
+     * already-decoded parts onto the API endpoint.
      */
-    private function parseBlobUrl(string $url): ?array
+    private function contentsApiUrl(GithubBlobUrl $blob): string
     {
-        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
-        if (! in_array($host, ['github.com', 'www.github.com'], true)) {
-            return null;
-        }
-
-        $path = (string) parse_url($url, PHP_URL_PATH);
-        $segments = array_values(array_filter(explode('/', $path), fn (string $s) => $s !== ''));
-
-        // /{owner}/{repo}/blob/{ref}/{path...} — at least one path segment after ref.
-        if (count($segments) < 5 || $segments[2] !== 'blob') {
-            return null;
-        }
-
-        return [
-            'owner' => $segments[0],
-            'repo' => $segments[1],
-            'ref' => rawurldecode($segments[3]),
-            // A branch name may contain slashes, but a blob URL can't tell where the
-            // ref ends and the path begins — GitHub itself treats segment 4 as the
-            // ref and the remainder as the path. That covers branches, tags, SHAs.
-            'path' => implode('/', array_map('rawurldecode', array_slice($segments, 4))),
-        ];
-    }
-
-    /**
-     * @param  array{owner: string, repo: string, ref: string, path: string}  $parts
-     */
-    private function contentsApiUrl(array $parts): string
-    {
-        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $parts['path'])));
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $blob->path)));
 
         return sprintf(
             '%s/repos/%s/%s/contents/%s?ref=%s',
@@ -152,10 +124,10 @@ abstract class AbstractGithubBlobConnector implements Connector
             // env-overridable only as the test seam (config/kedge.php, shared with
             // the tree lister); a bare GITHUB_API_HOST keeps the https default.
             (string) config('kedge.github.api_base', 'https://api.github.com'),
-            rawurlencode($parts['owner']),
-            rawurlencode($parts['repo']),
+            rawurlencode($blob->owner),
+            rawurlencode($blob->repo),
             $encodedPath,
-            rawurlencode($parts['ref']),
+            rawurlencode($blob->ref),
         );
     }
 
