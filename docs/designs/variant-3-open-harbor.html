@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kedge — Open Harbor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: { fontFamily: { display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+}
+function toggleTheme(){ document.documentElement.classList.toggle('dark') }
+</script>
+</head>
+<!-- OPEN HARBOR — light-first sibling with full dark mode. Warm paper-white / zinc-900,
+     emerald accent, Space Grotesk display sans, airy asymmetric cards. Workspace section hosts
+     the Signal Deck console (projects rail + docs table), restyled to this variant's register.
+     Signature move kept: code panels and diffs stay dark inside the light UI. -->
+<body class="bg-stone-50 dark:bg-zinc-900 antialiased font-sans text-zinc-600 dark:text-zinc-400">
+
+<!-- Header -->
+<header class="fixed inset-x-0 top-0 z-50 bg-stone-50/85 dark:bg-zinc-900/85 backdrop-blur border-b border-zinc-900/10 dark:border-white/10">
+  <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-6">
+    <div class="flex items-center gap-2">
+      <svg class="h-5 w-5 rotate-[15deg] text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v13.5"/><path d="M8 10h8"/><path d="M5 14.5c0 3.6 3.2 5.5 7 5.5s7-1.9 7-5.5"/></svg>
+      <span class="font-display font-semibold tracking-tight text-zinc-900 dark:text-white text-lg">kedge</span>
+    </div>
+    <nav class="ml-auto hidden md:flex items-center gap-7 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+      <a href="#how" class="hover:text-zinc-900 dark:hover:text-white">How it works</a>
+      <a href="#workspace" class="hover:text-zinc-900 dark:hover:text-white">Workspace</a>
+      <a href="#roadmap" class="hover:text-zinc-900 dark:hover:text-white">Roadmap</a>
+      <a href="#" class="hover:text-zinc-900 dark:hover:text-white">Self-host</a>
+    </nav>
+    <button onclick="toggleTheme()" aria-label="Toggle theme" class="flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-zinc-900/10 dark:ring-white/10 hover:bg-white dark:hover:bg-white/5">
+      <svg class="h-4 w-4 hidden dark:block text-zinc-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.7 14.4A9 9 0 1 1 9.6 2.3a7 7 0 1 0 12.1 12.1Z"/></svg>
+      <svg class="h-4 w-4 dark:hidden text-zinc-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <a href="#" class="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Paste a spec</a>
+  </div>
+</header>
+
+<!-- Hero: asymmetric split -->
+<section class="px-6 pt-32 pb-20 overflow-hidden">
+  <div class="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
+    <div>
+      <div class="inline-flex items-center gap-2 rounded-full bg-emerald-600/10 dark:bg-emerald-400/10 px-3 py-1 ring-1 ring-inset ring-emerald-600/20 dark:ring-emerald-400/30">
+        <span class="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
+        <span class="text-xs font-medium text-emerald-700 dark:text-emerald-400">Open source · AGPL-3.0 · self-hostable</span>
+      </div>
+      <h1 class="mt-6 font-display text-5xl sm:text-6xl font-bold tracking-tight text-zinc-900 dark:text-white leading-[1.02]">Paste a link.<br>Review a spec.<br><span class="text-emerald-600 dark:text-emerald-400">Zero signup.</span></h1>
+      <p class="mt-6 max-w-md text-base leading-7">Kedge renders your RFC from wherever it lives — GitHub, Confluence, any URL — with comment threads anchored to the text. Change the doc, re-sync, and the comments keep their place.</p>
+      <div class="mt-8 flex max-w-md items-center rounded-full bg-white dark:bg-white/5 p-1.5 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 shadow-sm">
+        <span class="ml-3 flex-1 truncate font-mono text-sm text-zinc-400 dark:text-zinc-500">https://github.com/…/docs/SPEC.md</span>
+        <button class="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Render it</button>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400 dark:text-zinc-500">
+        <span>Markdown</span><span>·</span><span>MDX</span><span>·</span><span>HTML</span><span>·</span><span>PlantUML & Mermaid via Kroki</span><span>·</span><span>private repos via PAT</span>
+      </div>
+    </div>
+
+    <!-- stacked product cards -->
+    <div class="relative">
+      <!-- thread card -->
+      <div class="rounded-3xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-lg shadow-zinc-900/5 p-5 lg:rotate-1">
+        <p class="text-sm leading-7 text-zinc-600 dark:text-zinc-300">Approvals are pinned to the version reviewed, and <mark class="bg-emerald-500/15 dark:bg-emerald-400/10 border-b-2 border-emerald-600/60 dark:border-emerald-500/60 text-zinc-800 dark:text-zinc-200 box-decoration-clone px-0.5">go visibly stale when the document moves on</mark> — no silent rubber stamps.</p>
+        <div class="mt-4 rounded-2xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 p-4">
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-500">§ 9.2</span>
+            <span class="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Staleness rules</span>
+            <span class="ml-auto font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Open</span>
+          </div>
+          <div class="mt-3 flex gap-2.5">
+            <div class="h-5 w-5 shrink-0 rounded-full bg-sky-600 text-[9px] text-white flex items-center justify-center">SC</div>
+            <p class="text-xs leading-5">Love this — can a stale approver re-approve in one click from the diff?</p>
+          </div>
+          <div class="mt-3 flex gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+            <button class="hover:text-emerald-700 dark:hover:text-emerald-400 font-medium">Reply</button>
+            <button class="hover:text-zinc-700 dark:hover:text-zinc-300">Resolve</button>
+            <button class="ml-auto text-emerald-700 dark:text-emerald-400 font-medium">Draft reply →</button>
+          </div>
+        </div>
+      </div>
+      <!-- suggestion card (dark panel stays dark — signature) -->
+      <div class="mt-5 lg:-mt-2 lg:ml-14 rounded-3xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-lg shadow-zinc-900/5 p-5 lg:-rotate-1">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Suggested edit</span>
+          <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400">Pending</span>
+          <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">rfc-017 · v6</span>
+        </div>
+        <div class="mt-3 rounded-2xl bg-zinc-900 dark:bg-zinc-950/60 ring-1 ring-inset ring-white/10 p-3.5 font-mono text-xs overflow-x-auto">
+          <div class="text-rose-400/90"><span class="select-none mr-2">-</span>anchors are stored as character offsets</div>
+          <div class="text-emerald-400"><span class="select-none mr-2">+</span>anchors store quote + prefix + suffix context</div>
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+          <button class="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Accept</button>
+          <button class="rounded-full bg-stone-100 dark:bg-white/5 px-4 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 hover:bg-stone-200 dark:hover:bg-white/10">Decline</button>
+        </div>
+      </div>
+      <!-- floating chip -->
+      <div class="hidden lg:flex absolute -left-6 -bottom-6 items-center gap-2 rounded-full bg-white dark:bg-zinc-900 px-4 py-2 ring-1 ring-zinc-900/10 dark:ring-white/15 shadow-md">
+        <span class="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>
+        <span class="text-xs font-medium text-zinc-700 dark:text-zinc-300">14 comments survived the last re-sync</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works: 3 airy steps -->
+<section id="how" class="px-6 py-20 bg-white dark:bg-white/[.02] border-y border-zinc-900/5 dark:border-white/5">
+  <div class="mx-auto max-w-6xl">
+    <div class="max-w-xl">
+      <h2 class="font-display text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-white">Review where the doc is readable,<br class="hidden sm:block"> not where it's stored</h2>
+      <p class="mt-4 text-sm leading-7">Docs live in repos and wikis; reviews die in PR comments on raw markdown. Kedge gives the conversation a surface built for reading — and keeps it alive across versions.</p>
+    </div>
+    <div class="mt-12 grid gap-6 md:grid-cols-3">
+      <div class="rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-6">
+        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600/10 dark:bg-emerald-400/10 font-display text-sm font-bold text-emerald-700 dark:text-emerald-400">1</div>
+        <h3 class="mt-4 font-display text-lg font-semibold text-zinc-900 dark:text-white">Import from anywhere</h3>
+        <p class="mt-2 text-sm leading-6">A GitHub file, a whole repo directory, a raw URL, an upload. Diagrams render, broken markup never crashes the page, and a share link exists in seconds.</p>
+      </div>
+      <div class="rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-6">
+        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600/10 dark:bg-emerald-400/10 font-display text-sm font-bold text-emerald-700 dark:text-emerald-400">2</div>
+        <h3 class="mt-4 font-display text-lg font-semibold text-zinc-900 dark:text-white">Discuss on the text itself</h3>
+        <p class="mt-2 text-sm leading-6">Select a sentence, start a thread. Propose the fix as a suggested edit the author accepts in one click. Reviewers join by magic link — no accounts to herd.</p>
+      </div>
+      <div class="rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-6">
+        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600/10 dark:bg-emerald-400/10 font-display text-sm font-bold text-emerald-700 dark:text-emerald-400">3</div>
+        <h3 class="mt-4 font-display text-lg font-semibold text-zinc-900 dark:text-white">Ship a new version, keep the review</h3>
+        <p class="mt-2 text-sm leading-6">Re-sync pulls the latest doc. Comments re-anchor — exact, then fuzzy, then safely into the orphan tray. Approvals show exactly which version they vouch for.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Workspace: the console -->
+<section id="workspace" class="px-6 py-20">
+  <div class="mx-auto max-w-6xl">
+    <div class="max-w-2xl">
+      <span class="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">New — projects & tracked repos</span>
+      <h2 class="mt-3 font-display text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Point it at your <span class="font-mono text-emerald-700 dark:text-emerald-400 text-2xl align-middle">docs/</span> folder and let it fill itself</h2>
+      <p class="mt-4 text-sm leading-7">A project tracks a repo, a branch, and a path pattern. Kedge previews the matches, bulk-imports them, and a re-scan after each push imports new files, re-syncs changed ones, and flags deletions — never deleting anything itself.</p>
+    </div>
+    <div class="mt-6 grid gap-3 sm:grid-cols-3 max-w-4xl text-sm">
+      <div class="flex gap-3"><svg class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg><span>Live import status on every doc, retry inline</span></div>
+      <div class="flex gap-3"><svg class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg><span>Lifecycle, open threads, and sync state at a glance</span></div>
+      <div class="flex gap-3"><svg class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg><span>An Unfiled bucket, so nothing needs a home first</span></div>
+    </div>
+
+    <!-- console frame (from Signal Deck, restyled) -->
+    <div class="mt-10 rounded-3xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-xl shadow-zinc-900/5 overflow-hidden">
+      <div class="flex items-center gap-1.5 border-b border-zinc-900/5 dark:border-white/10 bg-stone-50 dark:bg-zinc-950/40 px-4 py-2.5">
+        <div class="h-2.5 w-2.5 rounded-full bg-zinc-900/10 dark:bg-white/10"></div><div class="h-2.5 w-2.5 rounded-full bg-zinc-900/10 dark:bg-white/10"></div><div class="h-2.5 w-2.5 rounded-full bg-zinc-900/10 dark:bg-white/10"></div>
+        <span class="mx-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">kedge.review/workspace</span>
+      </div>
+      <div class="grid gap-4 p-5 lg:grid-cols-12">
+
+        <!-- projects rail -->
+        <div class="lg:col-span-4 space-y-3">
+          <div class="rounded-2xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-500/20 p-4">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-zinc-900 dark:text-white">Kedge v1</span>
+              <span class="ml-auto font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Active</span>
+            </div>
+            <div class="mt-2 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 truncate">⎇ kedgehq/kedge · main · docs/**/*.md</div>
+            <div class="mt-3 flex items-center gap-3 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
+              <span>6 docs</span><span>11 open</span><span class="text-rose-600 dark:text-rose-400">1 orphan</span>
+              <button class="ml-auto rounded-full bg-white dark:bg-white/5 px-2.5 py-0.5 uppercase ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 text-zinc-700 dark:text-zinc-300 hover:bg-stone-100 dark:hover:bg-white/10">Re-scan</button>
+            </div>
+          </div>
+          <div class="rounded-2xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10 p-4">
+            <div class="flex items-center gap-2"><span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Platform RFCs</span><span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">3 docs</span></div>
+            <div class="mt-2 font-mono text-[10px] text-zinc-400 dark:text-zinc-600 truncate">⎇ kedgehq/platform · main · rfcs/*.md</div>
+          </div>
+          <div class="rounded-2xl border border-dashed border-zinc-900/15 dark:border-white/15 p-4">
+            <div class="flex items-center gap-2"><span class="text-sm text-zinc-500">Unfiled</span><span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">2 docs</span></div>
+            <div class="mt-1.5 font-mono text-[10px] text-zinc-400 dark:text-zinc-600">drag docs here… or anywhere</div>
+          </div>
+        </div>
+
+        <!-- docs table -->
+        <div class="lg:col-span-8 rounded-2xl ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10 overflow-hidden">
+          <div class="flex items-center gap-2 border-b border-zinc-900/5 dark:border-white/10 bg-stone-50 dark:bg-zinc-950/40 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <span>Document</span><span class="ml-auto hidden sm:inline">Lifecycle · Threads · Sync</span>
+          </div>
+          <div class="divide-y divide-zinc-900/5 dark:divide-white/5">
+            <div class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+              <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">SPEC.md</span>
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400">In review</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v4 · 7 open · 2 h ago</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+              <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">DESIGN.md</span>
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Approved</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v2 · 0 open · 2 h ago</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+              <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">rfc-017-anchoring.mdx</span>
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-rose-500/30 dark:ring-rose-400/30 bg-rose-500/10 dark:bg-rose-400/10 text-rose-700 dark:text-rose-400">1 orphan</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v6 · 3 open · 40 min ago</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+              <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">specs/m4-ai-agents.md</span>
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/30 dark:ring-sky-400/30 bg-sky-500/10 dark:bg-sky-400/10 text-sky-700 dark:text-sky-400 animate-pulse">Importing…</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">found by re-scan · just now</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+              <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">ROADMAP.md</span>
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Approved</span>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v3 · 1 open · 2 h ago</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+              <span class="font-mono text-xs text-zinc-500 dark:text-zinc-400">legacy-import.html</span>
+              <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-rose-500/30 dark:ring-rose-400/30 bg-rose-500/10 dark:bg-rose-400/10 text-rose-700 dark:text-rose-400">Failed</span>
+              <button class="font-mono text-[10px] uppercase text-zinc-500 dark:text-zinc-400 underline decoration-zinc-300 dark:decoration-zinc-700 hover:text-zinc-900 dark:hover:text-white">Retry</button>
+              <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">unreachable · 1 d ago</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Roadmap: horizontal milestone cards -->
+<section id="roadmap" class="py-20 bg-white dark:bg-white/[.02] border-y border-zinc-900/5 dark:border-white/5">
+  <div class="mx-auto max-w-6xl px-6">
+    <div class="flex flex-wrap items-end gap-4">
+      <div>
+        <h2 class="font-display text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">The harbor chart</h2>
+        <p class="mt-3 max-w-lg text-sm leading-7">Six milestones shipped in July. Every one ends demoable — and Kedge reviews its own docs with each new capability the week it lands.</p>
+      </div>
+      <div class="ml-auto hidden sm:flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>Shipped</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400"></span>Building</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full ring-1 ring-inset ring-zinc-300 dark:ring-white/25 bg-white dark:bg-transparent"></span>Charted</span>
+      </div>
+    </div>
+  </div>
+  <div class="mt-10 overflow-x-auto pb-4">
+    <div class="flex gap-4 px-6 lg:px-[max(1.5rem,calc((100vw-72rem)/2))] w-max">
+
+      <div class="w-64 shrink-0 rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M0–M1 · July 12–15</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Import & render</h3>
+        <p class="mt-2 text-xs leading-5">GitHub, raw URL, upload, PAT for private repos. Kroki diagrams, MDX safety net, share links, instant demo mode.</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M2 · July 16</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Comments & suggestions</h3>
+        <p class="mt-2 text-xs leading-5">Anchored threads, replies, resolve, fork. Suggested edits with one-click accept. Magic-link reviewers.</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M3 · July 20</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Versions & approvals</h3>
+        <p class="mt-2 text-xs leading-5">The re-anchoring ladder ships: exact → fuzzy → orphan tray. Diff view with comment overlay; version-pinned approvals with staleness.</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-stone-50 dark:bg-white/[.03] ring-1 ring-zinc-900/5 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M3.5–3.6 · July 21</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Workspace</h3>
+        <p class="mt-2 text-xs leading-5">The live documents list, projects as free containers, and tracked repos: point at a folder, bulk import, re-scan on demand.</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-violet-50 dark:bg-violet-400/[.06] ring-1 ring-violet-600/20 dark:ring-violet-500/20 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse"></span><span class="font-mono text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400">M4 · building now</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">AI & agents</h3>
+        <p class="mt-2 text-xs leading-5">Review digests, drafted replies, improve-prompts — always human-confirmed. And the MCP server: AI agents as badged, first-class reviewers.</p>
+        <div class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-violet-600/10 dark:bg-violet-400/10 px-2.5 py-1 ring-1 ring-inset ring-violet-600/20 dark:ring-violet-400/30">
+          <span class="font-mono text-[9px] font-semibold uppercase text-violet-700 dark:text-violet-400">Agent · MCP</span>
+        </div>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-white dark:bg-transparent ring-1 ring-zinc-900/10 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full ring-1 ring-inset ring-zinc-300 dark:ring-white/25 bg-white dark:bg-transparent"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M5 · charted</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Inbox & review queue</h3>
+        <p class="mt-2 text-xs leading-5">Mentions, email you actually want, and one dashboard for "what needs my review?"</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-white dark:bg-transparent ring-1 ring-zinc-900/10 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full ring-1 ring-inset ring-zinc-300 dark:ring-white/25 bg-white dark:bg-transparent"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M6 · charted</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Private sources</h3>
+        <p class="mt-2 text-xs leading-5">GitHub App: push → the doc re-syncs itself. Confluence import. Digests posted back to the PR.</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-white dark:bg-transparent ring-1 ring-zinc-900/10 dark:ring-white/10 p-5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full ring-1 ring-inset ring-zinc-300 dark:ring-white/25 bg-white dark:bg-transparent"></span><span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">M7 · charted</span></div>
+        <h3 class="mt-3 font-display text-base font-semibold text-zinc-900 dark:text-white">Self-host</h3>
+        <p class="mt-2 text-xs leading-5"><span class="font-mono">docker compose up</span> on a fresh VM → a full private instance. Nothing leaves your network.</p>
+      </div>
+
+      <div class="w-64 shrink-0 rounded-3xl bg-emerald-600 dark:bg-emerald-500/90 p-5 text-white">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 rotate-[15deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v13.5"/><path d="M8 10h8"/><path d="M5 14.5c0 3.6 3.2 5.5 7 5.5s7-1.9 7-5.5"/></svg>
+          <span class="font-mono text-[10px] uppercase tracking-wider text-emerald-100">Launch</span>
+        </div>
+        <h3 class="mt-3 font-display text-base font-semibold">kedge.review goes live</h3>
+        <p class="mt-2 text-xs leading-5 text-emerald-50">Both editions at once — the SaaS for anyone with a URL, the compose file for teams who keep their specs at home.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Agents teaser -->
+<section class="px-6 py-20">
+  <div class="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2">
+    <div class="order-2 lg:order-1 rounded-3xl bg-white dark:bg-white/[.03] ring-1 ring-violet-600/20 dark:ring-violet-500/20 shadow-lg shadow-violet-600/5 p-5">
+      <div class="flex items-center gap-2">
+        <div class="h-6 w-6 rounded-full bg-violet-500 text-[10px] text-white flex items-center justify-center">CL</div>
+        <span class="text-sm font-semibold text-zinc-900 dark:text-white">Claude</span>
+        <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-violet-600/30 dark:ring-violet-400/30 bg-violet-600/10 dark:bg-violet-400/10 text-violet-700 dark:text-violet-400">Agent · MCP</span>
+        <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">§ 6.2 · just now</span>
+      </div>
+      <p class="mt-3 text-sm leading-6">The engine allowlist in §6.2 is enforced in the web layer but the spec doesn't state the API re-validates it. Suggest adding a server-side assertion so a crafted request can't reach Kroki with an unlisted engine.</p>
+      <div class="mt-4 flex gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+        <button class="font-medium hover:text-violet-700 dark:hover:text-violet-400">Reply</button>
+        <button class="hover:text-zinc-700 dark:hover:text-zinc-300">Resolve</button>
+        <span class="ml-auto text-zinc-300 dark:text-zinc-600">posted via MCP · human review pending</span>
+      </div>
+    </div>
+    <div class="order-1 lg:order-2">
+      <span class="text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">Next up · M4</span>
+      <h2 class="mt-3 font-display text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Your next reviewer might not be human</h2>
+      <p class="mt-4 text-sm leading-7">Kedge's MCP server makes AI agents first-class reviewers: they read the rendered doc, anchor comments to real passages, and wear a badge that says exactly what they are. Every AI output stays a draft until a human confirms it — agents never auto-act.</p>
+      <p class="mt-3 text-sm leading-7">Close the loop: comments → AI digest → improve-prompt → your coding agent revises the doc → re-sync → the comments are still there.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Self-host CTA (dark panel in both themes) -->
+<section class="px-6 pb-24">
+  <div class="mx-auto max-w-6xl rounded-3xl bg-zinc-900 dark:bg-white/[.03] p-8 sm:p-12 ring-1 ring-white/10">
+    <div class="grid items-center gap-10 lg:grid-cols-2">
+      <div>
+        <h2 class="font-display text-3xl font-bold tracking-tight text-white">Your specs never have to leave home</h2>
+        <p class="mt-4 text-sm leading-7 text-zinc-400">The open-source edition is the entire product — anchoring, approvals, the MCP server, all of it. AGPL-3.0, full parity with the SaaS, one compose file.</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="#" class="rounded-full bg-emerald-400/10 px-5 py-2 text-sm font-medium text-emerald-400 ring-1 ring-inset ring-emerald-400/20 hover:bg-emerald-400/15">Read the self-hosting guide</a>
+          <a href="#" class="rounded-full bg-white/5 px-5 py-2 text-sm font-medium text-zinc-300 ring-1 ring-inset ring-white/10 hover:bg-white/10">Star on GitHub</a>
+        </div>
+      </div>
+      <div class="rounded-2xl bg-zinc-950/60 ring-1 ring-inset ring-white/10 p-5 font-mono text-xs leading-7 text-zinc-300 overflow-x-auto">
+        <div><span class="text-emerald-400 select-none">$</span> git clone https://github.com/kedgehq/kedge</div>
+        <div><span class="text-emerald-400 select-none">$</span> cd kedge/deploy && docker compose up</div>
+        <div class="text-zinc-500">✓ api · web · postgres · kroki</div>
+        <div class="text-zinc-500">→ http://localhost:8080 — importing <span class="text-zinc-300">docs/SPEC.md</span> via PAT</div>
+        <div class="text-emerald-400">ready. nothing left the network.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="border-t border-zinc-900/10 dark:border-white/10 px-6 py-10 bg-white dark:bg-transparent">
+  <div class="mx-auto flex max-w-6xl flex-col items-center gap-4 sm:flex-row">
+    <div class="flex items-center gap-2">
+      <svg class="h-4 w-4 rotate-[15deg] text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v13.5"/><path d="M8 10h8"/><path d="M5 14.5c0 3.6 3.2 5.5 7 5.5s7-1.9 7-5.5"/></svg>
+      <span class="font-display text-sm font-semibold tracking-tight text-zinc-900 dark:text-white">kedge</span>
+      <span class="text-xs text-zinc-400 dark:text-zinc-500">— comments that keep their place.</span>
+    </div>
+    <div class="sm:ml-auto flex items-center gap-5 text-xs text-zinc-500">
+      <a href="#" class="hover:text-zinc-900 dark:hover:text-zinc-300">GitHub</a>
+      <a href="#" class="hover:text-zinc-900 dark:hover:text-zinc-300">Docs</a>
+      <a href="#" class="hover:text-zinc-900 dark:hover:text-zinc-300">Roadmap</a>
+      <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-600">AGPL-3.0</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kedge App — Project</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: { fontFamily: { display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+}
+function toggleTheme(){ document.documentElement.classList.toggle('dark') }
+</script>
+</head>
+<!-- APP · PROJECT PAGE — M3.6: project as free container with description, tracked sources
+     (repo + ref + glob, manual re-scan, deletions flagged never auto-deleted), doc assignment,
+     and the add-source → preview → bulk-import flow. -->
+<body class="bg-stone-50 dark:bg-zinc-900 antialiased font-sans text-zinc-600 dark:text-zinc-400">
+
+<!-- App header -->
+<header class="fixed inset-x-0 top-0 z-50 bg-stone-50/85 dark:bg-zinc-900/85 backdrop-blur border-b border-zinc-900/10 dark:border-white/10">
+  <div class="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6">
+    <a href="app-dashboard.html" class="flex items-center gap-2">
+      <svg class="h-5 w-5 rotate-[15deg] text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v13.5"/><path d="M8 10h8"/><path d="M5 14.5c0 3.6 3.2 5.5 7 5.5s7-1.9 7-5.5"/></svg>
+      <span class="font-display font-semibold tracking-tight text-zinc-900 dark:text-white">kedge</span>
+    </a>
+    <div class="hidden md:flex flex-1 max-w-sm">
+      <button class="flex w-full items-center gap-2 rounded-full bg-white dark:bg-white/5 px-3.5 py-1.5 text-sm text-zinc-400 dark:text-zinc-500 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 hover:ring-zinc-900/20 dark:hover:ring-white/20">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" d="m21 21-4.3-4.3M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"/></svg>
+        Find a document…
+        <kbd class="ml-auto rounded border border-zinc-300 dark:border-zinc-700 px-1.5 text-[10px] text-zinc-400">⌘K</kbd>
+      </button>
+    </div>
+    <nav class="ml-auto hidden lg:flex items-center gap-5 text-sm">
+      <a href="app-dashboard.html" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">Documents</a>
+      <a href="app-project.html" class="font-medium text-zinc-900 dark:text-white">Projects</a>
+      <span class="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-600 cursor-default" title="Review queue arrives with M5">Queue
+        <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-zinc-400/30 bg-zinc-400/10 text-zinc-400 dark:text-zinc-500">M5</span>
+      </span>
+    </nav>
+    <div class="h-5 w-px bg-zinc-900/10 dark:bg-white/15 hidden lg:block"></div>
+    <button onclick="toggleTheme()" aria-label="Toggle theme" class="flex h-7 w-7 items-center justify-center rounded-full ring-1 ring-zinc-900/10 dark:ring-white/10 hover:bg-white dark:hover:bg-white/5">
+      <svg class="h-4 w-4 hidden dark:block text-zinc-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.7 14.4A9 9 0 1 1 9.6 2.3a7 7 0 1 0 12.1 12.1Z"/></svg>
+      <svg class="h-4 w-4 dark:hidden text-zinc-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <button class="rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Import</button>
+    <div class="h-7 w-7 rounded-full bg-emerald-600 dark:bg-emerald-500 text-[10px] font-medium text-white flex items-center justify-center" title="Batjaa — signed in">BB</div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-7xl px-4 sm:px-6 pt-24 pb-16">
+
+  <!-- Breadcrumb + project header -->
+  <nav class="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+    <a href="app-dashboard.html" class="hover:text-zinc-900 dark:hover:text-white">Workspace</a>
+    <span>/</span>
+    <span class="text-zinc-700 dark:text-zinc-300">Kedge v1</span>
+  </nav>
+
+  <div class="mt-4 flex flex-wrap items-start gap-4">
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Kedge v1</h1>
+        <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Active</span>
+      </div>
+      <p class="mt-2 max-w-xl text-sm leading-6">Everything for the v1 push — the product spec, design language, and per-milestone module specs. Docs flow in from the tracked repo below; assignment is free-form.</p>
+      <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
+        <span>6 docs</span><span>11 open threads</span><span class="text-rose-600 dark:text-rose-400">1 orphan</span><span>2 reviewers</span><span>created 2026-07-21</span>
+      </div>
+    </div>
+    <div class="ml-auto flex items-center gap-2">
+      <button class="rounded-full bg-white dark:bg-white/5 px-3.5 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 hover:bg-stone-100 dark:hover:bg-white/10">Edit</button>
+      <button class="rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Add source</button>
+    </div>
+  </div>
+
+  <div class="mt-8 grid gap-6 lg:grid-cols-12 items-start">
+
+    <!-- Left: sources -->
+    <aside class="lg:col-span-4 space-y-4">
+      <h2 class="px-1 font-display text-sm font-semibold text-zinc-900 dark:text-white">Tracked sources</h2>
+
+      <!-- tracked repo card -->
+      <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-sm p-4">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-zinc-400 dark:text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.5 6H13a3 3 0 0 1 3 3v.5"/></svg>
+          <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200 truncate">kedgehq/kedge</span>
+          <span class="ml-auto font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Tracking</span>
+        </div>
+        <div class="mt-2.5 grid grid-cols-2 gap-2 font-mono text-[10px]">
+          <div class="rounded-lg bg-stone-50 dark:bg-white/5 ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10 px-2 py-1.5"><span class="text-zinc-400 dark:text-zinc-600">ref</span><div class="text-zinc-700 dark:text-zinc-300">main</div></div>
+          <div class="rounded-lg bg-stone-50 dark:bg-white/5 ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10 px-2 py-1.5"><span class="text-zinc-400 dark:text-zinc-600">pattern</span><div class="text-zinc-700 dark:text-zinc-300 truncate">docs/**/*.md</div></div>
+        </div>
+        <!-- last scan result -->
+        <div class="mt-3 rounded-xl bg-stone-50 dark:bg-zinc-950/40 ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10 p-3">
+          <div class="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <span>Last scan · 2 h ago</span>
+            <span class="ml-auto normal-case text-zinc-400 dark:text-zinc-600">@ 255beec</span>
+          </div>
+          <div class="mt-2 space-y-1.5 text-xs">
+            <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-sky-500 dark:bg-sky-400 animate-pulse"></span><span class="font-mono text-zinc-700 dark:text-zinc-300">specs/m4-ai-agents.md</span><span class="ml-auto text-zinc-400 dark:text-zinc-600">new · importing</span></div>
+            <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400"></span><span class="font-mono text-zinc-700 dark:text-zinc-300">SPEC.md</span><span class="ml-auto text-zinc-400 dark:text-zinc-600">changed · re-synced</span></div>
+            <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400"></span><span class="font-mono text-zinc-700 dark:text-zinc-300">ROADMAP.md</span><span class="ml-auto text-zinc-400 dark:text-zinc-600">changed · re-synced</span></div>
+            <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-rose-500 dark:bg-rose-400"></span><span class="font-mono text-zinc-700 dark:text-zinc-300 line-through decoration-zinc-400">IDEAS-old.md</span><span class="ml-auto text-rose-600 dark:text-rose-400">deleted at source</span></div>
+          </div>
+        </div>
+        <!-- flagged deletion — never auto-delete -->
+        <div class="mt-2 rounded-xl ring-1 ring-inset ring-rose-500/30 dark:ring-rose-400/30 bg-rose-500/5 dark:bg-rose-400/5 p-3">
+          <p class="text-[11px] leading-4 text-rose-700 dark:text-rose-300"><span class="font-mono">IDEAS-old.md</span> is gone from the repo. Kedge never deletes for you — its threads and history are intact.</p>
+          <div class="mt-2 flex gap-2">
+            <button class="rounded-full bg-white dark:bg-white/5 px-2.5 py-1 text-[10px] font-medium text-zinc-700 dark:text-zinc-300 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10">Keep</button>
+            <button class="rounded-full px-2.5 py-1 text-[10px] font-medium text-rose-700 dark:text-rose-400 ring-1 ring-inset ring-rose-500/30 dark:ring-rose-400/30 hover:bg-rose-500/10">Archive</button>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+          <button class="flex-1 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Re-scan now</button>
+          <button class="rounded-full bg-white dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-500 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 hover:bg-stone-100 dark:hover:bg-white/10">⋯</button>
+        </div>
+        <p class="mt-2.5 text-[10px] leading-4 text-zinc-400 dark:text-zinc-600">Manual for now — the M6 GitHub App will re-scan automatically on every push.</p>
+      </div>
+
+      <!-- add source (expanded form) -->
+      <div class="rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-sm p-4">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-zinc-900 dark:text-white">Add a source</h3>
+          <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-600">repo · ref · pattern</span>
+        </div>
+        <div class="mt-3 space-y-2">
+          <input class="w-full rounded-full bg-stone-50 dark:bg-white/5 px-3.5 py-1.5 text-xs font-mono text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-500" value="github.com/kedgehq/platform" />
+          <div class="grid grid-cols-2 gap-2">
+            <input class="rounded-full bg-stone-50 dark:bg-white/5 px-3.5 py-1.5 text-xs font-mono text-zinc-700 dark:text-zinc-300 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-500" value="main" />
+            <input class="rounded-full bg-stone-50 dark:bg-white/5 px-3.5 py-1.5 text-xs font-mono text-zinc-700 dark:text-zinc-300 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-500" value="rfcs/*.md" />
+          </div>
+        </div>
+        <!-- preview -->
+        <div class="mt-3 rounded-xl bg-stone-50 dark:bg-zinc-950/40 ring-1 ring-inset ring-zinc-900/5 dark:ring-white/10 p-3">
+          <div class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Preview — 3 files match</div>
+          <div class="mt-2 space-y-1.5 text-xs">
+            <label class="flex items-center gap-2"><input type="checkbox" checked class="h-3.5 w-3.5 rounded accent-emerald-600" /><span class="font-mono text-zinc-700 dark:text-zinc-300">rfcs/rfc-001-tenancy.md</span><span class="ml-auto text-zinc-400 dark:text-zinc-600">8.2 KB</span></label>
+            <label class="flex items-center gap-2"><input type="checkbox" checked class="h-3.5 w-3.5 rounded accent-emerald-600" /><span class="font-mono text-zinc-700 dark:text-zinc-300">rfcs/rfc-002-webhooks.md</span><span class="ml-auto text-zinc-400 dark:text-zinc-600">4.7 KB</span></label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="h-3.5 w-3.5 rounded accent-emerald-600" /><span class="font-mono text-zinc-700 dark:text-zinc-300">rfcs/template.md</span><span class="ml-auto text-zinc-400 dark:text-zinc-600">1.1 KB</span></label>
+          </div>
+        </div>
+        <button class="mt-3 w-full rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15">Import 2 files & track this source</button>
+      </div>
+    </aside>
+
+    <!-- Right: documents in project -->
+    <section class="lg:col-span-8">
+      <div class="flex flex-wrap items-center gap-2 px-1">
+        <h2 class="font-display text-sm font-semibold text-zinc-900 dark:text-white">Documents</h2>
+        <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-600">6 in this project</span>
+        <div class="ml-auto flex items-center gap-1.5 text-xs">
+          <button class="rounded-full bg-zinc-900 dark:bg-white/10 px-2.5 py-1 font-medium text-white dark:text-zinc-200">All</button>
+          <button class="rounded-full px-2.5 py-1 text-zinc-500 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 hover:bg-white dark:hover:bg-white/5">Needs attention</button>
+          <button class="rounded-full px-2.5 py-1 text-zinc-500 ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10 hover:bg-white dark:hover:bg-white/5">Approved</button>
+        </div>
+      </div>
+
+      <div class="mt-3 rounded-2xl bg-white dark:bg-white/[.03] ring-1 ring-zinc-900/10 dark:ring-white/10 shadow-sm overflow-hidden">
+        <div class="hidden sm:flex items-center gap-2 border-b border-zinc-900/5 dark:border-white/10 bg-stone-50 dark:bg-zinc-950/40 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <span>Document</span><span class="ml-auto">Lifecycle · Threads · Sync</span>
+        </div>
+        <div class="divide-y divide-zinc-900/5 dark:divide-white/5">
+          <a href="app-document.html" class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+            <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">SPEC.md</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400">In review</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v4 · 7 open · 2 h ago</span>
+          </a>
+          <a href="app-document.html" class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+            <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">rfc-017-anchoring.mdx</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-amber-500/30 dark:ring-amber-400/30 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400">In review</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-rose-500/30 dark:ring-rose-400/30 bg-rose-500/10 dark:bg-rose-400/10 text-rose-700 dark:text-rose-400">1 orphan</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v6 · 3 open · 40 min ago</span>
+          </a>
+          <a href="app-document.html" class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+            <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">specs/m4-ai-agents.md</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/30 dark:ring-sky-400/30 bg-sky-500/10 dark:bg-sky-400/10 text-sky-700 dark:text-sky-400 animate-pulse">Importing…</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">found by re-scan · just now</span>
+          </a>
+          <a href="app-document.html" class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+            <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">DESIGN.md</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Approved</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v2 · 0 open · 2 h ago</span>
+          </a>
+          <a href="app-document.html" class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+            <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">ROADMAP.md</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Approved</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v3 · 1 open · 2 h ago</span>
+          </a>
+          <a href="app-document.html" class="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/[.02]">
+            <span class="font-mono text-xs text-zinc-800 dark:text-zinc-200">specs/m3-versions-diff-approvals.md</span>
+            <span class="font-mono text-[9px] font-semibold uppercase rounded-lg px-1.5 py-0.5 ring-1 ring-inset ring-emerald-600/30 dark:ring-emerald-400/30 bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">Approved</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">v1 · 0 open · 2 d ago</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Unfiled pull-in -->
+      <div class="mt-4 rounded-2xl border border-dashed border-zinc-900/15 dark:border-white/15 p-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-sm text-zinc-500">Unfiled documents</span>
+          <span class="font-mono text-[10px] text-zinc-400 dark:text-zinc-600">2 — assign them to a project anytime</span>
+          <div class="ml-auto flex flex-wrap gap-2">
+            <span class="inline-flex items-center gap-2 rounded-full bg-white dark:bg-white/5 px-3 py-1 text-xs ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10">
+              <span class="font-mono text-zinc-700 dark:text-zinc-300">TODOS.md</span>
+              <button class="text-emerald-700 dark:text-emerald-400 font-medium hover:underline">Add →</button>
+            </span>
+            <span class="inline-flex items-center gap-2 rounded-full bg-white dark:bg-white/5 px-3 py-1 text-xs ring-1 ring-inset ring-zinc-900/10 dark:ring-white/10">
+              <span class="font-mono text-zinc-700 dark:text-zinc-300">legacy-import.html</span>
+              <button class="text-emerald-700 dark:text-emerald-400 font-medium hover:underline">Add →</button>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+</body>
+</html>
