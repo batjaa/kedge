@@ -3,7 +3,6 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\AnchorState;
-use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Jobs\ResyncDocumentJob;
@@ -189,6 +188,83 @@ class DocumentResyncTest extends TestCase
         Log::shouldHaveReceived('info')->withArgs(fn (string $event, array $context) => $event === 'resync.completed'
             && $context['document_id'] === $document->id
             && $context['deduped'] === false);
+    }
+
+    public function test_a_resync_writes_one_reanchor_digest_with_counts_thread_ids_and_title_snapshot(): void
+    {
+        $oldContent = "# Doc\n\nAlpha survives.\n\nBeta deleted.\n\nMoved phrase.\n";
+        $oldPlain = "Alpha survives.\n\nBeta deleted.\n\nMoved phrase.";
+        $newContent = "# Doc\n\nAlpha survives.\n\nGamma new.\n\nMoved phrase.\n";
+        $newPlain = "Alpha survives.\n\nGamma new.\n\nMoved phrase.";
+        [$author, $document, $current] = $this->readyDocument($oldContent, $oldPlain);
+        $survives = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Alpha survives.');
+        $deleted = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Beta deleted.');
+        $moved = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Moved phrase.');
+
+        $this->fakeFetchReturns($newContent);
+        $this->fakeProjectionAndReanchor($newPlain, [
+            [
+                'threadId' => $survives->id,
+                'state' => 'anchored',
+                'exact' => 'Alpha survives.',
+                'prefix' => '',
+                'suffix' => "\n\nGamma new.\n\nMoved phrase.",
+                'start' => 0,
+                'end' => 15,
+            ],
+            [
+                'threadId' => $deleted->id,
+                'state' => 'orphaned',
+                ...$this->resultFromAnchor($deleted->anchors()->where('document_version_id', $current->id)->firstOrFail()),
+            ],
+            [
+                'threadId' => $moved->id,
+                'state' => 'relocated',
+                'exact' => 'Moved phrase.',
+                'prefix' => "Alpha survives.\n\nGamma new.\n\n",
+                'suffix' => '',
+                'start' => 29,
+                'end' => 42,
+            ],
+        ]);
+
+        $this->runResync($document, $author);
+
+        // Exactly one digest row for the whole re-sync — never a row per thread
+        // (1A): a busy re-sync must read as a single feed line.
+        $rows = AuditLog::query()->where('action', 'reanchor.completed')->get();
+        $this->assertCount(1, $rows);
+
+        $document->refresh();
+        $digest = $rows->first();
+        $this->assertSame($document->id, $digest->subject_id);
+        // 2A display snapshot, frozen at write (the post-flip title the feed shows).
+        $this->assertSame($document->title, $digest->meta['document_title']);
+        $this->assertSame($current->id, $digest->meta['from_version_id']);
+        $this->assertSame($document->current_version_id, $digest->meta['to_version_id']);
+        // Counts drive #111's one-line sentence ("1 anchored, 1 relocated, 1 orphaned").
+        $this->assertSame(1, $digest->meta['anchored']);
+        $this->assertSame(1, $digest->meta['relocated']);
+        $this->assertSame(1, $digest->meta['orphaned']);
+        // Thread ids grouped by outcome so M5 re-derives per-thread relevance from
+        // this one row instead of per-thread audit rows.
+        $this->assertSame([$survives->id], $digest->meta['threads']['anchored']);
+        $this->assertSame([$moved->id], $digest->meta['threads']['relocated']);
+        $this->assertSame([$deleted->id], $digest->meta['threads']['orphaned']);
+    }
+
+    public function test_a_deduped_resync_writes_no_reanchor_digest(): void
+    {
+        // A no-op re-sync produces no anchor movements, so it emits no digest —
+        // the feed line would otherwise read "0 anchored, 0 relocated, 0 orphaned".
+        $content = "# Stable\n\nSame content.\n";
+        [$author, $document] = $this->readyDocument($content, "Stable\n\nSame content.");
+        $this->fakeFetchReturns($content);
+        $this->fakeProjection("Stable\n\nSame content.");
+
+        $this->runResync($document, $author);
+
+        $this->assertSame(0, AuditLog::query()->where('action', 'reanchor.completed')->count());
     }
 
     public function test_fetch_failure_keeps_current_version_and_reconnect_copy(): void
@@ -411,7 +487,7 @@ class DocumentResyncTest extends TestCase
         $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
     }
 
-    public function test_gone_stale_survives_a_failing_post_flip_audit_write(): void
+    public function test_a_dead_audit_sink_never_fails_the_resync(): void
     {
         $oldPlain = 'Anchored text.';
         [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
@@ -419,32 +495,31 @@ class DocumentResyncTest extends TestCase
         $this->seedApproval($document, $current, $author);
         $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
 
-        // A real logger backs every write except the post-flip reanchor/resync
-        // records, which throw. gone_stale is emitted before them, so it must
-        // survive even though the throwing record() bubbles for a job retry.
-        $real = new AuditLogger;
+        // A fully dead audit sink: every record() throws. The whole resync path now
+        // writes exclusively through the never-throwing recordSafely seam (#110
+        // migrated resync.started/completed and the reanchor.completed digest off
+        // record()), so each throw is swallowed and the re-sync is untouched.
         $logger = Mockery::mock(AuditLogger::class)->makePartial();
-        $logger->shouldReceive('record')->andReturnUsing(function (...$args) use ($real) {
-            if (in_array($args[2], [AuditEvent::ReanchorCompleted, AuditEvent::ResyncCompleted], true)) {
-                throw new RuntimeException('post-flip sink down');
-            }
-
-            return $real->record(...$args);
-        });
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
         $this->app->instance(AuditLogger::class, $logger);
 
-        try {
-            $this->runResync($document, $author);
-        } catch (RuntimeException) {
-            // reanchor.completed's throwing record() bubbles for a retry — expected.
-        }
+        // No exception bubbles despite every audit write failing — the digest,
+        // gone-stale, and lifecycle writes all fail silently.
+        $this->runResync($document, $author);
 
-        // The flip committed and the gone-stale row (written via recordSafely ahead
-        // of the throwing writes) is present; a retry would now dedupe and never
-        // re-emit it.
+        // The version flip committed and the sync landed clean: the dead audit sink
+        // changed nothing about the domain outcome (AC — "audit failure never
+        // affects the re-sync itself"), and no resync-path row was written.
         $document->refresh();
         $this->assertNotSame($current->id, $document->current_version_id);
-        $this->assertSame(1, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+        $this->assertSame(SyncStatus::Ok, $document->last_sync_status);
+        $this->assertNull($document->sync_error);
+        $this->assertSame(0, AuditLog::query()->whereIn('action', [
+            'resync.started',
+            'reanchor.completed',
+            'resync.completed',
+            'approval.gone_stale',
+        ])->count());
     }
 
     private function seedApproval(Document $document, DocumentVersion $version, User $user): Approval

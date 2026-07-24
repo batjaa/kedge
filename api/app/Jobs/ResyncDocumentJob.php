@@ -108,7 +108,10 @@ class ResyncDocumentJob implements ShouldBeUnique, ShouldQueue
 
         Log::warning('resync.failed', $this->logContext($reason, $e));
 
-        app(AuditLogger::class)->record(
+        // Best-effort: markFailed runs from catch blocks and from the exhausted
+        // failed() handler — a throwing audit write there would compound a failure
+        // (or throw out of failed()). Audit never affects the re-sync (M3.8 #110).
+        app(AuditLogger::class)->recordSafely(
             $this->document->workspace,
             $actor,
             AuditEvent::ResyncFailed,
