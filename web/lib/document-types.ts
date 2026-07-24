@@ -8,6 +8,34 @@ export type LifecycleStatus = 'draft' | 'in_review' | 'approved' | 'superseded';
 export type DocumentFormat = 'md' | 'mdx' | 'html';
 
 /**
+ * The authenticated dashboard's at-a-glance state (SPEC §16, M3.7): the stats
+ * strip reads the totals, orphans, stale approvals, and imports; the lifecycle
+ * filter chips (#103) read `documents.total` (All), the three lifecycle buckets,
+ * and `documents.needs_attention` (Attention). Keep in sync with
+ * api/app/Http/Resources/V1/WorkspaceSummaryResource.php (WorkspaceSummary).
+ */
+export interface WorkspaceSummary {
+  documents: {
+    total: number;
+    importing: number;
+    needs_attention: number;
+    lifecycle: {
+      draft: number;
+      in_review: number;
+      approved: number;
+      superseded: number;
+    };
+  };
+  threads: {
+    open: number;
+    orphaned: number;
+  };
+  approvals: {
+    stale: number;
+  };
+}
+
+/**
  * A project — a workspace container documents are grouped under (SPEC §16,
  * M3.6). Keep in sync with api/app/Http/Resources/V1/ProjectResource.php.
  */

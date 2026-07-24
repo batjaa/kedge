@@ -1,13 +1,16 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import { ProjectCreate } from './project-create';
+import { StatsStrip } from './stats-strip';
 import { hasMorePages } from '@/lib/document-list-live';
 import { compareProjectsByName } from '@/lib/document-groups';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
-import type { Document, DocumentListPage, Project } from '@/lib/document-types';
+import { useWorkspaceSummary } from '@/lib/use-workspace-summary';
+import { alsoRefresh } from '@/lib/workspace-summary';
+import type { Document, DocumentListPage, Project, WorkspaceSummary } from '@/lib/document-types';
 
 // The authenticated home's live surface (SPEC 11; decisions 2A + 5A; M3.6). The
 // one client island: it owns the row state so submit-stays-home and per-row
@@ -26,9 +29,12 @@ import type { Document, DocumentListPage, Project } from '@/lib/document-types';
 export function WorkspaceHome({
   initialPage,
   initialProjects = [],
+  initialSummary = null,
 }: {
   initialPage: DocumentListPage | null;
   initialProjects?: Project[];
+  /** Server-seeded stats strip (SPEC §16, M3.7); null degrades the strip to nothing (A1). */
+  initialSummary?: WorkspaceSummary | null;
 }) {
   const {
     degraded,
@@ -43,6 +49,11 @@ export function WorkspaceHome({
     handleRetried,
   } = useLiveDocumentList({ initialPage });
   const [projects, setProjects] = useState<Project[]>(initialProjects);
+
+  // The stats strip's live state (6A): re-read whenever a row settles, retries,
+  // or refiles — by piggybacking those existing callbacks, never a second poll
+  // loop. A failed read leaves the strip null (renders nothing, A1).
+  const { summary, refresh: refreshSummary } = useWorkspaceSummary(initialSummary);
 
   // A new project joins the chips and headers immediately, name-sorted (the shared
   // 14A comparator) so the selectors read the same order the grouped list will.
@@ -61,6 +72,22 @@ export function WorkspaceHome({
     [setItems],
   );
 
+  // Piggyback the summary refresh onto the three list callbacks (6A): each also
+  // re-reads the strip so its counts stay true as imports settle. Memoized so a
+  // stable identity flows down to the rows.
+  const onSettled = useMemo(
+    () => alsoRefresh(handleSettled, refreshSummary),
+    [handleSettled, refreshSummary],
+  );
+  const onRetried = useMemo(
+    () => alsoRefresh(handleRetried, refreshSummary),
+    [handleRetried, refreshSummary],
+  );
+  const onAssigned = useMemo(
+    () => alsoRefresh(handleAssigned, refreshSummary),
+    [handleAssigned, refreshSummary],
+  );
+
   return (
     <>
       <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
@@ -73,6 +100,8 @@ export function WorkspaceHome({
         <ImportForm onImported={handleImported} />
       </div>
 
+      <StatsStrip summary={summary} />
+
       <ProjectCreate onCreated={handleCreated} />
 
       <DocumentList
@@ -83,10 +112,10 @@ export function WorkspaceHome({
         onLoadMore={handleLoadMore}
         degraded={degraded}
         announcement={announcement}
-        onSettled={handleSettled}
-        onRetried={handleRetried}
+        onSettled={onSettled}
+        onRetried={onRetried}
         projects={projects}
-        onAssigned={handleAssigned}
+        onAssigned={onAssigned}
         grouped
       />
     </>
