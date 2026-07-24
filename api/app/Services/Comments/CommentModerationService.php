@@ -173,7 +173,8 @@ class CommentModerationService
 
     public function updateSuggestionStatus(Comment $comment, User $actor, SuggestionStatus $status, ?string $ip): Comment
     {
-        return DB::transaction(function () use ($comment, $actor, $status, $ip) {
+        /** @var array{Comment, ?SuggestionStatus, bool} $result */
+        $result = DB::transaction(function () use ($comment, $status): array {
             $lockedComment = Comment::withTrashed()
                 ->whereKey($comment->id)
                 ->lockForUpdate()
@@ -190,25 +191,37 @@ class CommentModerationService
 
             $previousStatus = $lockedComment->suggestion_status;
             if ($previousStatus === $status) {
-                return $lockedComment->load(['author', 'mentionedUsers']);
+                return [$lockedComment->load(['author', 'mentionedUsers']), $previousStatus, false];
             }
 
             $lockedComment->forceFill(['suggestion_status' => $status])->save();
 
-            $this->recordEvent(
-                $this->suggestionEventName($status),
-                $lockedComment->thread->document,
-                $actor,
-                $lockedComment,
-                $ip,
-                [
-                    'previous_status' => $previousStatus?->value,
-                    'status' => $status->value,
-                ],
-            );
-
-            return $lockedComment->refresh()->load(['author', 'mentionedUsers']);
+            return [$lockedComment, $previousStatus, true];
         });
+
+        [$lockedComment, $previousStatus, $changed] = $result;
+
+        if (! $changed) {
+            return $lockedComment;
+        }
+
+        // Post-commit: the triage has landed. Emitting the event here — never
+        // inside the transaction above — keeps a failing audit write from rolling
+        // the triage back (a mid-transaction insert error poisons the whole
+        // transaction on Postgres even when recordSafely swallows it).
+        $this->recordEvent(
+            $this->suggestionEventName($status),
+            $lockedComment->thread->document,
+            $actor,
+            $lockedComment,
+            $ip,
+            [
+                'previous_status' => $previousStatus?->value,
+                'status' => $status->value,
+            ],
+        );
+
+        return $lockedComment->refresh()->load(['author', 'mentionedUsers']);
     }
 
     private function suggestionEventName(SuggestionStatus $status): AuditEvent

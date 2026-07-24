@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\AnchorState;
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Jobs\ResyncDocumentJob;
@@ -13,6 +14,7 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\Fetch\FetchResult;
 use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\Exceptions\ProjectionFailedException;
@@ -25,6 +27,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class DocumentResyncTest extends TestCase
@@ -405,6 +409,42 @@ class DocumentResyncTest extends TestCase
         $this->assertNull($approval->fresh()->revoked_at);
         $this->assertSame($current->id, $document->fresh()->current_version_id);
         $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_gone_stale_survives_a_failing_post_flip_audit_write(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+        $this->seedApproval($document, $current, $author);
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+
+        // A real logger backs every write except the post-flip reanchor/resync
+        // records, which throw. gone_stale is emitted before them, so it must
+        // survive even though the throwing record() bubbles for a job retry.
+        $real = new AuditLogger;
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andReturnUsing(function (...$args) use ($real) {
+            if (in_array($args[2], [AuditEvent::ReanchorCompleted, AuditEvent::ResyncCompleted], true)) {
+                throw new RuntimeException('post-flip sink down');
+            }
+
+            return $real->record(...$args);
+        });
+        $this->app->instance(AuditLogger::class, $logger);
+
+        try {
+            $this->runResync($document, $author);
+        } catch (RuntimeException) {
+            // reanchor.completed's throwing record() bubbles for a retry — expected.
+        }
+
+        // The flip committed and the gone-stale row (written via recordSafely ahead
+        // of the throwing writes) is present; a retry would now dedupe and never
+        // re-emit it.
+        $document->refresh();
+        $this->assertNotSame($current->id, $document->current_version_id);
+        $this->assertSame(1, AuditLog::query()->where('action', 'approval.gone_stale')->count());
     }
 
     private function seedApproval(Document $document, DocumentVersion $version, User $user): Approval

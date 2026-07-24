@@ -65,6 +65,12 @@ class DocumentImporter
             'sync_error' => null,
         ])->save();
 
+        // Did THIS run actually settle the import, or is it a redelivery of a job
+        // whose document was already Ready on this version? Only a real transition
+        // earns a feed row / M5 notification — a re-run over already-imported
+        // content is a no-op save (nothing changed) and stays silent.
+        $settledNow = $document->wasChanged(['status', 'current_version_id']);
+
         Log::info('import.completed', [
             'document_id' => $document->id,
             'connector' => $prepared->connector,
@@ -78,16 +84,18 @@ class DocumentImporter
         // dead audit sink can never turn a successful import into a job failure /
         // retry. Display snapshot (2A): the freshly-imported title and the
         // requester's name as they read now.
-        $this->audit->recordSafely(
-            $document->workspace,
-            $document->creator,
-            AuditEvent::DocumentImported,
-            $document,
-            array_filter([
-                'document_title' => $document->title,
-                'actor_name' => $document->creator?->name,
-            ], static fn ($value): bool => $value !== null),
-        );
+        if ($settledNow) {
+            $this->audit->recordSafely(
+                $document->workspace,
+                $document->creator,
+                AuditEvent::DocumentImported,
+                $document,
+                array_filter([
+                    'document_title' => $document->title,
+                    'actor_name' => $document->creator?->name,
+                ], static fn ($value): bool => $value !== null),
+            );
+        }
     }
 
     public function prepareVersion(Document $document): PreparedDocumentVersion

@@ -34,9 +34,16 @@ trait RecordsCommentEvents
             'user_id' => $actor?->id,
         ];
 
-        $level === 'warning'
-            ? Log::warning($event->value, $context)
-            : Log::info($event->value, $context);
+        // Operational logging is best-effort too: it runs before the audit seam,
+        // so a dead log channel throwing here would otherwise reach the domain
+        // action the trail is only a side effect of.
+        try {
+            $level === 'warning'
+                ? Log::warning($event->value, $context)
+                : Log::info($event->value, $context);
+        } catch (\Throwable) {
+            // Swallowed: a failed log write must never fail the reviewed action.
+        }
 
         // recordSafely, never record(): a review action (a posted comment, a
         // triaged suggestion) has already committed by the time we get here, and

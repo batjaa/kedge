@@ -8,6 +8,7 @@ use App\Models\Approval;
 use App\Models\Document;
 use App\Models\User;
 use App\Services\AuditLogger;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ApprovalService
@@ -26,7 +27,8 @@ class ApprovalService
      */
     public function approveCurrent(Document $document, User $actor, ?string $ip): array
     {
-        [$approval, $status] = DB::transaction(function () use ($document, $actor, $ip): array {
+        /** @var array{Approval, int, Collection<int, Approval>} $result */
+        $result = DB::transaction(function () use ($document, $actor): array {
             $lockedDocument = Document::query()
                 ->with('workspace')
                 ->whereKey($document->id)
@@ -47,7 +49,7 @@ class ApprovalService
                 ->first();
 
             if ($existing) {
-                return [$this->loadForResource($existing, $lockedDocument), 200];
+                return [$this->loadForResource($existing, $lockedDocument), 200, collect()];
             }
 
             $supersededApprovals = Approval::query()
@@ -61,23 +63,6 @@ class ApprovalService
             $revokedAt = now();
             foreach ($supersededApprovals as $supersededApproval) {
                 $supersededApproval->forceFill(['revoked_at' => $revokedAt])->save();
-
-                // Superseding the reviewer's own older approvals is part of the
-                // re-approval itself, so its trail entry stays atomic with the
-                // write (throwing record()).
-                $this->audit->record(
-                    $lockedDocument->workspace,
-                    $actor,
-                    AuditEvent::ApprovalRevoked,
-                    $supersededApproval,
-                    [
-                        'document_id' => $lockedDocument->id,
-                        'document_version_id' => $supersededApproval->document_version_id,
-                        'reason' => 'superseded',
-                        'superseded_by_document_version_id' => $lockedDocument->current_version_id,
-                    ],
-                    $ip,
-                );
             }
 
             $approval = Approval::create([
@@ -87,14 +72,33 @@ class ApprovalService
                 'user_id' => $actor->id,
             ]);
 
-            return [$this->loadForResource($approval, $lockedDocument, $actor), 201];
+            return [$this->loadForResource($approval, $lockedDocument, $actor), 201, $supersededApprovals];
         });
 
-        // The grant has committed. Its trail entry is a post-commit side effect
-        // that must never roll back or fail the approval (AC #4) — hence
-        // recordSafely, outside the transaction. Display snapshot (2A): the doc
-        // title and approver name as they read at approval time.
+        [$approval, $status, $supersededApprovals] = $result;
+
+        // Every trail entry is a post-commit side effect that must never roll back
+        // or fail the grant (AC #4) — hence recordSafely, outside the transaction.
+        // Both the grant and the supersessions it caused are written here, so no
+        // audit write is inside the transaction that persisted the approval.
         if ($status === 201) {
+            foreach ($supersededApprovals as $supersededApproval) {
+                $this->audit->recordSafely(
+                    $approval->document->workspace,
+                    $actor,
+                    AuditEvent::ApprovalRevoked,
+                    $supersededApproval,
+                    [
+                        'document_id' => $approval->document_id,
+                        'document_version_id' => $supersededApproval->document_version_id,
+                        'reason' => 'superseded',
+                        'superseded_by_document_version_id' => $approval->document_version_id,
+                    ],
+                    $ip,
+                );
+            }
+
+            // Display snapshot (2A): the doc title and approver name at grant time.
             $this->audit->recordSafely(
                 $approval->document->workspace,
                 $actor,

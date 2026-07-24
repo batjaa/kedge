@@ -111,6 +111,13 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
             'sync_error' => $message,
         ])->save();
 
+        // Only a genuine transition into failure earns a feed row / M5
+        // notification: a redelivery of a job whose document is already Failed
+        // leaves the status unchanged and stays silent (no duplicate settle event).
+        if (! $this->document->wasChanged('status')) {
+            return;
+        }
+
         // The import has settled as failed — the symmetric counterpart to
         // DocumentImporter's `document.imported`, and M3.8's "settling imports"
         // feed row. A rate-limit release never reaches here (it is not a failure).

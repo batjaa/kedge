@@ -3,10 +3,12 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\AuditEvent;
+use App\Models\Approval;
 use App\Models\AuditLog;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Thread;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\RegistrationService;
@@ -151,6 +153,95 @@ class AuditInstrumentationTest extends TestCase
             'user_id' => $author->id,
             'revoked_at' => null,
         ]);
+        $this->assertSame(0, AuditLog::query()->where('action', AuditEvent::ApprovalGiven->value)->count());
+        Log::shouldHaveReceived('warning')->with('audit.write_failed', Mockery::type('array'));
+    }
+
+    public function test_a_dead_audit_sink_never_fails_suggestion_triage(): void
+    {
+        [$author, $document] = $this->readyDocument(
+            plainText: "Intro\n\nFirst target paragraph.",
+        );
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $thread->anchors()->create([
+            'document_version_id' => $document->currentVersion->id,
+            ...$this->anchorFor($document->currentVersion->plain_text, 'First target', '2'),
+        ]);
+        $suggestion = $thread->comments()->create([
+            'author_id' => $author->id,
+            'type' => 'suggestion',
+            'body_md' => 'Please use this wording.',
+            'proposed_text' => 'First target paragraph, revised.',
+            'suggestion_status' => 'pending',
+        ]);
+
+        Log::spy();
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
+        $this->app->instance(AuditLogger::class, $logger);
+
+        // The triage write is emitted post-commit now, so a dead sink cannot roll
+        // the accepted status back (a mid-transaction audit insert would poison the
+        // transaction on Postgres even under recordSafely).
+        $this->actingAs($author)->fromWebApp()
+            ->patchJson("/api/v1/comments/{$suggestion->id}/suggestion", ['status' => 'accepted'])
+            ->assertOk()
+            ->assertJsonPath('suggestion_status', 'accepted');
+
+        $this->assertDatabaseHas('comments', ['id' => $suggestion->id, 'suggestion_status' => 'accepted']);
+        $this->assertSame(0, AuditLog::query()->where('action', AuditEvent::SuggestionAccepted->value)->count());
+        Log::shouldHaveReceived('warning')->with('audit.write_failed', Mockery::type('array'));
+    }
+
+    public function test_a_dead_audit_sink_never_fails_a_superseding_approval(): void
+    {
+        [$author, $document] = $this->readyDocument();
+        $firstVersion = $document->currentVersion;
+
+        // An active approval on the outgoing version, then a new current version —
+        // approving it must supersede the old approval and stand, sink or no sink.
+        Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $firstVersion->id,
+            'user_id' => $author->id,
+        ]);
+        $secondVersion = DocumentVersion::factory()->for($document)->create([
+            'parent_version_id' => $firstVersion->id,
+            'content_raw' => '# Doc v2',
+            'content_normalized' => '# Doc v2',
+            'content_hash' => hash('sha256', '# Doc v2'),
+            'plain_text' => 'Doc v2',
+            'projection_version' => '2',
+        ]);
+        $document->forceFill(['current_version_id' => $secondVersion->id])->save();
+
+        Log::spy();
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andThrow(new RuntimeException('audit sink down'));
+        $this->app->instance(AuditLogger::class, $logger);
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/approvals")
+            ->assertCreated()
+            ->assertJsonPath('document_version_id', $secondVersion->id);
+
+        // The grant committed and the supersession applied — neither audit write
+        // (both now post-commit, best-effort) failed the domain action.
+        $this->assertDatabaseHas('approvals', [
+            'document_id' => $document->id,
+            'document_version_id' => $secondVersion->id,
+            'user_id' => $author->id,
+            'revoked_at' => null,
+        ]);
+        $this->assertNotNull(
+            Approval::query()->where('document_version_id', $firstVersion->id)->sole()->revoked_at,
+        );
         $this->assertSame(0, AuditLog::query()->where('action', AuditEvent::ApprovalGiven->value)->count());
         Log::shouldHaveReceived('warning')->with('audit.write_failed', Mockery::type('array'));
     }
