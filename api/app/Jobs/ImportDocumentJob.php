@@ -2,9 +2,11 @@
 
 namespace App\Jobs;
 
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Models\Document;
+use App\Services\AuditLogger;
 use App\Services\Fetch\Exceptions\BlockedUrlException;
 use App\Services\Import\DocumentImporter;
 use App\Services\Import\Exceptions\RateLimitedException;
@@ -108,6 +110,32 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
             'last_sync_status' => SyncStatus::Failed,
             'sync_error' => $message,
         ])->save();
+
+        // Only a genuine transition into failure earns a feed row / M5
+        // notification: a redelivery of a job whose document is already Failed
+        // leaves the status unchanged and stays silent (no duplicate settle event).
+        if (! $this->document->wasChanged('status')) {
+            return;
+        }
+
+        // The import has settled as failed — the symmetric counterpart to
+        // DocumentImporter's `document.imported`, and M3.8's "settling imports"
+        // feed row. A rate-limit release never reaches here (it is not a failure).
+        // recordSafely, never record(): the trail is a side effect of the
+        // already-committed failure state and must not throw back into the job's
+        // terminal handling. Display snapshot (2A): the doc title and the
+        // user-facing reason, never the raw exception.
+        app(AuditLogger::class)->recordSafely(
+            $this->document->workspace,
+            $this->document->creator,
+            AuditEvent::DocumentImportFailed,
+            $this->document,
+            array_filter([
+                'document_title' => $this->document->title,
+                'actor_name' => $this->document->creator?->name,
+                'reason' => $message,
+            ], static fn ($value): bool => $value !== null),
+        );
     }
 
     /**

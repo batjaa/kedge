@@ -2,6 +2,7 @@
 
 namespace App\Services\Comments;
 
+use App\Enums\AuditEvent;
 use App\Enums\CommentType;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
@@ -107,7 +108,7 @@ class CommentModerationService
         }
 
         $this->recordEvent(
-            'thread.forked',
+            AuditEvent::ThreadForked,
             $sourceThread->document,
             $actor,
             $thread,
@@ -143,7 +144,7 @@ class CommentModerationService
             ])->save();
         });
 
-        $this->recordEvent('comment.edited', $document, $actor, $comment, $ip);
+        $this->recordEvent(AuditEvent::CommentEdited, $document, $actor, $comment, $ip);
 
         $comment->refresh()->load(['author', 'mentionedUsers']);
 
@@ -167,12 +168,13 @@ class CommentModerationService
         $comment->mentionedUsers()->sync([]);
         $comment->delete();
 
-        $this->recordEvent('comment.deleted', $comment->thread->document, $actor, $comment, $ip);
+        $this->recordEvent(AuditEvent::CommentDeleted, $comment->thread->document, $actor, $comment, $ip);
     }
 
     public function updateSuggestionStatus(Comment $comment, User $actor, SuggestionStatus $status, ?string $ip): Comment
     {
-        return DB::transaction(function () use ($comment, $actor, $status, $ip) {
+        /** @var array{Comment, ?SuggestionStatus, bool} $result */
+        $result = DB::transaction(function () use ($comment, $status): array {
             $lockedComment = Comment::withTrashed()
                 ->whereKey($comment->id)
                 ->lockForUpdate()
@@ -189,33 +191,45 @@ class CommentModerationService
 
             $previousStatus = $lockedComment->suggestion_status;
             if ($previousStatus === $status) {
-                return $lockedComment->load(['author', 'mentionedUsers']);
+                return [$lockedComment->load(['author', 'mentionedUsers']), $previousStatus, false];
             }
 
             $lockedComment->forceFill(['suggestion_status' => $status])->save();
 
-            $this->recordEvent(
-                $this->suggestionEventName($status),
-                $lockedComment->thread->document,
-                $actor,
-                $lockedComment,
-                $ip,
-                [
-                    'previous_status' => $previousStatus?->value,
-                    'status' => $status->value,
-                ],
-            );
-
-            return $lockedComment->refresh()->load(['author', 'mentionedUsers']);
+            return [$lockedComment, $previousStatus, true];
         });
+
+        [$lockedComment, $previousStatus, $changed] = $result;
+
+        if (! $changed) {
+            return $lockedComment;
+        }
+
+        // Post-commit: the triage has landed. Emitting the event here — never
+        // inside the transaction above — keeps a failing audit write from rolling
+        // the triage back (a mid-transaction insert error poisons the whole
+        // transaction on Postgres even when recordSafely swallows it).
+        $this->recordEvent(
+            $this->suggestionEventName($status),
+            $lockedComment->thread->document,
+            $actor,
+            $lockedComment,
+            $ip,
+            [
+                'previous_status' => $previousStatus?->value,
+                'status' => $status->value,
+            ],
+        );
+
+        return $lockedComment->refresh()->load(['author', 'mentionedUsers']);
     }
 
-    private function suggestionEventName(SuggestionStatus $status): string
+    private function suggestionEventName(SuggestionStatus $status): AuditEvent
     {
         return match ($status) {
-            SuggestionStatus::Accepted => 'suggestion.accepted',
-            SuggestionStatus::Declined => 'suggestion.declined',
-            SuggestionStatus::Pending => 'suggestion.reopened',
+            SuggestionStatus::Accepted => AuditEvent::SuggestionAccepted,
+            SuggestionStatus::Declined => AuditEvent::SuggestionDeclined,
+            SuggestionStatus::Pending => AuditEvent::SuggestionReopened,
         };
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Services\Comments;
 
+use App\Enums\AuditEvent;
 use App\Enums\CommentClient;
 use App\Enums\CommentType;
 use App\Enums\DocumentStatus;
@@ -128,8 +129,8 @@ class CommentThreadService
             return [$this->loadThreadForResource($existing->thread, $author, $version), 200];
         }
 
-        $this->recordEvent('thread.created', $document, $author, $thread, $ip);
-        $this->recordEvent('comment.created', $document, $author, $comment, $ip);
+        $this->recordEvent(AuditEvent::ThreadCreated, $document, $author, $thread, $ip);
+        $this->recordEvent(AuditEvent::CommentCreated, $document, $author, $comment, $ip);
 
         return [$this->loadThreadForResource($thread, $author, $version), 201];
     }
@@ -180,7 +181,7 @@ class CommentThreadService
             return [$this->loadCommentForResource($existing, $author), 200];
         }
 
-        $this->recordEvent('comment.created', $thread->document, $author, $comment, $ip);
+        $this->recordEvent(AuditEvent::CommentCreated, $thread->document, $author, $comment, $ip);
 
         return [$this->loadCommentForResource($comment, $author), 201];
     }
@@ -232,9 +233,9 @@ class CommentThreadService
         $thread->refresh();
 
         if ($status === ThreadStatus::Resolved) {
-            $this->recordEvent('thread.resolved', $thread->document, $actor, $thread, $ip);
+            $this->recordEvent(AuditEvent::ThreadResolved, $thread->document, $actor, $thread, $ip);
         } else {
-            $this->recordEvent('thread.reopened', $thread->document, $actor, $thread, $ip);
+            $this->recordEvent(AuditEvent::ThreadReopened, $thread->document, $actor, $thread, $ip);
         }
 
         return $this->loadThreadForResource($thread, $actor);

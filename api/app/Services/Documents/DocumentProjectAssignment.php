@@ -2,6 +2,7 @@
 
 namespace App\Services\Documents;
 
+use App\Enums\AuditEvent;
 use App\Models\Document;
 use App\Models\Project;
 use App\Models\User;
@@ -62,7 +63,7 @@ class DocumentProjectAssignment
         $this->audit->record(
             $document->workspace,
             $actor,
-            'document.project_assigned',
+            AuditEvent::DocumentProjectAssigned,
             $document,
             ['project_id' => $project?->id],
             $ip,

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditEvent;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -81,7 +82,7 @@ class GitHubAuthService
             ])->save();
 
             if ($workspace = $user->personalWorkspace()) {
-                $this->auditLogger->record($workspace, $user, 'user.github_linked', $user, ip: $ip);
+                $this->auditLogger->record($workspace, $user, AuditEvent::UserGithubLinked, $user, ip: $ip);
             }
 
             return $user;

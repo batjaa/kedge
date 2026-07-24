@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateWorkspaceRequest;
 use App\Http\Resources\V1\WorkspaceResource;
@@ -61,7 +62,7 @@ class WorkspaceController extends Controller
             $this->audit->recordSafely(
                 $workspace,
                 $request->user(),
-                'workspace.renamed',
+                AuditEvent::WorkspaceRenamed,
                 $workspace,
                 [
                     'from' => $before,

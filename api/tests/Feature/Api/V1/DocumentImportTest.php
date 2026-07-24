@@ -6,6 +6,7 @@ use App\Enums\DocumentStatus;
 use App\Enums\SourceType;
 use App\Enums\SyncStatus;
 use App\Jobs\ImportDocumentJob;
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\Integration;
 use App\Models\User;
@@ -72,6 +73,73 @@ class DocumentImportTest extends TestCase
             ->assertJsonPath('current_version.content_hash', hash('sha256', "# Hello Kedge\n\nA rendered doc.\n"));
 
         $this->assertDatabaseCount('document_versions', 1);
+    }
+
+    public function test_a_settled_import_records_document_imported_with_a_display_snapshot(): void
+    {
+        Queue::fake();
+        $this->fakeFetchReturns("# Hello Kedge\n\nA rendered doc.\n");
+        $this->fakeProjection();
+        $user = $this->registerUser();
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/documents', ['url' => self::RAW_URL])
+            ->assertStatus(202);
+
+        $document = Document::sole();
+        $this->runImport($document);
+
+        // "Import settled ready" carries the freshly-synthesized title and the
+        // requester's name so the feed row renders without hydrating the document.
+        $entry = AuditLog::query()->where('action', 'document.imported')->sole();
+        $this->assertSame($document->id, $entry->subject_id);
+        $this->assertSame('Hello Kedge', $entry->meta['document_title']);
+        $this->assertSame('Doc Author', $entry->meta['actor_name']);
+    }
+
+    public function test_a_redelivered_import_does_not_double_emit_the_settle_event(): void
+    {
+        Queue::fake();
+        $this->fakeFetchReturns("# Hello Kedge\n\nA rendered doc.\n");
+        $this->fakeProjection();
+        $user = $this->registerUser();
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/documents', ['url' => self::RAW_URL])
+            ->assertStatus(202);
+
+        $document = Document::sole();
+
+        // First run settles the import. A redelivery of the same job (worker crash
+        // after commit, expired unique lock) re-runs import() over already-Ready
+        // content — a no-op save that must not emit a second feed row / M5 notice.
+        $this->runImport($document);
+        $this->runImport($document->fresh());
+
+        $this->assertSame(1, AuditLog::query()->where('action', 'document.imported')->count());
+        $this->assertDatabaseCount('document_versions', 1);
+    }
+
+    public function test_a_failed_import_records_document_import_failed_with_a_display_reason(): void
+    {
+        Queue::fake();
+        $this->fakeFetchThrows(new BlockedUrlException(BlockReason::PrivateAddress, 'resolves to private range'));
+        $user = $this->registerUser();
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/documents', ['url' => 'https://internal.corp/spec.md'])
+            ->assertStatus(202);
+
+        $document = Document::sole();
+        $this->runImport($document);
+
+        // "Import settled failed" — the symmetric counterpart to document.imported,
+        // carrying the user-facing reason (never the raw exception) as its display.
+        $entry = AuditLog::query()->where('action', 'document.import_failed')->sole();
+        $this->assertSame($document->id, $entry->subject_id);
+        $this->assertSame('URL not allowed (private address).', $entry->meta['reason']);
+        $this->assertSame('Doc Author', $entry->meta['actor_name']);
+        $this->assertSame(0, AuditLog::query()->where('action', 'document.imported')->count());
     }
 
     public function test_title_falls_back_to_filename_when_no_heading(): void

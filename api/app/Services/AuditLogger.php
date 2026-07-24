@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditEvent;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\Workspace;
@@ -25,7 +26,7 @@ class AuditLogger
     public function record(
         Workspace $workspace,
         ?User $actor,
-        string $action,
+        AuditEvent $action,
         ?Model $subject = null,
         array $meta = [],
         ?string $ip = null,
@@ -33,7 +34,13 @@ class AuditLogger
         return AuditLog::create([
             'workspace_id' => $workspace->id,
             'user_id' => $actor?->id,
-            'action' => $action,
+            // Store the backing value, not a strict enum cast: the write side is
+            // already enum-enforced by this typed seam, while the column stays a
+            // plain string so a reader on an older code version (mid-deploy, or
+            // before M5's new cases exist) never crashes hydrating a future action
+            // it doesn't know — consumers resolve via AuditEvent::tryFrom() and the
+            // feed's type allowlist (#111). Hard rule: reads never crash.
+            'action' => $action->value,
             'subject_type' => $subject?->getMorphClass(),
             'subject_id' => $subject?->getKey(),
             'meta' => $meta === [] ? null : $meta,
@@ -53,7 +60,7 @@ class AuditLogger
     public function recordSafely(
         Workspace $workspace,
         ?User $actor,
-        string $action,
+        AuditEvent $action,
         ?Model $subject = null,
         array $meta = [],
         ?string $ip = null,
@@ -65,7 +72,7 @@ class AuditLogger
             // be allowed to fail the primary action the trail is a side effect of.
             try {
                 Log::warning('audit.write_failed', [
-                    'action' => $action,
+                    'action' => $action->value,
                     'workspace_id' => $workspace->id,
                     'user_id' => $actor?->id,
                     'exception' => $e->getMessage(),

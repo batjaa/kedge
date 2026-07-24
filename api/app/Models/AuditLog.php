@@ -41,6 +41,10 @@ class AuditLog extends Model
     protected function casts(): array
     {
         return [
+            // `action` stays a plain string on read: the write seam already
+            // guarantees only AuditEvent values land here, and an un-cast column
+            // lets an older reader tolerate a future action instead of throwing on
+            // hydration (M3.8 #108). Resolve to the enum with AuditEvent::tryFrom().
             'meta' => 'array',
         ];
     }

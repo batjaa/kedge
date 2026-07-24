@@ -2,11 +2,13 @@
 
 namespace App\Services\Approvals;
 
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Models\Approval;
 use App\Models\Document;
 use App\Models\User;
 use App\Services\AuditLogger;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ApprovalService
@@ -25,7 +27,8 @@ class ApprovalService
      */
     public function approveCurrent(Document $document, User $actor, ?string $ip): array
     {
-        return DB::transaction(function () use ($document, $actor, $ip): array {
+        /** @var array{Approval, int, Collection<int, Approval>} $result */
+        $result = DB::transaction(function () use ($document, $actor): array {
             $lockedDocument = Document::query()
                 ->with('workspace')
                 ->whereKey($document->id)
@@ -46,7 +49,7 @@ class ApprovalService
                 ->first();
 
             if ($existing) {
-                return [$this->loadForResource($existing, $lockedDocument), 200];
+                return [$this->loadForResource($existing, $lockedDocument), 200, collect()];
             }
 
             $supersededApprovals = Approval::query()
@@ -60,20 +63,6 @@ class ApprovalService
             $revokedAt = now();
             foreach ($supersededApprovals as $supersededApproval) {
                 $supersededApproval->forceFill(['revoked_at' => $revokedAt])->save();
-
-                $this->audit->record(
-                    $lockedDocument->workspace,
-                    $actor,
-                    'approval.revoked',
-                    $supersededApproval,
-                    [
-                        'document_id' => $lockedDocument->id,
-                        'document_version_id' => $supersededApproval->document_version_id,
-                        'reason' => 'superseded',
-                        'superseded_by_document_version_id' => $lockedDocument->current_version_id,
-                    ],
-                    $ip,
-                );
             }
 
             $approval = Approval::create([
@@ -83,20 +72,49 @@ class ApprovalService
                 'user_id' => $actor->id,
             ]);
 
-            $this->audit->record(
-                $lockedDocument->workspace,
+            return [$this->loadForResource($approval, $lockedDocument, $actor), 201, $supersededApprovals];
+        });
+
+        [$approval, $status, $supersededApprovals] = $result;
+
+        // Every trail entry is a post-commit side effect that must never roll back
+        // or fail the grant (AC #4) — hence recordSafely, outside the transaction.
+        // Both the grant and the supersessions it caused are written here, so no
+        // audit write is inside the transaction that persisted the approval.
+        if ($status === 201) {
+            foreach ($supersededApprovals as $supersededApproval) {
+                $this->audit->recordSafely(
+                    $approval->document->workspace,
+                    $actor,
+                    AuditEvent::ApprovalRevoked,
+                    $supersededApproval,
+                    [
+                        'document_id' => $approval->document_id,
+                        'document_version_id' => $supersededApproval->document_version_id,
+                        'reason' => 'superseded',
+                        'superseded_by_document_version_id' => $approval->document_version_id,
+                    ],
+                    $ip,
+                );
+            }
+
+            // Display snapshot (2A): the doc title and approver name at grant time.
+            $this->audit->recordSafely(
+                $approval->document->workspace,
                 $actor,
-                'approval.given',
+                AuditEvent::ApprovalGiven,
                 $approval,
                 [
-                    'document_id' => $lockedDocument->id,
-                    'document_version_id' => $lockedDocument->current_version_id,
+                    'document_id' => $approval->document_id,
+                    'document_version_id' => $approval->document_version_id,
+                    'document_title' => $approval->document->title,
+                    'actor_name' => $actor->name,
                 ],
                 $ip,
             );
+        }
 
-            return [$this->loadForResource($approval, $lockedDocument, $actor), 201];
-        });
+        return [$approval, $status];
     }
 
     public function revoke(Approval $approval, User $actor, ?string $ip): Approval
@@ -112,7 +130,7 @@ class ApprovalService
         $this->audit->record(
             $approval->document->workspace,
             $actor,
-            'approval.revoked',
+            AuditEvent::ApprovalRevoked,
             $approval,
             [
                 'document_id' => $approval->document_id,

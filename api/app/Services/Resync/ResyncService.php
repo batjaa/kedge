@@ -3,9 +3,11 @@
 namespace App\Services\Resync;
 
 use App\Enums\AnchorState;
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Models\Anchor;
+use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
@@ -40,7 +42,7 @@ class ResyncService
             'document_id' => $document->id,
             'connector' => $document->source_type->value,
         ]);
-        $this->audit->record($document->workspace, $actor, 'resync.started', $document, [
+        $this->audit->record($document->workspace, $actor, AuditEvent::ResyncStarted, $document, [
             'connector' => $document->source_type->value,
         ]);
 
@@ -53,7 +55,7 @@ class ResyncService
             ])->save();
 
             $this->logCompleted($document, $prepared->connector, $startedAt, deduped: true);
-            $this->audit->record($document->workspace, $actor, 'resync.completed', $document, [
+            $this->audit->record($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
                 'connector' => $prepared->connector,
                 'duration' => $this->elapsedMs($startedAt),
                 'deduped' => true,
@@ -77,7 +79,30 @@ class ResyncService
         $counts = ['anchored' => 0, 'relocated' => 0, 'orphaned' => 0];
         $anchorsByThread = $currentAnchors->keyBy(fn (Anchor $anchor) => (int) $anchor->thread_id);
 
-        DB::transaction(function () use ($document, $current, $target, $prepared, $results, $anchorsByThread, &$counts): void {
+        /** @var Collection<int, Approval> $goneStaleApprovals */
+        $goneStaleApprovals = collect();
+
+        DB::transaction(function () use ($document, $current, $target, $prepared, $results, $anchorsByThread, &$counts, &$goneStaleApprovals): void {
+            // Lock the document row so a concurrent approval (which also locks it,
+            // {@see ApprovalService::approveCurrent}) can't slip in between reading
+            // the stranded set and committing the flip. "Stale approval" is a
+            // derived state (Approval::staleFor) with no discrete domain action, so
+            // the spec-consistent write point is this flip — the moment
+            // current_version_id leaves the version they approved (M3.8 #108).
+            Document::query()->whereKey($document->id)->lockForUpdate()->first();
+
+            // Active approvals still pinned to the outgoing version, captured (and
+            // row-locked) inside the transaction so the set is consistent with the
+            // committed flip. The user relation rides along so the display snapshot
+            // survives a later reviewer deletion.
+            $goneStaleApprovals = Approval::query()
+                ->with('user:id,name')
+                ->where('document_id', $document->id)
+                ->where('document_version_id', $current->id)
+                ->whereNull('revoked_at')
+                ->lockForUpdate()
+                ->get();
+
             foreach ($results as $result) {
                 /** @var Anchor|null $sourceAnchor */
                 $sourceAnchor = $anchorsByThread->get($result['threadId']);
@@ -121,14 +146,35 @@ class ResyncService
             ]);
         });
 
-        $this->audit->record($document->workspace, $actor, 'reanchor.completed', $document, [
+        // The flip has committed; every approval captured above is now stale. This
+        // is emitted FIRST — ahead of the throwing resync/reanchor writes below —
+        // so a failure there can't skip it and leave a retry (which now dedups
+        // against the already-current content) to drop the stale event forever.
+        // One aggregate row per re-sync (never one per approval) carries the
+        // affected approvers as a display snapshot (2A) so the feed renders each
+        // name even after a reviewer is deleted; M5 re-derives per-approver from
+        // meta. A post-commit side effect (recordSafely) that never fails the sync.
+        if ($goneStaleApprovals->isNotEmpty()) {
+            $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ApprovalGoneStale, $document, [
+                'document_title' => $document->title,
+                'from_version_id' => $current->id,
+                'to_version_id' => $target->id,
+                'count' => $goneStaleApprovals->count(),
+                'approvals' => $goneStaleApprovals->map(fn (Approval $approval): array => array_filter([
+                    'id' => $approval->id,
+                    'approver_name' => $approval->user?->name,
+                ], static fn ($value): bool => $value !== null))->values()->all(),
+            ]);
+        }
+
+        $this->audit->record($document->workspace, $actor, AuditEvent::ReanchorCompleted, $document, [
             'from_version_id' => $current->id,
             'to_version_id' => $target->id,
             ...$counts,
         ]);
 
         $this->logCompleted($document, $prepared->connector, $startedAt, deduped: false);
-        $this->audit->record($document->workspace, $actor, 'resync.completed', $document, [
+        $this->audit->record($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
             'connector' => $prepared->connector,
             'duration' => $this->elapsedMs($startedAt),
             'deduped' => false,

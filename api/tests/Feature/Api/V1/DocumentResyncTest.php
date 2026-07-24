@@ -3,14 +3,18 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\AnchorState;
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Jobs\ResyncDocumentJob;
 use App\Models\Anchor;
+use App\Models\Approval;
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\Fetch\FetchResult;
 use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\Exceptions\ProjectionFailedException;
@@ -23,6 +27,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class DocumentResyncTest extends TestCase
@@ -329,6 +335,144 @@ class DocumentResyncTest extends TestCase
         $this->assertSame($current->id, $document->current_version_id);
         $this->assertSame(SyncStatus::Failed, $document->last_sync_status);
         $this->assertStringContainsString('Sync failed', (string) $document->sync_error);
+    }
+
+    public function test_a_resync_flip_marks_prior_active_approvals_gone_stale_as_one_aggregate_row(): void
+    {
+        $oldContent = "# Doc\n\nAnchored text.\n";
+        $oldPlain = 'Anchored text.';
+        $newContent = "# Doc\n\nAnchored text edited.\n";
+        $newPlain = 'Anchored text edited.';
+        [$author, $document, $current] = $this->readyDocument($oldContent, $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+
+        // Two reviewers' active approvals pinned to the outgoing version.
+        $reviewer = User::factory()->create(['name' => 'Second Reviewer']);
+        $this->seedApproval($document, $current, $author);
+        $this->seedApproval($document, $current, $reviewer);
+
+        $this->fakeChangedResync($thread, $oldPlain, $newContent, $newPlain);
+        $this->runResync($document, $author);
+
+        // Exactly one aggregate row — never one per approval (matches the
+        // scan-report / re-anchor-digest precedent).
+        $rows = AuditLog::query()->where('action', 'approval.gone_stale')->get();
+        $this->assertCount(1, $rows);
+
+        $entry = $rows->first();
+        $this->assertSame($document->id, $entry->subject_id);
+        $this->assertSame($document->fresh()->title, $entry->meta['document_title']);
+        $this->assertSame($current->id, $entry->meta['from_version_id']);
+        $this->assertSame(2, $entry->meta['count']);
+        $this->assertEqualsCanonicalizing(
+            ['Doc Author', 'Second Reviewer'],
+            array_column($entry->meta['approvals'], 'approver_name'),
+        );
+    }
+
+    public function test_a_resync_flip_writes_no_gone_stale_without_active_approvals(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+        $this->runResync($document, $author);
+
+        $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_a_revoked_approval_is_not_reported_gone_stale(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+        $this->seedApproval($document, $current, $author)->forceFill(['revoked_at' => now()])->save();
+
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+        $this->runResync($document, $author);
+
+        $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_a_deduped_resync_leaves_approvals_active_and_writes_no_gone_stale(): void
+    {
+        $content = "# Stable\n\nSame content.\n";
+        [$author, $document, $current] = $this->readyDocument($content, "Stable\n\nSame content.");
+        $approval = $this->seedApproval($document, $current, $author);
+        $this->fakeFetchReturns($content);
+        $this->fakeProjection("Stable\n\nSame content.");
+
+        $this->runResync($document, $author);
+
+        // No new version → the approval stays on the current version, never stale.
+        $this->assertNull($approval->fresh()->revoked_at);
+        $this->assertSame($current->id, $document->fresh()->current_version_id);
+        $this->assertSame(0, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    public function test_gone_stale_survives_a_failing_post_flip_audit_write(): void
+    {
+        $oldPlain = 'Anchored text.';
+        [$author, $document, $current] = $this->readyDocument("# Doc\n\nAnchored text.\n", $oldPlain);
+        $thread = $this->threadWithAnchor($document, $author, $current, $oldPlain, 'Anchored text.');
+        $this->seedApproval($document, $current, $author);
+        $this->fakeChangedResync($thread, $oldPlain, "# Doc\n\nAnchored text edited.\n", 'Anchored text edited.');
+
+        // A real logger backs every write except the post-flip reanchor/resync
+        // records, which throw. gone_stale is emitted before them, so it must
+        // survive even though the throwing record() bubbles for a job retry.
+        $real = new AuditLogger;
+        $logger = Mockery::mock(AuditLogger::class)->makePartial();
+        $logger->shouldReceive('record')->andReturnUsing(function (...$args) use ($real) {
+            if (in_array($args[2], [AuditEvent::ReanchorCompleted, AuditEvent::ResyncCompleted], true)) {
+                throw new RuntimeException('post-flip sink down');
+            }
+
+            return $real->record(...$args);
+        });
+        $this->app->instance(AuditLogger::class, $logger);
+
+        try {
+            $this->runResync($document, $author);
+        } catch (RuntimeException) {
+            // reanchor.completed's throwing record() bubbles for a retry — expected.
+        }
+
+        // The flip committed and the gone-stale row (written via recordSafely ahead
+        // of the throwing writes) is present; a retry would now dedupe and never
+        // re-emit it.
+        $document->refresh();
+        $this->assertNotSame($current->id, $document->current_version_id);
+        $this->assertSame(1, AuditLog::query()->where('action', 'approval.gone_stale')->count());
+    }
+
+    private function seedApproval(Document $document, DocumentVersion $version, User $user): Approval
+    {
+        return Approval::create([
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'document_version_id' => $version->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    /**
+     * A changed-content re-sync that relocates a single thread's anchor onto the
+     * new version — enough to drive the version flip that stales approvals.
+     */
+    private function fakeChangedResync(Thread $thread, string $oldPlain, string $newContent, string $newPlain): void
+    {
+        $this->fakeFetchReturns($newContent);
+        $this->fakeProjectionAndReanchor($newPlain, [[
+            'threadId' => $thread->id,
+            'state' => 'relocated',
+            'exact' => $oldPlain,
+            'prefix' => '',
+            'suffix' => ' edited.',
+            'start' => 0,
+            'end' => $this->utf16CodeUnitLength($oldPlain),
+        ]]);
     }
 
     /**

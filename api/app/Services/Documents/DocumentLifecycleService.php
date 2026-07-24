@@ -2,6 +2,7 @@
 
 namespace App\Services\Documents;
 
+use App\Enums\AuditEvent;
 use App\Enums\LifecycleStatus;
 use App\Models\Document;
 use App\Models\User;
@@ -27,7 +28,7 @@ class DocumentLifecycleService
         $this->audit->record(
             $document->workspace,
             $actor,
-            'lifecycle.changed',
+            AuditEvent::LifecycleChanged,
             $document,
             [
                 'from' => $from?->value,

@@ -2,6 +2,7 @@
 
 namespace App\Services\TrackedRepos;
 
+use App\Enums\AuditEvent;
 use App\Enums\TrackedScanStatus;
 use App\Models\TrackedRepo;
 use App\Models\User;
@@ -67,7 +68,7 @@ class TrackedRepoDeleter
         $this->audit->record(
             $repo->workspace,
             $actor,
-            'tracked_repo.deleted',
+            AuditEvent::TrackedRepoDeleted,
             $repo,
             ['repo_url' => $repo->repo_url, 'documents_orphaned' => $orphaned],
             $ip,

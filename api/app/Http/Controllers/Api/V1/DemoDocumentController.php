@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentStatus;
 use App\Enums\SourceType;
@@ -97,7 +98,7 @@ class DemoDocumentController extends Controller
         $this->audit->record(
             $workspace,
             null,
-            'demo.created',
+            AuditEvent::DemoCreated,
             $document,
             ['source_type' => $document->source_type->value, 'source_url' => $url],
             $request->ip(),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreShareRequest;
 use App\Http\Resources\V1\ShareResource;
@@ -61,7 +62,7 @@ class ShareController extends Controller
         $this->audit->record(
             $document->workspace,
             $request->user(),
-            'share.created',
+            AuditEvent::ShareCreated,
             $issued->share,
             ['expires_at' => optional($issued->share->expires_at)->toIso8601String()],
             $request->ip(),
@@ -89,7 +90,7 @@ class ShareController extends Controller
             $this->audit->record(
                 $document->workspace,
                 $request->user(),
-                'share.revoked',
+                AuditEvent::ShareRevoked,
                 $share,
                 ip: $request->ip(),
             );
