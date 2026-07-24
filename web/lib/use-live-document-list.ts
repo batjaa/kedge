@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useCallback, useRef, useState } from 'react';
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 import {
   appendItems,
   applyFilterPage,
@@ -80,6 +80,15 @@ export function useLiveDocumentList({
   // True while a replace is in flight, so Load more won't append onto a list that
   // is about to be wholesale-replaced.
   const replacingRef = useRef(false);
+  // The committed filter, read at INVOCATION time (not render-capture) by the
+  // import handler: an import's POST can resolve after the user has already
+  // switched chips, and ImportForm calls the callback it captured at submit — so
+  // handleImported must branch on the filter that is live now, not the one that
+  // was active when the submit began. Kept in sync each commit.
+  const filterRef = useRef(state.filter);
+  useEffect(() => {
+    filterRef.current = state.filter;
+  }, [state.filter]);
 
   // Rows/paginator setters over the slice — the exposed interface each surface
   // uses for grouping and reassignment stays identical. Two separate setState
@@ -145,13 +154,15 @@ export function useLiveDocumentList({
     (doc: Document) => {
       filterGenRef.current++;
       replacingRef.current = false;
-      if (filter === 'all') {
+      // Read the live committed filter, not a render-captured one — the submit may
+      // have resolved after a chip switch (see filterRef).
+      if (filterRef.current === 'all') {
         setState((prev) => applyImport(prev, doc));
       } else {
         void replaceWithFilter('all');
       }
     },
-    [filter, replaceWithFilter],
+    [replaceWithFilter],
   );
 
   const handleSettled = useCallback((doc: Document) => {
