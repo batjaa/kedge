@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 // wrapper owns the page background.
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-zinc-900">
       <header className="flex h-14 items-center justify-between px-6">
         <BrandMark />
         <ThemeToggle />
