@@ -67,7 +67,7 @@ export function DocumentCommentComposer({
       <button
         type="button"
         onClick={onOpenPanel}
-        className="fixed z-50 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
+        className="fixed z-50 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         style={{ left: composer.x, top: composer.y, transform: 'translateX(-50%)' }}
       >
         <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
@@ -161,7 +161,7 @@ export function DocumentCommentComposer({
           disabled={submitDisabled}
           aria-busy={submitting}
           aria-label={isSuggestion ? 'Submit suggestion' : 'Post comment'}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />
           {isSuggestion ? 'Suggest' : 'Post'}
