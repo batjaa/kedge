@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\Document;
+use App\Services\Documents\SourceDescriptor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -39,6 +40,13 @@ class DocumentResource extends JsonResource
             'format' => $this->format->value,
             'source_type' => $this->source_type->value,
             'source_url' => $this->source_url,
+            // The display-ready provenance descriptor (M3.10, SPEC §11), derived
+            // in ONE place ({@see SourceDescriptor}) so the web renders, never
+            // re-parses (§5.4). Present on every read so the home's live-prepended
+            // import row carries its chip immediately, without a list refetch;
+            // `tracked_repo_id` rides along as the bucketing key (#118).
+            'source' => SourceDescriptor::fromDocument($this->resource)->toArray(),
+            'tracked_repo_id' => $this->tracked_repo_id,
             'last_sync_status' => $this->last_sync_status->value,
             'sync_error' => $this->sync_error,
             'lifecycle_status' => $this->lifecycle_status->value,
