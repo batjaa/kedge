@@ -2,6 +2,7 @@
 
 namespace App\Services\Import;
 
+use App\Enums\AuditEvent;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
@@ -72,7 +73,21 @@ class DocumentImporter
             'deduped' => ! $version->wasRecentlyCreated,
         ]);
 
-        $this->audit->record($document->workspace, $document->creator, 'document.imported', $document);
+        // The version has landed and the document is committed as Ready. The trail
+        // entry is a post-commit side effect (recordSafely, never record()) so a
+        // dead audit sink can never turn a successful import into a job failure /
+        // retry. Display snapshot (2A): the freshly-imported title and the
+        // requester's name as they read now.
+        $this->audit->recordSafely(
+            $document->workspace,
+            $document->creator,
+            AuditEvent::DocumentImported,
+            $document,
+            array_filter([
+                'document_title' => $document->title,
+                'actor_name' => $document->creator?->name,
+            ], static fn ($value): bool => $value !== null),
+        );
     }
 
     public function prepareVersion(Document $document): PreparedDocumentVersion

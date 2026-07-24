@@ -2,6 +2,7 @@
 
 namespace App\Services\Sharing;
 
+use App\Enums\AuditEvent;
 use App\Enums\ReviewerVerificationStatus;
 use App\Mail\ReviewerMagicLinkMail;
 use App\Models\Share;
@@ -69,12 +70,12 @@ class ReviewerMagicLinkService
             ));
         } catch (Throwable $exception) {
             $magicLink->delete();
-            $this->recordMagicLinkEvent('magiclink.send_failed', $share, $email, $ip, $exception);
+            $this->recordMagicLinkEvent(AuditEvent::MagicLinkSendFailed, $share, $email, $ip, $exception);
 
             return false;
         }
 
-        $this->recordMagicLinkEvent('magiclink.sent', $share, $email, $ip);
+        $this->recordMagicLinkEvent(AuditEvent::MagicLinkSent, $share, $email, $ip);
 
         return true;
     }
@@ -280,7 +281,7 @@ class ReviewerMagicLinkService
         return is_numeric($expires) && (int) $expires < now()->getTimestamp();
     }
 
-    private function recordMagicLinkEvent(string $event, Share $share, string $email, ?string $ip, ?Throwable $exception = null): void
+    private function recordMagicLinkEvent(AuditEvent $event, Share $share, string $email, ?string $ip, ?Throwable $exception = null): void
     {
         $share->loadMissing('document.workspace', 'creator');
 
@@ -295,14 +296,14 @@ class ReviewerMagicLinkService
                 'email_hash' => EmailDigest::for($email),
                 'exception' => $exception instanceof Throwable ? $exception::class : null,
             ]),
-            $event === 'magiclink.send_failed' ? 'warning' : 'info',
+            $event === AuditEvent::MagicLinkSendFailed ? 'warning' : 'info',
         );
     }
 
     private function recordParticipantVerified(Share $share, ShareParticipant $participant, User $user, ?string $ip): void
     {
         $this->recordEvent(
-            'participant.verified',
+            AuditEvent::ParticipantVerified,
             $share->document,
             $user,
             $participant,

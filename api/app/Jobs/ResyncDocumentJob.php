@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\AuditEvent;
 use App\Enums\SyncStatus;
 use App\Models\Document;
 use App\Models\User;
@@ -110,7 +111,7 @@ class ResyncDocumentJob implements ShouldBeUnique, ShouldQueue
         app(AuditLogger::class)->record(
             $this->document->workspace,
             $actor,
-            'resync.failed',
+            AuditEvent::ResyncFailed,
             $this->document,
             ['reason' => $reason, 'error' => $e?->getMessage()],
         );

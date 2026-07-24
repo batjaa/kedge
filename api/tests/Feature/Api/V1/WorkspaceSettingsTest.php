@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Enums\WorkspaceRole;
 use App\Models\AuditLog;
 use App\Models\User;
@@ -151,7 +152,7 @@ class WorkspaceSettingsTest extends TestCase
         $result = app(AuditLogger::class)->recordSafely(
             new Workspace,
             null,
-            'workspace.renamed',
+            AuditEvent::WorkspaceRenamed,
         );
 
         $this->assertNull($result);
@@ -169,7 +170,7 @@ class WorkspaceSettingsTest extends TestCase
         $result = app(AuditLogger::class)->recordSafely(
             new Workspace,
             null,
-            'workspace.renamed',
+            AuditEvent::WorkspaceRenamed,
         );
 
         $this->assertNull($result);

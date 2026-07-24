@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PreviewTrackedRepoRequest;
 use App\Http\Requests\StoreTrackedRepoRequest;
@@ -128,7 +129,7 @@ class TrackedRepoController extends Controller
         $this->audit->record(
             $workspace,
             $user,
-            'tracked_repo.created',
+            AuditEvent::TrackedRepoCreated,
             $trackedRepo,
             ['repo_url' => $trackedRepo->repo_url, 'path_pattern' => $trackedRepo->path_pattern],
             $request->ip(),

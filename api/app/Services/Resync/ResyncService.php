@@ -3,9 +3,11 @@
 namespace App\Services\Resync;
 
 use App\Enums\AnchorState;
+use App\Enums\AuditEvent;
 use App\Enums\DocumentStatus;
 use App\Enums\SyncStatus;
 use App\Models\Anchor;
+use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
@@ -40,7 +42,7 @@ class ResyncService
             'document_id' => $document->id,
             'connector' => $document->source_type->value,
         ]);
-        $this->audit->record($document->workspace, $actor, 'resync.started', $document, [
+        $this->audit->record($document->workspace, $actor, AuditEvent::ResyncStarted, $document, [
             'connector' => $document->source_type->value,
         ]);
 
@@ -53,7 +55,7 @@ class ResyncService
             ])->save();
 
             $this->logCompleted($document, $prepared->connector, $startedAt, deduped: true);
-            $this->audit->record($document->workspace, $actor, 'resync.completed', $document, [
+            $this->audit->record($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
                 'connector' => $prepared->connector,
                 'duration' => $this->elapsedMs($startedAt),
                 'deduped' => true,
@@ -73,6 +75,20 @@ class ResyncService
             (string) $target->plain_text,
         );
         $this->ensureCompleteResults($currentAnchors, $results);
+
+        // Active approvals still pinned to the outgoing version — captured before
+        // the flip below so we can name them once they go stale. "Stale approval"
+        // is a derived state (Approval::staleFor): no discrete domain action marks
+        // the transition, so the spec-consistent write point is this re-sync
+        // version flip, the moment current_version_id leaves the version they
+        // approved (M3.8 #108). The user relation is eager-loaded now so the
+        // display snapshot survives a later reviewer deletion.
+        $goneStaleApprovals = Approval::query()
+            ->with('user:id,name')
+            ->where('document_id', $document->id)
+            ->where('document_version_id', $current->id)
+            ->whereNull('revoked_at')
+            ->get();
 
         $counts = ['anchored' => 0, 'relocated' => 0, 'orphaned' => 0];
         $anchorsByThread = $currentAnchors->keyBy(fn (Anchor $anchor) => (int) $anchor->thread_id);
@@ -121,14 +137,32 @@ class ResyncService
             ]);
         });
 
-        $this->audit->record($document->workspace, $actor, 'reanchor.completed', $document, [
+        $this->audit->record($document->workspace, $actor, AuditEvent::ReanchorCompleted, $document, [
             'from_version_id' => $current->id,
             'to_version_id' => $target->id,
             ...$counts,
         ]);
 
+        // The flip has committed; every approval captured above is now stale. One
+        // aggregate row per re-sync (never one per approval) carries the affected
+        // approvers as a display snapshot (2A) so the feed renders each name even
+        // after a reviewer is deleted; M5 re-derives per-approver from meta. A
+        // post-commit side effect (recordSafely) that must never fail the re-sync.
+        if ($goneStaleApprovals->isNotEmpty()) {
+            $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ApprovalGoneStale, $document, [
+                'document_title' => $document->title,
+                'from_version_id' => $current->id,
+                'to_version_id' => $target->id,
+                'count' => $goneStaleApprovals->count(),
+                'approvals' => $goneStaleApprovals->map(fn (Approval $approval): array => array_filter([
+                    'id' => $approval->id,
+                    'approver_name' => $approval->user?->name,
+                ], static fn ($value): bool => $value !== null))->values()->all(),
+            ]);
+        }
+
         $this->logCompleted($document, $prepared->connector, $startedAt, deduped: false);
-        $this->audit->record($document->workspace, $actor, 'resync.completed', $document, [
+        $this->audit->record($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
             'connector' => $prepared->connector,
             'duration' => $this->elapsedMs($startedAt),
             'deduped' => false,

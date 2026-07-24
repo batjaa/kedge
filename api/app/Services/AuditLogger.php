@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditEvent;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\Workspace;
@@ -25,7 +26,7 @@ class AuditLogger
     public function record(
         Workspace $workspace,
         ?User $actor,
-        string $action,
+        AuditEvent $action,
         ?Model $subject = null,
         array $meta = [],
         ?string $ip = null,
@@ -53,7 +54,7 @@ class AuditLogger
     public function recordSafely(
         Workspace $workspace,
         ?User $actor,
-        string $action,
+        AuditEvent $action,
         ?Model $subject = null,
         array $meta = [],
         ?string $ip = null,
@@ -65,7 +66,7 @@ class AuditLogger
             // be allowed to fail the primary action the trail is a side effect of.
             try {
                 Log::warning('audit.write_failed', [
-                    'action' => $action,
+                    'action' => $action->value,
                     'workspace_id' => $workspace->id,
                     'user_id' => $actor?->id,
                     'exception' => $e->getMessage(),

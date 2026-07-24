@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\DocumentResource;
 use App\Models\Document;
@@ -51,7 +52,7 @@ class ClaimDocumentController extends Controller
         $this->audit->record(
             $workspace,
             $user,
-            'demo.claimed',
+            AuditEvent::DemoClaimed,
             $document,
             ['source_url' => $document->source_url],
             $request->ip(),

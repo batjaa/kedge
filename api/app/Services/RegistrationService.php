@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditEvent;
 use App\Enums\WorkspaceRole;
 use App\Models\User;
 use App\Models\Workspace;
@@ -75,8 +76,8 @@ class RegistrationService
                 'role' => WorkspaceRole::Owner->value,
             ]);
 
-            $this->auditLogger->record($workspace, $user, 'user.registered', $user, ip: $ip);
-            $this->auditLogger->record($workspace, $user, 'workspace.created', $workspace, ip: $ip);
+            $this->auditLogger->record($workspace, $user, AuditEvent::UserRegistered, $user, ip: $ip);
+            $this->auditLogger->record($workspace, $user, AuditEvent::WorkspaceCreated, $workspace, ip: $ip);
 
             return $user;
         });

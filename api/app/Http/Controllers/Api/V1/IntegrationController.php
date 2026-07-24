@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreIntegrationRequest;
 use App\Http\Resources\V1\IntegrationResource;
@@ -69,7 +70,7 @@ class IntegrationController extends Controller
         $this->audit->record(
             $workspace,
             $request->user(),
-            'integration.connected',
+            AuditEvent::IntegrationConnected,
             $integration,
             ['provider' => $integration->provider->value, 'token_last_four' => $integration->tokenLastFour()],
             $request->ip(),
@@ -98,7 +99,7 @@ class IntegrationController extends Controller
         $this->audit->record(
             $workspace,
             $request->user(),
-            'integration.removed',
+            AuditEvent::IntegrationRemoved,
             $integration,
             ['provider' => $provider],
             $request->ip(),

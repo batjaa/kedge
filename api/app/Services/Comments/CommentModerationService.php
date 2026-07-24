@@ -2,6 +2,7 @@
 
 namespace App\Services\Comments;
 
+use App\Enums\AuditEvent;
 use App\Enums\CommentType;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
@@ -107,7 +108,7 @@ class CommentModerationService
         }
 
         $this->recordEvent(
-            'thread.forked',
+            AuditEvent::ThreadForked,
             $sourceThread->document,
             $actor,
             $thread,
@@ -143,7 +144,7 @@ class CommentModerationService
             ])->save();
         });
 
-        $this->recordEvent('comment.edited', $document, $actor, $comment, $ip);
+        $this->recordEvent(AuditEvent::CommentEdited, $document, $actor, $comment, $ip);
 
         $comment->refresh()->load(['author', 'mentionedUsers']);
 
@@ -167,7 +168,7 @@ class CommentModerationService
         $comment->mentionedUsers()->sync([]);
         $comment->delete();
 
-        $this->recordEvent('comment.deleted', $comment->thread->document, $actor, $comment, $ip);
+        $this->recordEvent(AuditEvent::CommentDeleted, $comment->thread->document, $actor, $comment, $ip);
     }
 
     public function updateSuggestionStatus(Comment $comment, User $actor, SuggestionStatus $status, ?string $ip): Comment
@@ -210,12 +211,12 @@ class CommentModerationService
         });
     }
 
-    private function suggestionEventName(SuggestionStatus $status): string
+    private function suggestionEventName(SuggestionStatus $status): AuditEvent
     {
         return match ($status) {
-            SuggestionStatus::Accepted => 'suggestion.accepted',
-            SuggestionStatus::Declined => 'suggestion.declined',
-            SuggestionStatus::Pending => 'suggestion.reopened',
+            SuggestionStatus::Accepted => AuditEvent::SuggestionAccepted,
+            SuggestionStatus::Declined => AuditEvent::SuggestionDeclined,
+            SuggestionStatus::Pending => AuditEvent::SuggestionReopened,
         };
     }
 
