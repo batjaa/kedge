@@ -3,9 +3,9 @@ import { BrandMark } from '@/components/brand-mark';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 // Public chrome for the sign-in / sign-up pages: a thin header (wordmark +
-// theme toggle) over a centered form. Dark-first; both themes fully styled via
-// DESIGN.md tokens. These pages sit outside the Fumadocs layouts, so this
-// wrapper owns the page background.
+// theme toggle) over a centered form. Open Harbor light-first; both themes
+// fully styled via DESIGN.md tokens. These pages sit outside the Fumadocs
+// layouts, so this wrapper owns the page background.
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-zinc-900">
