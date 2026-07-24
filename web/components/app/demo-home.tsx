@@ -51,7 +51,7 @@ export function DemoHome() {
     : 'ring-zinc-900/10 focus-visible:ring-emerald-500 dark:ring-white/10';
 
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-zinc-900">
       <header className="flex h-14 items-center justify-between px-6">
         <BrandMark />
         <div className="flex items-center gap-3">

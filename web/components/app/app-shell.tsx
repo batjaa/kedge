@@ -20,9 +20,9 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-zinc-900">
       <SessionMonitor />
-      <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-zinc-900/10 bg-white/85 px-6 backdrop-blur dark:border-white/10 dark:bg-zinc-900/85">
+      <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-zinc-900/10 bg-stone-50/85 px-6 backdrop-blur dark:border-white/10 dark:bg-zinc-900/85">
         <BrandMark />
         <div className="ml-auto flex items-center gap-3">
           <Link
