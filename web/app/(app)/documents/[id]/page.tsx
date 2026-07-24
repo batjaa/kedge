@@ -152,7 +152,11 @@ export default async function DocumentPage({
             backLabel="← Review queue"
             plainText={viewedVersion.plain_text ?? null}
             projectionVersion={viewedVersion.projection_version ?? null}
-            canResync
+            // A pasted/uploaded document has no URL to re-pull: it gets the manual
+            // content-update affordance instead of Re-sync (#113). Mutually
+            // exclusive by source type.
+            canResync={document.source_type !== 'upload'}
+            canUpdateContent={document.source_type === 'upload'}
             lastSyncStatus={document.last_sync_status}
             syncError={document.sync_error}
           >

@@ -223,12 +223,22 @@ export async function selectDocumentText(page: Page, exact: string, occurrence =
     throw new Error(result.reason);
   }
 
-  await expect(page.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
+  await expect(inlineCommentAffordance(page)).toBeVisible();
+}
+
+/**
+ * The floating "Comment" affordance that pops over a fresh text selection. Scoped
+ * to the fixed-position composer button so it never collides with a thread card's
+ * "Comment" reply-mode toggle once a comment already exists in the rail — the case
+ * a multi-comment journey (e.g. update-content) hits.
+ */
+function inlineCommentAffordance(page: Page): Locator {
+  return page.locator('button.fixed', { hasText: 'Comment' });
 }
 
 export async function openInlineComposerForText(page: Page, exact: string): Promise<void> {
   await selectDocumentText(page, exact);
-  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await inlineCommentAffordance(page).click();
   await expect(page.getByLabel('Inline comment', { exact: true })).toBeVisible();
 }
 
