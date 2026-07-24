@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- The BrandMark glyph (components/brand-mark.tsx): emerald-600 rounded
+       square, white pill bottom-right with p-1 inset. Kept in the same 24px
+       geometry so the tab icon matches the header mark exactly. -->
+  <rect width="24" height="24" rx="6" fill="#059669"/>
+  <rect x="14" y="10" width="6" height="10" rx="2" fill="#ffffff"/>
+</svg>
