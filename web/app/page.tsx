@@ -7,6 +7,7 @@ import { WorkspaceHome } from '@/components/app/workspace-home';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 import { getWorkspaceSummary } from '@/lib/workspace';
+import { getWorkspaceActivity } from '@/lib/activity';
 import { getSession } from '@/lib/session';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
@@ -53,8 +54,10 @@ function firstNameOf(name: string): string {
 // list (SPEC 11). Page 1 is read server-side and seeds the live client island
 // (WorkspaceHome), which owns submit-stays-home + per-row polling (#85); a
 // failed read degrades the list area alone (the import box always renders). The
-// stats strip (SPEC §16, M3.7) is seeded the same way — its own read failing
-// degrades the strip to nothing (A1), never the list. Panel-based, DESIGN.md tokens.
+// stats strip (SPEC §16, M3.7) and the Recent-activity feed (SPEC §16, M3.8) are
+// seeded the same way — each own read failing degrades that panel to nothing
+// (A1), never the list. The feed loads once here with no polling (M5 owns
+// liveness). Panel-based, DESIGN.md tokens.
 async function ReviewQueue({
   firstName,
   workspace,
@@ -62,10 +65,11 @@ async function ReviewQueue({
   firstName: string;
   workspace: Workspace;
 }) {
-  const [documents, projectsResult, summaryResult] = await Promise.all([
+  const [documents, projectsResult, summaryResult, activityResult] = await Promise.all([
     getDocuments(),
     getProjects(),
     getWorkspaceSummary(),
+    getWorkspaceActivity(),
   ]);
 
   // A refused list read is an auth problem, not an outage: the session lapsed
@@ -91,6 +95,7 @@ async function ReviewQueue({
         initialProjects={projectsResult.projects}
         initialProjectsDegraded={projectsResult.status !== 200}
         initialSummary={summaryResult.summary}
+        initialActivity={activityResult.events}
       />
     </PageContainer>
   );
