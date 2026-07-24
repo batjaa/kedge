@@ -31,7 +31,7 @@ Pre-M0. Completed: spec reviewed (Rev 3), design approved, repo initialized, two
 
 - `npm run dev` → http://localhost:3000 · `npm run types:check` before finalizing TS changes.
 - Stack: Next 16, Fumadocs 16, Tailwind v4. Content lives in `web/content/docs/` — dogfood copies of `../docs/*.md` (plus fixtures like `rfc-017-anchoring.mdx`). **If you change `docs/*.md`, refresh the copies** (frontmatter added on top, first `# ` heading dropped).
-- Theming is done ONLY via `--color-fd-*` variable overrides in `app/global.css`, mapped from DESIGN.md tokens. Never fork Fumadocs components to restyle. **No webfonts** — system stacks only.
+- Theming is done ONLY via `--color-fd-*` variable overrides in `app/global.css`, mapped from DESIGN.md tokens. Never fork Fumadocs components to restyle. **Fonts**: the display face (headings/wordmark/panel titles) is self-hosted **Space Grotesk** via the `--font-display` token (Open Harbor, DESIGN.md amended 2026-07-23) — woff2 + OFL in `web/public/fonts/`, served same-origin, never a runtime Google Fonts fetch. Body/UI/prose stay on system stacks; add no other webfonts.
 - Diagrams: fenced code blocks on the Kroki engine allowlist (`lib/remark-diagrams.ts`) become `<KrokiDiagram/>` (server-rendered, cached). Unknown fence languages must fall through to plain-text highlighting.
 - MDX behaving oddly after config/schema/content changes → `rm -rf .next .source` and restart the dev server (stale compiled MDX cache).
 
