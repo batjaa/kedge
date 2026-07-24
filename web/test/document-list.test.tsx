@@ -401,6 +401,63 @@ describe('DocumentList', () => {
     expect(html).not.toContain('href="/projects/10"');
   });
 
+  // ---- M3.10: the provenance chip on the row (#117, SPEC §11) ---------------
+
+  it('carries the provenance chip on every home row, independent of projects', () => {
+    // A workspace with NO projects (so no project chip) still shows provenance —
+    // the source chip is not gated on projects (#117: "appears everywhere").
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({ id: 1, title: 'Repo doc', source: { kind: 'repo', path: 'docs/rfcs/017-anchoring.md' } }),
+          item({ id: 2, title: 'Pasted note', source: { kind: 'upload' } }),
+        ]}
+        total={2}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={[]}
+        grouped
+      />,
+    );
+
+    // The repo doc's path chip (full value on hover) and the pasted label both
+    // land in the rows, and each is announced with its "Source:" context.
+    expect(html).toContain('title="docs/rfcs/017-anchoring.md"');
+    expect(html).toContain('docs/rfcs/017-anchoring.md');
+    expect(html).toContain('pasted');
+    expect(html).toContain('Source:');
+    // No project chip on a project-less workspace, but provenance still shows.
+    expect(html).not.toContain('aria-label="Project for');
+  });
+
+  it('shows the provenance chip on a project page row too (shared row anatomy)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({
+            id: 1,
+            title: 'Standalone import',
+            source: { kind: 'github', repo: 'kedgehq/kedge', path: 'docs/spec.md' },
+            project: { id: 10, name: 'Anchoring' },
+          }),
+        ]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={projects()}
+        heading="Documents"
+      />,
+    );
+
+    // owner/repo · path, with the full value on hover.
+    expect(html).toContain('kedgehq/kedge · docs/spec.md');
+    expect(html).toContain('title="kedgehq/kedge · docs/spec.md"');
+  });
+
   // ---- M3.7: the lifecycle filter chips (#103, decisions 5A/7A/A1) ----------
 
   it('renders the lifecycle chips with counts from the summary and marks the active one', () => {
@@ -578,6 +635,8 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     open_threads_count: 0,
     synced_at: null,
     project: null,
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     created_at: null,
     ...overrides,
   };

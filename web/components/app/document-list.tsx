@@ -4,6 +4,7 @@ import { type ChangeEvent, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { MetaChip } from './meta-chip';
+import { SourceChip } from './source-chip';
 import { StatePanel } from './state-panel';
 import { StatusChip } from './status-chip';
 import { cn } from '@/lib/cn';
@@ -368,6 +369,10 @@ function DocumentRow({
           </p>
         </Link>
         <div className="flex shrink-0 items-center gap-2">
+          {/* Provenance chip (M3.10): where the doc came from, on every row and
+              independent of projects, so it renders even when the workspace has
+              none. Sits beside the project chip in the row anatomy. */}
+          <SourceChip source={item.source} />
           {projects.length > 0 ? (
             <RowProjectChip item={item} projects={projects} onAssigned={onAssigned} />
           ) : null}

@@ -112,6 +112,8 @@ function row(): DocumentListItem {
     open_threads_count: 0,
     synced_at: null,
     project: { id: 10, name: 'Anchoring' },
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     created_at: null,
   };
 }

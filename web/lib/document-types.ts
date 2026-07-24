@@ -172,6 +172,11 @@ export interface Document {
   format: DocumentFormat;
   source_type: string;
   source_url: string | null;
+  /** Where the doc came from (M3.10) — the same descriptor the list row carries,
+   *  so a live-prepended import row renders its provenance chip without a refetch. */
+  source: DocumentSource;
+  /** The tracked repo that imported it (#118 bucketing key); null if standalone. */
+  tracked_repo_id: number | null;
   last_sync_status: SyncStatus;
   sync_error: string | null;
   lifecycle_status: LifecycleStatus;
@@ -183,6 +188,22 @@ export interface Document {
   current_version?: DocumentVersion | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/**
+ * Where a document came from (M3.10, SPEC §11) — the display-ready provenance
+ * descriptor the row chip renders. Derived server-side in ONE place
+ * (api/app/Services/Documents/SourceDescriptor.php); the web renders it, never
+ * re-parses a blob URL (§5.4). `kind` is always present; the rest ride along per
+ * kind: `path` for a repo/github doc, `repo` ("owner/repo") for a standalone
+ * GitHub import, `host` for a raw URL. An `upload` carries only its kind (the web
+ * labels it "pasted"); a raw URL with no parseable host omits `host`.
+ */
+export interface DocumentSource {
+  kind: 'repo' | 'github' | 'url' | 'upload';
+  path?: string;
+  repo?: string;
+  host?: string;
 }
 
 /**
@@ -203,6 +224,10 @@ export interface DocumentListItem {
   synced_at: string | null;
   /** The document's project (M3.6) for the row chip; null is Unfiled. */
   project: ProjectRef | null;
+  /** Where the doc came from (M3.10) — the provenance chip's source (§11). */
+  source: DocumentSource;
+  /** The tracked repo that imported it (#118 bucketing key); null if standalone. */
+  tracked_repo_id: number | null;
   created_at: string | null;
 }
 

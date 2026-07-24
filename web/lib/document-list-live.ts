@@ -72,6 +72,10 @@ export function toListItem(doc: Document): DocumentListItem {
     open_threads_count: 0,
     synced_at: doc.current_version?.synced_at ?? null,
     project: doc.project ?? null,
+    // Provenance is immutable, server-derived (M3.10) — carried straight through
+    // so a live-prepended import row shows its chip without a list refetch.
+    source: doc.source,
+    tracked_repo_id: doc.tracked_repo_id,
     created_at: doc.created_at,
   };
 }
@@ -135,6 +139,8 @@ export function mergeSettled(
           created_at: item.created_at,
           synced_at: doc.current_version?.synced_at ?? item.synced_at,
           project: item.project,
+          // `source` / `tracked_repo_id` ride through from toListItem(doc): the
+          // settle payload is the server's authority for provenance (M3.10).
         }
       : item,
   );

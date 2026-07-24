@@ -130,6 +130,8 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     open_threads_count: 0,
     synced_at: null,
     project: null,
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     created_at: null,
     ...overrides,
   };

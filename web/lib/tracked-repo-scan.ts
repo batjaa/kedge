@@ -159,6 +159,12 @@ export function reportImportingRows(
       // The row carries the repo's project so its chip is correct on sight and a
       // settle never re-buckets it to Unfiled.
       project,
+      // A scan import is a repo doc at this repo-relative path (M3.10): the report
+      // hands us the path directly, so the provenance chip is correct on sight and
+      // the settle carries the server's authoritative descriptor. `tracked_repo_id`
+      // is filled in by the settle (the bucketing key, #118).
+      source: { kind: 'repo', path: file.path },
+      tracked_repo_id: null,
       created_at: null,
     });
   }
