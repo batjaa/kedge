@@ -131,6 +131,7 @@ export function ProjectDocuments({
           emptyBody="A scan of this repository imports its matching files here."
           projects={projects}
           injection={injections[String(repo.id)]}
+          directoryDividers
         />
       ))}
 

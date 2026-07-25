@@ -14,6 +14,7 @@ import { assignDocumentProject } from '@/lib/projects-client';
 import { runProjectAssign } from '@/lib/assign-project';
 import { shouldPoll } from '@/lib/document-list-live';
 import { groupDocumentsByProject, hasNamedGroups } from '@/lib/document-groups';
+import { withDirectoryDividers } from '@/lib/directory-dividers';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { useImportRetry } from '@/lib/import-retry';
 import type {
@@ -49,6 +50,7 @@ export function DocumentList({
   projects = [],
   onAssigned = () => {},
   grouped = false,
+  directoryDividers = false,
   filter,
   onSelectFilter,
   summary,
@@ -73,6 +75,9 @@ export function DocumentList({
   onAssigned?: (doc: Document) => void;
   /** Render project group headers (home). Off on a single-project page. */
   grouped?: boolean;
+  /** Interleave directory dividers between path-ordered rows (M3.10 #119) — a
+   *  repo section only; the home list and "Other documents" leave it off. */
+  directoryDividers?: boolean;
   /** The active lifecycle chip (5A). Chips render only when onSelectFilter is set. */
   filter?: DocumentLifecycleFilter;
   /** Select a lifecycle chip — the dashboard only (#103); omit to hide chips. */
@@ -171,6 +176,7 @@ export function DocumentList({
               onSettled={onSettled}
               onRetried={onRetried}
               onAssigned={onAssigned}
+              directoryDividers={directoryDividers}
             />
           )}
         </>
@@ -278,12 +284,15 @@ function GroupHeader({ project, count }: { project: ProjectRef | null; count: nu
 }
 
 // The rounded-2xl hairline card holding one group's divide-y rows (DESIGN.md).
+// In a repo section (directoryDividers) the path-ordered rows are interleaved with
+// non-interactive directory dividers (#119); everywhere else the rows render flat.
 function RowCard({
   items,
   projects,
   onSettled,
   onRetried,
   onAssigned,
+  directoryDividers = false,
   className,
 }: {
   items: DocumentListItem[];
@@ -291,8 +300,14 @@ function RowCard({
   onSettled: (doc: Document) => void;
   onRetried: (id: number) => void;
   onAssigned: (doc: Document) => void;
+  /** Repo section only: mark directory changes between adjacent rows (#119). */
+  directoryDividers?: boolean;
   className?: string;
 }) {
+  const entries = directoryDividers
+    ? withDirectoryDividers(items)
+    : items.map((item) => ({ kind: 'row' as const, item }));
+
   return (
     <div
       className={cn(
@@ -301,18 +316,42 @@ function RowCard({
       )}
     >
       <ul role="list" className="divide-y divide-zinc-900/5 dark:divide-white/10">
-        {items.map((item) => (
-          <DocumentRow
-            key={item.id}
-            item={item}
-            projects={projects}
-            onSettled={onSettled}
-            onRetried={onRetried}
-            onAssigned={onAssigned}
-          />
-        ))}
+        {entries.map((entry) =>
+          entry.kind === 'divider' ? (
+            <DirectoryDivider key={entry.key} dir={entry.dir} />
+          ) : (
+            <DocumentRow
+              key={entry.item.id}
+              item={entry.item}
+              projects={projects}
+              onSettled={onSettled}
+              onRetried={onRetried}
+              onAssigned={onAssigned}
+            />
+          ),
+        )}
       </ul>
     </div>
+  );
+}
+
+// A directory divider between path-ordered repo-section rows (M3.10 #119, story
+// 3): DESIGN.md's hairline + dirname in the muted mono style — the `divide-y` on
+// the list draws the hairline, this is the subtly-tinted label row it sits on.
+// It is presentation ONLY — not a link, not a folder, nothing collapsible — and
+// `aria-hidden` so assistive tech skips it entirely: the directory it names is
+// already announced on every row's provenance chip (story 8), so voicing it again
+// would be redundant noise, and hiding it (rather than role="separator", which a
+// role="list" cannot legally hold as a child) keeps the list's item count exactly
+// the real documents. A repeated label (a nested dir between parent files, or a
+// Load-more boundary) is harmless precisely because the row is inert.
+function DirectoryDivider({ dir }: { dir: string }) {
+  return (
+    <li aria-hidden="true" className="bg-zinc-500/[.03] px-4 py-1.5 dark:bg-white/[.02] sm:px-6">
+      <span className="font-mono text-[10px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500">
+        {dir}
+      </span>
+    </li>
   );
 }
 

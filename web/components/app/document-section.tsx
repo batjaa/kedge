@@ -44,6 +44,7 @@ export function DocumentSection({
   emptyBody,
   projects,
   injection,
+  directoryDividers = false,
   className = 'mt-8',
 }: {
   /** This page's project — reassigning a row out of it drops the row (M3.6). */
@@ -60,6 +61,8 @@ export function DocumentSection({
   projects: Project[];
   /** Rows a scan/paste imported into THIS section since mount (parent-routed). */
   injection?: SectionInjection;
+  /** Interleave directory dividers (#119) — a repo section, never Other. */
+  directoryDividers?: boolean;
   className?: string;
 }) {
   const {
@@ -146,6 +149,7 @@ export function DocumentSection({
       onRetried={handleRetried}
       projects={projects}
       onAssigned={handleAssigned}
+      directoryDividers={directoryDividers}
       heading={heading}
       headingId={headingId}
       emptyTitle={emptyTitle}
