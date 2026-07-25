@@ -19,6 +19,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // whole set — the API validates the value and applies the shared predicate (7A).
   const lifecycle = request.nextUrl.searchParams.get('lifecycle');
   if (lifecycle) query.set('lifecycle', lifecycle);
+  // Forward the project page's source-grouping controls (#118): a repo section's
+  // tracked-repo filter + path order, or the Other-documents exclusion set. The
+  // API validates each and scopes them to the caller's workspace.
+  for (const param of ['tracked_repo', 'order', 'exclude_tracked_repos'] as const) {
+    const value = request.nextUrl.searchParams.get(param);
+    if (value) query.set(param, value);
+  }
 
   const { status, data } = await forwardApiGet<DocumentListPage>(
     request.headers,

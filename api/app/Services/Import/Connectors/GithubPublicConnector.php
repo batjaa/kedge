@@ -5,6 +5,7 @@ namespace App\Services\Import\Connectors;
 use App\Enums\SourceType;
 use App\Services\Import\DocumentSource;
 use App\Services\Import\Exceptions\RateLimitedException;
+use App\Services\Import\GithubBlobUrl;
 
 /**
  * Imports a public GitHub file from a blob URL (SPEC 5.1). It claims
@@ -14,9 +15,10 @@ use App\Services\Import\Exceptions\RateLimitedException;
  * {@see RawUrlConnector}, a github.com blob URL routes here while a
  * `raw.githubusercontent.com` link (a different host) still falls through to raw.
  *
- * All the mechanics — blob-URL parsing, the raw-media-type request, the SSRF pin,
- * and the §19 rate-limit back-off — live in {@see AbstractGithubBlobConnector},
- * shared with the authenticated {@see GithubPatConnector}. This reader adds
+ * All the mechanics — the raw-media-type request, the SSRF pin, and the §19
+ * rate-limit back-off — live in {@see AbstractGithubBlobConnector}, shared with the
+ * authenticated {@see GithubPatConnector}; blob-URL parsing is the shared
+ * {@see GithubBlobUrl}. This reader adds
  * nothing: no auth header, and no special auth-failure handling (an unauthenticated
  * caller never sees a 401; a plain 403 on a private repo is a normal import failure).
  *

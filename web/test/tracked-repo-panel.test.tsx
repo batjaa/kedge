@@ -11,8 +11,9 @@ describe('TrackedRepoPanel form', () => {
     const html = renderToStaticMarkup(
       <TrackedRepoPanel
         project={{ id: 10, name: 'Anchoring' }}
-        initialRepos={[]}
-        onMaterialize={() => {}}
+        repos={[]}
+        setRepos={() => {}}
+        onScanSettled={() => {}}
       />,
     );
 

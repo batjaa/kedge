@@ -17,6 +17,7 @@ import type {
   DocumentListItem,
   DocumentListMeta,
   DocumentListPage,
+  DocumentSectionQuery,
 } from './document-types';
 
 // The live document-list island state (SPEC 11; decisions 2A + 5A + 7A + 10A),
@@ -52,15 +53,31 @@ export interface LiveDocumentList {
   handleSettled: (doc: Document) => void;
   handleLoadMore: () => Promise<void>;
   handleRetried: (id: number) => void;
+  /**
+   * Refetch page 1 under the current filter and replace the list — a reconcile
+   * for when the read's SCOPE shifted underneath (a project page's Other section
+   * when a repo is tracked/untracked, #118: its exclusion set changes, so an
+   * orphaned document must resurface without a navigation). Same latest-wins
+   * guards as a chip select.
+   */
+  reload: () => void;
 }
 
 export function useLiveDocumentList({
   initialPage,
   projectFilter,
+  section,
 }: {
   initialPage: DocumentListPage | null;
   /** Scope Load more to a project (id) or the Unfiled bucket — the project page. */
   projectFilter?: string | number;
+  /**
+   * A project page source section's grouping controls (#118): the repo filter +
+   * path order, or the Other-documents exclusion set. Threaded into every Load
+   * more so page 2 reads exactly like the server-rendered page 1 — same scope,
+   * same order. Absent on the home and the flat project list.
+   */
+  section?: DocumentSectionQuery;
 }): LiveDocumentList {
   // A null page 1 is the degraded read (3A). Fixed for this render's lifetime.
   const degraded = initialPage === null;
@@ -125,7 +142,7 @@ export function useLiveDocumentList({
       const token = ++filterGenRef.current;
       replacingRef.current = true;
       try {
-        const page = await readDocumentPage(1, projectFilter, lifecycleParam(next));
+        const page = await readDocumentPage(1, projectFilter, lifecycleParam(next), section);
         if (filterGenRef.current !== token) return; // superseded by a newer chip
         if (page) {
           // Commit the chip WITH its rows, and mirror it into filterRef in the same
@@ -139,7 +156,7 @@ export function useLiveDocumentList({
         if (filterGenRef.current === token) replacingRef.current = false;
       }
     },
-    [projectFilter],
+    [projectFilter, section],
   );
 
   // An import flips the active chip to All so the new row is never hidden (5A).
@@ -191,7 +208,7 @@ export function useLiveDocumentList({
     loadingRef.current = true;
     setLoadingMore(true);
     try {
-      const page = await readDocumentPage(next, projectFilter, lifecycleParam(filter));
+      const page = await readDocumentPage(next, projectFilter, lifecycleParam(filter), section);
       if (page && filterGenRef.current === token) {
         setItems((prev) => appendItems(prev, page.data));
         setMeta(page.meta);
@@ -200,7 +217,7 @@ export function useLiveDocumentList({
       loadingRef.current = false;
       setLoadingMore(false);
     }
-  }, [meta, projectFilter, filter, setItems, setMeta]);
+  }, [meta, projectFilter, filter, section, setItems, setMeta]);
 
   // A row's inline retry succeeded: flip it back to importing so its RowPoller
   // re-mounts and settles it live in place (7A). Clear the live region first so a
@@ -220,6 +237,13 @@ export function useLiveDocumentList({
     [replaceWithFilter],
   );
 
+  // Re-read page 1 under the CURRENT filter (filterRef, not a render-captured
+  // value — the committed filter, always `all` on a project section). Used when
+  // the section's scope changed, never when the rows did (#118).
+  const reload = useCallback(() => {
+    void replaceWithFilter(filterRef.current);
+  }, [replaceWithFilter]);
+
   return {
     degraded,
     items,
@@ -235,5 +259,6 @@ export function useLiveDocumentList({
     handleSettled,
     handleLoadMore,
     handleRetried,
+    reload,
   };
 }

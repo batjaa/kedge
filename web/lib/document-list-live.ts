@@ -4,6 +4,7 @@ import type {
   DocumentListItem,
   DocumentListMeta,
   DocumentListPage,
+  DocumentSectionQuery,
 } from './document-types';
 
 // The poll cadence moved to its single home in lib/use-poll-until-settled.ts (12A),
@@ -17,6 +18,22 @@ import type {
  */
 export function lifecycleParam(filter: DocumentLifecycleFilter): string | undefined {
   return filter === 'all' ? undefined : filter;
+}
+
+/**
+ * Write a project page's source-grouping controls (#118) onto a document-list
+ * query string — the ONE place the web maps {@link DocumentSectionQuery} to the
+ * API's `tracked_repo` / `order` / `exclude_tracked_repos` parameters, so the
+ * server-rendered initial page and the client Load more can never drift on the
+ * names. Empty/absent fields write nothing, leaving the plain newest-first list.
+ */
+export function applySectionQuery(params: URLSearchParams, query?: DocumentSectionQuery): void {
+  if (!query) return;
+  if (query.trackedRepo !== undefined) params.set('tracked_repo', String(query.trackedRepo));
+  if (query.order) params.set('order', query.order);
+  if (query.excludeTrackedRepos && query.excludeTrackedRepos.length > 0) {
+    params.set('exclude_tracked_repos', query.excludeTrackedRepos.join(','));
+  }
 }
 
 /**
@@ -72,6 +89,10 @@ export function toListItem(doc: Document): DocumentListItem {
     open_threads_count: 0,
     synced_at: doc.current_version?.synced_at ?? null,
     project: doc.project ?? null,
+    // Provenance is immutable, server-derived (M3.10) — carried straight through
+    // so a live-prepended import row shows its chip without a list refetch.
+    source: doc.source,
+    tracked_repo_id: doc.tracked_repo_id,
     created_at: doc.created_at,
   };
 }
@@ -135,6 +156,8 @@ export function mergeSettled(
           created_at: item.created_at,
           synced_at: doc.current_version?.synced_at ?? item.synced_at,
           project: item.project,
+          // `source` / `tracked_repo_id` ride through from toListItem(doc): the
+          // settle payload is the server's authority for provenance (M3.10).
         }
       : item,
   );

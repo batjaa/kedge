@@ -3,6 +3,7 @@ import {
   appendItems,
   applyFilterPage,
   applyImport,
+  applySectionQuery,
   hasMorePages,
   type LiveListState,
   lifecycleParam,
@@ -20,6 +21,30 @@ import type {
   DocumentListMeta,
   DocumentListPage,
 } from '@/lib/document-types';
+
+describe('applySectionQuery', () => {
+  it('maps a repo section to the API tracked_repo + order parameters (#118)', () => {
+    const params = new URLSearchParams();
+    applySectionQuery(params, { trackedRepo: 7, order: 'path' });
+    expect(params.get('tracked_repo')).toBe('7');
+    expect(params.get('order')).toBe('path');
+    expect(params.has('exclude_tracked_repos')).toBe(false);
+  });
+
+  it('maps the Other-documents exclusion to a comma-separated id list', () => {
+    const params = new URLSearchParams();
+    applySectionQuery(params, { excludeTrackedRepos: [3, 7, 9] });
+    expect(params.get('exclude_tracked_repos')).toBe('3,7,9');
+  });
+
+  it('writes nothing for an empty or absent query — the plain newest-first list', () => {
+    const empty = new URLSearchParams();
+    applySectionQuery(empty, {});
+    applySectionQuery(empty, { excludeTrackedRepos: [] });
+    applySectionQuery(empty, undefined);
+    expect(empty.toString()).toBe('');
+  });
+});
 
 describe('document list live state', () => {
   describe('prependItem', () => {
@@ -416,6 +441,8 @@ function document(overrides: Partial<Document> = {}): Document {
     last_sync_status: 'ok',
     sync_error: null,
     lifecycle_status: 'draft',
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     current_version: null,
     created_at: null,
     updated_at: null,
@@ -443,6 +470,8 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     open_threads_count: 0,
     synced_at: null,
     project: null,
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     created_at: null,
     ...overrides,
   };

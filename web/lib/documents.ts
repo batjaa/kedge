@@ -1,8 +1,10 @@
 import { headers } from 'next/headers';
 import { forwardApiGet, forwardApiGetWithJson } from './bff';
+import { applySectionQuery } from './document-list-live';
 import type {
   Document,
   DocumentListPage,
+  DocumentSectionQuery,
   DocumentVersion,
   DocumentVersionDiff,
 } from './document-types';
@@ -38,14 +40,18 @@ export interface DocumentsReadResult {
  * {@link getDocument}. A non-200 leaves `page` null so the home can degrade the
  * list area alone without ever throwing. `project` scopes the read to one
  * project (an id) or the Unfiled bucket (`'unfiled'`) — the project page's
- * filter (M3.6).
+ * filter (M3.6). `section` layers the M3.10 (#118) source-grouping controls so a
+ * repo section's / the Other-documents section's initial page is server-rendered
+ * exactly as its client Load more will read it.
  */
 export async function getDocuments(
   page = 1,
   project?: string | number,
+  section?: DocumentSectionQuery,
 ): Promise<DocumentsReadResult> {
   const query = new URLSearchParams({ page: String(page) });
   if (project !== undefined && project !== '') query.set('project', String(project));
+  applySectionQuery(query, section);
 
   const { status, data } = await forwardApiGet<DocumentListPage>(
     await headers(),

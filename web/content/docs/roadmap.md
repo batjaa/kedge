@@ -25,7 +25,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Design refresh | M | Documents list · Projects & tracked repos | done (2026-07-23) | [specs/m3.7-design-refresh.md](specs/m3.7-design-refresh.md) · [#97](https://github.com/batjaa/kedge/issues/97) |
 | Activity & landing | M | Design refresh | done (2026-07-24) | [specs/m3.8-activity-landing.md](specs/m3.8-activity-landing.md) · [#107](https://github.com/batjaa/kedge/issues/107) |
 | Web i18n | M | Activity & landing · Source provenance | specced (2026-07-23) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) |
-| Source provenance | S | Projects & tracked repos · Design refresh | ticketed (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
+| Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | specced (2026-07-20) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |

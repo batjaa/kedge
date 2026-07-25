@@ -45,6 +45,8 @@ function documentWithCurrentVersion(currentVersion: DocumentVersion): Document {
     format: 'md',
     source_type: 'raw_url',
     source_url: 'https://example.test/spec.md',
+    source: { kind: 'url', host: 'example.test' },
+    tracked_repo_id: null,
     last_sync_status: 'ok',
     sync_error: null,
     lifecycle_status: 'in_review',

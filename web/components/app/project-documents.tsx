@@ -1,104 +1,111 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ImportForm } from './import-form';
-import { DocumentList } from './document-list';
+import { DocumentSection, type SectionInjection } from './document-section';
 import { TrackedRepoPanel } from './tracked-repo-panel';
-import { hasMorePages } from '@/lib/document-list-live';
-import { mergeReportedRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
-import { useLiveDocumentList } from '@/lib/use-live-document-list';
-import type {
-  Document,
-  DocumentListItem,
-  DocumentListPage,
-  Project,
-  ProjectRef,
-} from '@/lib/document-types';
+import { toListItem } from '@/lib/document-list-live';
+import { reportImportingRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
+import {
+  OTHER_SECTION,
+  repoShortName,
+  resolveSectionKey,
+  type SectionKey,
+} from '@/lib/project-sections';
+import type { Document, DocumentListPage, Project, ProjectRef } from '@/lib/document-types';
 
-// A project page's live document surface (SPEC §16 story 6, M3.6) — the M3.5
-// home re-scoped to one project: the same row components, per-row polling, retry
-// affordance, and Load more, filtered to this project (the clamp/pagination
-// convention carried by the shared hook). The import box here targets the
-// project, so a paste lands filed. Reassigning a doc OUT of this project (or to
-// Unfiled) removes its row; the row chip is how that move is made. The tracked-repo
-// panel sits above it inside the SAME island, so a scan's reported imports
-// materialize as importing rows here and settle through the existing per-row path
-// (this closes the M3.5 out-of-band-liveness TODO, story 22).
+// A project page's document surface (SPEC §11, M3.10 #118) — grouped by SOURCE.
+// Each attached tracked repo becomes a section headed by its short name
+// (`owner/repo`), its docs in repo-path order; everything not from an attached
+// repo (hand/paste imports, docs reassigned in from another project) reads under
+// "Other documents", newest-first as before. Each section is its own
+// server-paginated live list (DocumentSection), so grouping costs one DB query
+// per section and never hides a document.
+//
+// This component is the orchestrator: it owns the tracked-repo list (so a repo
+// tracked or removed here adds/removes its section live) and routes freshly-
+// imported rows into the right section — a scan's queued imports into their
+// repo's section, a paste into Other — each settling through the existing per-row
+// path. The import box files into this project, so a paste lands under Other.
+
+/** An empty page for a repo tracked live this session (no server-rendered page). */
+const EMPTY_PAGE: DocumentListPage = {
+  data: [],
+  meta: { current_page: 1, last_page: 1, per_page: 20, total: 0 },
+};
+
 export function ProjectDocuments({
   project,
-  initialPage,
   projects,
   initialTrackedRepos = [],
+  initialRepoPages = {},
+  initialOtherPage,
 }: {
-  /** This page's project — scopes the list and stamps scan-materialized rows (B1). */
+  /** This page's project — scopes the list and stamps scan-materialized rows. */
   project: ProjectRef;
-  initialPage: DocumentListPage | null;
   projects: Project[];
   initialTrackedRepos?: TrackedRepo[];
+  /** Server-rendered page 1 per attached repo id (null = a degraded read). */
+  initialRepoPages?: Record<number, DocumentListPage | null>;
+  /** Server-rendered page 1 for "Other documents" (the exclude-attached read). */
+  initialOtherPage: DocumentListPage | null;
 }) {
   const projectId = project.id;
-  const {
-    degraded,
-    items,
-    setItems,
-    meta,
-    setMeta,
-    loadingMore,
-    announcement,
-    handleImported,
-    handleSettled,
-    handleLoadMore,
-    handleRetried,
-  } = useLiveDocumentList({ initialPage, projectFilter: projectId });
+  const [repos, setRepos] = useState<TrackedRepo[]>(initialTrackedRepos);
+  // Per-section injection batches (keyed by section: repo id or 'other'), each a
+  // monotonic {seq, rows} the target section applies once. Bumping the seq is how
+  // a scan/paste hands rows to a section without a cross-island imperative call.
+  const [injections, setInjections] = useState<Record<string, SectionInjection>>({});
 
-  // A settled scan's queued imports appear as importing rows, deduped by id like
-  // the prepend path — then settle through the existing per-row poller. The merge
-  // and the actually-added count are computed together inside ONE functional
-  // updater, against `prev` (never a stale `items` closure), so concurrent settles
-  // chain correctly and a Load more that already surfaced these rows can't inflate
-  // the count. `items` is intentionally OUT of the deps: keeping it here churned
-  // this callback's identity on every list mutation, tearing down and restarting
-  // the scan poller each time a row settled.
-  const handleScanMaterialize = useCallback(
-    (rows: DocumentListItem[]) => {
-      let added = 0;
-      setItems((prev) => {
-        const merged = mergeReportedRows(prev, rows);
-        added = merged.added; // idempotent assignment — StrictMode-safe
-        return merged.items;
-      });
-      // setItems is invoked before setMeta and both enqueue updaters on the hook's
-      // one live-list slice, which React applies in enqueue order — so the items
-      // updater has set `added` by the time this meta updater reads it; bump the
-      // total by exactly the new rows, once.
-      setMeta((prev) => (prev && added > 0 ? { ...prev, total: prev.total + added } : prev));
+  const attachedIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos]);
+  // Repo sections in a stable order (attachment order by id) so they never
+  // reshuffle as scans settle or repos are added.
+  const orderedRepos = useMemo(() => [...repos].sort((a, b) => a.id - b.id), [repos]);
+  // The Other section excludes exactly the attached set; its identity is stable
+  // per attached-id set so its Load more stays scoped.
+  const excludeIds = useMemo(() => [...attachedIds].sort((a, b) => a - b), [attachedIds]);
+
+  const injectInto = useCallback((key: SectionKey, rows: SectionInjection['rows']) => {
+    if (rows.length === 0) return;
+    setInjections((prev) => {
+      const id = String(key);
+      const seq = (prev[id]?.seq ?? 0) + 1;
+      return { ...prev, [id]: { seq, rows } };
+    });
+  }, []);
+
+  // A settled scan's queued imports materialize into their repo's section (story
+  // 22, now source-scoped): the report names the repo, so they route to its
+  // section and settle there — never Other. Stamped with this page's project so
+  // the row's project chip reads correctly (B1).
+  const handleScanSettled = useCallback(
+    (repo: TrackedRepo) => {
+      const rows = reportImportingRows(repo.last_scan_report, project);
+      // The scanning repo is attached (it lives in this panel), so this resolves to
+      // its own section; the resolve is the defensive guard for a just-removed repo.
+      injectInto(resolveSectionKey(repo.id, attachedIds), rows);
     },
-    [setItems, setMeta],
+    [project, attachedIds, injectInto],
   );
 
-  const handleAssigned = useCallback(
+  // A hand/paste import from the box: no tracked repo, so it lands under Other
+  // (resolveSectionKey maps a null repo id there) and settles live in place.
+  const handleImported = useCallback(
     (doc: Document) => {
-      const stays = (doc.project?.id ?? null) === projectId;
-      if (stays) {
-        setItems((prev) =>
-          prev.map((item) => (item.id === doc.id ? { ...item, project: doc.project ?? null } : item)),
-        );
-      } else {
-        // Moved to another project (or Unfiled): it no longer belongs on this
-        // page — drop the row and decrement the count.
-        setItems((prev) => prev.filter((item) => item.id !== doc.id));
-        setMeta((prev) => (prev ? { ...prev, total: Math.max(0, prev.total - 1) } : prev));
-      }
+      injectInto(resolveSectionKey(doc.tracked_repo_id, attachedIds), [toListItem(doc)]);
     },
-    [projectId, setItems, setMeta],
+    [attachedIds, injectInto],
   );
+
+  const hasRepos = orderedRepos.length > 0;
 
   return (
     <>
       <TrackedRepoPanel
         project={project}
-        initialRepos={initialTrackedRepos}
-        onMaterialize={handleScanMaterialize}
+        repos={repos}
+        setRepos={setRepos}
+        onScanSettled={handleScanSettled}
       />
 
       <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
@@ -111,21 +118,40 @@ export function ProjectDocuments({
         <ImportForm onImported={handleImported} projectId={projectId} />
       </div>
 
-      <DocumentList
-        items={items}
-        total={meta?.total ?? items.length}
-        hasMore={hasMorePages(meta)}
-        loadingMore={loadingMore}
-        onLoadMore={handleLoadMore}
-        degraded={degraded}
-        announcement={announcement}
-        onSettled={handleSettled}
-        onRetried={handleRetried}
+      {/* One section per attached repo: its docs in repo-path order (#118). */}
+      {orderedRepos.map((repo) => (
+        <DocumentSection
+          key={repo.id}
+          projectId={projectId}
+          initialPage={repo.id in initialRepoPages ? initialRepoPages[repo.id] : EMPTY_PAGE}
+          section={{ trackedRepo: repo.id, order: 'path' }}
+          heading={<span className="font-mono">{repoShortName(repo.repo_url)}</span>}
+          headingId={`section-repo-${repo.id}`}
+          emptyTitle="No documents yet from this source"
+          emptyBody="A scan of this repository imports its matching files here."
+          projects={projects}
+          injection={injections[String(repo.id)]}
+          directoryDividers
+        />
+      ))}
+
+      {/* Everything not from an attached repo — newest-first, as it always was.
+          With no repos this IS the whole project list, so it keeps the plain
+          "Documents" heading and the original empty copy. */}
+      <DocumentSection
+        projectId={projectId}
+        initialPage={initialOtherPage}
+        section={excludeIds.length > 0 ? { excludeTrackedRepos: excludeIds } : {}}
+        heading={hasRepos ? 'Other documents' : 'Documents'}
+        headingId={`section-${OTHER_SECTION}`}
+        emptyTitle={hasRepos ? 'No other documents' : 'No documents in this project yet'}
+        emptyBody={
+          hasRepos
+            ? 'Everything in this project came from a tracked repository above.'
+            : 'Import one with the box above, or assign an existing document from its review header or the project chip on any home row.'
+        }
         projects={projects}
-        onAssigned={handleAssigned}
-        heading="Documents"
-        emptyTitle="No documents in this project yet"
-        emptyBody="Import one with the box above, or assign an existing document from its review header or the project chip on any home row."
+        injection={injections[String(OTHER_SECTION)]}
       />
     </>
   );

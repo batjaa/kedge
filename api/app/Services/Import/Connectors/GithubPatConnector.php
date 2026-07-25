@@ -10,13 +10,15 @@ use App\Services\Import\ConnectorRegistry;
 use App\Services\Import\DocumentSource;
 use App\Services\Import\Exceptions\ImportFailedException;
 use App\Services\Import\Exceptions\TokenRevokedException;
+use App\Services\Import\GithubBlobUrl;
 
 /**
  * Imports a GitHub file with a workspace's encrypted personal access token (#23,
  * SPEC §5.1) — the permanent private-repo connector and the self-hoster's primary
  * private-source path (SPEC Rev 3). It reads the same blob URLs as
- * {@see GithubPublicConnector} (all parsing and rate-limit handling is shared in
- * {@see AbstractGithubBlobConnector}) but authenticates, so it reads private repos
+ * {@see GithubPublicConnector} (blob-URL parsing is the shared
+ * {@see GithubBlobUrl}; the fetch and rate-limit handling live
+ * in {@see AbstractGithubBlobConnector}) but authenticates, so it reads private repos
  * — and public ones too, on the higher authenticated rate budget.
  *
  * Selection is workspace-aware, not URL-only: the import flow prefers this reader

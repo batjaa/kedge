@@ -59,7 +59,10 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await expect(page.getByRole('heading', { name: 'Fixture specs' })).toBeVisible();
   const projectUrl = page.url();
 
-  const projectDocuments = page.getByRole('region', { name: 'Documents' });
+  // With the fixture repo tracked, its docs live in their own SOURCE section
+  // (M3.10 #118) headed by the repo's short name; a pasted doc lands under "Other
+  // documents". The region only materializes once the repo is tracked (below).
+  const projectDocuments = page.getByRole('region', { name: GITHUB_FIXTURE.slug });
   const importing = projectDocuments.getByText('Importing');
 
   // Park the per-row poll before any row can materialize.
@@ -101,11 +104,43 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
     await page.evaluate(() => (window as Window & { __noReload?: boolean }).__noReload === true),
   ).toBe(true);
 
-  // The three documents are now live links on the project page (real synthesized
-  // titles, not the importing-row basenames).
-  for (const file of GITHUB_FIXTURE.matched) {
-    await expect(projectDocuments.getByRole('link', { name: file.title })).toBeVisible();
+  // The three documents are now live links in the repo's OWN source section
+  // (real synthesized titles, not the importing-row basenames), and they read in
+  // REPO-PATH ORDER (#118) — `matched` is path-sorted, so the section reflects the
+  // repository's own structure, not import order.
+  const repoDocLinks = projectDocuments.getByRole('link');
+  await expect(repoDocLinks).toHaveCount(GITHUB_FIXTURE.matched.length);
+  for (const [index, file] of GITHUB_FIXTURE.matched.entries()) {
+    await expect(repoDocLinks.nth(index)).toContainText(file.title);
   }
+
+  // …and the path-ordered rows read as DIRECTORY CLUSTERS (M3.10 #119, story 3):
+  // the matched files sort `docs/architecture.md` · `docs/guide/getting-started.md`
+  // · `docs/overview.md`, so the nested file lands BETWEEN the two docs/* files —
+  // a `docs/guide` divider for the nested cluster and `docs` twice (the parent
+  // label legitimately recurs across the nested one; a repeated label is tolerated
+  // by design). The chips render full paths, so the divider labels match exactly.
+  const dividerRows = projectDocuments.locator('li[aria-hidden="true"]');
+  await expect(dividerRows).toHaveCount(3);
+  await expect(dividerRows.filter({ hasText: /^docs\/guide$/ })).toHaveCount(1);
+  await expect(dividerRows.filter({ hasText: /^docs$/ })).toHaveCount(2);
+  // The dividers are decorative to assistive tech (#119, AC b): being aria-hidden,
+  // they never join the accessible list, so it still reports exactly the three
+  // documents — clustering is sight-only sugar, the paths already ride the chips.
+  await expect(projectDocuments.getByRole('listitem')).toHaveCount(GITHUB_FIXTURE.matched.length);
+
+  // 6b. Dogfood the bucketing: a PASTED doc (no tracked repo) lands under "Other
+  //     documents", never in the repo section — visibly grouped by source.
+  const otherDocuments = page.getByRole('region', { name: 'Other documents' });
+  await page.getByRole('tab', { name: 'Paste content', exact: true }).click();
+  await page
+    .getByLabel('Content', { exact: true })
+    .fill('# Loose scratch note\n\nA pasted doc with no repository behind it.');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  // The "pasted" provenance chip appears under Other documents — and NOT in the
+  // repo section, so grouping keeps sources apart.
+  await expect(otherDocuments.getByText('pasted', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(projectDocuments.getByText('pasted', { exact: true })).toHaveCount(0);
 
   // 7. Place a comment on the CHANGED doc, anchored to a sentence that stays
   //    byte-identical across the mutation — the moat: it must survive the re-sync.
@@ -147,4 +182,23 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await page.goto(projectUrl);
   await page.getByRole('button', { name: 'Re-scan', exact: true }).click();
   await expect(page.getByText('Already up to date')).toBeVisible({ timeout: 30_000 });
+
+  // 13. Un-track the repo (two-step inline confirm). Its documents STAY in the
+  //     project — grouping must never hide them (#118): the repo section goes
+  //     away and its docs reflow LIVE into "Other documents" (which, now that no
+  //     repo is attached, is the plain "Documents" list again), still carrying
+  //     their repo-path provenance chip (story 5). No reload — the section
+  //     reconciles its own scope.
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByText('Remove tracking?')).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  // The repo's own section is gone…
+  await expect(page.getByRole('region', { name: GITHUB_FIXTURE.slug })).toHaveCount(0);
+  // …and its documents are still here, reflowed into the (now single) list — never
+  // hidden by the un-track. (Provenance survival on the chip is API-unit-tested.)
+  const reflowed = page.getByRole('region', { name: 'Documents', exact: true });
+  await expect(reflowed.getByRole('link', { name: GITHUB_FIXTURE.changed.title })).toBeVisible({
+    timeout: 30_000,
+  });
 });

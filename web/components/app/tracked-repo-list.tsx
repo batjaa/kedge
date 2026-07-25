@@ -15,6 +15,7 @@ import {
 } from '@/lib/tracked-repo-scan';
 import { importNeedsReconnect } from '@/lib/import-retry';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
+import { repoShortName } from '@/lib/project-sections';
 import { PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles';
 
 // The tracked repos on a project page (SPEC §16, M3.6, stories 10/11/12/14/16/22):
@@ -85,7 +86,7 @@ export function TrackedRepoRow({
     <li className="rounded-xl bg-zinc-50 p-3.5 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/[.02] dark:ring-white/10">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <code className="font-mono text-sm font-medium text-zinc-900 dark:text-white">
-          {repoSlug(repo.repo_url)}
+          {repoShortName(repo.repo_url)}
         </code>
         <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
           {repo.ref ?? report?.ref ?? 'default'} · {repo.path_pattern}
@@ -345,9 +346,4 @@ function ScanPoller({ id, onScanned }: { id: number; onScanned: (repo: TrackedRe
   });
 
   return null;
-}
-
-/** `owner/repo` from a GitHub repo URL, for a compact row heading. */
-function repoSlug(url: string): string {
-  return url.replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/\.git$/i, '');
 }

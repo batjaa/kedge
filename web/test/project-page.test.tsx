@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProjectHeader } from '@/components/app/project-header';
 import { ProjectCreate } from '@/components/app/project-create';
 import type { DocumentListItem, DocumentListPage, Project } from '@/lib/document-types';
+import type { TrackedRepo } from '@/lib/tracked-repo-scan';
 
 // Static-markup coverage for the M3.6 project surfaces: the editable project
 // header, the home's create affordance, and the project page's live island.
@@ -46,7 +47,11 @@ describe('ProjectCreate', () => {
 describe('ProjectDocuments', () => {
   it('renders the project import box and the filtered document rows', () => {
     const html = renderToStaticMarkup(
-      <ProjectDocuments project={{ id: 10, name: 'Anchoring' }} initialPage={page()} projects={[project({})]} />,
+      <ProjectDocuments
+        project={{ id: 10, name: 'Anchoring' }}
+        initialOtherPage={page()}
+        projects={[project({})]}
+      />,
     );
 
     expect(html).toContain('Import into this project');
@@ -54,11 +59,18 @@ describe('ProjectDocuments', () => {
     expect(html).toContain('href="/documents/5"');
     // Flat (single project): no group header linking back to the project page.
     expect(html).not.toContain('href="/projects/10"');
+    // With no tracked repos the whole list keeps the plain "Documents" heading.
+    expect(html).toContain('Documents');
+    expect(html).not.toContain('Other documents');
   });
 
   it('shows the empty state pointing at import and assignment', () => {
     const html = renderToStaticMarkup(
-      <ProjectDocuments project={{ id: 10, name: 'Anchoring' }} initialPage={emptyPage()} projects={[project({})]} />,
+      <ProjectDocuments
+        project={{ id: 10, name: 'Anchoring' }}
+        initialOtherPage={emptyPage()}
+        projects={[project({})]}
+      />,
     );
 
     expect(html).toContain('No documents in this project yet');
@@ -67,12 +79,51 @@ describe('ProjectDocuments', () => {
 
   it('degrades the list area alone when the project read was unreachable', () => {
     const html = renderToStaticMarkup(
-      <ProjectDocuments project={{ id: 10, name: 'Anchoring' }} initialPage={null} projects={[project({})]} />,
+      <ProjectDocuments
+        project={{ id: 10, name: 'Anchoring' }}
+        initialOtherPage={null}
+        projects={[project({})]}
+      />,
     );
 
     // The import box still renders; only the list area falls back (3A).
     expect(html).toContain('Import into this project');
     expect(html).toContain('unreachable');
+  });
+
+  it('renders a repo section headed by its short name, with the Other-documents section beside it', () => {
+    const html = renderToStaticMarkup(
+      <ProjectDocuments
+        project={{ id: 10, name: 'Anchoring' }}
+        projects={[project({})]}
+        initialTrackedRepos={[repo()]}
+        initialRepoPages={{ 7: repoPage() }}
+        initialOtherPage={emptyPage()}
+      />,
+    );
+
+    // The repo section header is the repo's owner/repo short name.
+    expect(html).toContain('kedgehq/kedge');
+    // Its path-ordered doc renders under it.
+    expect(html).toContain('href="/documents/8"');
+    // With a repo attached, the leftover bucket is explicitly "Other documents".
+    expect(html).toContain('Other documents');
+  });
+
+  it('shows the empty-source state for a repo section with no documents yet', () => {
+    const html = renderToStaticMarkup(
+      <ProjectDocuments
+        project={{ id: 10, name: 'Anchoring' }}
+        projects={[project({})]}
+        initialTrackedRepos={[repo()]}
+        initialRepoPages={{ 7: emptyPage() }}
+        initialOtherPage={emptyPage()}
+      />,
+    );
+
+    // The header stays; the body explains the source is empty (not degraded).
+    expect(html).toContain('kedgehq/kedge');
+    expect(html).toContain('No documents yet from this source');
   });
 });
 
@@ -112,6 +163,39 @@ function row(): DocumentListItem {
     open_threads_count: 0,
     synced_at: null,
     project: { id: 10, name: 'Anchoring' },
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     created_at: null,
+  };
+}
+
+function repo(): TrackedRepo {
+  return {
+    id: 7,
+    project_id: 10,
+    repo_url: 'https://github.com/kedgehq/kedge',
+    ref: 'main',
+    path_pattern: 'docs/**/*.md',
+    last_scan_status: 'ok',
+    scan_error: null,
+    last_scanned_at: null,
+    last_scan_report: null,
+    created_at: null,
+  };
+}
+
+/** A repo section's page: one repo-sourced, path-ordered document. */
+function repoPage(): DocumentListPage {
+  return {
+    data: [
+      {
+        ...row(),
+        id: 8,
+        title: 'Repo doc',
+        source: { kind: 'repo', path: 'docs/overview.md' },
+        tracked_repo_id: 7,
+      },
+    ],
+    meta: { current_page: 1, last_page: 1, per_page: 20, total: 1 },
   };
 }

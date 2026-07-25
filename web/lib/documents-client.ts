@@ -5,7 +5,13 @@
 
 import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
-import type { Document, DocumentListPage, LifecycleStatus } from './document-types';
+import { applySectionQuery } from './document-list-live';
+import type {
+  Document,
+  DocumentListPage,
+  DocumentSectionQuery,
+  LifecycleStatus,
+} from './document-types';
 import type { ValidationErrorBody } from './auth-types';
 
 export type ImportOutcome =
@@ -138,11 +144,14 @@ export async function readDocumentPage(
   page: number,
   project?: string | number,
   lifecycle?: string,
+  section?: DocumentSectionQuery,
 ): Promise<DocumentListPage | null> {
   try {
     const query = new URLSearchParams({ page: String(page) });
     if (project !== undefined && project !== '') query.set('project', String(project));
     if (lifecycle !== undefined && lifecycle !== '') query.set('lifecycle', lifecycle);
+    // A project page's repo section / Other-documents controls (#118).
+    applySectionQuery(query, section);
 
     const res = await fetch(`/api/bff/documents?${query.toString()}`, {
       credentials: 'same-origin',

@@ -401,6 +401,129 @@ describe('DocumentList', () => {
     expect(html).not.toContain('href="/projects/10"');
   });
 
+  // ---- M3.10: the provenance chip on the row (#117, SPEC §11) ---------------
+
+  it('carries the provenance chip on every home row, independent of projects', () => {
+    // A workspace with NO projects (so no project chip) still shows provenance —
+    // the source chip is not gated on projects (#117: "appears everywhere").
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({ id: 1, title: 'Repo doc', source: { kind: 'repo', path: 'docs/rfcs/017-anchoring.md' } }),
+          item({ id: 2, title: 'Pasted note', source: { kind: 'upload' } }),
+        ]}
+        total={2}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={[]}
+        grouped
+      />,
+    );
+
+    // The repo doc's path chip (full value on hover) and the pasted label both
+    // land in the rows, and each is announced with its "Source:" context.
+    expect(html).toContain('title="docs/rfcs/017-anchoring.md"');
+    expect(html).toContain('docs/rfcs/017-anchoring.md');
+    expect(html).toContain('pasted');
+    expect(html).toContain('Source:');
+    // No project chip on a project-less workspace, but provenance still shows.
+    expect(html).not.toContain('aria-label="Project for');
+  });
+
+  it('shows the provenance chip on a project page row too (shared row anatomy)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({
+            id: 1,
+            title: 'Standalone import',
+            source: { kind: 'github', repo: 'kedgehq/kedge', path: 'docs/spec.md' },
+            project: { id: 10, name: 'Anchoring' },
+          }),
+        ]}
+        total={1}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={projects()}
+        heading="Documents"
+      />,
+    );
+
+    // owner/repo · path, with the full value on hover.
+    expect(html).toContain('kedgehq/kedge · docs/spec.md');
+    expect(html).toContain('title="kedgehq/kedge · docs/spec.md"');
+  });
+
+  // ---- M3.10: directory dividers in a repo section (#119, story 3) ----------
+
+  it('interleaves a directory divider where the directory changes in a repo section', () => {
+    // Path-ordered repo rows (the shape a repo section serves): the nested
+    // getting-started sorts between two docs/* files, so `docs` legitimately
+    // recurs — the section labels each cluster.
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({ id: 1, title: 'Architecture', source: { kind: 'repo', path: 'docs/architecture.md' } }),
+          item({ id: 2, title: 'Getting started', source: { kind: 'repo', path: 'docs/guide/getting-started.md' } }),
+          item({ id: 3, title: 'Overview', source: { kind: 'repo', path: 'docs/overview.md' } }),
+        ]}
+        total={3}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={[]}
+        heading="kedgehq/fixture"
+        directoryDividers
+      />,
+    );
+
+    // A divider is an aria-hidden <li> (decorative to AT — the directory is
+    // already on each row's provenance chip); there are three clusters here
+    // (docs, docs/guide, docs), so three such rows.
+    expect(html.match(/<li aria-hidden="true"/g)?.length).toBe(3);
+    // Each carries its dirname in the muted mono style (exact text — the chip
+    // renders the FULL path, so `>docs</span>` and `>docs/guide</span>` are the
+    // divider labels alone).
+    expect(html).toContain('>docs</span>');
+    expect(html).toContain('>docs/guide</span>');
+    expect(html).toContain('font-mono');
+
+    // Presentation only: dividers add no links and no buttons — the three doc
+    // titles are still the only navigable rows.
+    expect(html.match(/href="\/documents\//g)?.length).toBe(3);
+    expect(html).not.toContain('<button');
+  });
+
+  it('draws no dividers without directoryDividers (Other documents / home stay flat)', () => {
+    // The very same repo-kind rows, but the section did not opt in: no divider
+    // <li> appears — only repo sections cluster.
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[
+          item({ id: 1, title: 'Architecture', source: { kind: 'repo', path: 'docs/architecture.md' } }),
+          item({ id: 2, title: 'Overview', source: { kind: 'repo', path: 'docs/overview.md' } }),
+        ]}
+        total={2}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+        projects={[]}
+        heading="Other documents"
+      />,
+    );
+
+    expect(html).not.toContain('<li aria-hidden="true"');
+    // The rows themselves are untouched.
+    expect(html).toContain('href="/documents/1"');
+    expect(html).toContain('href="/documents/2"');
+  });
+
   // ---- M3.7: the lifecycle filter chips (#103, decisions 5A/7A/A1) ----------
 
   it('renders the lifecycle chips with counts from the summary and marks the active one', () => {
@@ -578,6 +701,8 @@ function item(overrides: Partial<DocumentListItem> & { id: number }): DocumentLi
     open_threads_count: 0,
     synced_at: null,
     project: null,
+    source: { kind: 'upload' },
+    tracked_repo_id: null,
     created_at: null,
     ...overrides,
   };
