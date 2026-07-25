@@ -2,37 +2,30 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { signIn, signUp, type AuthOutcome } from '@/lib/auth-client';
 import { signupEmailHandoffKey } from '@/lib/shared';
 
 type Mode = 'signin' | 'signup';
 
-const COPY = {
-  signin: {
-    title: 'Sign in',
-    subtitle: 'Welcome back. Pick up your reviews where you left off.',
-    submit: 'Sign in',
-    altPrompt: 'New to Kedge?',
-    altLabel: 'Create an account',
-    altHref: '/signup',
-  },
-  signup: {
-    title: 'Create your account',
-    subtitle: 'Start reviewing specs with comments that keep their place.',
-    submit: 'Create account',
-    altPrompt: 'Already have an account?',
-    altLabel: 'Sign in',
-    altHref: '/signin',
-  },
-} as const;
-
-// Friendly copy for the reasons the API bounces an OAuth attempt back here.
-const OAUTH_ERRORS: Record<string, string> = {
-  github_failed: "GitHub sign-in didn't complete. Please try again.",
-  github_no_verified_email:
-    'Your GitHub account has no verified email. Verify one on GitHub, or sign in with a password.',
+// All visible copy lives in the `auth` catalog (M3.9 #124), keyed by mode
+// (auth.signin.* / auth.signup.*); only the cross-link targets stay in code.
+const ALT_HREF: Record<Mode, string> = {
+  signin: '/signup',
+  signup: '/signin',
 };
+
+// The OAuth bounce reasons with dedicated catalog copy (auth.oauthErrors.*).
+// An unknown code degrades to the generic github_failed message.
+const KNOWN_OAUTH_ERRORS = ['github_failed', 'github_no_verified_email'] as const;
+type KnownOauthError = (typeof KNOWN_OAUTH_ERRORS)[number];
+
+function knownOauthError(code: string): KnownOauthError {
+  return (KNOWN_OAUTH_ERRORS as readonly string[]).includes(code)
+    ? (code as KnownOauthError)
+    : 'github_failed';
+}
 
 // Only allow same-origin, non-protocol-relative return paths (no open redirects).
 function safeNext(next: string | undefined): string {
@@ -60,10 +53,10 @@ export function AuthForm({
   oauthError?: string;
 }) {
   const router = useRouter();
-  const copy = COPY[mode];
+  const t = useTranslations('auth');
   const next = safeNext(redirectTo);
   const oauthMessage = oauthError
-    ? (OAUTH_ERRORS[oauthError] ?? OAUTH_ERRORS.github_failed)
+    ? t(`oauthErrors.${knownOauthError(oauthError)}`)
     : null;
 
   const [name, setName] = useState('');
@@ -119,12 +112,19 @@ export function AuthForm({
       return;
     }
 
+    // outcome.message is API prose when the response carried one (passed through
+    // untranslated per SPEC m3.9); otherwise fall back to catalog copy by kind.
     if (outcome.kind === 'validation') {
       setFieldErrors(outcome.errors);
       // Surface a top-level message only when it isn't already pinned to a field.
-      if (Object.keys(outcome.errors).length === 0) setFormError(outcome.message);
+      if (Object.keys(outcome.errors).length === 0) {
+        setFormError(outcome.message ?? t('errors.validation'));
+      }
     } else {
-      setFormError(outcome.message);
+      setFormError(
+        outcome.message ??
+          t(outcome.kind === 'rate-limited' ? 'errors.rateLimited' : 'errors.server'),
+      );
     }
     setPending(false);
   }
@@ -132,16 +132,16 @@ export function AuthForm({
   return (
     <div className="w-full max-w-sm">
       <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
-        {copy.title}
+        {t(`${mode}.title`)}
       </h1>
       <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        {copy.subtitle}
+        {t(`${mode}.subtitle`)}
       </p>
 
       <div className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-7">
         {expired ? (
           <p className="mb-5 rounded-xl bg-amber-400/10 px-3.5 py-2.5 text-sm text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300">
-            Your session expired. Please sign in again.
+            {t('sessionExpired')}
           </p>
         ) : null}
 
@@ -161,11 +161,11 @@ export function AuthForm({
               className="flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 px-3.5 py-2 text-sm font-medium text-zinc-900 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:hover:bg-white/10"
             >
               <GitHubMark />
-              Continue with GitHub
+              {t('continueWithGithub')}
             </a>
             <div className="my-5 flex items-center gap-3" aria-hidden="true">
               <div className="h-px flex-1 bg-zinc-900/10 dark:bg-white/10" />
-              <span className="text-xs text-zinc-400 dark:text-zinc-500">or</span>
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('or')}</span>
               <div className="h-px flex-1 bg-zinc-900/10 dark:bg-white/10" />
             </div>
           </>
@@ -184,7 +184,7 @@ export function AuthForm({
           {mode === 'signup' ? (
             <Field
               id="name"
-              label="Name"
+              label={t('fields.name')}
               type="text"
               autoComplete="name"
               value={name}
@@ -198,7 +198,7 @@ export function AuthForm({
 
           <Field
             id="email"
-            label="Email"
+            label={t('fields.email')}
             type="email"
             autoComplete="email"
             value={email}
@@ -211,7 +211,7 @@ export function AuthForm({
 
           <Field
             id="password"
-            label="Password"
+            label={t('fields.password')}
             type="password"
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             value={password}
@@ -227,18 +227,18 @@ export function AuthForm({
             disabled={pending}
             className="w-full rounded-full bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
           >
-            {pending ? 'Working…' : copy.submit}
+            {pending ? t('working') : t(`${mode}.submit`)}
           </button>
         </form>
       </div>
 
       <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
-        {copy.altPrompt}{' '}
+        {t(`${mode}.altPrompt`)}{' '}
         <Link
-          href={withNext(copy.altHref, next)}
+          href={withNext(ALT_HREF[mode], next)}
           className="font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
         >
-          {copy.altLabel}
+          {t(`${mode}.altLabel`)}
         </Link>
       </p>
     </div>

@@ -8,11 +8,14 @@ import { publicApiBaseUrl } from './config';
 import { ensureCsrfCookie, refreshCsrfCookie, xsrfHeader } from './csrf-client';
 import type { Session, ValidationErrorBody } from './auth-types';
 
+// Failure messages are API prose when the response body provides one (passed
+// through untranslated, SPEC m3.9 scope) and null otherwise — the consuming
+// component supplies the localized fallback from its catalog (#124).
 export type AuthOutcome =
   | { ok: true; session: Session }
-  | { ok: false; kind: 'validation'; message: string; errors: Record<string, string[]> }
-  | { ok: false; kind: 'rate-limited'; message: string }
-  | { ok: false; kind: 'error'; message: string };
+  | { ok: false; kind: 'validation'; message: string | null; errors: Record<string, string[]> }
+  | { ok: false; kind: 'rate-limited'; message: string | null }
+  | { ok: false; kind: 'error'; message: string | null };
 
 function post(path: string, body?: Record<string, unknown>): Promise<Response> {
   return fetch(`${publicApiBaseUrl}${path}`, {
@@ -49,24 +52,16 @@ async function mutate(
     return {
       ok: false,
       kind: 'validation',
-      message: data?.message ?? 'Please check the form and try again.',
+      message: data?.message ?? null,
       errors: data?.errors ?? {},
     };
   }
 
   if (res.status === 429) {
-    return {
-      ok: false,
-      kind: 'rate-limited',
-      message: 'Too many attempts. Wait a minute, then try again.',
-    };
+    return { ok: false, kind: 'rate-limited', message: null };
   }
 
-  return {
-    ok: false,
-    kind: 'error',
-    message: 'Something went wrong reaching the server. Please try again.',
-  };
+  return { ok: false, kind: 'error', message: null };
 }
 
 export function signIn(email: string, password: string): Promise<AuthOutcome> {
