@@ -46,6 +46,16 @@
   font-family: var(--font-display);
 }
 
+/* mn-MN display font (M3.9 eng-review 12A). Space Grotesk has no Cyrillic, so for
+   Mongolian the display token resolves to the system stack WHOLESALE — headings go
+   consistent, never per-glyph ransom-note fallback. This is the single override the
+   token was built locale-conditional for (see the @theme comment above). `html lang`
+   is set from the negotiated locale in app/layout.tsx. Revisit when Space Grotesk
+   ships Cyrillic upstream. */
+html[lang='mn-MN'] {
+  --font-display: var(--font-sans);
+}
+
 :root {
   --color-fd-background: #fafaf9; /* stone-50 (Open Harbor page) */
   --color-fd-foreground: #27272a; /* zinc-800 */

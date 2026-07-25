@@ -1,6 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 // Header theme toggle (DESIGN.md: "Theme toggle in the header"). Uses the
@@ -9,6 +10,7 @@ import { useEffect, useState } from 'react';
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const t = useTranslations('app-shell');
 
   // Theme is only known after hydration; render a stable placeholder until then.
   useEffect(() => setMounted(true), []);
@@ -18,7 +20,7 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      aria-label="Toggle theme"
+      aria-label={t('theme.toggle')}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:ring-white/10 dark:hover:bg-white/5"
     >
