@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Info } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { Document, DocumentVersion } from '@/lib/document-types';
 import { versionLabel } from '@/lib/version-label';
 
@@ -48,6 +49,8 @@ export function DocumentNewVersionBanner({
 }: {
   notice: NewerVersionNotice | null;
 }) {
+  const t = useTranslations('review');
+
   if (!notice) return null;
 
   return (
@@ -56,14 +59,18 @@ export function DocumentNewVersionBanner({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Info className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
           <p className="min-w-0 flex-1">
-            You&apos;re viewing an older version. Latest is{' '}
-            <span className="font-mono text-[11px] font-semibold uppercase">{notice.label}</span>.
+            {t.rich('newVersion.notice', {
+              label: notice.label,
+              b: (chunks) => (
+                <span className="font-mono text-[11px] font-semibold uppercase">{chunks}</span>
+              ),
+            })}
           </p>
           <Link
             href={notice.href}
             className="inline-flex rounded-full bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
           >
-            View latest
+            {t('newVersion.viewLatest')}
           </Link>
         </div>
       </div>

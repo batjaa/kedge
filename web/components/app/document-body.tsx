@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { renderMarkdown } from '@/lib/render-markdown';
 import { renderMdx } from '@/lib/mdx';
 import type { DocumentFormat } from '@/lib/document-types';
@@ -50,18 +51,22 @@ export async function DocumentBody({
 /**
  * Author-visible degradation notice (SPEC §6.1). Amber = the DESIGN.md
  * pending/suggestion status hue; this is a graceful degradation, not an error.
+ * Chrome only (M3.9 #126): the notice localizes; the document body it wraps
+ * never does. Async so the string comes from the request locale's catalog.
  */
-function MdxFallbackBanner() {
+async function MdxFallbackBanner() {
+  const t = await getTranslations('review');
+
   return (
     <div
       role="status"
       className="not-prose mb-6 flex items-start gap-3 rounded-2xl bg-amber-50/50 p-4 ring-1 ring-inset ring-amber-500/25 dark:bg-amber-500/5"
     >
       <span className="mt-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-        MDX
+        {t('body.mdxBadge')}
       </span>
       <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-        This document&apos;s MDX failed to compile; showing plain markdown.
+        {t('body.mdxFallback')}
       </p>
     </div>
   );

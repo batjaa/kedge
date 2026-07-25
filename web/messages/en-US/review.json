@@ -1,0 +1,55 @@
+{
+  "header": {
+    "synced": "synced {when}",
+    "openCount": "{count, number} open"
+  },
+  "sidebar": {
+    "hide": "Hide contents and threads",
+    "show": "Show contents and threads",
+    "document": "Document",
+    "tocLabel": "Document table of contents",
+    "noHeadings": "No headings",
+    "threads": "Threads",
+    "noThreads": "No threads",
+    "orphanedThreads": "Orphaned threads",
+    "documentThread": "Document thread",
+    "inlineThread": "Inline thread",
+    "navStatus": {
+      "agent": "agent",
+      "suggestion": "sugg",
+      "resolved": "done",
+      "open": "open"
+    }
+  },
+  "surface": {
+    "projectLabel": "Project",
+    "unfiled": "Unfiled",
+    "lifecycleLabel": "Lifecycle status",
+    "saving": "Saving...",
+    "revoke": "Revoke",
+    "approve": "Approve",
+    "resyncing": "Re-syncing...",
+    "resync": "Re-sync",
+    "showRail": "Show thread rail",
+    "hideRail": "Hide thread rail",
+    "openThreadsCount": "{count, plural, one {# open thread} other {# open threads}}",
+    "orphanedThreadsCount": "{count, plural, one {# orphaned thread} other {# orphaned threads}}",
+    "captureFailed": "Could not capture that selection. Re-attach by selecting document text.",
+    "suggestionUnchanged": "Edit the text to suggest a change.",
+    "reattachPrompt": "Select replacement text in the document to re-attach this thread.",
+    "resyncError": "Something went wrong starting the request. Please try again."
+  },
+  "versions": {
+    "navLabel": "Document versions",
+    "latest": "(latest)",
+    "compare": "Compare"
+  },
+  "newVersion": {
+    "notice": "You're viewing an older version. Latest is <b>{label}</b>.",
+    "viewLatest": "View latest"
+  },
+  "body": {
+    "mdxBadge": "MDX",
+    "mdxFallback": "This document's MDX failed to compile; showing plain markdown."
+  }
+}

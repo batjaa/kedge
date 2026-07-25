@@ -11,6 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import {
   DocumentNewVersionBanner,
@@ -139,6 +140,8 @@ export function DocumentReviewSurface({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const t = useTranslations('review');
+  const tChips = useTranslations('chips');
   const rootRef = useRef<HTMLDivElement | null>(null);
   const headingPositionsRef = useRef<HeadingPosition[]>([]);
   const [threads, setThreads] = useState<ReviewThread[]>([]);
@@ -490,7 +493,7 @@ export function DocumentReviewSurface({
         setReattachStatus({
           threadId: pendingReattachThreadId,
           tone: 'error',
-          message: 'Could not capture that selection. Re-attach by selecting document text.',
+          message: t('surface.captureFailed'),
         });
         return;
       }
@@ -537,7 +540,7 @@ export function DocumentReviewSurface({
       anchorExact: composer.anchor?.exact,
     });
     if (validity.submitDisabled) {
-      if (validity.suggestionUnchanged) setMessage('Edit the text to suggest a change.');
+      if (validity.suggestionUnchanged) setMessage(t('surface.suggestionUnchanged'));
 
       return;
     }
@@ -714,7 +717,7 @@ export function DocumentReviewSurface({
 
       await refreshSurfaceAfterResync(refreshLoadedThreads, () => router.refresh());
     } catch {
-      setResyncError('Something went wrong starting the request. Please try again.');
+      setResyncError(t('surface.resyncError'));
     } finally {
       setResyncPending(false);
     }
@@ -805,13 +808,13 @@ export function DocumentReviewSurface({
   // stays hidden until the workspace has at least one project.
   const projectControl = canUpdateLifecycle && projects.length > 0 ? (
     <select
-      aria-label="Project"
+      aria-label={t('surface.projectLabel')}
       value={projectValue === null ? '' : String(projectValue)}
       disabled={projectPending}
       onChange={(event) => void changeProject(event.target.value === '' ? null : Number(event.target.value))}
       className="h-8 max-w-[12rem] truncate rounded-full bg-zinc-100 px-3 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
     >
-      <option value="">Unfiled</option>
+      <option value="">{t('surface.unfiled')}</option>
       {projects.map((project) => (
         <option key={project.id} value={project.id}>
           {project.name}
@@ -822,7 +825,7 @@ export function DocumentReviewSurface({
 
   const lifecycleControl = canUpdateLifecycle && lifecycleValue ? (
     <select
-      aria-label="Lifecycle status"
+      aria-label={t('surface.lifecycleLabel')}
       value={lifecycleValue}
       disabled={lifecyclePending}
       onChange={(event) => void changeLifecycle(event.target.value as LifecycleStatus)}
@@ -830,7 +833,7 @@ export function DocumentReviewSurface({
     >
       {LIFECYCLE_OPTIONS.map((status) => (
         <option key={status} value={status}>
-          {status.replace('_', ' ')}
+          {tChips(`lifecycle.${status}`)}
         </option>
       ))}
     </select>
@@ -853,7 +856,7 @@ export function DocumentReviewSurface({
       ) : (
         <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
       )}
-      {approvalPending ? 'Saving...' : currentUserApproval ? 'Revoke' : 'Approve'}
+      {approvalPending ? t('surface.saving') : currentUserApproval ? t('surface.revoke') : t('surface.approve')}
     </button>
   ) : null;
 
@@ -865,7 +868,7 @@ export function DocumentReviewSurface({
       className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
     >
       <RefreshCw className={cn('h-4 w-4', resyncPending ? 'animate-spin' : '')} aria-hidden="true" />
-      {resyncPending ? 'Re-syncing...' : 'Re-sync'}
+      {resyncPending ? t('surface.resyncing') : t('surface.resync')}
     </button>
   ) : null;
 
@@ -939,7 +942,7 @@ export function DocumentReviewSurface({
           {sidebarCollapsed ? (
             <div className="sticky top-32 flex justify-center py-8">
               <ColumnToggleButton
-                label="Show contents and threads"
+                label={t('sidebar.show')}
                 onClick={() => setSidebarCollapsed(false)}
               >
                 <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -999,7 +1002,7 @@ export function DocumentReviewSurface({
                   setReattachStatus({
                     threadId: thread.id,
                     tone: 'info',
-                    message: 'Select replacement text in the document to re-attach this thread.',
+                    message: t('surface.reattachPrompt'),
                   });
                   setComposer({ open: false });
                   setActiveThreadId(thread.id);
@@ -1022,7 +1025,7 @@ export function DocumentReviewSurface({
         <div className="hidden w-12 shrink-0 xl:block">
           <div className="sticky top-32 flex flex-col items-center gap-2 py-8">
             <ColumnToggleButton
-              label={railCollapsed ? 'Show thread rail' : 'Hide thread rail'}
+              label={railCollapsed ? t('surface.showRail') : t('surface.hideRail')}
               onClick={() => setRailCollapsed(!railCollapsed)}
             >
               {railCollapsed ? (
@@ -1033,7 +1036,7 @@ export function DocumentReviewSurface({
             </ColumnToggleButton>
             {railCollapsed && threads.length > 0 ? (
               <span
-                title={`${openThreadCount} open ${openThreadCount === 1 ? 'thread' : 'threads'}`}
+                title={t('surface.openThreadsCount', { count: openThreadCount })}
                 className="rounded-full bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
               >
                 {openThreadCount}
@@ -1041,7 +1044,7 @@ export function DocumentReviewSurface({
             ) : null}
             {railCollapsed && orphanedThreadCount > 0 ? (
               <span
-                title={`${orphanedThreadCount} orphaned ${orphanedThreadCount === 1 ? 'thread' : 'threads'}`}
+                title={t('surface.orphanedThreadsCount', { count: orphanedThreadCount })}
                 className="h-2 w-2 rounded-full bg-rose-500"
               />
             ) : null}
@@ -1057,7 +1060,7 @@ export function DocumentReviewSurface({
             className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xl ring-1 ring-white/10 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
           >
             <MessageSquare className="h-4 w-4" aria-hidden="true" />
-            {openThreadCount} open {openThreadCount === 1 ? 'thread' : 'threads'}
+            {t('surface.openThreadsCount', { count: openThreadCount })}
           </button>
         </div>
       ) : null}
