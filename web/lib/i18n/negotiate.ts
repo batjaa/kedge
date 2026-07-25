@@ -25,6 +25,11 @@ interface NegotiationInput {
   acceptLanguage?: string | null;
 }
 
+// RFC 7231 qvalue: 0-1 with up to three decimals. A weight outside this grammar
+// (e.g. q=2, q=abc) is malformed, so we drop the tag rather than trust it —
+// never silently promote it to the default weight of 1.
+const QVALUE = /^(?:0(?:\.\d{1,3})?|1(?:\.0{1,3})?)$/;
+
 /** Parse an Accept-Language header into language tags, best-preference first. */
 function rankedTags(header: string | null | undefined): string[] {
   if (!header) return [];
@@ -34,10 +39,14 @@ function rankedTags(header: string | null | undefined): string[] {
       const [tag, ...params] = part.trim().split(';');
       let q = 1;
       for (const param of params) {
-        const match = /^q=(\d(?:\.\d+)?)$/.exec(param.trim());
-        if (match) q = Number.parseFloat(match[1]);
+        const trimmed = param.trim();
+        if (/^q=/i.test(trimmed)) {
+          const raw = trimmed.slice(2).trim();
+          // A present-but-invalid weight means "ignore this tag" (q=0), not 1.
+          q = QVALUE.test(raw) ? Number.parseFloat(raw) : 0;
+        }
       }
-      return { tag: tag.trim(), q: Number.isFinite(q) ? q : 0 };
+      return { tag: tag.trim(), q };
     })
     .filter((entry) => entry.tag !== '' && entry.tag !== '*' && entry.q > 0)
     // Stable sort (V8): equal q-values keep header order, so a client's own

@@ -53,6 +53,22 @@ describe('negotiateLocale', () => {
     ).toBe('mn-MN');
   });
 
+  it('ignores out-of-range and malformed q-values (RFC 7231), never promoting them to 1', () => {
+    // q=2 is invalid (max 1), so German is dropped and Spanish (valid 0.9) wins —
+    // NOT German by a bogus weight of 2.
+    expect(
+      negotiateLocale({ acceptLanguage: 'de;q=2, es;q=0.9' }),
+    ).toBe('es-US');
+    // A malformed weight is ignored, not silently treated as the default 1.
+    expect(
+      negotiateLocale({ acceptLanguage: 'de;q=abc, es;q=0.5' }),
+    ).toBe('es-US');
+    // Case-insensitive q parameter; a valid weight still counts.
+    expect(negotiateLocale({ acceptLanguage: 'de;Q=0.8' })).toBe('de-DE');
+    // Every tag carrying an invalid weight → nothing usable → en-US default.
+    expect(negotiateLocale({ acceptLanguage: 'de;q=2, es;q=5' })).toBe('en-US');
+  });
+
   it('defaults to en-US with no signals at all', () => {
     expect(negotiateLocale({})).toBe('en-US');
     expect(negotiateLocale({ cookie: '', acceptLanguage: '' })).toBe('en-US');

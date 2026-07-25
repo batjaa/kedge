@@ -80,7 +80,8 @@ test.describe('i18n', () => {
   }) => {
     // The switcher's server action sets exactly this cookie; an anonymous visitor
     // (no session) must have it honored the same way a signed-in one does — locale
-    // is a cookie, not a session detail. /docs is public and API-free.
+    // is a cookie, not a session detail. The SaaS landing (anonymous root) is a
+    // localized surface, so its html lang tracks the cookie.
     await page.context().addCookies([
       {
         name: 'NEXT_LOCALE',
@@ -91,10 +92,32 @@ test.describe('i18n', () => {
       },
     ]);
 
-    await page.goto('/docs');
+    await page.goto('/');
+    await expect(
+      page.getByRole('heading', { name: /Paste a link\./, level: 1 }),
+    ).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE');
 
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE');
+  });
+
+  test('the /docs dogfood shell stays English regardless of the locale cookie', async ({
+    page,
+  }) => {
+    // SPEC m3.9 Out of Scope: the /docs shell is Kedge's own English content and
+    // is NOT localized — a non-English cookie must not relabel it or swap its font.
+    await page.context().addCookies([
+      {
+        name: 'NEXT_LOCALE',
+        value: 'mn-MN',
+        url: 'http://localhost:3000',
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ]);
+
+    await page.goto('/docs');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-US');
   });
 });
