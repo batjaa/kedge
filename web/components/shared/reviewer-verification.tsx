@@ -16,6 +16,21 @@ import type { VerifyReturnState } from '@/lib/reviewer-verification-status';
 // messages the API provided are shown as-is (untranslated pass-through, SPEC
 // m3.9); when the lib reports a kind/status without prose, the localized
 // fallback below applies.
+//
+// State holds a semantic notice — a catalog KEY or raw API prose — never a
+// translated string: the guest switcher's router.refresh() preserves client
+// state, so a pre-rendered translation would survive a locale switch and leave
+// mixed-language chrome. Translation happens at render time instead.
+
+type Notice =
+  | { kind: 'api'; text: string }
+  | { kind: 'catalog'; key: string };
+
+function noticeFrom(apiMessage: string | null, catalogKey: string): Notice {
+  return apiMessage !== null
+    ? { kind: 'api', text: apiMessage }
+    : { kind: 'catalog', key: catalogKey };
+}
 
 const REQUEST_ERROR_KEYS: Record<
   Extract<MagicLinkRequestOutcome, { ok: false }>['kind'],
@@ -59,8 +74,8 @@ export function ReviewerVerification({
   const [state, setState] = useState<'idle' | 'completing' | 'sending' | 'sent' | 'failed'>(
     completionToken ? 'completing' : 'idle',
   );
-  const [message, setMessage] = useState<string | null>(
-    returnState ? t(`verify.returnState.${returnState}`) : null,
+  const [notice, setNotice] = useState<Notice | null>(
+    returnState ? { kind: 'catalog', key: `verify.returnState.${returnState}` } : null,
   );
 
   useEffect(() => {
@@ -69,7 +84,7 @@ export function ReviewerVerification({
 
     async function complete() {
       setState('completing');
-      setMessage(t('verify.verifyingEmail'));
+      setNotice({ kind: 'catalog', key: 'verify.verifyingEmail' });
       const outcome = await completeReviewerMagicLink(token, completionToken!);
 
       if (outcome.ok) {
@@ -79,11 +94,11 @@ export function ReviewerVerification({
       }
 
       setState('failed');
-      setMessage(outcome.message ?? t(completionErrorKey(outcome.status)));
+      setNotice(noticeFrom(outcome.message, completionErrorKey(outcome.status)));
     }
 
     void complete();
-  }, [completionToken, router, t, token]);
+  }, [completionToken, router, token]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,17 +106,17 @@ export function ReviewerVerification({
     if (!trimmed || state === 'sending' || state === 'completing') return;
 
     setState('sending');
-    setMessage(null);
+    setNotice(null);
     const outcome = await requestReviewerMagicLink(token, trimmed);
 
     if (outcome.ok) {
       setState('sent');
-      setMessage(outcome.message ?? t('verify.sentFallback'));
+      setNotice(noticeFrom(outcome.message, 'verify.sentFallback'));
       return;
     }
 
     setState('failed');
-    setMessage(outcome.message ?? t(REQUEST_ERROR_KEYS[outcome.kind]));
+    setNotice(noticeFrom(outcome.message, REQUEST_ERROR_KEYS[outcome.kind]));
   }
 
   return (
@@ -139,9 +154,9 @@ export function ReviewerVerification({
                     : t('verify.send')}
             </button>
           </form>
-          {message ? (
+          {notice ? (
             <p className={state === 'failed' ? 'mt-2 text-sm text-rose-600 dark:text-rose-400' : 'mt-2 text-sm text-zinc-600 dark:text-zinc-400'}>
-              {message}
+              {notice.kind === 'api' ? notice.text : t(notice.key)}
             </p>
           ) : null}
         </div>

@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { PLAIN_DOC } from './fixtures';
-import { createShareLink, documentTitle, importDocumentFromUrl, register, uniqueIdentity } from './helpers';
+import {
+  createShareLink,
+  documentTitle,
+  importDocumentFromUrl,
+  postInlineComment,
+  register,
+  uniqueIdentity,
+  verifyReviewerByMagicLink,
+} from './helpers';
 
 // The shared-surface i18n journey (SPEC m3.9, story 3 / eng-review 4A; #124).
 // An invited reviewer on a share link has NO account, so the shared-doc surface
@@ -64,6 +72,57 @@ test('a guest on a share link switches the chrome to Spanish and the choice surv
     await expect(guest.getByText(PLAIN_DOC.body)).toBeVisible();
   } finally {
     await guestContext.close();
+  }
+});
+
+test('a verified reviewer switches locale and their comment stays verbatim', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120_000);
+
+  const author = uniqueIdentity('i18n-shared-author');
+  const reviewer = uniqueIdentity('i18n-shared-reviewer');
+  const anchorText = 'preserves the document';
+  const comment = `Guest-switcher journey comment ${reviewer.email}`;
+
+  await register(page, author);
+  await importDocumentFromUrl(page, PLAIN_DOC.url);
+  await expect(documentTitle(page, PLAIN_DOC.title)).toBeVisible();
+  const shareUrl = await createShareLink(page);
+
+  const reviewerContext = await browser.newContext();
+  try {
+    const reviewerPage = await reviewerContext.newPage();
+
+    // Anonymous magic-link verification, then an anchored comment — all in
+    // English chrome (no cookie yet).
+    await verifyReviewerByMagicLink(reviewerPage, shareUrl, reviewer.email, PLAIN_DOC.title);
+    await postInlineComment(reviewerPage, anchorText, comment);
+
+    // The switcher is available to the verified reviewer too (same layout
+    // header, still no account). Switch to Spanish: the surface label my page
+    // passes flips, while comment and document text are user content and MUST
+    // stay exactly as written. (The review chrome inside the surface remains
+    // English until #126 — deliberately not asserted here.)
+    await reviewerPage.getByLabel('Language', { exact: true }).selectOption('es-US');
+    await expect(reviewerPage.locator('html')).toHaveAttribute('lang', 'es-US');
+    await expect(
+      reviewerPage.getByText('Documento compartido · revisor verificado'),
+    ).toBeVisible();
+    await expect(reviewerPage.getByText(PLAIN_DOC.body)).toBeVisible();
+
+    // The choice survives a reload, and the comment is still verbatim.
+    await reviewerPage.reload();
+    await expect(reviewerPage.locator('html')).toHaveAttribute('lang', 'es-US');
+    await reviewerPage
+      .getByRole('button', { name: 'Open thread', exact: true })
+      .filter({ hasText: anchorText })
+      .click();
+    await expect(reviewerPage.getByText(comment, { exact: true })).toBeVisible();
+    await expect(reviewerPage.getByText(PLAIN_DOC.body)).toBeVisible();
+  } finally {
+    await reviewerContext.close();
   }
 });
 
