@@ -186,17 +186,14 @@ export function markRetrying(
   );
 }
 
-/** Give assistive technology one exact announcement when an import settles (10A). */
-export function settleAnnouncement(
-  doc: Pick<Document, 'status' | 'title'>,
-): string | null {
-  if (doc.status === 'ready') {
-    return `Import ready: ${doc.title}`;
-  }
+/** A settle worth announcing to assistive technology (10A). */
+export type SettleOutcome = 'ready' | 'failed';
 
-  if (doc.status === 'failed') {
-    return `Import failed: ${doc.title}`;
-  }
-
-  return null;
+/**
+ * Classify a settle for the one exact screen-reader announcement (10A). Pure —
+ * the hook maps the outcome to the localized `documents.announce.*` string
+ * (M3.9 #123), so this module stays free of copy in any language.
+ */
+export function settleOutcome(doc: Pick<Document, 'status'>): SettleOutcome | null {
+  return doc.status === 'ready' || doc.status === 'failed' ? doc.status : null;
 }

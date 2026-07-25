@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StatsStrip } from '@/components/app/stats-strip';
 import {

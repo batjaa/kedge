@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { DocumentSource } from '@/lib/document-types';
 
 // The provenance chip on every document row (M3.10 #117, SPEC §11): where a doc
@@ -13,19 +14,26 @@ import type { DocumentSource } from '@/lib/document-types';
 // text is never truncated — only its rendering — so assistive tech reads the whole
 // value; a `title` gives sighted users the full value on hover; an `sr-only`
 // "Source:" prefix names what the value is (perceivable without vision, story 8).
+//
+// The "pasted" label and the sr-only prefix come from the chip glossary
+// (M3.9 13A, messages/*/chips.json); paths/repos/hosts are DATA and pass
+// through untranslated. Short values ride the same 16ch clamp as the status
+// chip — belt-and-braces for a long-running locale, invisible otherwise.
 export function SourceChip({ source }: { source: DocumentSource | null | undefined }) {
+  const t = useTranslations('chips');
+
   // Defensive: a row must never crash the list on a missing/odd descriptor
   // (the hard rendering rule). No source → no chip.
   if (!source) return null;
 
-  const rendered = renderSource(source);
+  const rendered = renderSource(source, t('source.pasted'));
   if (rendered === null) return null;
 
   const { text, truncate } = rendered;
 
   return (
     <span className="inline-flex min-w-0 items-center rounded-lg bg-zinc-400/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-zinc-500 ring-1 ring-inset ring-zinc-400/30 dark:text-zinc-400">
-      <span className="sr-only">Source: </span>
+      <span className="sr-only">{t('source.label')} </span>
       {truncate ? (
         <span
           dir="rtl"
@@ -35,7 +43,7 @@ export function SourceChip({ source }: { source: DocumentSource | null | undefin
           {LRM + text}
         </span>
       ) : (
-        <span>{text}</span>
+        <span className="inline-block max-w-[16ch] truncate align-bottom">{text}</span>
       )}
     </span>
   );
@@ -46,11 +54,15 @@ const LRM = '\u200E';
 
 /**
  * The chip's rendered value per kind (SPEC §11): `path` · `repo · path` · `host`
- * · "pasted". `truncate` marks the long, left-truncatable values (paths); short
- * ones (host, "pasted") render whole. Returns null only for a degenerate URL with
- * no host — the row simply carries no chip rather than an empty one.
+ * · the localized "pasted". `truncate` marks the long, left-truncatable values
+ * (paths); short ones (host, "pasted") render whole. Returns null only for a
+ * degenerate URL with no host — the row simply carries no chip rather than an
+ * empty one. Pure: the caller passes the localized upload label.
  */
-function renderSource(source: DocumentSource): { text: string; truncate: boolean } | null {
+function renderSource(
+  source: DocumentSource,
+  pastedLabel: string,
+): { text: string; truncate: boolean } | null {
   switch (source.kind) {
     case 'repo':
       return source.path ? { text: source.path, truncate: true } : null;
@@ -63,7 +75,7 @@ function renderSource(source: DocumentSource): { text: string; truncate: boolean
     case 'url':
       return source.host ? { text: source.host, truncate: false } : null;
     case 'upload':
-      return { text: 'pasted', truncate: false };
+      return { text: pastedLabel, truncate: false };
     default:
       return null;
   }

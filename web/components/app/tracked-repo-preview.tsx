@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { PreviewFile } from '@/lib/tracked-repos-client';
 import { EMERALD_BUTTON, PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles';
 
@@ -7,7 +8,9 @@ import { EMERALD_BUTTON, PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles
 // (10A); over-cap (story 18) and truncation (4A) are loud blocking errors. The
 // matches state carries an active "Add & scan" confirm (wired by the container,
 // #93): pressing it persists the tracked repo and runs the first scan. DESIGN.md
-// panel tokens; mirrors the import-form error idiom.
+// panel tokens; mirrors the import-form error idiom. Chrome strings from the
+// tracked-repos catalog; the overlap pill rides the 13A chip glossary; API
+// error/over-cap messages pass through untranslated (M3.9).
 
 /** The derived view-model the container hands this component. */
 export type PreviewView =
@@ -33,10 +36,13 @@ export function TrackedRepoPreview({
   confirmPending: boolean;
   confirmError: string | null;
 }) {
+  const t = useTranslations('tracked-repos');
+  const chips = useTranslations('chips');
+
   if (view.kind === 'loading') {
     return (
       <p role="status" className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
-        Checking the repository…
+        {t('preview.checking')}
       </p>
     );
   }
@@ -53,7 +59,7 @@ export function TrackedRepoPreview({
   if (view.files.length === 0) {
     return (
       <p className="mt-4 rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/[.03] dark:text-zinc-400 dark:ring-white/10">
-        0 files match this pattern. Adjust the pattern and preview again.
+        {t('preview.zeroMatches')}
       </p>
     );
   }
@@ -62,12 +68,12 @@ export function TrackedRepoPreview({
     <div className="mt-4">
       <p className="text-sm text-zinc-700 dark:text-zinc-300">
         <span className="font-medium text-zinc-900 dark:text-white">
-          {view.files.length} file{view.files.length === 1 ? '' : 's'} match
+          {t('preview.matches', { count: view.files.length })}
         </span>
         {view.overlapCount > 0 ? (
           <span className="text-amber-700 dark:text-amber-400">
             {' '}
-            · {view.overlapCount} already tracked elsewhere
+            {t('preview.overlap', { count: view.overlapCount })}
           </span>
         ) : null}
       </p>
@@ -80,10 +86,10 @@ export function TrackedRepoPreview({
             </code>
             {file.overlap ? (
               <span
-                title="Another tracked repo in this workspace already imports this path — importing here would duplicate it."
+                title={t('preview.overlapTitle')}
                 className={`${PILL_BASE} bg-amber-100 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300`}
               >
-                Already tracked
+                {chips('scan.already_tracked')}
               </span>
             ) : null}
           </li>
@@ -97,10 +103,10 @@ export function TrackedRepoPreview({
           disabled={confirmPending}
           className={CONFIRM_CLASS}
         >
-          {confirmPending ? 'Starting scan…' : 'Add & scan'}
+          {confirmPending ? t('preview.confirming') : t('preview.confirm')}
         </button>
         <span className="text-xs text-zinc-500 dark:text-zinc-500">
-          Imports these files into the project and keeps the repo tracked.
+          {t('preview.confirmHint')}
         </span>
       </div>
 

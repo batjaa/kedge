@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { AppShell } from '@/components/app/app-shell';
 import { PageContainer } from '@/components/app/page-container';
 import { MetaChip } from '@/components/app/meta-chip';
@@ -65,6 +66,9 @@ async function ReviewQueue({
   firstName: string;
   workspace: Workspace;
 }) {
+  // Dashboard chrome reads the negotiated locale (M3.9 #123); the visitor's
+  // first name and workspace name are data and interpolate untranslated.
+  const t = await getTranslations('dashboard');
   const [documents, projectsResult, summaryResult, activityResult] = await Promise.all([
     getDocuments(),
     getProjects(),
@@ -82,12 +86,12 @@ async function ReviewQueue({
     <PageContainer>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          Review queue
+          {t('queue.title')}
         </h1>
         <MetaChip>{workspace.slug}</MetaChip>
       </div>
       <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-400">
-        Welcome, {firstName}. This is {workspace.name} — your personal workspace.
+        {t('queue.welcome', { name: firstName, workspace: workspace.name })}
       </p>
 
       <WorkspaceHome

@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { TrackedRepoList, TrackedRepoRow } from '@/components/app/tracked-repo-list';
 import type { ScanReport, TrackedRepo, TrackedScanStatus } from '@/lib/tracked-repo-scan';

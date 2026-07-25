@@ -5,12 +5,12 @@
   "documentFallback": "un documento",
   "workspaceFallback": "tu espacio de trabajo",
   "sentence": {
-    "commentCreated": "{actor, select, system {Comentario en <target></target>} other {<name>{name}</name> comentó en <target></target>}}",
-    "suggestionAccepted": "{actor, select, system {Se aceptó una sugerencia en <target></target>} other {<name>{name}</name> aceptó una sugerencia en <target></target>}}",
-    "suggestionDeclined": "{actor, select, system {Se rechazó una sugerencia en <target></target>} other {<name>{name}</name> rechazó una sugerencia en <target></target>}}",
-    "approvalGiven": "{actor, select, system {Se aprobó <target></target>} other {<name>{name}</name> aprobó <target></target>}}",
-    "documentImported": "{actor, select, system {Se importó <target></target>} other {<name>{name}</name> importó <target></target>}}",
-    "workspaceRenamed": "{actor, select, system {Se renombró el espacio de trabajo a <target></target>} other {<name>{name}</name> renombró el espacio de trabajo a <target></target>}}",
+    "commentCreated": "{actor, select, system {Comentario en <target></target>} other {<person>{name}</person> comentó en <target></target>}}",
+    "suggestionAccepted": "{actor, select, system {Se aceptó una sugerencia en <target></target>} other {<person>{name}</person> aceptó una sugerencia en <target></target>}}",
+    "suggestionDeclined": "{actor, select, system {Se rechazó una sugerencia en <target></target>} other {<person>{name}</person> rechazó una sugerencia en <target></target>}}",
+    "approvalGiven": "{actor, select, system {Se aprobó <target></target>} other {<person>{name}</person> aprobó <target></target>}}",
+    "documentImported": "{actor, select, system {Se importó <target></target>} other {<person>{name}</person> importó <target></target>}}",
+    "workspaceRenamed": "{actor, select, system {Se renombró el espacio de trabajo a <target></target>} other {<person>{name}</person> renombró el espacio de trabajo a <target></target>}}",
     "approvalsGoneStale": "{count, plural, one {# aprobación} other {# aprobaciones}} en <target></target> caducaron tras una resincronización",
     "importFailed": "{hasReason, select, yes {La importación de <target></target> falló — {reason}} other {La importación de <target></target> falló}}",
     "reanchorCompleted": "Se resincronizó <target></target> — {anchored} anclados, {relocated} reubicados, {orphaned} huérfanos"

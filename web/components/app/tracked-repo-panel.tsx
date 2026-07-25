@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { useTranslations } from 'next-intl';
 import { createTrackedRepo, previewTrackedRepo } from '@/lib/tracked-repos-client';
 import { type TrackedRepo } from '@/lib/tracked-repo-scan';
 import type { ProjectRef } from '@/lib/document-types';
@@ -41,6 +42,7 @@ export function TrackedRepoPanel({
   /** A scan settled: the orchestrator materializes its imports into the repo's section. */
   onScanSettled: (repo: TrackedRepo) => void;
 }) {
+  const t = useTranslations('tracked-repos');
   const projectId = project.id;
   const [repoUrl, setRepoUrl] = useState('');
   const [ref, setRef] = useState('');
@@ -70,7 +72,7 @@ export function TrackedRepoPanel({
       setView(toView(outcome));
     } catch {
       // A rejected fetch (network blip) must not leave the button stuck spinning.
-      setView({ kind: 'error', message: 'Something went wrong checking the repository. Please try again.' });
+      setView({ kind: 'error', message: t('panel.previewFailed') });
     } finally {
       setPreviewing(false);
     }
@@ -102,7 +104,7 @@ export function TrackedRepoPanel({
       setPattern('');
     } catch {
       // A rejected fetch must not leave the confirm button stuck on "Starting scan…".
-      setConfirmError('Something went wrong starting the scan. Please try again.');
+      setConfirmError(t('panel.confirmFailed'));
     } finally {
       setConfirming(false);
     }
@@ -136,22 +138,21 @@ export function TrackedRepoPanel({
 
   return (
     <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
-      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Track a repository</h2>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">{t('panel.title')}</h2>
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Point at a GitHub repo and a path pattern, preview exactly which files match, then import them
-        all into this project — kept tracked for a re-scan later.
+        {t('panel.body')}
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-3">
         <label htmlFor="tracked-repo-url" className={LABEL_CLASS}>
-          Repository URL
+          {t('panel.repoUrlLabel')}
         </label>
         <input
           id="tracked-repo-url"
           name="repo_url"
           type="url"
           inputMode="url"
-          placeholder="https://github.com/owner/repo"
+          placeholder={t('panel.repoUrlPlaceholder')}
           value={repoUrl}
           onChange={(event) => setRepoUrl(event.target.value)}
           className={FIELD_CLASS}
@@ -160,14 +161,14 @@ export function TrackedRepoPanel({
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <div className="sm:w-1/3">
             <label htmlFor="tracked-repo-ref" className={LABEL_CLASS}>
-              Branch{' '}
-              <span className="font-normal text-zinc-400 dark:text-zinc-500">— optional</span>
+              {t('panel.branchLabel')}{' '}
+              <span className="font-normal text-zinc-400 dark:text-zinc-500">{t('panel.optional')}</span>
             </label>
             <input
               id="tracked-repo-ref"
               name="ref"
               type="text"
-              placeholder="default branch"
+              placeholder={t('panel.branchPlaceholder')}
               value={ref}
               onChange={(event) => setRef(event.target.value)}
               className={FIELD_CLASS}
@@ -175,13 +176,13 @@ export function TrackedRepoPanel({
           </div>
           <div className="min-w-0 flex-1">
             <label htmlFor="tracked-repo-pattern" className={LABEL_CLASS}>
-              Path pattern
+              {t('panel.patternLabel')}
             </label>
             <input
               id="tracked-repo-pattern"
               name="path_pattern"
               type="text"
-              placeholder="docs/**/*.md"
+              placeholder={t('panel.patternPlaceholder')}
               value={pattern}
               onChange={(event) => setPattern(event.target.value)}
               className={`${FIELD_CLASS} font-mono`}
@@ -190,23 +191,20 @@ export function TrackedRepoPanel({
         </div>
 
         <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
-          <code className="font-mono">*</code> matches within a folder,{' '}
-          <code className="font-mono">**</code> spans folders,{' '}
-          <code className="font-mono">?</code> one character — case-sensitive. Only{' '}
-          <code className="font-mono">.md</code>, <code className="font-mono">.mdx</code>, and{' '}
-          <code className="font-mono">.html</code> files import.
+          {t.rich('panel.patternHelp', {
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
 
         {/* PAT recommendation (spec 4A): unauthenticated GitHub allows only 60
             requests/hour, so a large public repo can exhaust the quota mid-scan. */}
         <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
-          Tracking a large public repo? Connect the workspace GitHub PAT in Settings for a higher
-          rate limit — unauthenticated GitHub allows only 60 requests an hour.
+          {t('panel.patHint')}
         </p>
 
         <div className="mt-3">
           <button type="submit" disabled={!canPreview} className={BUTTON_CLASS}>
-            {previewing ? 'Previewing…' : 'Preview files'}
+            {previewing ? t('panel.previewing') : t('panel.preview')}
           </button>
         </div>
       </form>

@@ -3,12 +3,13 @@
 import { type ChangeEvent, type ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { MetaChip } from './meta-chip';
 import { SourceChip } from './source-chip';
 import { StatePanel } from './state-panel';
 import { StatusChip } from './status-chip';
 import { cn } from '@/lib/cn';
-import { relativeTime } from '@/lib/relative-time';
+import { formatRelativeTime } from '@/lib/intl-time';
 import { readDocument } from '@/lib/documents-client';
 import { assignDocumentProject } from '@/lib/projects-client';
 import { runProjectAssign } from '@/lib/assign-project';
@@ -37,6 +38,12 @@ import type {
 // project chip that doubles as the assignment selector. DESIGN.md panel idiom:
 // divide-y rows in a rounded-2xl hairline card, mono chips, status hues in chips
 // only; the title stays a real link.
+//
+// i18n (M3.9 #123): every chrome string reads from the documents / dashboard /
+// imports catalogs; document titles, project names, and API sync-error prose are
+// DATA and pass through untranslated. Relative times ride Intl on the active
+// locale (lib/intl-time). The heading/empty defaults are resolved here (not as
+// parameter defaults) so the untranslated English literals never exist.
 export function DocumentList({
   items,
   total,
@@ -54,11 +61,11 @@ export function DocumentList({
   filter,
   onSelectFilter,
   summary,
-  heading = 'Your documents',
+  heading,
   headingId = 'documents-heading',
   className = 'mt-10',
-  emptyTitle = 'No documents yet',
-  emptyBody = 'Import a spec or RFC with the box above and it lands here — every document in your workspace, newest first.',
+  emptyTitle,
+  emptyBody,
 }: {
   items: DocumentListItem[];
   total: number;
@@ -84,6 +91,7 @@ export function DocumentList({
   onSelectFilter?: (filter: DocumentLifecycleFilter) => void;
   /** Chip counts (SPEC §16, M3.7); null keeps the chips but drops the counts (A1). */
   summary?: WorkspaceSummary | null;
+  /** Defaults to the catalog's "Your documents" when omitted. */
   heading?: ReactNode;
   /** Unique per rendered list so a project page's stacked source sections (#118)
    *  don't collide on the `documents-heading` id / its `aria-labelledby`. */
@@ -94,6 +102,8 @@ export function DocumentList({
   emptyTitle?: string;
   emptyBody?: string;
 }) {
+  const t = useTranslations('documents');
+
   // Degraded wins only while we have nothing to show; a successful import gives
   // us a real row, so the StatePanel yields to it rather than hiding it.
   const showDegraded = degraded && items.length === 0;
@@ -119,7 +129,7 @@ export function DocumentList({
           id={headingId}
           className="text-base font-semibold text-zinc-900 dark:text-white"
         >
-          {heading}
+          {heading ?? t('list.heading')}
         </h2>
         {!showDegraded && items.length > 0 ? <MetaChip>{total}</MetaChip> : null}
         {showChips && onSelectFilter ? (
@@ -142,12 +152,12 @@ export function DocumentList({
       {showDegraded ? (
         // Degraded (3A): the API is unreachable or 404s mid-rollout. The import
         // box above keeps working; only this area falls back to the panel idiom.
-        <StatePanel
-          title="Couldn't load your documents"
-          body="The API is unreachable right now. Your import box above still works — refresh in a moment."
-        />
+        <StatePanel title={t('list.degradedTitle')} body={t('list.degradedBody')} />
       ) : items.length === 0 ? (
-        <EmptyState title={emptyTitle} body={emptyBody} />
+        <EmptyState
+          title={emptyTitle ?? t('list.emptyTitle')}
+          body={emptyBody ?? t('list.emptyBody')}
+        />
       ) : (
         <>
           {/* Degraded, but a live prepend gave us rows to show: the StatePanel
@@ -191,7 +201,7 @@ export function DocumentList({
             disabled={loadingMore}
             className="rounded-full bg-zinc-100 px-4 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 transition hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/10"
           >
-            {loadingMore ? 'Loading…' : 'Load more'}
+            {loadingMore ? t('list.loadingMore') : t('list.loadMore')}
           </button>
         </div>
       ) : null}
@@ -207,17 +217,18 @@ export function DocumentList({
 // outlines (the mockup's recipe). A null summary (A1) keeps the chips and their
 // filtering but drops the counts. Kept inside the list region so the rail+table
 // wrap (#104) stays clean. Selecting a chip refetches server-side (the hook),
-// never a client cull — so it is correct across pagination.
+// never a client cull — so it is correct across pagination. Labels come from the
+// dashboard catalog (these are the dashboard's chips, not the 13A glossary).
 const LIFECYCLE_CHIPS: ReadonlyArray<{
   value: DocumentLifecycleFilter;
-  label: string;
+  labelKey: 'all' | 'inReview' | 'approved' | 'draft' | 'needsAttention';
   count: (summary: WorkspaceSummary) => number;
 }> = [
-  { value: 'all', label: 'All', count: (s) => s.documents.total },
-  { value: 'in_review', label: 'In review', count: (s) => s.documents.lifecycle.in_review },
-  { value: 'approved', label: 'Approved', count: (s) => s.documents.lifecycle.approved },
-  { value: 'draft', label: 'Draft', count: (s) => s.documents.lifecycle.draft },
-  { value: 'needs_attention', label: 'Needs attention', count: (s) => s.documents.needs_attention },
+  { value: 'all', labelKey: 'all', count: (s) => s.documents.total },
+  { value: 'in_review', labelKey: 'inReview', count: (s) => s.documents.lifecycle.in_review },
+  { value: 'approved', labelKey: 'approved', count: (s) => s.documents.lifecycle.approved },
+  { value: 'draft', labelKey: 'draft', count: (s) => s.documents.lifecycle.draft },
+  { value: 'needs_attention', labelKey: 'needsAttention', count: (s) => s.documents.needs_attention },
 ];
 
 function FilterChips({
@@ -231,10 +242,13 @@ function FilterChips({
   onSelect: (filter: DocumentLifecycleFilter) => void;
   className?: string;
 }) {
+  const t = useTranslations('dashboard');
+  const format = useFormatter();
+
   return (
     <div
       role="group"
-      aria-label="Filter documents by lifecycle"
+      aria-label={t('filters.label')}
       className={cn('flex flex-wrap items-center gap-1.5 text-xs', className)}
     >
       {LIFECYCLE_CHIPS.map((chip) => {
@@ -252,9 +266,11 @@ function FilterChips({
                 : 'text-zinc-500 ring-1 ring-inset ring-zinc-900/10 hover:bg-white dark:text-zinc-400 dark:ring-white/10 dark:hover:bg-white/5',
             )}
           >
-            {chip.label}
+            {t(`filters.${chip.labelKey}`)}
             {summary ? (
-              <span className="ml-1 font-mono tabular-nums">· {chip.count(summary)}</span>
+              <span className="ml-1 font-mono tabular-nums">
+                · {format.number(chip.count(summary))}
+              </span>
             ) : null}
           </button>
         );
@@ -266,6 +282,8 @@ function FilterChips({
 // One project's (or Unfiled's) group header (14A): the project name links to its
 // page; Unfiled is plain, always last. The count rides the mono chip idiom.
 function GroupHeader({ project, count }: { project: ProjectRef | null; count: number }) {
+  const t = useTranslations('documents');
+
   return (
     <div className="mb-3 mt-8 flex flex-wrap items-center gap-x-3 gap-y-1">
       {project ? (
@@ -276,7 +294,9 @@ function GroupHeader({ project, count }: { project: ProjectRef | null; count: nu
           {project.name}
         </Link>
       ) : (
-        <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">Unfiled</h3>
+        <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+          {t('list.unfiled')}
+        </h3>
       )}
       <MetaChip>{count}</MetaChip>
     </div>
@@ -359,12 +379,14 @@ function DirectoryDivider({ dir }: { dir: string }) {
 // rows when the server-side list read failed yet this session's live prepends
 // give us something to render — so the failure never silently disappears.
 function DegradedNotice() {
+  const t = useTranslations('documents');
+
   return (
     <div
       role="status"
       className="mt-4 rounded-xl bg-amber-500/5 px-4 py-2.5 text-xs leading-5 text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300 dark:ring-amber-400/20"
     >
-      Couldn&apos;t load your documents — showing only this session&apos;s imports. Refresh to see everything.
+      {t('list.degradedNotice')}
     </div>
   );
 }
@@ -454,6 +476,7 @@ function RowProjectChip({
   projects: Project[];
   onAssigned: (doc: Document) => void;
 }) {
+  const t = useTranslations('documents');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentId = item.project?.id ?? null;
@@ -478,13 +501,13 @@ function RowProjectChip({
   return (
     <div className="flex flex-col items-end gap-1">
       <select
-        aria-label={`Project for ${item.title}`}
+        aria-label={t('row.projectFor', { title: item.title })}
         value={currentId === null ? '' : String(currentId)}
         disabled={pending}
         onChange={onChange}
         className="max-w-[9rem] truncate rounded-full bg-zinc-100 px-2.5 py-1 font-mono text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-900/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
       >
-        <option value="">Unfiled</option>
+        <option value="">{t('row.unfiledOption')}</option>
         {projects.map((project) => (
           <option key={project.id} value={project.id}>
             {project.name}
@@ -505,15 +528,16 @@ function RowProjectChip({
 
 // The failed row's inline recovery (7A) — the documents-list's consumer of the
 // shared affordance the doc page's ImportFailed also uses, so copy and behaviour
-// (pending guard, retry-error copy, dead-PAT branch) match exactly. Compact by
-// design (a list row, not the doc-page panel): the import error and its actions.
-// Retry is ALWAYS offered (it flips the row back to `importing` via onRetried so
-// the RowPoller resumes and settles it in place); a dead PAT ADDITIONALLY shows a
-// "reconnect in Settings" link — additive, exactly like ImportFailed, so a user
-// who has since reconnected is never left with only the Settings link and no way
-// to re-run the import from the row (SPEC §19). The re-settle rides the list's
-// existing polite live region: a recovery to ready reads as a fresh "Import
-// ready: {title}" announcement — no new a11y machinery.
+// (pending guard, retry-error copy, dead-PAT branch) match exactly: both read the
+// SAME imports-catalog keys. Compact by design (a list row, not the doc-page
+// panel): the import error and its actions. Retry is ALWAYS offered (it flips the
+// row back to `importing` via onRetried so the RowPoller resumes and settles it in
+// place); a dead PAT ADDITIONALLY shows a "reconnect in Settings" link — additive,
+// exactly like ImportFailed, so a user who has since reconnected is never left
+// with only the Settings link and no way to re-run the import from the row (SPEC
+// §19). The re-settle rides the list's existing polite live region: a recovery to
+// ready reads as a fresh localized announcement — no new a11y machinery. The API
+// sync-error prose passes through untranslated (M3.9 scope).
 function RowRetry({
   item,
   onRetried,
@@ -521,6 +545,7 @@ function RowRetry({
   item: DocumentListItem;
   onRetried: (id: number) => void;
 }) {
+  const t = useTranslations('imports');
   const { needsReconnect, pending, retryError, onRetry } = useImportRetry({
     id: item.id,
     error: item.sync_error,
@@ -530,7 +555,7 @@ function RowRetry({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 pb-4 sm:px-6">
       <p className="min-w-0 flex-1 text-xs leading-5 text-rose-600 dark:text-rose-400">
-        {item.sync_error ?? 'The document could not be imported.'}
+        {item.sync_error ?? t('failed.fallback')}
       </p>
       <button
         type="button"
@@ -538,14 +563,14 @@ function RowRetry({
         disabled={pending}
         className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
       >
-        {pending ? 'Retrying…' : 'Retry import'}
+        {pending ? t('retry.pending') : t('retry.action')}
       </button>
       {needsReconnect ? (
         <Link
           href="/settings"
           className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
         >
-          Reconnect GitHub
+          {t('retry.reconnect')}
         </Link>
       ) : null}
       {retryError ? (
@@ -580,13 +605,16 @@ function RowPoller({ id, onSettled }: { id: number; onSettled: (doc: Document) =
 
 // Last-sync state + relative time. A colored dot carries the hue (emerald
 // ready, rose failed); an importing row spins (DocumentPoller's treatment). The
-// label stays quiet.
+// label stays quiet. Relative times render through Intl on the active locale.
 function SyncState({ item }: { item: DocumentListItem }) {
+  const t = useTranslations('documents');
+  const locale = useLocale();
+
   if (item.status === 'failed') {
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-600 dark:text-rose-400">
         <Dot className="bg-rose-500" />
-        Import failed
+        {t('sync.importFailed')}
       </span>
     );
   }
@@ -595,7 +623,7 @@ function SyncState({ item }: { item: DocumentListItem }) {
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
         <Spinner />
-        Importing…
+        {t('sync.importing')}
       </span>
     );
   }
@@ -610,7 +638,7 @@ function SyncState({ item }: { item: DocumentListItem }) {
         className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-600 dark:text-rose-400"
       >
         <Dot className="bg-rose-500" />
-        Sync failed
+        {t('sync.syncFailed')}
       </span>
     );
   }
@@ -618,7 +646,9 @@ function SyncState({ item }: { item: DocumentListItem }) {
   return (
     <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
       <Dot className="bg-emerald-500" />
-      {item.synced_at ? `synced ${relativeTime(item.synced_at)}` : 'ready'}
+      {item.synced_at
+        ? t('sync.synced', { when: formatRelativeTime(item.synced_at, locale) })
+        : t('sync.ready')}
     </span>
   );
 }
@@ -639,11 +669,14 @@ function Spinner() {
 }
 
 function OpenThreads({ count }: { count: number }) {
+  const t = useTranslations('documents');
+  const format = useFormatter();
+
   return (
     <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-600 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10">
       <MessageSquare className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-      {count}
-      <span className="sr-only">open threads</span>
+      {format.number(count)}
+      <span className="sr-only">{t('row.openThreads', { count })}</span>
     </span>
   );
 }

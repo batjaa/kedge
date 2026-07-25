@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { TrackedRepoPreview, type PreviewView } from '@/components/app/tracked-repo-preview';
 

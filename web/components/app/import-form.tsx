@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { importPaste, importUrl } from '@/lib/documents-client';
 import type { Document } from '@/lib/document-types';
 
@@ -12,7 +13,8 @@ type Mode = 'url' | 'paste';
 // returns 202 with the new document. When `onImported` is supplied (the home's
 // live list, 5A) the form stays put and hands the 202'd document up to prepend as
 // an importing row; without it, it falls back to navigating to the doc page. A
-// failed submit keeps its inline error and adds no row. DESIGN.md tokens.
+// failed submit keeps its inline error and adds no row. DESIGN.md tokens. Chrome
+// strings from the imports catalog (M3.9); API validation prose passes through.
 const BUTTON_CLASS =
   'shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15';
 
@@ -24,6 +26,7 @@ export function ImportForm({
   /** File the imported document under this project (a project page, M3.6). */
   projectId?: number;
 }) {
+  const t = useTranslations('imports');
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('url');
   const [url, setUrl] = useState('');
@@ -87,13 +90,13 @@ export function ImportForm({
     <div className="mt-4">
       <div
         role="tablist"
-        aria-label="Import source"
+        aria-label={t('tabs.label')}
         className="inline-flex rounded-full bg-zinc-900/5 p-0.5 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:ring-white/10"
       >
         {(
           [
-            ['url', 'Paste a URL'],
-            ['paste', 'Paste content'],
+            ['url', t('tabs.url')],
+            ['paste', t('tabs.paste')],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -120,7 +123,7 @@ export function ImportForm({
               htmlFor="import-url"
               className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Document URL
+              {t('url.label')}
             </label>
             <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
               <input
@@ -128,7 +131,7 @@ export function ImportForm({
                 name="url"
                 type="url"
                 inputMode="url"
-                placeholder="https://github.com/org/repo/blob/main/SPEC.md"
+                placeholder={t('url.placeholder')}
                 value={url}
                 onChange={(event) => {
                   setUrl(event.target.value);
@@ -139,7 +142,7 @@ export function ImportForm({
                 className={`w-full min-w-0 flex-1 rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 dark:bg-white/[.03] dark:text-white ${fieldRing}`}
               />
               <button type="submit" disabled={pending} className={BUTTON_CLASS}>
-                {pending ? 'Importing…' : 'Import'}
+                {pending ? t('submitting') : t('submit')}
               </button>
             </div>
           </>
@@ -149,16 +152,16 @@ export function ImportForm({
               htmlFor="import-title"
               className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Title{' '}
+              {t('paste.titleLabel')}{' '}
               <span className="font-normal text-zinc-400 dark:text-zinc-500">
-                — optional
+                {t('optional')}
               </span>
             </label>
             <input
               id="import-title"
               name="title"
               type="text"
-              placeholder="Untitled document"
+              placeholder={t('paste.titlePlaceholder')}
               value={title}
               onChange={(event) => {
                 setTitle(event.target.value);
@@ -172,13 +175,13 @@ export function ImportForm({
               htmlFor="import-content"
               className="mt-3 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Content
+              {t('paste.contentLabel')}
             </label>
             <textarea
               id="import-content"
               name="content"
               rows={8}
-              placeholder={'# Paste your Markdown here\n\nKedge renders it — no link needed.'}
+              placeholder={t('paste.contentPlaceholder')}
               value={content}
               onChange={(event) => {
                 setContent(event.target.value);
@@ -190,7 +193,7 @@ export function ImportForm({
             />
             <div className="mt-2 flex justify-end">
               <button type="submit" disabled={pending} className={BUTTON_CLASS}>
-                {pending ? 'Importing…' : 'Import'}
+                {pending ? t('submitting') : t('submit')}
               </button>
             </div>
           </>
@@ -206,9 +209,7 @@ export function ImportForm({
           </p>
         ) : (
           <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
-            {mode === 'url'
-              ? 'Paste a link to a public Markdown file or a GitHub blob URL, and Kedge renders it here.'
-              : 'Paste Markdown content directly and Kedge renders it here.'}
+            {mode === 'url' ? t('url.hint') : t('paste.hint')}
           </p>
         )}
       </form>

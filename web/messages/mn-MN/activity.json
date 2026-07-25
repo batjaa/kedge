@@ -5,12 +5,12 @@
   "documentFallback": "нэгэн баримт",
   "workspaceFallback": "таны ажлын талбар",
   "sentence": {
-    "commentCreated": "{actor, select, system {<target></target> дээр сэтгэгдэл үлдээв} other {<name>{name}</name> <target></target> дээр сэтгэгдэл үлдээв}}",
-    "suggestionAccepted": "{actor, select, system {<target></target> дээрх саналыг зөвшөөрөв} other {<name>{name}</name> <target></target> дээрх саналыг зөвшөөрөв}}",
-    "suggestionDeclined": "{actor, select, system {<target></target> дээрх саналыг татгалзав} other {<name>{name}</name> <target></target> дээрх саналыг татгалзав}}",
-    "approvalGiven": "{actor, select, system {<target></target>-г баталлаа} other {<name>{name}</name> <target></target>-г баталлаа}}",
-    "documentImported": "{actor, select, system {<target></target>-г импортлов} other {<name>{name}</name> <target></target>-г импортлов}}",
-    "workspaceRenamed": "{actor, select, system {Ажлын талбарын нэрийг <target></target> болгов} other {<name>{name}</name> ажлын талбарын нэрийг <target></target> болгов}}",
+    "commentCreated": "{actor, select, system {<target></target> дээр сэтгэгдэл үлдээв} other {<person>{name}</person> <target></target> дээр сэтгэгдэл үлдээв}}",
+    "suggestionAccepted": "{actor, select, system {<target></target> дээрх саналыг зөвшөөрөв} other {<person>{name}</person> <target></target> дээрх саналыг зөвшөөрөв}}",
+    "suggestionDeclined": "{actor, select, system {<target></target> дээрх саналыг татгалзав} other {<person>{name}</person> <target></target> дээрх саналыг татгалзав}}",
+    "approvalGiven": "{actor, select, system {<target></target>-г баталлаа} other {<person>{name}</person> <target></target>-г баталлаа}}",
+    "documentImported": "{actor, select, system {<target></target>-г импортлов} other {<person>{name}</person> <target></target>-г импортлов}}",
+    "workspaceRenamed": "{actor, select, system {Ажлын талбарын нэрийг <target></target> болгов} other {<person>{name}</person> ажлын талбарын нэрийг <target></target> болгов}}",
     "approvalsGoneStale": "<target></target> дээрх {count, plural, one {# баталгаа} other {# баталгаа}} re-sync-ийн дараа хуучирлаа",
     "importFailed": "{hasReason, select, yes {<target></target>-ийн импорт амжилтгүй боллоо — {reason}} other {<target></target>-ийн импорт амжилтгүй боллоо}}",
     "reanchorCompleted": "<target></target>-г дахин sync хийв — {anchored} бэхлэгдсэн, {relocated} шилжсэн, {orphaned} өнчирсөн"

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getDocument, getDocumentVersion, getDocumentVersions } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 import { DocumentBody } from '@/components/app/document-body';
@@ -32,6 +33,9 @@ export default async function DocumentPage({
 }) {
   const { id } = await params;
   const { claim, version } = await searchParams;
+  // Page-owned chrome strings (M3.9 #123) — the review surface's own strings
+  // stay with #126; only what THIS page renders or passes down localizes here.
+  const t = await getTranslations('documents');
 
   // Claim intent (#25): a just-signed-up visitor arriving from the demo page's
   // "Claim this doc" CTA. The doc still lives in the system workspace, so we must
@@ -41,7 +45,7 @@ export default async function DocumentPage({
     return (
       <PageContainer>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          Claiming your document
+          {t('page.claiming')}
         </h1>
         <DocumentClaim id={Number(id)} />
       </PageContainer>
@@ -58,10 +62,7 @@ export default async function DocumentPage({
   if (!document) {
     return (
       <PageContainer>
-        <StatePanel
-          title="Couldn't load this document"
-          body="The API is unreachable right now. Try again in a moment."
-        />
+        <StatePanel title={t('page.loadFailedTitle')} body={t('page.loadFailedBody')} />
       </PageContainer>
     );
   }
@@ -91,8 +92,8 @@ export default async function DocumentPage({
         return (
           <PageContainer>
             <StatePanel
-              title="Couldn't load this version"
-              body="The API is unreachable right now. Try again in a moment."
+              title={t('page.versionFailedTitle')}
+              body={t('page.loadFailedBody')}
             />
           </PageContainer>
         );
@@ -110,7 +111,7 @@ export default async function DocumentPage({
             title={document.title}
             sourceUrl={document.source_url}
             backHref="/"
-            backLabel="← Review queue"
+            backLabel={t('page.backToQueue')}
           />
 
           {document.status === 'importing' ? (
@@ -135,7 +136,7 @@ export default async function DocumentPage({
           <DocumentReviewSurface
             documentId={document.id}
             title={document.title}
-            surfaceLabel="Authenticated document"
+            surfaceLabel={t('page.surfaceLabel')}
             sourceUrl={document.source_url}
             lifecycleStatus={document.lifecycle_status}
             versions={versions}
@@ -149,7 +150,7 @@ export default async function DocumentPage({
             projects={projects}
             projectId={document.project?.id ?? null}
             backHref="/"
-            backLabel="← Review queue"
+            backLabel={t('page.backToQueue')}
             plainText={viewedVersion.plain_text ?? null}
             projectionVersion={viewedVersion.projection_version ?? null}
             // A pasted/uploaded document has no URL to re-pull: it gets the manual

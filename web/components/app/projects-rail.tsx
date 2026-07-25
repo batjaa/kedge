@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 import { unfiledDocumentCount } from '@/lib/projects-rail';
 import type { Project, WorkspaceSummary } from '@/lib/document-types';
@@ -13,7 +14,8 @@ import type { Project, WorkspaceSummary } from '@/lib/document-types';
 // Rendered only at `lg` and up (the caller hides it); narrow viewports keep the
 // single-column grouped list, whose project group headers already link to the
 // same pages. Display-only: it reads seeded state and holds no live counters —
-// the live workspace truth is the stats strip above it (6A).
+// the live workspace truth is the stats strip above it (6A). Counts are ICU
+// plurals on the active locale (M3.9); project names are user data, untouched.
 export function ProjectsRail({
   projects,
   summary,
@@ -31,11 +33,14 @@ export function ProjectsRail({
   degraded?: boolean;
   className?: string;
 }) {
+  const t = useTranslations('dashboard');
   const unfiled = degraded ? null : unfiledDocumentCount(summary, projects);
 
   return (
-    <aside aria-label="Projects" className={cn('space-y-3', className)}>
-      <h2 className="px-1 text-sm font-semibold text-zinc-900 dark:text-white">Projects</h2>
+    <aside aria-label={t('rail.heading')} className={cn('space-y-3', className)}>
+      <h2 className="px-1 text-sm font-semibold text-zinc-900 dark:text-white">
+        {t('rail.heading')}
+      </h2>
 
       {projects.map((project) => (
         <ProjectCard key={project.id} project={project} />
@@ -53,6 +58,7 @@ export function ProjectsRail({
 // optional on the type — a just-created project (added client-side) has only its
 // doc count — so each falls back to 0.
 function ProjectCard({ project }: { project: Project }) {
+  const t = useTranslations('dashboard');
   const docs = project.documents_count ?? 0;
   const open = project.open_threads_count ?? 0;
   const orphans = project.orphaned_threads_count ?? 0;
@@ -64,11 +70,11 @@ function ProjectCard({ project }: { project: Project }) {
     >
       <span className="text-sm font-semibold text-zinc-900 dark:text-white">{project.name}</span>
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
-        <span>{docs === 1 ? '1 doc' : `${docs} docs`}</span>
-        {open > 0 ? <span>{open} open</span> : null}
+        <span>{t('rail.docs', { count: docs })}</span>
+        {open > 0 ? <span>{t('rail.open', { count: open })}</span> : null}
         {orphans > 0 ? (
           <span className="text-rose-600 dark:text-rose-400">
-            {orphans === 1 ? '1 orphan' : `${orphans} orphans`}
+            {t('rail.orphans', { count: orphans })}
           </span>
         ) : null}
       </div>
@@ -80,18 +86,20 @@ function ProjectCard({ project }: { project: Project }) {
 // link. Dashed to read as a container, not a project. Its count is derived from
 // the summary; a null summary (A1) keeps the card and drops the count.
 function UnfiledCard({ count }: { count: number | null }) {
+  const t = useTranslations('dashboard');
+
   return (
     <div className="rounded-2xl border border-dashed border-zinc-900/15 p-4 dark:border-white/15">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">Unfiled</span>
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">{t('rail.unfiled')}</span>
         {count !== null ? (
           <span className="ml-auto font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
-            {count === 1 ? '1 doc' : `${count} docs`}
+            {t('rail.docs', { count })}
           </span>
         ) : null}
       </div>
       <p className="mt-1.5 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
-        docs land here until assigned
+        {t('rail.unfiledHint')}
       </p>
     </div>
   );
@@ -100,16 +108,18 @@ function UnfiledCard({ count }: { count: number | null }) {
 // The ghosted M5 card: the review queue arrives with M5, so the rail states that
 // in-product rather than offering a dead link. Non-interactive, dimmed, badged.
 function QueueGhost() {
+  const t = useTranslations('dashboard');
+
   return (
     <div className="rounded-2xl border border-dashed border-zinc-900/10 p-4 opacity-70 dark:border-white/10">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-zinc-400 dark:text-zinc-500">Review queue</span>
+        <span className="text-sm text-zinc-400 dark:text-zinc-500">{t('rail.queueTitle')}</span>
         <span className="ml-auto rounded-lg bg-zinc-400/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-zinc-400 ring-1 ring-inset ring-zinc-400/30 dark:text-zinc-500">
           M5
         </span>
       </div>
       <p className="mt-1.5 text-[11px] leading-4 text-zinc-400 dark:text-zinc-500">
-        &ldquo;What needs my review?&rdquo; lands here with notifications.
+        {t('rail.queueBody')}
       </p>
     </div>
   );

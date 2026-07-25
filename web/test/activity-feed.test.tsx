@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { ActivityFeed } from '@/components/app/activity-feed';
 import type { ActivityEvent, ActivityEventType, ActivityTarget } from '@/lib/activity-types';

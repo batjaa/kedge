@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
 import type { WorkspaceSummary } from '@/lib/document-types';
 
 // The dashboard stats strip (SPEC §16, M3.7; docs/designs/app-dashboard.html).
@@ -12,23 +13,45 @@ import type { WorkspaceSummary } from '@/lib/document-types';
 // three alert stats are conditional so a healthy workspace reads clean rather
 // than "0 orphaned · 0 stale". Open Harbor register: quiet zinc text, status
 // hues carried by a dot + the number, per the mockup.
+//
+// i18n (M3.9): labels are ICU plurals on the count (CLDR owns each locale's
+// rules, Mongolian included) and the number itself renders through the
+// formatter, so "documents" can inflect even where English doesn't.
 export function StatsStrip({ summary }: { summary: WorkspaceSummary | null }) {
+  const t = useTranslations('dashboard');
+
   if (summary === null) return null;
 
   const { documents, threads, approvals } = summary;
 
   return (
     <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-500 dark:text-zinc-400">
-      <Stat value={documents.total} label="documents" />
-      <Stat value={threads.open} label="open threads" />
+      <Stat
+        value={documents.total}
+        label={t('stats.documents', { count: documents.total })}
+      />
+      <Stat value={threads.open} label={t('stats.openThreads', { count: threads.open })} />
       {threads.orphaned > 0 ? (
-        <Stat value={threads.orphaned} label="orphaned" tone="rose" />
+        <Stat
+          value={threads.orphaned}
+          label={t('stats.orphaned', { count: threads.orphaned })}
+          tone="rose"
+        />
       ) : null}
       {approvals.stale > 0 ? (
-        <Stat value={approvals.stale} label="approvals stale" tone="amber" />
+        <Stat
+          value={approvals.stale}
+          label={t('stats.approvalsStale', { count: approvals.stale })}
+          tone="amber"
+        />
       ) : null}
       {documents.importing > 0 ? (
-        <Stat value={documents.importing} label="importing" tone="sky" pulse />
+        <Stat
+          value={documents.importing}
+          label={t('stats.importing', { count: documents.importing })}
+          tone="sky"
+          pulse
+        />
       ) : null}
     </div>
   );
@@ -60,6 +83,7 @@ function Stat({
   tone?: Tone;
   pulse?: boolean;
 }) {
+  const format = useFormatter();
   const dot: ReactNode =
     tone === 'neutral' ? null : (
       <span className={`h-1.5 w-1.5 rounded-full ${DOT_TONE[tone]} ${pulse ? 'animate-pulse' : ''}`} />
@@ -68,7 +92,8 @@ function Stat({
   return (
     <span className="flex items-center gap-1.5">
       {dot}
-      <span className={`font-semibold ${NUMBER_TONE[tone]}`}>{value}</span> {label}
+      <span className={`font-semibold ${NUMBER_TONE[tone]}`}>{format.number(value)}</span>{' '}
+      {label}
     </span>
   );
 }
