@@ -1,0 +1,35 @@
+{
+  "queue": {
+    "title": "Cola de revisión",
+    "welcome": "Hola, {name}. Este es {workspace} — tu espacio de trabajo personal."
+  },
+  "importPanel": {
+    "title": "Importa un documento",
+    "body": "Pega un enlace a una especificación o RFC y obtén una página renderizada lista para revisar."
+  },
+  "stats": {
+    "documents": "{count, plural, one {documento} other {documentos}}",
+    "openThreads": "{count, plural, one {hilo abierto} other {hilos abiertos}}",
+    "orphaned": "{count, plural, one {huérfano} other {huérfanos}}",
+    "approvalsStale": "{count, plural, one {aprobación caducada} other {aprobaciones caducadas}}",
+    "importing": "{count, plural, one {importando} other {importando}}"
+  },
+  "rail": {
+    "heading": "Proyectos",
+    "docs": "{count, plural, one {# doc} other {# docs}}",
+    "open": "{count} abiertos",
+    "orphans": "{count, plural, one {# huérfano} other {# huérfanos}}",
+    "unfiled": "Sin archivar",
+    "unfiledHint": "los docs quedan aquí hasta asignarse",
+    "queueTitle": "Cola de revisión",
+    "queueBody": "“¿Qué necesita mi revisión?” llegará aquí con las notificaciones."
+  },
+  "filters": {
+    "label": "Filtrar documentos por ciclo de vida",
+    "all": "Todos",
+    "inReview": "En revisión",
+    "approved": "Aprobados",
+    "draft": "Borrador",
+    "needsAttention": "Requiere atención"
+  }
+}

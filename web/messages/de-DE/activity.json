@@ -1,0 +1,18 @@
+{
+  "heading": "Letzte Aktivität",
+  "emptyTitle": "Noch keine Aktivität",
+  "emptyBody": "Antworten, angenommene Vorschläge, Re-Syncs und abgeschlossene Importe erscheinen hier, während du prüfst.",
+  "documentFallback": "ein Dokument",
+  "workspaceFallback": "dein Arbeitsbereich",
+  "sentence": {
+    "commentCreated": "{actor, select, system {Kommentar zu <target></target>} other {<name>{name}</name> hat <target></target> kommentiert}}",
+    "suggestionAccepted": "{actor, select, system {Vorschlag zu <target></target> angenommen} other {<name>{name}</name> hat einen Vorschlag zu <target></target> angenommen}}",
+    "suggestionDeclined": "{actor, select, system {Vorschlag zu <target></target> abgelehnt} other {<name>{name}</name> hat einen Vorschlag zu <target></target> abgelehnt}}",
+    "approvalGiven": "{actor, select, system {<target></target> genehmigt} other {<name>{name}</name> hat <target></target> genehmigt}}",
+    "documentImported": "{actor, select, system {<target></target> importiert} other {<name>{name}</name> hat <target></target> importiert}}",
+    "workspaceRenamed": "{actor, select, system {Arbeitsbereich umbenannt in <target></target>} other {<name>{name}</name> hat den Arbeitsbereich in <target></target> umbenannt}}",
+    "approvalsGoneStale": "{count, plural, one {# Freigabe} other {# Freigaben}} zu <target></target> nach einem Re-Sync veraltet",
+    "importFailed": "{hasReason, select, yes {Import von <target></target> fehlgeschlagen — {reason}} other {Import von <target></target> fehlgeschlagen}}",
+    "reanchorCompleted": "<target></target> neu synchronisiert — {anchored} verankert, {relocated} verschoben, {orphaned} verwaist"
+  }
+}

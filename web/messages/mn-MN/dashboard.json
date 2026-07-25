@@ -1,0 +1,35 @@
+{
+  "queue": {
+    "title": "Хяналтын дараалал",
+    "welcome": "Тавтай морил, {name}. Энэ бол {workspace} — таны хувийн ажлын талбар."
+  },
+  "importPanel": {
+    "title": "Баримт импортлох",
+    "body": "Спек эсвэл RFC-ийн холбоосыг буулгаад хянахад бэлэн, render хийгдсэн хуудас аваарай."
+  },
+  "stats": {
+    "documents": "{count, plural, one {баримт} other {баримт}}",
+    "openThreads": "{count, plural, one {нээлттэй хэлэлцүүлэг} other {нээлттэй хэлэлцүүлэг}}",
+    "orphaned": "{count, plural, one {өнчирсөн} other {өнчирсөн}}",
+    "approvalsStale": "{count, plural, one {хуучирсан баталгаа} other {хуучирсан баталгаа}}",
+    "importing": "{count, plural, one {импортлож байна} other {импортлож байна}}"
+  },
+  "rail": {
+    "heading": "Төслүүд",
+    "docs": "{count, plural, one {# баримт} other {# баримт}}",
+    "open": "{count} нээлттэй",
+    "orphans": "{count, plural, one {# өнчирсөн} other {# өнчирсөн}}",
+    "unfiled": "Ангилаагүй",
+    "unfiledHint": "баримтууд төсөлд оноогдох хүртэл энд байрлана",
+    "queueTitle": "Хяналтын дараалал",
+    "queueBody": "«Юуг би хянах ёстой вэ?» гэдэг нь мэдэгдлүүдтэй хамт энд ирнэ."
+  },
+  "filters": {
+    "label": "Баримтуудыг төлөвөөр шүүх",
+    "all": "Бүгд",
+    "inReview": "Хяналтад",
+    "approved": "Батлагдсан",
+    "draft": "Ноорог",
+    "needsAttention": "Анхаарал хэрэгтэй"
+  }
+}

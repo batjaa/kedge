@@ -1,0 +1,35 @@
+{
+  "queue": {
+    "title": "Review queue",
+    "welcome": "Welcome, {name}. This is {workspace} — your personal workspace."
+  },
+  "importPanel": {
+    "title": "Import a document",
+    "body": "Paste a link to a spec or RFC and get a rendered page you can review."
+  },
+  "stats": {
+    "documents": "{count, plural, one {document} other {documents}}",
+    "openThreads": "{count, plural, one {open thread} other {open threads}}",
+    "orphaned": "{count, plural, one {orphaned} other {orphaned}}",
+    "approvalsStale": "{count, plural, one {approval stale} other {approvals stale}}",
+    "importing": "{count, plural, one {importing} other {importing}}"
+  },
+  "rail": {
+    "heading": "Projects",
+    "docs": "{count, plural, one {# doc} other {# docs}}",
+    "open": "{count} open",
+    "orphans": "{count, plural, one {# orphan} other {# orphans}}",
+    "unfiled": "Unfiled",
+    "unfiledHint": "docs land here until assigned",
+    "queueTitle": "Review queue",
+    "queueBody": "“What needs my review?” lands here with notifications."
+  },
+  "filters": {
+    "label": "Filter documents by lifecycle",
+    "all": "All",
+    "inReview": "In review",
+    "approved": "Approved",
+    "draft": "Draft",
+    "needsAttention": "Needs attention"
+  }
+}

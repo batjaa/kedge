@@ -1,0 +1,43 @@
+{
+  "create": {
+    "title": "Projects",
+    "body": "Group your documents by what you're working on. Your list below reads as one section per project.",
+    "nameLabel": "Project name",
+    "namePlaceholder": "Anchoring",
+    "descriptionLabel": "Description",
+    "optional": "— optional",
+    "descriptionPlaceholder": "What this project is for",
+    "submit": "Create project",
+    "submitting": "Creating…",
+    "created": "Created <link>{name}</link>. Assign documents to it from any row's project chip."
+  },
+  "header": {
+    "edit": "Edit",
+    "nameLabel": "Project name",
+    "descriptionLabel": "Description",
+    "optional": "— optional",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "noDescription": "No description yet."
+  },
+  "page": {
+    "back": "← Review queue",
+    "degradedTitle": "Couldn't load this project",
+    "degradedBody": "The API is unreachable right now — refresh in a moment."
+  },
+  "importPanel": {
+    "title": "Import into this project",
+    "body": "Paste a link or content and it lands here, filed under this project."
+  },
+  "sections": {
+    "other": "Other documents",
+    "documents": "Documents",
+    "repoEmptyTitle": "No documents yet from this source",
+    "repoEmptyBody": "A scan of this repository imports its matching files here.",
+    "otherEmptyTitle": "No other documents",
+    "otherEmptyBody": "Everything in this project came from a tracked repository above.",
+    "emptyTitle": "No documents in this project yet",
+    "emptyBody": "Import one with the box above, or assign an existing document from its review header or the project chip on any home row."
+  }
+}

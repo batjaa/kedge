@@ -1,0 +1,37 @@
+{
+  "tabs": {
+    "label": "Importquelle",
+    "url": "URL einfügen",
+    "paste": "Inhalt einfügen"
+  },
+  "url": {
+    "label": "Dokument-URL",
+    "placeholder": "https://github.com/org/repo/blob/main/SPEC.md",
+    "hint": "Füge einen Link zu einer öffentlichen Markdown-Datei oder einer GitHub-Blob-URL ein, und Kedge rendert sie hier."
+  },
+  "paste": {
+    "titleLabel": "Titel",
+    "titlePlaceholder": "Unbenanntes Dokument",
+    "contentLabel": "Inhalt",
+    "contentPlaceholder": "# Füge dein Markdown hier ein\n\nKedge rendert es — kein Link nötig.",
+    "hint": "Füge Markdown-Inhalt direkt ein und Kedge rendert ihn hier."
+  },
+  "optional": "— optional",
+  "submit": "Importieren",
+  "submitting": "Importiert…",
+  "failed": {
+    "title": "Import fehlgeschlagen",
+    "fallback": "Das Dokument konnte nicht importiert werden."
+  },
+  "retry": {
+    "action": "Import wiederholen",
+    "pending": "Wiederholt…",
+    "reconnect": "GitHub neu verbinden"
+  },
+  "poller": "Dein Dokument wird importiert — diese Seite aktualisiert sich selbst, sobald es bereit ist.",
+  "warnings": {
+    "count": "{count, plural, one {# Import-Warnung} other {# Import-Warnungen}}",
+    "show": "Zeigen",
+    "hide": "Ausblenden"
+  }
+}

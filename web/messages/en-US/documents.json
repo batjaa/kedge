@@ -1,0 +1,45 @@
+{
+  "list": {
+    "heading": "Your documents",
+    "emptyTitle": "No documents yet",
+    "emptyBody": "Import a spec or RFC with the box above and it lands here — every document in your workspace, newest first.",
+    "degradedTitle": "Couldn't load your documents",
+    "degradedBody": "The API is unreachable right now. Your import box above still works — refresh in a moment.",
+    "degradedNotice": "Couldn't load your documents — showing only this session's imports. Refresh to see everything.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "unfiled": "Unfiled"
+  },
+  "row": {
+    "projectFor": "Project for {title}",
+    "unfiledOption": "Unfiled",
+    "openThreads": "{count, plural, one {open thread} other {open threads}}"
+  },
+  "sync": {
+    "importing": "Importing…",
+    "importFailed": "Import failed",
+    "syncFailed": "Sync failed",
+    "ready": "ready",
+    "synced": "synced {when}"
+  },
+  "announce": {
+    "ready": "Import ready: {title}",
+    "failed": "Import failed: {title}"
+  },
+  "page": {
+    "claiming": "Claiming your document",
+    "backToQueue": "← Review queue",
+    "surfaceLabel": "Authenticated document",
+    "loadFailedTitle": "Couldn't load this document",
+    "loadFailedBody": "The API is unreachable right now. Try again in a moment.",
+    "versionFailedTitle": "Couldn't load this version"
+  },
+  "diff": {
+    "loadFailedTitle": "Couldn't load this diff",
+    "loadFailedBody": "The API is unreachable right now. Try again in a moment.",
+    "backToDocument": "← Back to document",
+    "current": "current {label}",
+    "notComparableTitle": "These versions can't be compared",
+    "notComparableBody": "Their projection substrates differ, so comment offsets would not line up safely."
+  }
+}

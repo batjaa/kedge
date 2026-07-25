@@ -1,0 +1,37 @@
+{
+  "tabs": {
+    "label": "Импортын эх сурвалж",
+    "url": "URL буулгах",
+    "paste": "Агуулга буулгах"
+  },
+  "url": {
+    "label": "Баримтын URL",
+    "placeholder": "https://github.com/org/repo/blob/main/SPEC.md",
+    "hint": "Нээлттэй Markdown файл эсвэл GitHub blob URL-ийн холбоосыг буулгахад Kedge энд render хийнэ."
+  },
+  "paste": {
+    "titleLabel": "Гарчиг",
+    "titlePlaceholder": "Гарчиггүй баримт",
+    "contentLabel": "Агуулга",
+    "contentPlaceholder": "# Markdown-оо энд буулгана уу\n\nKedge render хийнэ — холбоос шаардлагагүй.",
+    "hint": "Markdown агуулгыг шууд буулгахад Kedge энд render хийнэ."
+  },
+  "optional": "— заавал биш",
+  "submit": "Импортлох",
+  "submitting": "Импортлож байна…",
+  "failed": {
+    "title": "Импорт амжилтгүй",
+    "fallback": "Баримтыг импортолж чадсангүй."
+  },
+  "retry": {
+    "action": "Дахин импортлох",
+    "pending": "Дахин оролдож байна…",
+    "reconnect": "GitHub дахин холбох"
+  },
+  "poller": "Таны баримтыг импортолж байна — бэлэн болмогц энэ хуудас өөрөө шинэчлэгдэнэ.",
+  "warnings": {
+    "count": "{count, plural, one {импортын # анхааруулга} other {импортын # анхааруулга}}",
+    "show": "Харуулах",
+    "hide": "Нуух"
+  }
+}

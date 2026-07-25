@@ -56,6 +56,20 @@ en-US counterpart. Consequences:
    `--font-display` for that `html[lang=…]` in `app/global.css` (see the mn-MN
    rule, eng-review 12A).
 
+## Translator notes (`_notes`)
+
+A namespace whose strings carry hard constraints declares them in a top-level
+`_notes` object inside the catalog file itself — translator-facing prose, never
+referenced by code. The convention (established by #123 for the chip glossary):
+
+- `_notes` keys are ordinary catalog keys, so the parity test holds them to the
+  same four-locale shape; keep the note text identical (English) across locales.
+- `chips.json` is the constrained glossary (eng-review 13A): every label renders
+  inside a small uppercase mono chip. **Budget: 15 characters max per label**;
+  chips clamp at `16ch` with a truncation class as belt-and-braces, and the
+  length lint (`test/i18n-chip-glossary.test.ts`) enforces the budget on de-DE.
+  German stays deliberately short — OFFEN/PRÜFUNG style, never compound prose.
+
 ## Provenance
 
 en-US is authored. es-US / de-DE are machine-seeded and **gated on native review

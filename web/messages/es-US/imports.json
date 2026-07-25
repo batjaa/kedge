@@ -1,0 +1,37 @@
+{
+  "tabs": {
+    "label": "Origen de la importación",
+    "url": "Pegar una URL",
+    "paste": "Pegar contenido"
+  },
+  "url": {
+    "label": "URL del documento",
+    "placeholder": "https://github.com/org/repo/blob/main/SPEC.md",
+    "hint": "Pega un enlace a un archivo Markdown público o una URL de blob de GitHub, y Kedge lo renderiza aquí."
+  },
+  "paste": {
+    "titleLabel": "Título",
+    "titlePlaceholder": "Documento sin título",
+    "contentLabel": "Contenido",
+    "contentPlaceholder": "# Pega tu Markdown aquí\n\nKedge lo renderiza — sin necesidad de enlace.",
+    "hint": "Pega contenido Markdown directamente y Kedge lo renderiza aquí."
+  },
+  "optional": "— opcional",
+  "submit": "Importar",
+  "submitting": "Importando…",
+  "failed": {
+    "title": "Importación fallida",
+    "fallback": "No se pudo importar el documento."
+  },
+  "retry": {
+    "action": "Reintentar importación",
+    "pending": "Reintentando…",
+    "reconnect": "Reconectar GitHub"
+  },
+  "poller": "Importando tu documento — esta página se actualiza sola cuando esté listo.",
+  "warnings": {
+    "count": "{count, plural, one {# advertencia de importación} other {# advertencias de importación}}",
+    "show": "Mostrar",
+    "hide": "Ocultar"
+  }
+}

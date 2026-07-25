@@ -1,0 +1,45 @@
+{
+  "list": {
+    "heading": "Tus documentos",
+    "emptyTitle": "Aún no hay documentos",
+    "emptyBody": "Importa una especificación o RFC con el cuadro de arriba y aparecerá aquí — cada documento de tu espacio de trabajo, el más reciente primero.",
+    "degradedTitle": "No se pudieron cargar tus documentos",
+    "degradedBody": "La API no está disponible en este momento. El cuadro de importación de arriba sigue funcionando — recarga en un momento.",
+    "degradedNotice": "No se pudieron cargar tus documentos — solo se muestran las importaciones de esta sesión. Recarga para ver todo.",
+    "loadMore": "Cargar más",
+    "loadingMore": "Cargando…",
+    "unfiled": "Sin archivar"
+  },
+  "row": {
+    "projectFor": "Proyecto para {title}",
+    "unfiledOption": "Sin archivar",
+    "openThreads": "{count, plural, one {hilo abierto} other {hilos abiertos}}"
+  },
+  "sync": {
+    "importing": "Importando…",
+    "importFailed": "Importación fallida",
+    "syncFailed": "Sincronización fallida",
+    "ready": "listo",
+    "synced": "sincronizado {when}"
+  },
+  "announce": {
+    "ready": "Importación lista: {title}",
+    "failed": "Importación fallida: {title}"
+  },
+  "page": {
+    "claiming": "Reclamando tu documento",
+    "backToQueue": "← Cola de revisión",
+    "surfaceLabel": "Documento autenticado",
+    "loadFailedTitle": "No se pudo cargar este documento",
+    "loadFailedBody": "La API no está disponible en este momento. Inténtalo de nuevo en un momento.",
+    "versionFailedTitle": "No se pudo cargar esta versión"
+  },
+  "diff": {
+    "loadFailedTitle": "No se pudo cargar esta comparación",
+    "loadFailedBody": "La API no está disponible en este momento. Inténtalo de nuevo en un momento.",
+    "backToDocument": "← Volver al documento",
+    "current": "actual {label}",
+    "notComparableTitle": "Estas versiones no se pueden comparar",
+    "notComparableBody": "Sus sustratos de proyección difieren, por lo que los desplazamientos de comentarios no se alinearían de forma segura."
+  }
+}
