@@ -59,7 +59,10 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await expect(page.getByRole('heading', { name: 'Fixture specs' })).toBeVisible();
   const projectUrl = page.url();
 
-  const projectDocuments = page.getByRole('region', { name: 'Documents' });
+  // With the fixture repo tracked, its docs live in their own SOURCE section
+  // (M3.10 #118) headed by the repo's short name; a pasted doc lands under "Other
+  // documents". The region only materializes once the repo is tracked (below).
+  const projectDocuments = page.getByRole('region', { name: GITHUB_FIXTURE.slug });
   const importing = projectDocuments.getByText('Importing');
 
   // Park the per-row poll before any row can materialize.
@@ -101,11 +104,28 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
     await page.evaluate(() => (window as Window & { __noReload?: boolean }).__noReload === true),
   ).toBe(true);
 
-  // The three documents are now live links on the project page (real synthesized
-  // titles, not the importing-row basenames).
-  for (const file of GITHUB_FIXTURE.matched) {
-    await expect(projectDocuments.getByRole('link', { name: file.title })).toBeVisible();
+  // The three documents are now live links in the repo's OWN source section
+  // (real synthesized titles, not the importing-row basenames), and they read in
+  // REPO-PATH ORDER (#118) — `matched` is path-sorted, so the section reflects the
+  // repository's own structure, not import order.
+  const repoDocLinks = projectDocuments.getByRole('link');
+  await expect(repoDocLinks).toHaveCount(GITHUB_FIXTURE.matched.length);
+  for (const [index, file] of GITHUB_FIXTURE.matched.entries()) {
+    await expect(repoDocLinks.nth(index)).toContainText(file.title);
   }
+
+  // 6b. Dogfood the bucketing: a PASTED doc (no tracked repo) lands under "Other
+  //     documents", never in the repo section — visibly grouped by source.
+  const otherDocuments = page.getByRole('region', { name: 'Other documents' });
+  await page.getByRole('tab', { name: 'Paste content', exact: true }).click();
+  await page
+    .getByLabel('Content', { exact: true })
+    .fill('# Loose scratch note\n\nA pasted doc with no repository behind it.');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  // The "pasted" provenance chip appears under Other documents — and NOT in the
+  // repo section, so grouping keeps sources apart.
+  await expect(otherDocuments.getByText('pasted', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(projectDocuments.getByText('pasted', { exact: true })).toHaveCount(0);
 
   // 7. Place a comment on the CHANGED doc, anchored to a sentence that stays
   //    byte-identical across the mutation — the moat: it must survive the re-sync.
