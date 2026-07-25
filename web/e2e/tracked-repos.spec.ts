@@ -114,6 +114,21 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
     await expect(repoDocLinks.nth(index)).toContainText(file.title);
   }
 
+  // …and the path-ordered rows read as DIRECTORY CLUSTERS (M3.10 #119, story 3):
+  // the matched files sort `docs/architecture.md` · `docs/guide/getting-started.md`
+  // · `docs/overview.md`, so the nested file lands BETWEEN the two docs/* files —
+  // a `docs/guide` divider for the nested cluster and `docs` twice (the parent
+  // label legitimately recurs across the nested one; a repeated label is tolerated
+  // by design). The chips render full paths, so the divider labels match exactly.
+  const dividerRows = projectDocuments.locator('li[aria-hidden="true"]');
+  await expect(dividerRows).toHaveCount(3);
+  await expect(dividerRows.filter({ hasText: /^docs\/guide$/ })).toHaveCount(1);
+  await expect(dividerRows.filter({ hasText: /^docs$/ })).toHaveCount(2);
+  // The dividers are decorative to assistive tech (#119, AC b): being aria-hidden,
+  // they never join the accessible list, so it still reports exactly the three
+  // documents — clustering is sight-only sugar, the paths already ride the chips.
+  await expect(projectDocuments.getByRole('listitem')).toHaveCount(GITHUB_FIXTURE.matched.length);
+
   // 6b. Dogfood the bucketing: a PASTED doc (no tracked repo) lands under "Other
   //     documents", never in the repo section — visibly grouped by source.
   const otherDocuments = page.getByRole('region', { name: 'Other documents' });
