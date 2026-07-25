@@ -40,10 +40,11 @@ test.describe('i18n app chrome (#123)', () => {
       await expect(page.getByRole('tab', { name: 'Pegar una URL' })).toBeVisible();
       await expect(page.getByRole('tab', { name: 'Pegar contenido' })).toBeVisible();
 
-      // Projects panel (projects catalog).
+      // Projects panel (projects catalog). Both the rail and the panel legitimately
+      // head themselves "Proyectos" — assert both render, disambiguated by count.
       await expect(
         page.getByRole('heading', { name: 'Proyectos', exact: true }),
-      ).toBeVisible();
+      ).toHaveCount(2);
       await expect(
         page.getByRole('button', { name: 'Crear proyecto', exact: true }),
       ).toBeVisible();
