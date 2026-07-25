@@ -10,6 +10,7 @@ use App\Enums\ThreadType;
 use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Project;
 use App\Models\Thread;
 use App\Models\TrackedRepo;
 use App\Models\User;
@@ -429,6 +430,180 @@ class DocumentListTest extends TestCase
         $this->assertNull($rows[$doc->id]['tracked_repo_id']);
         // Provenance survives: the path column still names the origin.
         $this->assertSame(['kind' => 'repo', 'path' => 'docs/adr/0001.md'], $rows[$doc->id]['source']);
+    }
+
+    // ---- M3.10: the project page's source grouping controls (#118) -----------
+
+    public function test_tracked_repo_filter_scopes_to_that_repos_documents(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+
+        $repoA = TrackedRepo::factory()->for($workspace)->create();
+        $repoB = TrackedRepo::factory()->for($workspace)->create();
+
+        $a1 = $this->trackedDoc($workspace, $repoA, 'docs/a1.md');
+        $a2 = $this->trackedDoc($workspace, $repoA, 'docs/a2.md');
+        $this->trackedDoc($workspace, $repoB, 'docs/b1.md');
+        // A hand import (no tracked repo) must never appear under a repo filter.
+        Document::factory()->for($workspace)->create();
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/documents?tracked_repo={$repoA->id}")
+            ->assertOk()
+            // The paginator total is the section's whole size, not just the page.
+            ->assertJsonPath('meta.total', 2);
+
+        $ids = array_column($response->json('data'), 'id');
+        $this->assertEqualsCanonicalizing([$a1->id, $a2->id], $ids);
+    }
+
+    public function test_a_foreign_tracked_repo_id_yields_an_empty_page_not_an_error_oracle(): void
+    {
+        $userA = $this->registerUser('a@example.com');
+        $userB = $this->registerUser('b@example.com');
+
+        // B's repo, with a document, in B's workspace.
+        $repoB = TrackedRepo::factory()->for($userB->personalWorkspace())->create();
+        $this->trackedDoc($userB->personalWorkspace(), $repoB, 'docs/secret.md');
+
+        // A filters by B's repo id. The IDOR matrix extension: a foreign id is
+        // indistinguishable from "no such repo" — an empty 200 page, never a 403
+        // or 404 that would confirm the id exists elsewhere.
+        $this->actingAs($userA)->fromWebApp()
+            ->getJson("/api/v1/documents?tracked_repo={$repoB->id}")
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_order_path_sorts_a_repo_section_by_repo_path(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+        $repo = TrackedRepo::factory()->for($workspace)->create();
+
+        // Created OUT of path order, so only the DB sort can produce path order.
+        $zeta = $this->trackedDoc($workspace, $repo, 'docs/zeta.md');
+        $alpha = $this->trackedDoc($workspace, $repo, 'docs/adr/0001.md');
+        $beta = $this->trackedDoc($workspace, $repo, 'docs/beta.md');
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/documents?tracked_repo={$repo->id}&order=path")
+            ->assertOk();
+
+        // Ordered by tracked_path ascending — the repo's own structure.
+        $this->assertSame(
+            [$alpha->id, $beta->id, $zeta->id],
+            array_column($response->json('data'), 'id'),
+        );
+    }
+
+    public function test_order_path_paginates_a_repo_section_stably_across_a_boundary(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+        $repo = TrackedRepo::factory()->for($workspace)->create();
+
+        // 25 distinct paths spanning two pages; the id DESC tiebreak keeps a row
+        // straddling the boundary from permuting or dropping between page reads.
+        $ids = [];
+        foreach (range(1, 25) as $n) {
+            $path = sprintf('docs/%03d.md', $n);
+            $ids[] = $this->trackedDoc($workspace, $repo, $path)->id;
+        }
+
+        $pageOne = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/documents?tracked_repo={$repo->id}&order=path&per_page=20")
+            ->assertOk()
+            ->assertJsonCount(20, 'data')
+            ->assertJsonPath('meta.total', 25);
+        $pageTwo = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/documents?tracked_repo={$repo->id}&order=path&per_page=20&page=2")
+            ->assertOk()
+            ->assertJsonCount(5, 'data');
+
+        $seen = array_merge(
+            array_column($pageOne->json('data'), 'id'),
+            array_column($pageTwo->json('data'), 'id'),
+        );
+
+        $this->assertCount(25, $seen);
+        $this->assertSame(count($seen), count(array_unique($seen)));
+        $this->assertEqualsCanonicalizing($ids, $seen);
+    }
+
+    public function test_order_path_without_the_tracked_repo_filter_is_rejected(): void
+    {
+        $user = $this->registerUser();
+        Document::factory()->for($user->personalWorkspace())->create();
+
+        // Path order is meaningless across sources, so it is a 422 without the
+        // filter, never a silently-ignored parameter.
+        $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?order=path')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('order');
+    }
+
+    public function test_exclude_tracked_repos_returns_the_other_documents_complement(): void
+    {
+        $user = $this->registerUser();
+        $workspace = $user->personalWorkspace();
+        $project = Project::factory()->for($workspace)->create();
+
+        // The project's attached repo, with two docs — its own section.
+        $attached = TrackedRepo::factory()->for($workspace)->create(['project_id' => $project->id]);
+        $this->trackedDoc($workspace, $attached, 'docs/a.md', $project);
+        $this->trackedDoc($workspace, $attached, 'docs/b.md', $project);
+
+        // A hand import filed under the project (null tracked repo) — belongs to
+        // "Other documents".
+        $hand = Document::factory()->for($workspace)->create(['project_id' => $project->id]);
+
+        // A doc that came from ANOTHER project's repo and was reassigned in here:
+        // it keeps its provenance id, which is NOT in this project's attached set,
+        // so grouping must still show it under "Other documents" (never hide it).
+        $otherRepo = TrackedRepo::factory()->for($workspace)->create();
+        $reassigned = $this->trackedDoc($workspace, $otherRepo, 'docs/x.md', $project);
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/documents?project={$project->id}&exclude_tracked_repos={$attached->id}")
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2);
+
+        // The attached repo's docs are excluded; the hand doc and the reassigned-in
+        // doc (repo id NOT attached here) both remain — nothing is hidden.
+        $this->assertEqualsCanonicalizing(
+            [$hand->id, $reassigned->id],
+            array_column($response->json('data'), 'id'),
+        );
+    }
+
+    public function test_a_non_numeric_tracked_repo_filter_is_rejected(): void
+    {
+        $user = $this->registerUser();
+        Document::factory()->for($user->personalWorkspace())->create();
+
+        $this->actingAs($user)->fromWebApp()
+            ->getJson('/api/v1/documents?tracked_repo=abc')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('tracked_repo');
+    }
+
+    /**
+     * A repo-sourced document at a repo-relative path — the shape a scan import
+     * mints (tracked repo + path), optionally filed under a project.
+     */
+    private function trackedDoc(Workspace $workspace, TrackedRepo $repo, string $path, ?Project $project = null): Document
+    {
+        return Document::factory()->for($workspace)->create([
+            'project_id' => $project?->id,
+            'source_type' => SourceType::GithubPublic,
+            'source_url' => "https://github.com/kedgehq/kedge/blob/main/{$path}",
+            'tracked_repo_id' => $repo->id,
+            'tracked_path' => $path,
+        ]);
     }
 
     /**

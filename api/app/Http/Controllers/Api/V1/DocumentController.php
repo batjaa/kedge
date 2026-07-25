@@ -62,9 +62,37 @@ class DocumentController extends Controller
         // The lifecycle filter chips (SPEC §16, M3.7; #103). A closed set, so an
         // unknown value is a 422 rather than a silent no-op — and `from()` below
         // can never throw on garbage. Absent means All.
+        //
+        // M3.10 (#118) adds the project page's source-grouping controls, all on
+        // this ONE workspace-scoped query so grouping costs no extra query surface
+        // (story 7): `tracked_repo` narrows to one attached repo's section,
+        // `exclude_tracked_repos` carves the "Other documents" complement, and
+        // `order=path` reads a repo section in repo-path order. All are optional;
+        // absent, the endpoint behaves exactly as the M3.7 flat list.
         $validated = $request->validate([
             'lifecycle' => ['sometimes', Rule::enum(DocumentLifecycleFilter::class)],
+            // A numeric tracked-repo id. The query is already workspace-scoped, so a
+            // foreign id simply matches nothing (an empty page, never a 403/404
+            // oracle) — the same no-existence-leak convention as `?project=`.
+            'tracked_repo' => ['sometimes', 'integer'],
+            // The attached-repo ids to EXCLUDE for "Other documents" — a
+            // comma-separated id list. Only ever narrows the caller's own
+            // workspace, so it can disclose nothing a foreign id isn't already
+            // barred from.
+            'exclude_tracked_repos' => ['sometimes', 'string', 'regex:/^\d+(,\d+)*$/'],
+            // The only non-default ordering: repo-path order for a repo section.
+            'order' => ['sometimes', 'in:path'],
         ]);
+
+        // Path order is meaningless across sources (every doc's `tracked_path` is
+        // relative to ITS repo), so it is only valid scoped to one tracked repo —
+        // a 422 without the filter, never a silently-ignored parameter.
+        $orderByPath = ($validated['order'] ?? null) === 'path';
+        if ($orderByPath && ! array_key_exists('tracked_repo', $validated)) {
+            throw ValidationException::withMessages([
+                'order' => 'Path ordering requires a tracked_repo filter.',
+            ]);
+        }
 
         $perPage = min(max((int) $request->integer('per_page', 20), 1), 50);
 
@@ -89,6 +117,29 @@ class DocumentController extends Controller
             $query->where('project_id', (int) $project);
         }
 
+        // The project page's repo section (#118): narrow to one attached tracked
+        // repo. Workspace-scoped like `?project=`, so a foreign repo id yields an
+        // empty page rather than an access oracle. Covered by the composite unique
+        // index `(tracked_repo_id, tracked_path)` — leftmost column — so the filter
+        // (and the path sort below) cost no extra index.
+        if (array_key_exists('tracked_repo', $validated)) {
+            $query->where('tracked_repo_id', (int) $validated['tracked_repo']);
+        }
+
+        // The project page's "Other documents" complement (#118): everything NOT
+        // from an attached repo — repo id null (hand imports) OR pointing at a repo
+        // that isn't attached here (a doc reassigned in from another project keeps
+        // its provenance id). One predicate, so grouping never hides a document and
+        // stays a single DB-paginated query. Excluding ids only ever narrows the
+        // caller's own workspace, so it leaks nothing.
+        if (array_key_exists('exclude_tracked_repos', $validated)) {
+            $excluded = array_map('intval', explode(',', $validated['exclude_tracked_repos']));
+            $query->where(function ($inner) use ($excluded) {
+                $inner->whereNull('tracked_repo_id')
+                    ->orWhereNotIn('tracked_repo_id', $excluded);
+            });
+        }
+
         // Server-side lifecycle filter (SPEC §16, M3.7; #103) through the ONE
         // shared predicate the summary counts each chip with (DocumentLifecycleFilter
         // → the lifecycle scopes / needsAttention). Applied before pagination, so
@@ -102,14 +153,20 @@ class DocumentController extends Controller
             $builder = DocumentLifecycleFilter::from($validated['lifecycle'])->apply($builder);
         }
 
+        // Repo-path order for a repo section (#118), else the default newest-first.
+        // Both carry the `id` DESC tiebreak: `tracked_path` is not unique per repo
+        // in general and `created_at` is second-precision, so without it a row
+        // straddling a page boundary can permute between reads or silently drop.
+        if ($orderByPath) {
+            $builder->orderBy('tracked_path')->orderByDesc('id');
+        } else {
+            $builder->latest()->orderByDesc('id');
+        }
+
         $documents = $builder
-            // `created_at` is second-precision, so a stable tiebreaker is required:
-            // without it same-second rows can order differently between page reads,
-            // and a row straddling a page boundary can permute or silently drop.
-            ->latest()
-            ->orderByDesc('id')
             ->paginate($perPage)
-            // Keep `?project=` on the paginator links so Load more stays scoped.
+            // Keep every filter (project, tracked_repo, order, …) on the paginator
+            // links so a section's Load more stays scoped and ordered.
             ->withQueryString();
 
         return DocumentListResource::collection($documents);
