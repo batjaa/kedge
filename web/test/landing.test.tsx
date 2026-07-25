@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it, vi } from 'vitest';
 import { loadMessages } from '@/lib/i18n/messages';
+import { SUPPORTED_LOCALES, type Locale } from '@/lib/i18n/config';
 
 // The hero form (LandingHeroForm) calls useRouter, and there is no app-router
 // context under renderToStaticMarkup — stub next/navigation. We assert static
@@ -14,14 +15,19 @@ vi.mock('next/navigation', () => ({
 // Import AFTER the mock so the hero form binds the stubbed router.
 const { Landing } = await import('@/components/app/landing/landing');
 
-describe('Landing (Open Harbor marketing home, conversion pass 2026-07-24)', () => {
-  // The landing header's ThemeToggle is localized (M3.9), so it needs the intl
-  // context the root layout provides in production — supply en-US here.
-  const html = renderToStaticMarkup(
-    <NextIntlClientProvider locale="en-US" messages={loadMessages('en-US')}>
+// The landing is localized (M3.9 #125): render it exactly the way the root
+// layout does in production — under NextIntlClientProvider with the merged
+// (en-US fallback baked in) message tree for a locale.
+function renderLanding(locale: Locale): string {
+  return renderToStaticMarkup(
+    <NextIntlClientProvider locale={locale} messages={loadMessages(locale)}>
       <Landing />
     </NextIntlClientProvider>,
   );
+}
+
+describe('Landing (Open Harbor marketing home, conversion pass 2026-07-24)', () => {
+  const html = renderLanding('en-US');
 
   it('renders the hero with the reused paste box (Document URL + Render it)', () => {
     expect(html).toContain('Paste a link.');
@@ -90,11 +96,48 @@ describe('Landing (Open Harbor marketing home, conversion pass 2026-07-24)', () 
   it('exposes exactly one h1 (the hero) for a clean document outline', () => {
     expect(html.match(/<h1\b/g)).toHaveLength(1);
   });
+});
 
-  it('keeps marketing copy free of em dashes (house style)', () => {
-    // Copy rule from the conversion pass: no em dashes in visitor-facing text.
-    // The illustration stills and code comments are rendered markup too, so the
-    // whole document must be clean.
-    expect(html).not.toContain('—');
+describe('Landing i18n (M3.9 #125 — catalogs, footer switcher, house style)', () => {
+  // SPEC m3.9 story 6: an es-US visitor gets the Spanish landing on first paint.
+  // This is the render seam of that journey — the same merged message tree the
+  // request config resolves for an es-US Accept-Language, rendered from scratch
+  // (no switch, no client hydration): the full funnel reads Spanish.
+  it('renders the Spanish landing from the es-US catalog on first paint', () => {
+    const html = renderLanding('es-US');
+    // Hero.
+    expect(html).toContain('Pega un enlace.');
+    expect(html).toContain('Cero registro.');
+    expect(html).not.toContain('Paste a link.');
+    // Demo affordance.
+    expect(html).toContain('URL del documento');
+    expect(html).toContain('Renderízalo');
+    // Roadmap band.
+    expect(html).toContain('Disponible hoy');
+    // Email funnel + footer.
+    expect(html).toContain('Crear mi espacio de trabajo');
+    expect(html).toContain('Comentarios que no pierden su lugar.');
   });
+
+  it('places the language switcher in the footer for anonymous visitors', () => {
+    // The switcher is #122's component (endonyms are never translated), so its
+    // four options prove the placement in every locale's markup; the persistence
+    // path (cookie server action + refresh) is the i18n journeys' job.
+    const html = renderLanding('en-US');
+    const footer = html.slice(html.indexOf('<footer'));
+    expect(footer).toContain('<select');
+    for (const endonym of ['English', 'Español', 'Монгол', 'Deutsch']) {
+      expect(footer).toContain(endonym);
+    }
+  });
+
+  // House style (conversion pass 2026-07-24): no em dashes in visitor-facing
+  // text — and translations owe the same discipline (#125 AC). The illustration
+  // stills and code comments are rendered markup too, so the whole document must
+  // be clean in EVERY locale, not just the authored en-US.
+  for (const locale of SUPPORTED_LOCALES) {
+    it(`keeps the ${locale} landing markup free of em dashes (house style)`, () => {
+      expect(renderLanding(locale)).not.toContain('—');
+    });
+  }
 });

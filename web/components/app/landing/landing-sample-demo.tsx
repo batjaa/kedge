@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { sharePath, startDemo } from '@/lib/demo-client';
 
@@ -8,7 +9,9 @@ import { sharePath, startDemo } from '@/lib/demo-client';
 // known-good public URL (Kedge's own SPEC.md — dogfooding as proof). This is the
 // zero-friction path to the product's wow moment: no hunting for a URL before
 // seeing a render. Same startDemo contract as the hero paste box; only the
-// trigger differs.
+// trigger differs. The label arrives already translated from the call site
+// (M3.9 #125); the pending/disabled strings read from the `landing` catalog,
+// while an API error message passes through untranslated (SPEC m3.9).
 export function SampleDemoButton({
   url,
   label,
@@ -18,6 +21,7 @@ export function SampleDemoButton({
   label: string;
   variant: 'chip' | 'link';
 }) {
+  const t = useTranslations('landing');
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +38,7 @@ export function SampleDemoButton({
       return;
     }
 
-    setError(
-      outcome.kind === 'disabled'
-        ? 'Demo mode is off on this instance. Sign in to import a document.'
-        : outcome.message,
-    );
+    setError(outcome.kind === 'disabled' ? t('demo.disabledError') : outcome.message);
     setPending(false);
   }
 
@@ -55,7 +55,7 @@ export function SampleDemoButton({
         disabled={pending}
         className={`${styles} focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60`}
       >
-        {pending ? 'Rendering…' : label}
+        {pending ? t('demo.pending') : label}
       </button>
       {error ? (
         <span role="alert" className="text-rose-600 dark:text-rose-400">
