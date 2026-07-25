@@ -1,0 +1,157 @@
+{
+  "header": {
+    "navLabel": "Hauptnavigation",
+    "nav": {
+      "how": "So funktioniert’s",
+      "workspace": "Arbeitsbereich",
+      "roadmap": "Roadmap",
+      "selfHost": "Self-Hosting"
+    },
+    "signIn": "Anmelden",
+    "getStarted": "Loslegen"
+  },
+  "hero": {
+    "badge": "Open Source · AGPL-3.0 · selbst hostbar",
+    "title": {
+      "line1": "Link einfügen.",
+      "line2": "Spec reviewen.",
+      "accent": "Ohne Registrierung."
+    },
+    "lede": "Specs leben in GitHub und Confluence, doch ihre Reviews sterben in PR-Threads und Meeting-Chats. Kedge macht aus jeder Quelle eine einzige gut lesbare Review-Seite: Diskussion am Text verankert, Freigaben an Versionen geheftet und KI griffbereit, um das Dokument zu stärken."
+  },
+  "stills": {
+    "openChip": "Offen",
+    "pendingChip": "Ausstehend",
+    "reply": "Antworten",
+    "resolve": "Auflösen",
+    "draftReply": "Antwort entwerfen →",
+    "suggestedEdit": "Vorgeschlagene Änderung",
+    "accept": "Übernehmen",
+    "decline": "Ablehnen",
+    "survivedBadge": "14 Kommentare haben den letzten Re-Sync überlebt",
+    "agentChip": "Agent · MCP",
+    "justNow": "gerade eben",
+    "viaMcp": "via MCP gepostet · menschliche Prüfung ausstehend"
+  },
+  "demo": {
+    "formLabel": "Ein Dokument rendern",
+    "urlLabel": "Dokument-URL",
+    "submit": "Rendern",
+    "pending": "Wird gerendert…",
+    "hintSources": "Öffentliches GitHub und Raw-URLs",
+    "hintDiagrams": "PlantUML und Mermaid via Kroki",
+    "sampleIntro": "Keine URL zur Hand?",
+    "sampleChip": "Kedges eigene SPEC.md rendern",
+    "disabledError": "Der Demo-Modus ist auf dieser Instanz aus. Melde dich an, um ein Dokument zu importieren."
+  },
+  "surface": {
+    "heading": "Kommentare, die ihren Platz behalten",
+    "body": "Ein echtes Review in Kedge: das Dokument zum Lesen gerendert, Threads an genau den Sätzen, die sie hinterfragen, Freigaben an der Version, die sie gesehen haben. Veröffentliche eine neue Version, und die Diskussion verankert sich neu, statt fortgespült zu werden.",
+    "screenshotAlt": "Eine in Kedge gerenderte Spec mit Kommentar-Threads an Sätzen im Text und versionsgebundenen Aktionen zum Freigeben und Re-Sync"
+  },
+  "how": {
+    "heading": "Reviewe dort, wo das Dokument lesbar ist, nicht dort, wo es liegt",
+    "body": "Drei Schritte von einer URL zum laufenden Review. Keine Migration, kein neues Zuhause für deine Dokumente, und Reviewer brauchen nie Accounts.",
+    "steps": {
+      "import": {
+        "title": "Von überall importieren",
+        "body": "Eine GitHub-Datei, ein ganzes Repo-Verzeichnis, eine Raw-URL, ein Upload. Diagramme werden gerendert, kaputtes Markup bringt die Seite nie zum Absturz, und in Sekunden existiert ein Teilen-Link."
+      },
+      "discuss": {
+        "title": "Direkt am Text diskutieren",
+        "body": "Wähle einen Satz aus, starte einen Thread. Schlage die Korrektur als vorgeschlagene Änderung vor, die der Autor mit einem Klick übernimmt. Reviewer kommen per Magic Link dazu, ohne Accounts zu verwalten."
+      },
+      "resync": {
+        "title": "Neue Version liefern, Review behalten",
+        "body": "Der Re-Sync holt das neueste Dokument, und jeder Kommentar findet seinen Platz wieder: exakter Treffer zuerst, unscharfer Treffer danach, die Waisen-Ablage als Sicherheitsnetz. Freigaben zeigen genau, für welche Version sie bürgen."
+      }
+    }
+  },
+  "agents": {
+    "kicker": "In Entwicklung",
+    "heading": "Dein nächster Reviewer ist vielleicht kein Mensch",
+    "body1": "Kedges MCP-Server macht KI-Agenten zu vollwertigen Reviewern. Sie lesen das gerenderte Dokument, verankern Kommentare an echten Passagen und tragen ein Badge, das genau sagt, was sie sind. Nichts, was ein Agent schreibt, wird ohne menschliche Bestätigung veröffentlicht.",
+    "body2": "Dann schließe den Kreis: fasse das Review in einem KI-Digest zusammen, gib deinem Coding-Agenten den Verbesserungs-Prompt, re-synce das überarbeitete Dokument, und die ganze Diskussion ist noch da."
+  },
+  "workspace": {
+    "kicker": "Projekte und verbundene Repos",
+    "heading": "Richte es auf deinen <code>docs/</code>-Ordner, und jede Spec kommt reviewbereit an",
+    "body": "Ein Projekt verfolgt ein Repo, einen Branch und ein Pfadmuster. Kedge zeigt die Treffer in der Vorschau, importiert sie gesammelt, und ein Re-Scan nach jedem Push importiert neue Dateien, re-synct geänderte und markiert Löschungen. Selbst löscht es nie etwas.",
+    "points": {
+      "status": "Live-Importstatus an jedem Dokument, Wiederholung inline",
+      "glance": "Lebenszyklus, offene Threads und Sync-Status auf einen Blick",
+      "unfiled": "Eine Ablage für Unsortiertes, damit nichts zuerst ein Zuhause braucht"
+    },
+    "console": {
+      "activeChip": "Aktiv",
+      "docs6": "6 Docs",
+      "open11": "11 offen",
+      "orphan1": "1 Waise",
+      "rescan": "Re-Scan",
+      "docs3": "3 Docs",
+      "docs2": "2 Docs",
+      "unfiled": "Unsortiert",
+      "dragHint": "Docs hierher ziehen… oder irgendwohin",
+      "colDocument": "Dokument",
+      "colMeta": "Status · Threads · Sync",
+      "chipInReview": "Prüfung",
+      "chipApproved": "Freigegeben",
+      "chipOrphan": "1 Waise",
+      "chipImporting": "Import läuft…",
+      "chipFailed": "Fehler",
+      "retry": "Wiederholen",
+      "metaSpec": "v4 · 7 offen · vor 2 Std.",
+      "metaDesign": "v2 · 0 offen · vor 2 Std.",
+      "metaRfc": "v6 · 3 offen · vor 40 Min.",
+      "metaScan": "vom Re-Scan gefunden · gerade eben",
+      "metaRoadmap": "v3 · 1 offen · vor 2 Std.",
+      "metaFailed": "nicht erreichbar · vor 1 Tag"
+    }
+  },
+  "roadmap": {
+    "heading": "Heute live, als Nächstes auf der Karte",
+    "intro": "Sechs Releases im Juli, jedes noch in seiner Woche an Kedges eigenen Dokumenten vorgeführt. Die Karte ab hier:",
+    "liveTitle": "Heute live",
+    "chartedTitle": "Als Nächstes",
+    "live": {
+      "import": "Import aus GitHub, Raw-URLs, Uploads, privaten Repos",
+      "threads": "Verankerte Threads und Ein-Klick-Änderungsvorschläge",
+      "versions": "Versionen, Diffs und Freigaben, die sichtbar veralten",
+      "projects": "Arbeitsbereich-Projekte und verbundene Repos mit Re-Scan"
+    },
+    "charted": {
+      "ai": "KI-Reviewer und Digests über MCP, jetzt in Entwicklung",
+      "inbox": "Ein Review-Posteingang: Erwähnungen, Digests, was dich braucht",
+      "sync": "GitHub App und Confluence-Sync: einmal pushen, es re-synct sich selbst",
+      "selfhost": "Self-Hosting GA: ein Befehl, volle Parität, AGPL-3.0"
+    },
+    "closer": "Beide Editionen starten zusammen: das SaaS für alle mit einer URL, die Compose-Datei für Teams, deren Specs zu Hause bleiben."
+  },
+  "selfHost": {
+    "heading": "Deine Specs müssen nie das Haus verlassen",
+    "body": "Die Open-Source-Edition ist das ganze Produkt: Verankerung, Freigaben, der MCP-Server, alles. AGPL-3.0, volle Parität mit dem SaaS, eine Compose-Datei.",
+    "guideCta": "Self-Hosting-Anleitung lesen",
+    "starCta": "Auf GitHub einen Stern geben",
+    "terminal": {
+      "frontDoor": "die Anmeldung ist die Haustür",
+      "ready": "fertig. nichts hat die Maschine verlassen."
+    }
+  },
+  "cta": {
+    "heading": "Starte dein erstes Review in 60 Sekunden",
+    "body": "Hinterlasse deine E-Mail-Adresse, um einen Arbeitsbereich für die Specs deines Teams zu eröffnen. Nichts zu installieren, keine Kreditkarte, und die Demo funktioniert, bevor du dich entscheidest.",
+    "proofPrompt": "Erst den Beweis?",
+    "proofCta": "Kedges eigene SPEC.md rendern, ohne Registrierung"
+  },
+  "email": {
+    "formLabel": "Erstelle deinen Arbeitsbereich",
+    "emailLabel": "E-Mail",
+    "placeholder": "du@firma.de",
+    "submit": "Arbeitsbereich erstellen"
+  },
+  "footer": {
+    "tagline": "Kommentare, die ihren Platz behalten.",
+    "docs": "Doku",
+    "roadmap": "Roadmap"
+  }
+}
