@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { claimDocument } from '@/lib/demo-client';
 
@@ -12,10 +13,12 @@ import { claimDocument } from '@/lib/demo-client';
 // It POSTs the claim, then lands on the clean doc URL — now owned. If the doc was
 // already claimed (a double-submit, or someone beat them to it), it still routes
 // to the doc and lets the normal guard decide what to show.
+// Copy lives in the `claim` catalog (M3.9 #124).
 export function DocumentClaim({ id }: { id: number }) {
   const router = useRouter();
+  const t = useTranslations('claim');
   const ran = useRef(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (ran.current) return; // StrictMode double-invoke guard
@@ -32,7 +35,7 @@ export function DocumentClaim({ id }: { id: number }) {
         return;
       }
 
-      setFailed(outcome.message);
+      setFailed(true);
     })();
   }, [id, router]);
 
@@ -40,16 +43,16 @@ export function DocumentClaim({ id }: { id: number }) {
     return (
       <div className="mt-8 rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-          Couldn&apos;t claim this document
+          {t('failed.heading')}
         </h2>
         <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          {failed}
+          {t('failed.body')}
         </p>
         <Link
           href={`/documents/${id}?claim=1`}
           className="mt-4 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
         >
-          Try again
+          {t('failed.tryAgain')}
         </Link>
       </div>
     );
@@ -62,7 +65,7 @@ export function DocumentClaim({ id }: { id: number }) {
         className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500"
       />
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Claiming this document into your workspace…
+        {t('completing')}
       </p>
     </div>
   );

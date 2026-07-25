@@ -16,10 +16,12 @@ export type DemoOutcome =
   | { ok: false; kind: 'disabled' }
   | { ok: false; kind: 'error'; message: string };
 
+// The claim error carries no prose: the API body isn't parsed for one, so the
+// consuming component (document-claim) owns the localized copy (M3.9 #124).
 export type ClaimOutcome =
   | { ok: true; document: Document }
   | { ok: false; kind: 'forbidden' }
-  | { ok: false; kind: 'error'; message: string };
+  | { ok: false; kind: 'error' };
 
 function post(path: string, body?: Record<string, unknown>): Promise<Response> {
   return fetch(`${publicApiBaseUrl}${path}`, {
@@ -121,9 +123,5 @@ export async function claimDocument(id: number): Promise<ClaimOutcome> {
     return { ok: false, kind: 'forbidden' };
   }
 
-  return {
-    ok: false,
-    kind: 'error',
-    message: 'Couldn’t claim this document. Please try again.',
-  };
+  return { ok: false, kind: 'error' };
 }

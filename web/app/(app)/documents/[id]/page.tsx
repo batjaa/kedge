@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getDocument, getDocumentVersion, getDocumentVersions } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 import { DocumentBody } from '@/components/app/document-body';
@@ -38,10 +39,11 @@ export default async function DocumentPage({
   // NOT read it as this (non-member) user yet — hand off to the client claim,
   // which POSTs the claim and then lands on the clean, now-owned doc URL.
   if (claim === '1') {
+    const t = await getTranslations('claim');
     return (
       <PageContainer>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          Claiming your document
+          {t('claiming')}
         </h1>
         <DocumentClaim id={Number(id)} />
       </PageContainer>
