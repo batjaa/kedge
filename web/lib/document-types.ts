@@ -231,6 +231,21 @@ export interface DocumentListItem {
   created_at: string | null;
 }
 
+/**
+ * The project page's source-grouping controls (#118) layered on the ONE shared
+ * list query. `trackedRepo` narrows to an attached repo's section;
+ * `excludeTrackedRepos` carves the "Other documents" complement (repo id null or
+ * not in the attached set); `order: 'path'` reads a repo section in repo-path
+ * order (server-validated to require `trackedRepo`). All optional — omitted, the
+ * read is the plain newest-first list. Kept web-side only: it maps to the API's
+ * `tracked_repo` / `exclude_tracked_repos` / `order` query parameters.
+ */
+export interface DocumentSectionQuery {
+  trackedRepo?: number;
+  order?: 'path';
+  excludeTrackedRepos?: number[];
+}
+
 /** Laravel paginator meta for the document list — drives "Load more" (#86). */
 export interface DocumentListMeta {
   current_page: number;

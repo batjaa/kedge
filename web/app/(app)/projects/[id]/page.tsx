@@ -7,6 +7,7 @@ import { StatePanel } from '@/components/app/state-panel';
 import { getDocuments } from '@/lib/documents';
 import { getProjects } from '@/lib/projects';
 import { getTrackedRepos } from '@/lib/tracked-repos';
+import type { DocumentListPage } from '@/lib/document-types';
 
 // A project page (SPEC §16 story 6, M3.6): its description header plus its
 // documents rendered with the SAME live rows as home, filtered to this project.
@@ -49,12 +50,29 @@ export default async function ProjectPage({
   // in a URL never reveals whether a project exists elsewhere (SPEC §13).
   if (!project) notFound();
 
-  const documents = await getDocuments(1, project.id);
-  if (documents.status === 401 || documents.status === 403) redirect('/signin');
-
   // The project's tracked repos, so each record's state + last report renders on
-  // load (a refused/unreachable read yields an empty panel, never a crash).
+  // load AND each becomes a source section (M3.10 #118). A refused/unreachable
+  // read yields an empty panel + no repo sections, never a crash.
   const trackedRepos = await getTrackedRepos(project.id);
+  const repos = trackedRepos.trackedRepos;
+  const attachedIds = repos.map((repo) => repo.id);
+
+  // Each section is its OWN lean, DB-paginated query (#118), server-rendered so
+  // page 1 arrives already grouped and ordered: a repo section in repo-path order,
+  // "Other documents" excluding the attached set. Fetched in parallel — grouping
+  // costs one query per section, no more.
+  const [otherRead, ...repoReads] = await Promise.all([
+    getDocuments(1, project.id, attachedIds.length > 0 ? { excludeTrackedRepos: attachedIds } : undefined),
+    ...repos.map((repo) => getDocuments(1, project.id, { trackedRepo: repo.id, order: 'path' })),
+  ]);
+
+  // A refused read is auth, not an outage — the home's convention.
+  if (otherRead.status === 401 || otherRead.status === 403) redirect('/signin');
+
+  const initialRepoPages: Record<number, DocumentListPage | null> = {};
+  repos.forEach((repo, index) => {
+    initialRepoPages[repo.id] = repoReads[index].page;
+  });
 
   return (
     <PageContainer>
@@ -64,9 +82,10 @@ export default async function ProjectPage({
 
       <ProjectDocuments
         project={{ id: project.id, name: project.name }}
-        initialPage={documents.page}
         projects={projects}
-        initialTrackedRepos={trackedRepos.trackedRepos}
+        initialTrackedRepos={repos}
+        initialRepoPages={initialRepoPages}
+        initialOtherPage={otherRead.page}
       />
     </PageContainer>
   );

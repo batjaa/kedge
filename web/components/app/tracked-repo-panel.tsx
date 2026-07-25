@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { createTrackedRepo, previewTrackedRepo } from '@/lib/tracked-repos-client';
-import { reportImportingRows, type TrackedRepo } from '@/lib/tracked-repo-scan';
-import type { DocumentListItem, ProjectRef } from '@/lib/document-types';
+import { type TrackedRepo } from '@/lib/tracked-repo-scan';
+import type { ProjectRef } from '@/lib/document-types';
 import { TrackedRepoPreview, type PreviewView } from './tracked-repo-preview';
 import { TrackedRepoList } from './tracked-repo-list';
 import { EMERALD_BUTTON } from '@/lib/tracked-repo-styles';
@@ -12,10 +12,13 @@ import { EMERALD_BUTTON } from '@/lib/tracked-repo-styles';
 // 7/8/9/12/22). A member pastes a repo URL + path pattern and previews exactly
 // which files a scan would import (matches, overlaps 10A, over-cap 18, truncation
 // 4A). Confirming persists the tracked repo and runs its first scan (#93): the new
-// record joins the list, the page polls it until the scan settles, and the
-// reported `import_queued` files materialize as importing rows on the project
-// island — settling through the existing per-row path (this closes the M3.5
-// out-of-band-liveness TODO). DESIGN.md panel tokens.
+// record joins the list, the page polls it until the scan settles, and its
+// settle is reported up (onScanSettled) so the orchestrator materializes the
+// reported `import_queued` files as importing rows in THAT repo's source section
+// (M3.10 #118) — settling through the existing per-row path (this closes the M3.5
+// out-of-band-liveness TODO). The repo list is owned by the parent (ProjectDocuments)
+// so tracking or removing a repo here adds/removes its section live. DESIGN.md
+// panel tokens.
 
 const BUTTON_CLASS = `shrink-0 px-4 py-2 ${EMERALD_BUTTON}`;
 
@@ -26,14 +29,17 @@ const LABEL_CLASS = 'block text-xs font-medium text-zinc-700 dark:text-zinc-300'
 
 export function TrackedRepoPanel({
   project,
-  initialRepos,
-  onMaterialize,
+  repos,
+  setRepos,
+  onScanSettled,
 }: {
   /** The page's project — scopes create/preview AND stamps materialized rows (B1). */
   project: ProjectRef;
-  initialRepos: TrackedRepo[];
-  /** Merge scan-reported importing rows into the project island (story 22). */
-  onMaterialize: (rows: DocumentListItem[]) => void;
+  /** The attached repos — owned by the parent so each drives its own section (#118). */
+  repos: TrackedRepo[];
+  setRepos: Dispatch<SetStateAction<TrackedRepo[]>>;
+  /** A scan settled: the orchestrator materializes its imports into the repo's section. */
+  onScanSettled: (repo: TrackedRepo) => void;
 }) {
   const projectId = project.id;
   const [repoUrl, setRepoUrl] = useState('');
@@ -43,7 +49,6 @@ export function TrackedRepoPanel({
   const [view, setView] = useState<PreviewView | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [repos, setRepos] = useState<TrackedRepo[]>(initialRepos);
 
   const canPreview = repoUrl.trim() !== '' && pattern.trim() !== '' && !previewing;
 
@@ -106,22 +111,28 @@ export function TrackedRepoPanel({
   const handleScanned = useCallback(
     (repo: TrackedRepo) => {
       setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
-      // A settled scan's queued imports appear as importing rows on the island,
-      // stamped with this page's project so their chips read correctly (B1).
-      onMaterialize(reportImportingRows(repo.last_scan_report, project));
+      // The settle is reported up so the orchestrator materializes this repo's
+      // queued imports into its OWN source section (#118), not a shared list.
+      onScanSettled(repo);
     },
-    [onMaterialize, project],
+    [onScanSettled, setRepos],
   );
 
   // A re-scan just triggered: replace the record with its (optimistically in-flight)
   // self so the poll takes over — nothing to materialize until it settles.
-  const handleRescanned = useCallback((repo: TrackedRepo) => {
-    setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
-  }, []);
+  const handleRescanned = useCallback(
+    (repo: TrackedRepo) => {
+      setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
+    },
+    [setRepos],
+  );
 
-  const handleRemoved = useCallback((id: number) => {
-    setRepos((prev) => prev.filter((existing) => existing.id !== id));
-  }, []);
+  const handleRemoved = useCallback(
+    (id: number) => {
+      setRepos((prev) => prev.filter((existing) => existing.id !== id));
+    },
+    [setRepos],
+  );
 
   return (
     <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">

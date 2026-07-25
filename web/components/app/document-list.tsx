@@ -1,6 +1,6 @@
 'use client';
 
-import { type ChangeEvent, useState } from 'react';
+import { type ChangeEvent, type ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { MetaChip } from './meta-chip';
@@ -53,6 +53,7 @@ export function DocumentList({
   onSelectFilter,
   summary,
   heading = 'Your documents',
+  headingId = 'documents-heading',
   className = 'mt-10',
   emptyTitle = 'No documents yet',
   emptyBody = 'Import a spec or RFC with the box above and it lands here — every document in your workspace, newest first.',
@@ -78,7 +79,10 @@ export function DocumentList({
   onSelectFilter?: (filter: DocumentLifecycleFilter) => void;
   /** Chip counts (SPEC §16, M3.7); null keeps the chips but drops the counts (A1). */
   summary?: WorkspaceSummary | null;
-  heading?: string;
+  heading?: ReactNode;
+  /** Unique per rendered list so a project page's stacked source sections (#118)
+   *  don't collide on the `documents-heading` id / its `aria-labelledby`. */
+  headingId?: string;
   /** The root section's spacing — default `mt-10`; the dashboard grid (#104)
    *  zeroes it so the list aligns with the projects rail beside it. */
   className?: string;
@@ -104,10 +108,10 @@ export function DocumentList({
   const showChips = !!onSelectFilter && !showDegraded && (items.length > 0 || filter !== 'all');
 
   return (
-    <section className={className} aria-labelledby="documents-heading">
+    <section className={className} aria-labelledby={headingId}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2
-          id="documents-heading"
+          id={headingId}
           className="text-base font-semibold text-zinc-900 dark:text-white"
         >
           {heading}

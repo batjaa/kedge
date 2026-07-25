@@ -4,6 +4,7 @@ import type {
   DocumentListItem,
   DocumentListMeta,
   DocumentListPage,
+  DocumentSectionQuery,
 } from './document-types';
 
 // The poll cadence moved to its single home in lib/use-poll-until-settled.ts (12A),
@@ -17,6 +18,22 @@ import type {
  */
 export function lifecycleParam(filter: DocumentLifecycleFilter): string | undefined {
   return filter === 'all' ? undefined : filter;
+}
+
+/**
+ * Write a project page's source-grouping controls (#118) onto a document-list
+ * query string — the ONE place the web maps {@link DocumentSectionQuery} to the
+ * API's `tracked_repo` / `order` / `exclude_tracked_repos` parameters, so the
+ * server-rendered initial page and the client Load more can never drift on the
+ * names. Empty/absent fields write nothing, leaving the plain newest-first list.
+ */
+export function applySectionQuery(params: URLSearchParams, query?: DocumentSectionQuery): void {
+  if (!query) return;
+  if (query.trackedRepo !== undefined) params.set('tracked_repo', String(query.trackedRepo));
+  if (query.order) params.set('order', query.order);
+  if (query.excludeTrackedRepos && query.excludeTrackedRepos.length > 0) {
+    params.set('exclude_tracked_repos', query.excludeTrackedRepos.join(','));
+  }
 }
 
 /**
