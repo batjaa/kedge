@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { rowDirectory, withDirectoryDividers, type SectionEntry } from '@/lib/directory-dividers';
+import {
+  ROOT_DIRECTORY,
+  rowDirectory,
+  withDirectoryDividers,
+  type SectionEntry,
+} from '@/lib/directory-dividers';
 import type { DocumentListItem, DocumentSource } from '@/lib/document-types';
 
 // Directory-divider derivation (M3.10 #119, SPEC §11 story 3) — a pure projection
@@ -48,9 +53,9 @@ describe('rowDirectory', () => {
     expect(rowDirectory(repoRow(2, 'docs/overview.md'))).toBe('docs');
   });
 
-  it('returns null for a root-level file (no directory to label)', () => {
-    expect(rowDirectory(repoRow(1, 'README.md'))).toBeNull();
-    expect(rowDirectory(repoRow(2, 'LICENSE'))).toBeNull();
+  it('clusters a root-level file under the repository-root label', () => {
+    expect(rowDirectory(repoRow(1, 'README.md'))).toBe(ROOT_DIRECTORY);
+    expect(rowDirectory(repoRow(2, 'LICENSE'))).toBe(ROOT_DIRECTORY);
   });
 
   it('returns null for a non-repo row (no section-relevant path)', () => {
@@ -112,11 +117,11 @@ describe('withDirectoryDividers', () => {
     expect(new Set(keys).size).toBe(keys.length); // no duplicate React keys
   });
 
-  it('tolerates a repeated label at a load-more page boundary', () => {
+  it('keeps a load-more page boundary from interleaving or spuriously repeating', () => {
     // Page 1 ends mid-cluster; page 2 begins in the SAME directory. Deriving over
-    // the merged list yields ONE divider for that directory — the boundary does
-    // not spuriously repeat it (nor interleave), because same-dir rows are
-    // contiguous by path order.
+    // the merged (server-ordered) list yields ONE divider for that directory — the
+    // boundary neither interleaves nor spuriously repeats, because same-dir rows
+    // stay contiguous by path order.
     const page1 = [repoRow(1, 'docs/a.md'), repoRow(2, 'docs/b.md')];
     const page2 = [repoRow(3, 'docs/c.md'), repoRow(4, 'spec/x.md')];
     expect(dividers(withDirectoryDividers([...page1, ...page2]))).toEqual(['docs', 'spec']);
@@ -134,10 +139,28 @@ describe('withDirectoryDividers', () => {
     ]);
   });
 
-  it('gives root-level files no divider, and re-labels a directory that follows them', () => {
+  it('tolerates a repeated label from an out-of-order live-injected row (key-safe)', () => {
+    // A live scan/paste injection (#118) PREPENDS a freshly-imported row, so a new
+    // `spec/b.md` can land above an already-loaded, path-ordered `[docs/a, spec/a]`
+    // — breaking path order until the next server read. The derivation reflects the
+    // shown order honestly: `spec` recurs, and the keys stay unique so React never
+    // collides on the transient repeat.
+    const entries = withDirectoryDividers([
+      repoRow(3, 'spec/b.md'), // just injected at the top
+      repoRow(1, 'docs/a.md'),
+      repoRow(2, 'spec/a.md'),
+    ]);
+
+    expect(dividers(entries)).toEqual(['spec', 'docs', 'spec']);
+    const keys = entries.filter((e) => e.kind === 'divider').map((e) => (e as { key: string }).key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('labels root-level files as their own cluster, distinct from a directory', () => {
     // Path order can place a root file first (`README.md` < `docs/…`) and another
-    // after a cluster (`zzz.md` sorts after `docs/…`). Neither gets a divider (no
-    // directory to name); the sub-directory between them is labeled once.
+    // after a cluster (`zzz.md` sorts after `docs/…`). Each opens a repository-root
+    // cluster — a dirname change (`docs` → root) is a real boundary, so `zzz.md`
+    // never reads as part of the `docs` cluster above it.
     const entries = withDirectoryDividers([
       repoRow(1, 'README.md'),
       repoRow(2, 'docs/a.md'),
@@ -145,6 +168,19 @@ describe('withDirectoryDividers', () => {
       repoRow(4, 'zzz.md'),
     ]);
 
-    expect(shape(entries)).toEqual(['row:1', 'dir:docs', 'row:2', 'row:3', 'row:4']);
+    expect(shape(entries)).toEqual([
+      `dir:${ROOT_DIRECTORY}`,
+      'row:1',
+      'dir:docs',
+      'row:2',
+      'row:3',
+      `dir:${ROOT_DIRECTORY}`,
+      'row:4',
+    ]);
+  });
+
+  it('emits a single root cluster for a root-only section', () => {
+    const entries = withDirectoryDividers([repoRow(1, 'README.md'), repoRow(2, 'LICENSE')]);
+    expect(shape(entries)).toEqual([`dir:${ROOT_DIRECTORY}`, 'row:1', 'row:2']);
   });
 });
