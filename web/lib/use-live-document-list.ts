@@ -53,6 +53,14 @@ export interface LiveDocumentList {
   handleSettled: (doc: Document) => void;
   handleLoadMore: () => Promise<void>;
   handleRetried: (id: number) => void;
+  /**
+   * Refetch page 1 under the current filter and replace the list — a reconcile
+   * for when the read's SCOPE shifted underneath (a project page's Other section
+   * when a repo is tracked/untracked, #118: its exclusion set changes, so an
+   * orphaned document must resurface without a navigation). Same latest-wins
+   * guards as a chip select.
+   */
+  reload: () => void;
 }
 
 export function useLiveDocumentList({
@@ -229,6 +237,13 @@ export function useLiveDocumentList({
     [replaceWithFilter],
   );
 
+  // Re-read page 1 under the CURRENT filter (filterRef, not a render-captured
+  // value — the committed filter, always `all` on a project section). Used when
+  // the section's scope changed, never when the rows did (#118).
+  const reload = useCallback(() => {
+    void replaceWithFilter(filterRef.current);
+  }, [replaceWithFilter]);
+
   return {
     degraded,
     items,
@@ -244,5 +259,6 @@ export function useLiveDocumentList({
     handleSettled,
     handleLoadMore,
     handleRetried,
+    reload,
   };
 }

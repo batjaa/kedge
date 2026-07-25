@@ -73,7 +73,29 @@ export function DocumentSection({
     handleSettled,
     handleLoadMore,
     handleRetried,
+    reload,
   } = useLiveDocumentList({ initialPage, projectFilter: projectId, section });
+
+  // When this section's SCOPE changes — a repo tracked/untracked shifts the Other
+  // section's exclusion set (#118) — refetch page 1 so a now-orphaned document
+  // (its `tracked_repo_id` nulled on un-track) resurfaces here instead of
+  // vanishing until a navigation: grouping never hides a document. Gated on the
+  // query's CONTENT (not its object identity, which repo sections churn every
+  // render) and skipped on mount, whose read is already the server page — so a
+  // repo section (stable query) never refetches. StrictMode-safe: the first
+  // invoke only records the signature, so its double-run can't fire a reload.
+  const sectionSig = JSON.stringify(section);
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  const lastSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastSig.current === null || lastSig.current === sectionSig) {
+      lastSig.current = sectionSig;
+      return;
+    }
+    lastSig.current = sectionSig;
+    reloadRef.current();
+  }, [sectionSig]);
 
   // Fold the parent's freshly-imported rows in (prepend, deduped, bump the total)
   // — the same materialize the flat project list did, now scoped to this section.

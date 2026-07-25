@@ -167,4 +167,23 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await page.goto(projectUrl);
   await page.getByRole('button', { name: 'Re-scan', exact: true }).click();
   await expect(page.getByText('Already up to date')).toBeVisible({ timeout: 30_000 });
+
+  // 13. Un-track the repo (two-step inline confirm). Its documents STAY in the
+  //     project — grouping must never hide them (#118): the repo section goes
+  //     away and its docs reflow LIVE into "Other documents" (which, now that no
+  //     repo is attached, is the plain "Documents" list again), still carrying
+  //     their repo-path provenance chip (story 5). No reload — the section
+  //     reconciles its own scope.
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByText('Remove tracking?')).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  // The repo's own section is gone…
+  await expect(page.getByRole('region', { name: GITHUB_FIXTURE.slug })).toHaveCount(0);
+  // …and its documents are still here, reflowed into the (now single) list — never
+  // hidden by the un-track. (Provenance survival on the chip is API-unit-tested.)
+  const reflowed = page.getByRole('region', { name: 'Documents', exact: true });
+  await expect(reflowed.getByRole('link', { name: GITHUB_FIXTURE.changed.title })).toBeVisible({
+    timeout: 30_000,
+  });
 });
