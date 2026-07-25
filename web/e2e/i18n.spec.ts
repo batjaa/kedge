@@ -93,9 +93,10 @@ test.describe('i18n', () => {
     ]);
 
     await page.goto('/');
-    await expect(
-      page.getByRole('heading', { name: /Paste a link\./, level: 1 }),
-    ).toBeVisible();
+    // #125 localized the landing, so the de-DE cookie renders a German hero —
+    // assert the landing rendered (its single h1) without coupling this
+    // pipeline test to translated copy (i18n-landing.spec.ts owns the copy).
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE');
 
     await page.reload();
