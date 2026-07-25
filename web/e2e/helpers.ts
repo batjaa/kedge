@@ -49,7 +49,10 @@ export async function register(page: Page, identity: Identity): Promise<void> {
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
 
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { name: 'Review queue' })).toBeVisible();
+  // Landing check is locale-agnostic (M3.9 #123): the queue heading is now a
+  // catalog string, and the i18n journeys register under es-US/de-DE contexts.
+  // Auth-page selectors above stay English until #124 localizes that surface.
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
 
 /**
