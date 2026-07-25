@@ -20,7 +20,7 @@
     "checking": "Repository-г шалгаж байна…",
     "zeroMatches": "Энэ хэвэнд 0 файл таарлаа. Хэвээ засаад дахин урьдчилан хараарай.",
     "matches": "{count, plural, one {# файл таарч байна} other {# файл таарч байна}}",
-    "overlap": "· {count} өөр газар аль хэдийн бүртгэлтэй",
+    "overlap": "· {count, number} өөр газар аль хэдийн бүртгэлтэй",
     "overlapTitle": "Энэ ажлын талбарын өөр бүртгэлтэй repo энэ замыг аль хэдийн импортолдог — энд импортловол давхардана.",
     "confirm": "Нэмээд scan хийх",
     "confirming": "Scan эхэлж байна…",
@@ -46,13 +46,13 @@
     "adjustPattern": " — хэвээ засна уу.",
     "upToDate": "Аль хэдийн шинэ байна",
     "filesUnchanged": " · {count, plural, one {# файл хэвээрээ} other {# файл хэвээрээ}}",
-    "queued": "{count} дараалалд",
-    "resynced": " · {count} шинэчилсэн",
-    "unchanged": "{count} хэвээрээ",
-    "missing": " · {count} алга",
-    "failed": " · {count} алдаатай",
+    "queued": "{count, number} дараалалд",
+    "resynced": " · {count, number} шинэчилсэн",
+    "unchanged": "{count, number} хэвээрээ",
+    "missing": " · {count, number} алга",
+    "failed": " · {count, number} алдаатай",
     "staleTakeover": " · гацсан scan-ийг сэргээв",
     "scanned": "{count, plural, one {# файл scan хийгдсэн} other {# файл scan хийгдсэн}}",
-    "scannedMissing": ", {count} алга"
+    "scannedMissing": ", {count, number} алга"
   }
 }

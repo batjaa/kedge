@@ -17,7 +17,7 @@
   "rail": {
     "heading": "Projects",
     "docs": "{count, plural, one {# doc} other {# docs}}",
-    "open": "{count} open",
+    "open": "{count, number} open",
     "orphans": "{count, plural, one {# orphan} other {# orphans}}",
     "unfiled": "Unfiled",
     "unfiledHint": "docs land here until assigned",

@@ -103,6 +103,7 @@ export function DocumentList({
   emptyBody?: string;
 }) {
   const t = useTranslations('documents');
+  const format = useFormatter();
 
   // Degraded wins only while we have nothing to show; a successful import gives
   // us a real row, so the StatePanel yields to it rather than hiding it.
@@ -131,7 +132,9 @@ export function DocumentList({
         >
           {heading ?? t('list.heading')}
         </h2>
-        {!showDegraded && items.length > 0 ? <MetaChip>{total}</MetaChip> : null}
+        {!showDegraded && items.length > 0 ? (
+          <MetaChip>{format.number(total)}</MetaChip>
+        ) : null}
         {showChips && onSelectFilter ? (
           <FilterChips
             className="ml-auto"
@@ -280,9 +283,11 @@ function FilterChips({
 }
 
 // One project's (or Unfiled's) group header (14A): the project name links to its
-// page; Unfiled is plain, always last. The count rides the mono chip idiom.
+// page; Unfiled is plain, always last. The count rides the mono chip idiom,
+// Intl-formatted like every other count in this component.
 function GroupHeader({ project, count }: { project: ProjectRef | null; count: number }) {
   const t = useTranslations('documents');
+  const format = useFormatter();
 
   return (
     <div className="mb-3 mt-8 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -298,7 +303,7 @@ function GroupHeader({ project, count }: { project: ProjectRef | null; count: nu
           {t('list.unfiled')}
         </h3>
       )}
-      <MetaChip>{count}</MetaChip>
+      <MetaChip>{format.number(count)}</MetaChip>
     </div>
   );
 }

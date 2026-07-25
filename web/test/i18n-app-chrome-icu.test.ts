@@ -74,6 +74,16 @@ describe('ICU plurals per locale (CLDR)', () => {
     expect(t('tracked-repos.report.filesUnchanged', { count: 4 })).toContain('4 Dateien unverändert');
   });
 
+  it('bare count arguments group digits per locale ({count, number}, codex finding)', () => {
+    // A plain {count} would string-interpolate 12345; the , number argument
+    // routes through Intl.NumberFormat so German groups with dots.
+    expect(translatorFor('de-DE')('dashboard.rail.open', { count: 12345 })).toBe('12.345 offen');
+    expect(
+      translatorFor('de-DE')('tracked-repos.report.queued', { count: 12345 }),
+    ).toBe('12.345 wartend');
+    expect(translatorFor('en-US')('dashboard.rail.open', { count: 12345 })).toBe('12,345 open');
+  });
+
   it('mn-MN selects CLDR one/other (one = exactly 1; 21 is other, unlike Slavic rules)', () => {
     const t = translatorFor('mn-MN');
     // Mongolian nouns don't inflect for these counts — the point is that the

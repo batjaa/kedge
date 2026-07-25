@@ -20,7 +20,7 @@
     "checking": "Repository wird geprüft…",
     "zeroMatches": "0 Dateien passen auf dieses Muster. Passe das Muster an und sieh dir die Vorschau erneut an.",
     "matches": "{count, plural, one {# Datei passt} other {# Dateien passen}}",
-    "overlap": "· {count} bereits anderswo verfolgt",
+    "overlap": "· {count, number} bereits anderswo verfolgt",
     "overlapTitle": "Ein anderes verfolgtes Repo in diesem Arbeitsbereich importiert diesen Pfad bereits — ein Import hier würde ihn duplizieren.",
     "confirm": "Hinzufügen & scannen",
     "confirming": "Scan startet…",
@@ -46,13 +46,13 @@
     "adjustPattern": " — Muster anpassen.",
     "upToDate": "Bereits aktuell",
     "filesUnchanged": " · {count, plural, one {# Datei unverändert} other {# Dateien unverändert}}",
-    "queued": "{count} wartend",
-    "resynced": " · {count} erneuert",
-    "unchanged": "{count} unverändert",
-    "missing": " · {count} fehlen",
-    "failed": " · {count} fehlgeschlagen",
+    "queued": "{count, number} wartend",
+    "resynced": " · {count, number} erneuert",
+    "unchanged": "{count, number} unverändert",
+    "missing": " · {count, number} fehlen",
+    "failed": " · {count, number} fehlgeschlagen",
     "staleTakeover": " · hängengebliebenen Scan übernommen",
     "scanned": "{count, plural, one {# Datei gescannt} other {# Dateien gescannt}}",
-    "scannedMissing": ", {count} fehlen"
+    "scannedMissing": ", {count, number} fehlen"
   }
 }

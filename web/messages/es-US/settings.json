@@ -17,7 +17,7 @@
   },
   "integrations": {
     "heading": "GitHub",
-    "connectedCount": "{count} conectados",
+    "connectedCount": "{count, number} conectados",
     "intro": "Conecta un <link>token de acceso personal de grano fino</link> para importar archivos de repositorios privados. El enlace preselecciona el mínimo que Kedge necesita (<strong>Contents: read-only</strong>) — solo elige <strong>“Only select repositories”</strong> y selecciona los repos a revisar. El token se cifra y no se vuelve a mostrar — quítalo cuando quieras.",
     "orgLabel": "¿Repos de una organización?",
     "orgPlaceholder": "nombre de la org (opcional)",

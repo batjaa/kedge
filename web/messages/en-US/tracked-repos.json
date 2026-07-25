@@ -20,7 +20,7 @@
     "checking": "Checking the repository…",
     "zeroMatches": "0 files match this pattern. Adjust the pattern and preview again.",
     "matches": "{count, plural, one {# file matches} other {# files match}}",
-    "overlap": "· {count} already tracked elsewhere",
+    "overlap": "· {count, number} already tracked elsewhere",
     "overlapTitle": "Another tracked repo in this workspace already imports this path — importing here would duplicate it.",
     "confirm": "Add & scan",
     "confirming": "Starting scan…",
@@ -46,13 +46,13 @@
     "adjustPattern": " — adjust the pattern.",
     "upToDate": "Already up to date",
     "filesUnchanged": " · {count, plural, one {# file unchanged} other {# files unchanged}}",
-    "queued": "{count} queued",
-    "resynced": " · {count} re-synced",
-    "unchanged": "{count} unchanged",
-    "missing": " · {count} missing",
-    "failed": " · {count} failed",
+    "queued": "{count, number} queued",
+    "resynced": " · {count, number} re-synced",
+    "unchanged": "{count, number} unchanged",
+    "missing": " · {count, number} missing",
+    "failed": " · {count, number} failed",
     "staleTakeover": " · recovered a stalled scan",
     "scanned": "{count, plural, one {# file scanned} other {# files scanned}}",
-    "scannedMissing": ", {count} missing"
+    "scannedMissing": ", {count, number} missing"
   }
 }

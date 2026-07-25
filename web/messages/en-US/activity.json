@@ -13,6 +13,6 @@
     "workspaceRenamed": "{actor, select, system {Renamed the workspace to <target></target>} other {<person>{name}</person> renamed the workspace to <target></target>}}",
     "approvalsGoneStale": "{count, plural, one {# approval} other {# approvals}} on <target></target> went stale after a re-sync",
     "importFailed": "{hasReason, select, yes {Import of <target></target> failed — {reason}} other {Import of <target></target> failed}}",
-    "reanchorCompleted": "Re-synced <target></target> — {anchored} anchored, {relocated} relocated, {orphaned} orphaned"
+    "reanchorCompleted": "Re-synced <target></target> — {anchored, number} anchored, {relocated, number} relocated, {orphaned, number} orphaned"
   }
 }

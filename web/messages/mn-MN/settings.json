@@ -17,7 +17,7 @@
   },
   "integrations": {
     "heading": "GitHub",
-    "connectedCount": "{count} холбогдсон",
+    "connectedCount": "{count, number} холбогдсон",
     "intro": "Хувийн repository-с файл импортлохын тулд <link>нарийн эрхтэй personal access token</link> холбоорой. Холбоос Kedge-д хэрэгтэй хамгийн бага эрхийг (<strong>Contents: read-only</strong>) урьдчилан сонгоно — та зөвхөн <strong>“Only select repositories”</strong>-г сонгоод хянах repo-нуудаа сонгоорой. Token шифрлэгдэж, дахин хэзээ ч харагдахгүй — хүссэн үедээ устгаж болно.",
     "orgLabel": "Repo-нууд байгууллагынх уу?",
     "orgPlaceholder": "байгууллагын нэр (заавал биш)",

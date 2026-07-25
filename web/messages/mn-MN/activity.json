@@ -13,6 +13,6 @@
     "workspaceRenamed": "{actor, select, system {Ажлын талбарын нэрийг <target></target> болгов} other {<person>{name}</person> ажлын талбарын нэрийг <target></target> болгов}}",
     "approvalsGoneStale": "<target></target> дээрх {count, plural, one {# баталгаа} other {# баталгаа}} re-sync-ийн дараа хуучирлаа",
     "importFailed": "{hasReason, select, yes {<target></target>-ийн импорт амжилтгүй боллоо — {reason}} other {<target></target>-ийн импорт амжилтгүй боллоо}}",
-    "reanchorCompleted": "<target></target>-г дахин sync хийв — {anchored} бэхлэгдсэн, {relocated} шилжсэн, {orphaned} өнчирсөн"
+    "reanchorCompleted": "<target></target>-г дахин sync хийв — {anchored, number} бэхлэгдсэн, {relocated, number} шилжсэн, {orphaned, number} өнчирсөн"
   }
 }

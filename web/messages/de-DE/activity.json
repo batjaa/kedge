@@ -13,6 +13,6 @@
     "workspaceRenamed": "{actor, select, system {Arbeitsbereich umbenannt in <target></target>} other {<person>{name}</person> hat den Arbeitsbereich in <target></target> umbenannt}}",
     "approvalsGoneStale": "{count, plural, one {# Freigabe} other {# Freigaben}} zu <target></target> nach einem Re-Sync veraltet",
     "importFailed": "{hasReason, select, yes {Import von <target></target> fehlgeschlagen — {reason}} other {Import von <target></target> fehlgeschlagen}}",
-    "reanchorCompleted": "<target></target> neu synchronisiert — {anchored} verankert, {relocated} verschoben, {orphaned} verwaist"
+    "reanchorCompleted": "<target></target> neu synchronisiert — {anchored, number} verankert, {relocated, number} verschoben, {orphaned, number} verwaist"
   }
 }

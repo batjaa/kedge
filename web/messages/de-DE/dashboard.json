@@ -17,7 +17,7 @@
   "rail": {
     "heading": "Projekte",
     "docs": "{count, plural, one {# Dok.} other {# Dok.}}",
-    "open": "{count} offen",
+    "open": "{count, number} offen",
     "orphans": "{count, plural, one {# verwaist} other {# verwaist}}",
     "unfiled": "Unsortiert",
     "unfiledHint": "Dokumente landen hier, bis sie zugewiesen sind",

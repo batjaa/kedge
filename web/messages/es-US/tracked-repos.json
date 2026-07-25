@@ -20,7 +20,7 @@
     "checking": "Consultando el repositorio…",
     "zeroMatches": "0 archivos coinciden con este patrón. Ajusta el patrón y previsualiza de nuevo.",
     "matches": "{count, plural, one {# archivo coincide} other {# archivos coinciden}}",
-    "overlap": "· {count} ya rastreados en otro lugar",
+    "overlap": "· {count, number} ya rastreados en otro lugar",
     "overlapTitle": "Otro repositorio rastreado en este espacio de trabajo ya importa esta ruta — importarla aquí la duplicaría.",
     "confirm": "Agregar y escanear",
     "confirming": "Iniciando escaneo…",
@@ -46,13 +46,13 @@
     "adjustPattern": " — ajusta el patrón.",
     "upToDate": "Ya está al día",
     "filesUnchanged": " · {count, plural, one {# archivo sin cambios} other {# archivos sin cambios}}",
-    "queued": "{count} en cola",
-    "resynced": " · {count} resincronizados",
-    "unchanged": "{count} sin cambios",
-    "missing": " · {count} ausentes",
-    "failed": " · {count} fallidos",
+    "queued": "{count, number} en cola",
+    "resynced": " · {count, number} resincronizados",
+    "unchanged": "{count, number} sin cambios",
+    "missing": " · {count, number} ausentes",
+    "failed": " · {count, number} fallidos",
     "staleTakeover": " · se recuperó un escaneo estancado",
     "scanned": "{count, plural, one {# archivo escaneado} other {# archivos escaneados}}",
-    "scannedMissing": ", {count} ausentes"
+    "scannedMissing": ", {count, number} ausentes"
   }
 }

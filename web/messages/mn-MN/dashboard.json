@@ -17,7 +17,7 @@
   "rail": {
     "heading": "Төслүүд",
     "docs": "{count, plural, one {# баримт} other {# баримт}}",
-    "open": "{count} нээлттэй",
+    "open": "{count, number} нээлттэй",
     "orphans": "{count, plural, one {# өнчирсөн} other {# өнчирсөн}}",
     "unfiled": "Ангилаагүй",
     "unfiledHint": "баримтууд төсөлд оноогдох хүртэл энд байрлана",

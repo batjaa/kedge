@@ -678,6 +678,33 @@ function summary(): WorkspaceSummary {
   };
 }
 
+describe('DocumentList i18n (M3.9 #123)', () => {
+  const noop = () => {};
+
+  it('renders German chrome with Intl-grouped counts (codex finding: header total)', () => {
+    const html = renderToStaticMarkup(
+      <DocumentList
+        items={[item({ id: 7, title: 'Anchoring RFC', lifecycle_status: 'draft' })]}
+        total={12345}
+        degraded={false}
+        announcement=""
+        onSettled={noop}
+        onRetried={noop}
+      />,
+      'de-DE',
+    );
+
+    // Catalog chrome in German, 13A glossary chip, localized pasted label.
+    expect(html).toContain('Deine Dokumente');
+    expect(html).toContain('Entwurf');
+    expect(html).toContain('eingefügt');
+    // The header MetaChip total goes through Intl.NumberFormat — German
+    // digit grouping, never raw string interpolation.
+    expect(html).toContain('12.345');
+    expect(html).not.toContain('12345');
+  });
+});
+
 function emptySummary(): WorkspaceSummary {
   return {
     documents: {
