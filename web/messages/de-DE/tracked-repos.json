@@ -1,0 +1,58 @@
+{
+  "panel": {
+    "title": "Repository verfolgen",
+    "body": "Zeige auf ein GitHub-Repo und ein Pfadmuster, sieh in der Vorschau genau, welche Dateien passen, und importiere sie dann alle in dieses Projekt — bleibt für einen späteren Re-Scan verfolgt.",
+    "repoUrlLabel": "Repository-URL",
+    "repoUrlPlaceholder": "https://github.com/owner/repo",
+    "branchLabel": "Branch",
+    "optional": "— optional",
+    "branchPlaceholder": "Standard-Branch",
+    "patternLabel": "Pfadmuster",
+    "patternPlaceholder": "docs/**/*.md",
+    "patternHelp": "<code>*</code> passt innerhalb eines Ordners, <code>**</code> über Ordner hinweg, <code>?</code> ein Zeichen — Groß-/Kleinschreibung zählt. Nur <code>.md</code>-, <code>.mdx</code>- und <code>.html</code>-Dateien werden importiert.",
+    "patHint": "Du verfolgst ein großes öffentliches Repo? Verbinde das GitHub-PAT des Arbeitsbereichs in den Einstellungen für ein höheres Limit — GitHub erlaubt ohne Anmeldung nur 60 Anfragen pro Stunde.",
+    "preview": "Dateien ansehen",
+    "previewing": "Vorschau…",
+    "previewFailed": "Beim Prüfen des Repositories ist etwas schiefgelaufen. Bitte versuche es erneut.",
+    "confirmFailed": "Beim Starten des Scans ist etwas schiefgelaufen. Bitte versuche es erneut."
+  },
+  "preview": {
+    "checking": "Repository wird geprüft…",
+    "zeroMatches": "0 Dateien passen auf dieses Muster. Passe das Muster an und sieh dir die Vorschau erneut an.",
+    "matches": "{count, plural, one {# Datei passt} other {# Dateien passen}}",
+    "overlap": "· {count, number} bereits anderswo verfolgt",
+    "overlapTitle": "Ein anderes verfolgtes Repo in diesem Arbeitsbereich importiert diesen Pfad bereits — ein Import hier würde ihn duplizieren.",
+    "confirm": "Hinzufügen & scannen",
+    "confirming": "Scan startet…",
+    "confirmHint": "Importiert diese Dateien ins Projekt und hält das Repo verfolgt."
+  },
+  "row": {
+    "defaultRef": "Standard",
+    "scanning": "Repository wird gescannt…",
+    "scanFailedFallback": "Der Scan ist fehlgeschlagen. Prüfe die Repository-Angaben und versuche es erneut.",
+    "notScanned": "Noch nicht gescannt.",
+    "rescan": "Neu scannen",
+    "retryScan": "Scan wiederholen",
+    "rescanning": "Scannt neu…",
+    "reconnect": "GitHub neu verbinden",
+    "delete": "Löschen",
+    "removing": "Entfernt…",
+    "cancel": "Abbrechen",
+    "confirmRemove": "Verfolgung entfernen?",
+    "removeHint": "Seine Dokumente bleiben im Projekt — nur die Verfolgung wird entfernt."
+  },
+  "report": {
+    "zeroMatched": "0 Dateien passten",
+    "adjustPattern": " — Muster anpassen.",
+    "upToDate": "Bereits aktuell",
+    "filesUnchanged": " · {count, plural, one {# Datei unverändert} other {# Dateien unverändert}}",
+    "queued": "{count, number} wartend",
+    "resynced": " · {count, number} erneuert",
+    "unchanged": "{count, number} unverändert",
+    "missing": " · {count, number} fehlen",
+    "failed": " · {count, number} fehlgeschlagen",
+    "staleTakeover": " · hängengebliebenen Scan übernommen",
+    "scanned": "{count, plural, one {# Datei gescannt} other {# Dateien gescannt}}",
+    "scannedMissing": ", {count, number} fehlen"
+  }
+}

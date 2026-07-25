@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { PageContainer } from '@/components/app/page-container';
 import { ProjectHeader } from '@/components/app/project-header';
 import { ProjectDocuments } from '@/components/app/project-documents';
@@ -14,7 +15,8 @@ import type { DocumentListPage } from '@/lib/document-types';
 // The project itself is resolved from the workspace's project list — a foreign
 // or unknown id simply isn't in it, so the page 404s (no existence leak, the
 // same convention the API's assignment path uses). Never cached: an import in
-// flight must re-read on every navigation.
+// flight must re-read on every navigation. Chrome strings from the projects
+// catalog (M3.9); the project name/description are user data.
 export const dynamic = 'force-dynamic';
 
 export default async function ProjectPage({
@@ -23,6 +25,7 @@ export default async function ProjectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getTranslations('projects');
 
   const { status, projects } = await getProjects();
   // A refused read is an auth problem, not an outage — route to sign-in (the
@@ -36,11 +39,8 @@ export default async function ProjectPage({
   if (status !== 200) {
     return (
       <PageContainer>
-        <BackLink />
-        <StatePanel
-          title="Couldn't load this project"
-          body="The API is unreachable right now — refresh in a moment."
-        />
+        <BackLink label={t('page.back')} />
+        <StatePanel title={t('page.degradedTitle')} body={t('page.degradedBody')} />
       </PageContainer>
     );
   }
@@ -76,7 +76,7 @@ export default async function ProjectPage({
 
   return (
     <PageContainer>
-      <BackLink />
+      <BackLink label={t('page.back')} />
 
       <ProjectHeader project={project} />
 
@@ -92,14 +92,15 @@ export default async function ProjectPage({
 }
 
 // The link back to the review queue, shared by the resolved page and its degraded
-// fallback so both offer the same way out.
-function BackLink() {
+// fallback so both offer the same way out. The label is passed in — this stays a
+// sync component under an async parent that already resolved the catalog.
+function BackLink({ label }: { label: string }) {
   return (
     <Link
       href="/"
       className="inline-flex text-sm text-emerald-600 hover:text-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
     >
-      ← Review queue
+      {label}
     </Link>
   );
 }

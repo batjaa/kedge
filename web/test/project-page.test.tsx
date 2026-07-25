@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectHeader } from '@/components/app/project-header';
 import { ProjectCreate } from '@/components/app/project-create';

@@ -1,0 +1,35 @@
+{
+  "queue": {
+    "title": "Prüf-Warteschlange",
+    "welcome": "Willkommen, {name}. Das ist {workspace} — dein persönlicher Arbeitsbereich."
+  },
+  "importPanel": {
+    "title": "Dokument importieren",
+    "body": "Füge einen Link zu einer Spezifikation oder einem RFC ein und erhalte eine gerenderte Seite zur Prüfung."
+  },
+  "stats": {
+    "documents": "{count, plural, one {Dokument} other {Dokumente}}",
+    "openThreads": "{count, plural, one {offener Thread} other {offene Threads}}",
+    "orphaned": "{count, plural, one {verwaist} other {verwaist}}",
+    "approvalsStale": "{count, plural, one {Freigabe veraltet} other {Freigaben veraltet}}",
+    "importing": "{count, plural, one {im Import} other {im Import}}"
+  },
+  "rail": {
+    "heading": "Projekte",
+    "docs": "{count, plural, one {# Dok.} other {# Dok.}}",
+    "open": "{count, number} offen",
+    "orphans": "{count, plural, one {# verwaist} other {# verwaist}}",
+    "unfiled": "Unsortiert",
+    "unfiledHint": "Dokumente landen hier, bis sie zugewiesen sind",
+    "queueTitle": "Prüf-Warteschlange",
+    "queueBody": "„Was braucht meine Prüfung?“ landet hier mit den Benachrichtigungen."
+  },
+  "filters": {
+    "label": "Dokumente nach Lebenszyklus filtern",
+    "all": "Alle",
+    "inReview": "In Prüfung",
+    "approved": "Genehmigt",
+    "draft": "Entwurf",
+    "needsAttention": "Braucht Aufmerksamkeit"
+  }
+}

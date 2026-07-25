@@ -1,0 +1,58 @@
+{
+  "panel": {
+    "title": "Track a repository",
+    "body": "Point at a GitHub repo and a path pattern, preview exactly which files match, then import them all into this project — kept tracked for a re-scan later.",
+    "repoUrlLabel": "Repository URL",
+    "repoUrlPlaceholder": "https://github.com/owner/repo",
+    "branchLabel": "Branch",
+    "optional": "— optional",
+    "branchPlaceholder": "default branch",
+    "patternLabel": "Path pattern",
+    "patternPlaceholder": "docs/**/*.md",
+    "patternHelp": "<code>*</code> matches within a folder, <code>**</code> spans folders, <code>?</code> one character — case-sensitive. Only <code>.md</code>, <code>.mdx</code>, and <code>.html</code> files import.",
+    "patHint": "Tracking a large public repo? Connect the workspace GitHub PAT in Settings for a higher rate limit — unauthenticated GitHub allows only 60 requests an hour.",
+    "preview": "Preview files",
+    "previewing": "Previewing…",
+    "previewFailed": "Something went wrong checking the repository. Please try again.",
+    "confirmFailed": "Something went wrong starting the scan. Please try again."
+  },
+  "preview": {
+    "checking": "Checking the repository…",
+    "zeroMatches": "0 files match this pattern. Adjust the pattern and preview again.",
+    "matches": "{count, plural, one {# file matches} other {# files match}}",
+    "overlap": "· {count, number} already tracked elsewhere",
+    "overlapTitle": "Another tracked repo in this workspace already imports this path — importing here would duplicate it.",
+    "confirm": "Add & scan",
+    "confirming": "Starting scan…",
+    "confirmHint": "Imports these files into the project and keeps the repo tracked."
+  },
+  "row": {
+    "defaultRef": "default",
+    "scanning": "Scanning the repository…",
+    "scanFailedFallback": "The scan failed. Check the repository details and try again.",
+    "notScanned": "Not scanned yet.",
+    "rescan": "Re-scan",
+    "retryScan": "Retry scan",
+    "rescanning": "Re-scanning…",
+    "reconnect": "Reconnect GitHub",
+    "delete": "Delete",
+    "removing": "Removing…",
+    "cancel": "Cancel",
+    "confirmRemove": "Remove tracking?",
+    "removeHint": "Its documents stay in the project — only tracking is removed."
+  },
+  "report": {
+    "zeroMatched": "0 files matched",
+    "adjustPattern": " — adjust the pattern.",
+    "upToDate": "Already up to date",
+    "filesUnchanged": " · {count, plural, one {# file unchanged} other {# files unchanged}}",
+    "queued": "{count, number} queued",
+    "resynced": " · {count, number} re-synced",
+    "unchanged": "{count, number} unchanged",
+    "missing": " · {count, number} missing",
+    "failed": " · {count, number} failed",
+    "staleTakeover": " · recovered a stalled scan",
+    "scanned": "{count, plural, one {# file scanned} other {# files scanned}}",
+    "scannedMissing": ", {count, number} missing"
+  }
+}

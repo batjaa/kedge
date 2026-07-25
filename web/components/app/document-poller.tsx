@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { readDocument } from '@/lib/documents-client';
 import type { Document } from '@/lib/document-types';
@@ -13,6 +14,7 @@ import type { Document } from '@/lib/document-types';
 // prior art) so the BFF call — encodeURIComponent, the accept header, the
 // transient-hiccup → null mapping — lives in exactly one place and can't drift.
 export function DocumentPoller({ id }: { id: number }) {
+  const t = useTranslations('imports');
   const router = useRouter();
 
   usePollUntilSettled({
@@ -34,7 +36,7 @@ export function DocumentPoller({ id }: { id: number }) {
         className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500"
       />
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Importing your document — this page updates itself when it&apos;s ready.
+        {t('poller')}
       </p>
     </div>
   );

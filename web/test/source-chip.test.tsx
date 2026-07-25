@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { SourceChip } from '@/components/app/source-chip';
 import type { DocumentSource } from '@/lib/document-types';

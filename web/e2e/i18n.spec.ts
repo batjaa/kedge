@@ -20,8 +20,11 @@ import { register, uniqueIdentity } from './helpers';
 const SPACE_GROTESK = /Space Grotesk/i;
 
 async function headingFontFamily(page: import('@playwright/test').Page): Promise<string> {
+  // The dashboard h1 by LEVEL, not name — since #123 the queue title is a
+  // catalog string ("Cola de revisión" / "Хяналтын дараалал"), and this helper
+  // runs under es-US and mn-MN in the same test.
   return page
-    .getByRole('heading', { name: 'Review queue' })
+    .getByRole('heading', { level: 1 })
     .first()
     .evaluate((el) => getComputedStyle(el).fontFamily);
 }

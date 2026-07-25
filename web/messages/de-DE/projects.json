@@ -1,0 +1,43 @@
+{
+  "create": {
+    "title": "Projekte",
+    "body": "Gruppiere deine Dokumente nach dem, woran du arbeitest. Deine Liste unten liest sich als eine Sektion pro Projekt.",
+    "nameLabel": "Projektname",
+    "namePlaceholder": "Anchoring",
+    "descriptionLabel": "Beschreibung",
+    "optional": "— optional",
+    "descriptionPlaceholder": "Wofür dieses Projekt ist",
+    "submit": "Projekt erstellen",
+    "submitting": "Erstellt…",
+    "created": "<link>{name}</link> wurde erstellt. Weise ihm Dokumente über den Projekt-Chip einer beliebigen Zeile zu."
+  },
+  "header": {
+    "edit": "Bearbeiten",
+    "nameLabel": "Projektname",
+    "descriptionLabel": "Beschreibung",
+    "optional": "— optional",
+    "save": "Speichern",
+    "saving": "Speichert…",
+    "cancel": "Abbrechen",
+    "noDescription": "Noch keine Beschreibung."
+  },
+  "page": {
+    "back": "← Prüf-Warteschlange",
+    "degradedTitle": "Dieses Projekt konnte nicht geladen werden",
+    "degradedBody": "Die API ist gerade nicht erreichbar — lade gleich neu."
+  },
+  "importPanel": {
+    "title": "In dieses Projekt importieren",
+    "body": "Füge einen Link oder Inhalt ein und es landet hier, abgelegt unter diesem Projekt."
+  },
+  "sections": {
+    "other": "Weitere Dokumente",
+    "documents": "Dokumente",
+    "repoEmptyTitle": "Noch keine Dokumente aus dieser Quelle",
+    "repoEmptyBody": "Ein Scan dieses Repositories importiert seine passenden Dateien hierher.",
+    "otherEmptyTitle": "Keine weiteren Dokumente",
+    "otherEmptyBody": "Alles in diesem Projekt stammt aus einem oben verfolgten Repository.",
+    "emptyTitle": "Noch keine Dokumente in diesem Projekt",
+    "emptyBody": "Importiere eines über das Feld oben, oder weise ein bestehendes Dokument über seinen Prüf-Header oder den Projekt-Chip einer Startseiten-Zeile zu."
+  }
+}

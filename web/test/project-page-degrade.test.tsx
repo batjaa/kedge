@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // The project page is a server component: mock its data reads and next/navigation
@@ -14,6 +14,23 @@ vi.mock('next/navigation', () => ({
   }),
   // The resolved page renders ProjectDocuments → ImportForm, which calls useRouter.
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
+}));
+// The page now resolves its chrome strings server-side (M3.9): back the
+// getTranslations call with a real translator over the REAL en-US catalog, so
+// the branch assertions keep asserting authored copy — no request context in
+// vitest, so next-intl's server entry must be stubbed.
+vi.mock('next-intl/server', () => ({
+  getTranslations: async (namespace: string) => {
+    const { createTranslator } = await import('use-intl/core');
+    const { loadMessages } = await import('@/lib/i18n/messages');
+    return createTranslator({
+      locale: 'en-US',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- catalog tree as AbstractIntlMessages
+      messages: loadMessages('en-US') as any,
+      namespace,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- namespace is dynamic in the mock
+    } as any);
+  },
 }));
 vi.mock('@/lib/projects', () => ({ getProjects: vi.fn() }));
 vi.mock('@/lib/documents', () => ({ getDocuments: vi.fn() }));

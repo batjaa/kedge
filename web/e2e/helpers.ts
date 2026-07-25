@@ -49,6 +49,8 @@ export async function register(page: Page, identity: Identity): Promise<void> {
   await page.locator('form button[type="submit"]').click();
 
   await expect(page).toHaveURL('/');
+  // Locale-agnostic (M3.9): the queue heading is a catalog string and the i18n
+  // journeys register under es-US/de-DE contexts.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
 

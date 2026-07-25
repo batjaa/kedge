@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Integration } from '@/lib/integration-types';
 import {
   connectIntegration,
@@ -12,7 +13,11 @@ import {
 // self-contained client island: it lists the workspace's connected credentials
 // (masked to a last-4 hint), connects a GitHub PAT (a password-type input, never
 // echoed back), and removes one. The token is sent once and never returned.
-// DESIGN.md tokens, matching the share panel.
+// DESIGN.md tokens, matching the share panel. Chrome from the settings catalog
+// (M3.9) — the intro/owner hints are rich ICU messages so their links and
+// emphasis live in each language's own word order; GitHub product terms
+// ("Contents: read-only", "Only select repositories") stay as GitHub renders
+// them; the connected date rides ICU date formatting on the active locale.
 
 // Deep-link to GitHub's fine-grained token form pre-filled with the MINIMUM
 // Kedge needs (#43): Contents read-only (Metadata read is implied), a bounded
@@ -41,6 +46,7 @@ const CLASSIC_TOKEN_URL =
   'https://github.com/settings/tokens/new?scopes=repo&description=Kedge%20imports';
 
 export function IntegrationsPanel() {
+  const t = useTranslations('settings');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
@@ -75,7 +81,7 @@ export function IntegrationsPanel() {
     if (outcome.ok) {
       setIntegrations((prev) => [outcome.integration, ...prev]);
       setToken('');
-      setNotice('GitHub connected. Private repositories now import through this token.');
+      setNotice(t('integrations.connectedNotice'));
     } else {
       setError(outcome.message);
     }
@@ -97,34 +103,44 @@ export function IntegrationsPanel() {
     setRemovingId(null);
   }
 
+  // "Connected Jul 24, 2026" on the active locale — ICU's {date, date, medium}
+  // owns the format. A missing/invalid timestamp degrades to the plain label.
+  function connectedLabel(integration: Integration): string {
+    if (!integration.created_at) return t('integrations.connected');
+    const date = new Date(integration.created_at);
+    return Number.isNaN(date.getTime())
+      ? t('integrations.connected')
+      : t('integrations.connectedAt', { date });
+  }
+
   return (
     <section className="rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">GitHub</h2>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+          {t('integrations.heading')}
+        </h2>
         {integrations.length > 0 ? (
           <span className="text-xs text-zinc-500 dark:text-zinc-500">
-            {integrations.length} connected
+            {t('integrations.connectedCount', { count: integrations.length })}
           </span>
         ) : null}
       </div>
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Connect a{' '}
-        <a
-          href={newTokenUrl(org)}
-          target="_blank"
-          rel="noreferrer"
-          className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-        >
-          fine-grained personal access token
-        </a>{' '}
-        to import files from private repositories. The link pre-selects the minimum Kedge needs
-        (<span className="font-medium text-zinc-700 dark:text-zinc-300">Contents: read-only</span>)
-        — just choose{' '}
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          &ldquo;Only select repositories&rdquo;
-        </span>{' '}
-        and pick the repos to review. The token is encrypted and never shown again — remove it any
-        time.
+        {t.rich('integrations.intro', {
+          link: (chunks) => (
+            <a
+              href={newTokenUrl(org)}
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              {chunks}
+            </a>
+          ),
+          strong: (chunks) => (
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">{chunks}</span>
+          ),
+        })}
       </p>
 
       <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
@@ -132,34 +148,33 @@ export function IntegrationsPanel() {
           htmlFor="pat-org"
           className="shrink-0 text-xs font-medium text-zinc-600 dark:text-zinc-400"
         >
-          Repos owned by an organization?
+          {t('integrations.orgLabel')}
         </label>
         <input
           id="pat-org"
           type="text"
           autoComplete="off"
           spellCheck={false}
-          placeholder="org name (optional)"
+          placeholder={t('integrations.orgPlaceholder')}
           value={org}
           onChange={(e) => setOrg(e.target.value)}
           className="w-full rounded-xl bg-white px-3 py-1.5 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10 sm:max-w-56"
         />
       </div>
       <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-500">
-        A fine-grained token sees one owner&apos;s repos: yours by default, or one organization —
-        enter it above so the link opens pre-scoped (changing the owner inside GitHub&apos;s form
-        resets the pre-filled permissions). Orgs can block these tokens or require approval. For a
-        private repo owned by another user where you&apos;re a collaborator, fine-grained tokens
-        can&apos;t help — use a{' '}
-        <a
-          href={CLASSIC_TOKEN_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-        >
-          classic token
-        </a>{' '}
-        (broader <code className="font-mono">repo</code> scope) instead.
+        {t.rich('integrations.ownerHint', {
+          classic: (chunks) => (
+            <a
+              href={CLASSIC_TOKEN_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              {chunks}
+            </a>
+          ),
+          code: (chunks) => <code className="font-mono">{chunks}</code>,
+        })}
       </p>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -167,13 +182,13 @@ export function IntegrationsPanel() {
           type="password"
           autoComplete="off"
           spellCheck={false}
-          placeholder="ghp_… or github_pat_…"
+          placeholder={t('integrations.tokenPlaceholder')}
           value={token}
           onChange={(e) => {
             setToken(e.target.value);
             if (error) setError(null);
           }}
-          aria-label="GitHub personal access token"
+          aria-label={t('integrations.tokenAria')}
           aria-invalid={Boolean(error)}
           className={`w-full min-w-0 flex-1 rounded-xl bg-white px-3.5 py-2 font-mono text-sm text-zinc-900 ring-1 ring-inset placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 dark:bg-white/[.03] dark:text-white ${
             error
@@ -187,7 +202,7 @@ export function IntegrationsPanel() {
           disabled={connecting || token.trim() === ''}
           className="shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
-          {connecting ? 'Connecting…' : 'Connect'}
+          {connecting ? t('integrations.connecting') : t('integrations.connect')}
         </button>
       </div>
 
@@ -202,10 +217,12 @@ export function IntegrationsPanel() {
 
       <div className="mt-6">
         {loading ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-500">Loading connections…</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">
+            {t('integrations.loading')}
+          </p>
         ) : integrations.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
-            No tokens connected yet.
+            {t('integrations.none')}
           </p>
         ) : (
           <ul className="divide-y divide-zinc-900/5 dark:divide-white/5">
@@ -217,7 +234,7 @@ export function IntegrationsPanel() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                      GitHub PAT
+                      {t('integrations.patBadge')}
                     </span>
                     <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
                       {integration.token_last_four
@@ -235,7 +252,9 @@ export function IntegrationsPanel() {
                   disabled={removingId === integration.id}
                   className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-500/30 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:text-rose-400"
                 >
-                  {removingId === integration.id ? 'Removing…' : 'Remove'}
+                  {removingId === integration.id
+                    ? t('integrations.removing')
+                    : t('integrations.remove')}
                 </button>
               </li>
             ))}
@@ -244,16 +263,4 @@ export function IntegrationsPanel() {
       </div>
     </section>
   );
-}
-
-function connectedLabel(integration: Integration): string {
-  if (!integration.created_at) return 'Connected';
-  const date = new Date(integration.created_at);
-  return Number.isNaN(date.getTime())
-    ? 'Connected'
-    : `Connected ${date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })}`;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ImportForm } from './import-form';
 import { DocumentList } from './document-list';
 import { ProjectCreate } from './project-create';
@@ -55,6 +56,7 @@ export function WorkspaceHome({
    */
   initialActivity?: ActivityEvent[] | null;
 }) {
+  const t = useTranslations('dashboard');
   const {
     degraded,
     items,
@@ -146,10 +148,10 @@ export function WorkspaceHome({
     <>
       <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-          Import a document
+          {t('importPanel.title')}
         </h2>
         <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paste a link to a spec or RFC and get a rendered page you can review.
+          {t('importPanel.body')}
         </p>
         <ImportForm onImported={onImported} />
       </div>

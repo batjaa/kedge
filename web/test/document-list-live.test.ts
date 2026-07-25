@@ -11,7 +11,7 @@ import {
   mergeSettled,
   nextLoadMorePage,
   prependItem,
-  settleAnnouncement,
+  settleOutcome,
   shouldPoll,
   toListItem,
 } from '@/lib/document-list-live';
@@ -241,18 +241,14 @@ describe('document list live state', () => {
     });
   });
 
-  describe('settleAnnouncement', () => {
-    it('announces ready and failed imports exactly', () => {
-      expect(settleAnnouncement({ status: 'ready', title: 'Anchoring RFC' })).toBe(
-        'Import ready: Anchoring RFC',
-      );
-      expect(settleAnnouncement({ status: 'failed', title: 'Broken import' })).toBe(
-        'Import failed: Broken import',
-      );
+  describe('settleOutcome', () => {
+    it('classifies ready and failed settles for the localized announcement', () => {
+      expect(settleOutcome({ status: 'ready' })).toBe('ready');
+      expect(settleOutcome({ status: 'failed' })).toBe('failed');
     });
 
     it('does not announce an importing document', () => {
-      expect(settleAnnouncement({ status: 'importing', title: 'Still importing' })).toBeNull();
+      expect(settleOutcome({ status: 'importing' })).toBeNull();
     });
   });
 

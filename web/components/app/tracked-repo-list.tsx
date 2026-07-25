@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { deleteTrackedRepo, readTrackedRepo, rescanTrackedRepo } from '@/lib/tracked-repos-client';
 import { runDelete, runRescan } from '@/lib/tracked-repo-actions';
 import {
@@ -28,6 +29,10 @@ import { PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles';
 // message with Re-scan and — when the PAT is dead — an additive Reconnect link
 // (never a reconnect-only dead end). Pure view apart from the poller and the row's
 // own action state.
+//
+// i18n (M3.9): chrome + report fragments from the tracked-repos catalog (ICU
+// plurals where counts inflect); outcome badges ride the 13A chip glossary.
+// Repo URLs, refs, patterns, file paths, and API scan-error prose are DATA.
 
 const ERROR_CLASS = `mt-2 p-3 ${ROSE_PANEL}`;
 
@@ -79,6 +84,7 @@ export function TrackedRepoRow({
   onRescanned: (repo: TrackedRepo) => void;
   onRemoved: (id: number) => void;
 }) {
+  const t = useTranslations('tracked-repos');
   const inFlight = isScanInFlight(repo.last_scan_status);
   const report = repo.last_scan_report;
 
@@ -89,7 +95,7 @@ export function TrackedRepoRow({
           {repoShortName(repo.repo_url)}
         </code>
         <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
-          {repo.ref ?? report?.ref ?? 'default'} · {repo.path_pattern}
+          {repo.ref ?? report?.ref ?? t('row.defaultRef')} · {repo.path_pattern}
         </span>
       </div>
 
@@ -99,16 +105,16 @@ export function TrackedRepoRow({
             aria-hidden="true"
             className="size-3.5 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500"
           />
-          Scanning the repository…
+          {t('row.scanning')}
         </p>
       ) : repo.last_scan_status === 'failed' ? (
         <p role="alert" className={ERROR_CLASS}>
-          {repo.scan_error ?? 'The scan failed. Check the repository details and try again.'}
+          {repo.scan_error ?? t('row.scanFailedFallback')}
         </p>
       ) : report ? (
         <ScanReportSummary report={report} />
       ) : (
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Not scanned yet.</p>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('row.notScanned')}</p>
       )}
 
       {inFlight ? (
@@ -135,6 +141,7 @@ function RowActions({
   onRescanned: (repo: TrackedRepo) => void;
   onRemoved: (id: number) => void;
 }) {
+  const t = useTranslations('tracked-repos');
   const [rescanPending, setRescanPending] = useState(false);
   const [rescanError, setRescanError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -170,21 +177,21 @@ function RowActions({
     <div className="mt-3">
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={onRescan} disabled={rescanPending} className={ACTION_CLASS}>
-          {rescanPending ? 'Re-scanning…' : failed ? 'Retry scan' : 'Re-scan'}
+          {rescanPending ? t('row.rescanning') : failed ? t('row.retryScan') : t('row.rescan')}
         </button>
 
         {needsReconnect ? (
           <Link href="/settings" className={LINK_CLASS}>
-            Reconnect GitHub
+            {t('row.reconnect')}
           </Link>
         ) : null}
 
         <div className="ml-auto">
           {confirmingDelete ? (
             <span className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
-              Remove tracking?
+              {t('row.confirmRemove')}
               <button type="button" onClick={onConfirmDelete} disabled={deletePending} className={DANGER_CLASS}>
-                {deletePending ? 'Removing…' : 'Delete'}
+                {deletePending ? t('row.removing') : t('row.delete')}
               </button>
               <button
                 type="button"
@@ -192,12 +199,12 @@ function RowActions({
                 disabled={deletePending}
                 className={ACTION_CLASS}
               >
-                Cancel
+                {t('row.cancel')}
               </button>
             </span>
           ) : (
             <button type="button" onClick={() => setConfirmingDelete(true)} className={DANGER_CLASS}>
-              Delete
+              {t('row.delete')}
             </button>
           )}
         </div>
@@ -205,7 +212,7 @@ function RowActions({
 
       {confirmingDelete && !deleteError ? (
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-          Its documents stay in the project — only tracking is removed.
+          {t('row.removeHint')}
         </p>
       ) : null}
       {rescanError ? (
@@ -223,42 +230,55 @@ function RowActions({
 }
 
 function ScanReportSummary({ report }: { report: ScanReport }) {
+  const t = useTranslations('tracked-repos');
   const { import_queued, resync_queued, unchanged, missing, failed } = report.counts;
 
   return (
     <div className="mt-2">
       {isZeroMatch(report) ? (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          <span className="font-medium text-amber-700 dark:text-amber-400">0 files matched</span>
-          {' — adjust the pattern.'}
+          <span className="font-medium text-amber-700 dark:text-amber-400">
+            {t('report.zeroMatched')}
+          </span>
+          {t('report.adjustPattern')}
           {report.stale_takeover ? (
-            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+            <span className="text-amber-700 dark:text-amber-400">{t('report.staleTakeover')}</span>
           ) : null}
         </p>
       ) : isUpToDate(report) ? (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          <span className="font-medium text-emerald-700 dark:text-emerald-400">Already up to date</span>
-          {unchanged > 0 ? ` · ${unchanged} file${unchanged === 1 ? '' : 's'} unchanged` : null}
+          <span className="font-medium text-emerald-700 dark:text-emerald-400">
+            {t('report.upToDate')}
+          </span>
+          {unchanged > 0 ? t('report.filesUnchanged', { count: unchanged }) : null}
           {report.stale_takeover ? (
-            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+            <span className="text-amber-700 dark:text-amber-400">{t('report.staleTakeover')}</span>
           ) : null}
         </p>
       ) : (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          <span className="font-medium text-emerald-700 dark:text-emerald-400">{import_queued} queued</span>
+          <span className="font-medium text-emerald-700 dark:text-emerald-400">
+            {t('report.queued', { count: import_queued })}
+          </span>
           {resync_queued > 0 ? (
-            <span className="text-emerald-700 dark:text-emerald-400">{' · '}{resync_queued} re-synced</span>
+            <span className="text-emerald-700 dark:text-emerald-400">
+              {t('report.resynced', { count: resync_queued })}
+            </span>
           ) : null}
           {' · '}
-          {unchanged} unchanged
+          {t('report.unchanged', { count: unchanged })}
           {missing > 0 ? (
-            <span className="text-amber-700 dark:text-amber-400">{' · '}{missing} missing</span>
+            <span className="text-amber-700 dark:text-amber-400">
+              {t('report.missing', { count: missing })}
+            </span>
           ) : null}
           {failed > 0 ? (
-            <span className="text-rose-700 dark:text-rose-400">{' · '}{failed} failed</span>
+            <span className="text-rose-700 dark:text-rose-400">
+              {t('report.failed', { count: failed })}
+            </span>
           ) : null}
           {report.stale_takeover ? (
-            <span className="text-amber-700 dark:text-amber-400"> · recovered a stalled scan</span>
+            <span className="text-amber-700 dark:text-amber-400">{t('report.staleTakeover')}</span>
           ) : null}
         </p>
       )}
@@ -266,8 +286,8 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
       {report.files.length > 0 ? (
         <details className="mt-1.5">
           <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
-            {report.matched} file{report.matched === 1 ? '' : 's'} scanned
-            {missing > 0 ? `, ${missing} missing` : ''}
+            {t('report.scanned', { count: report.matched })}
+            {missing > 0 ? t('report.scannedMissing', { count: missing }) : ''}
           </summary>
           <ul className="mt-2 divide-y divide-zinc-900/5 rounded-lg ring-1 ring-inset ring-zinc-900/10 dark:divide-white/5 dark:ring-white/10">
             {report.files.map((file) => (
@@ -290,11 +310,16 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
 
 const BADGE_BASE = PILL_BASE;
 
+// One per-file outcome pill — the 13A chip glossary's scan labels, keyed by the
+// wire outcome so an unknown value falls back to the "unchanged" neutral rather
+// than crashing the report (the hard rendering rule).
 function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: string | null }) {
+  const chips = useTranslations('chips');
+
   if (outcome === 'import_queued') {
     return (
       <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
-        Queued
+        {chips('scan.import_queued')}
       </span>
     );
   }
@@ -302,7 +327,7 @@ function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: strin
   if (outcome === 'resync_queued') {
     return (
       <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
-        Re-synced
+        {chips('scan.resync_queued')}
       </span>
     );
   }
@@ -310,7 +335,7 @@ function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: strin
   if (outcome === 'missing') {
     return (
       <span className={`${BADGE_BASE} bg-amber-100 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300`}>
-        Missing
+        {chips('scan.missing')}
       </span>
     );
   }
@@ -321,14 +346,14 @@ function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: strin
         title={reason ?? undefined}
         className={`${BADGE_BASE} bg-rose-100 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300`}
       >
-        Failed
+        {chips('scan.failed')}
       </span>
     );
   }
 
   return (
     <span className={`${BADGE_BASE} bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-400`}>
-      Unchanged
+      {chips('scan.unchanged')}
     </span>
   );
 }

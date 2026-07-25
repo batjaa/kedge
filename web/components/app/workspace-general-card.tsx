@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { Workspace } from '@/lib/auth-types';
 import { updateWorkspace } from '@/lib/workspace-client';
 
@@ -14,6 +15,7 @@ import { updateWorkspace } from '@/lib/workspace-client';
 //
 // Sits ABOVE the integrations panel on the settings page.
 export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
+  const t = useTranslations('settings');
   const router = useRouter();
   const [name, setName] = useState(workspace.name);
   const [slug, setSlug] = useState(workspace.slug);
@@ -45,7 +47,7 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
     if (outcome.ok) {
       setName(outcome.workspace.name);
       setSlug(outcome.workspace.slug);
-      setNotice('Workspace updated.');
+      setNotice(t('general.updated'));
       // Reflect the new name across the server-rendered chrome (this page's
       // heading, the dashboard greeting) without a full reload.
       router.refresh();
@@ -65,15 +67,14 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
 
   return (
     <section className="rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
-      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">General</h2>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">{t('general.title')}</h2>
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        The name and handle for your workspace. The name shows across the app; the slug is its
-        URL-safe handle.
+        {t('general.body')}
       </p>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Name</span>
+          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('general.nameLabel')}</span>
           <input
             type="text"
             value={name}
@@ -82,7 +83,7 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
               if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: undefined }));
               if (notice) setNotice(null);
             }}
-            aria-label="Workspace name"
+            aria-label={t('general.nameAria')}
             aria-invalid={Boolean(fieldErrors.name)}
             className={`mt-1 w-full rounded-full bg-stone-50 px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 dark:bg-white/5 dark:text-white ${
               fieldErrors.name
@@ -98,7 +99,7 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
         </label>
 
         <label className="block">
-          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Slug</span>
+          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('general.slugLabel')}</span>
           <input
             type="text"
             autoComplete="off"
@@ -109,7 +110,7 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
               if (fieldErrors.slug) setFieldErrors((p) => ({ ...p, slug: undefined }));
               if (notice) setNotice(null);
             }}
-            aria-label="Workspace slug"
+            aria-label={t('general.slugAria')}
             aria-invalid={Boolean(fieldErrors.slug)}
             className={`mt-1 w-full rounded-full bg-stone-50 px-3.5 py-2 font-mono text-sm text-zinc-900 ring-1 ring-inset placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 dark:bg-white/5 dark:text-white ${
               fieldErrors.slug
@@ -140,7 +141,7 @@ export function WorkspaceGeneralCard({ workspace }: { workspace: Workspace }) {
           disabled={!canSave}
           className="shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('general.saving') : t('general.save')}
         </button>
       </div>
     </section>

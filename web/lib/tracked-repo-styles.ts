@@ -13,5 +13,9 @@ export const EMERALD_BUTTON =
 export const ROSE_PANEL =
   'rounded-xl bg-rose-50 text-sm text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20';
 
-/** The outcome/overlap pill base — shape and type. Append color classes per variant. */
-export const PILL_BASE = 'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium';
+/** The outcome/overlap pill base — shape and type. Append color classes per
+ *  variant. The 16ch clamp is the chip glossary's truncation safety (M3.9 13A):
+ *  labels are catalog strings budgeted at 15 chars, so the clamp never bites in
+ *  a well-formed locale — belt-and-braces only. */
+export const PILL_BASE =
+  'inline-block max-w-[16ch] shrink-0 truncate rounded-full px-2 py-0.5 text-xs font-medium';
