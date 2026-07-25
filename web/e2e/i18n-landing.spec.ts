@@ -33,8 +33,13 @@ test.describe('landing i18n', () => {
       await expect(
         page.getByRole('button', { name: 'Renderízalo', exact: true }),
       ).toBeVisible();
+      // Exact + level 2: the "Disponible hoy" column h3 would also match a
+      // loose regex, tripping strict mode.
       await expect(
-        page.getByRole('heading', { name: /Disponible hoy/ }),
+        page.getByRole('heading', {
+          name: 'Disponible hoy, lo próximo en la carta',
+          level: 2,
+        }),
       ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Crear mi espacio de trabajo', exact: true }),

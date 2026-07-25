@@ -192,7 +192,9 @@ function HeroIllustration() {
           . No silent rubber stamps.
         </p>
         <div className="mt-4 rounded-2xl bg-stone-50 p-4 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-          <div className="flex items-center gap-2">
+          {/* Localized strings run longer than the English originals (de/mn),
+              so every still header wraps rather than overflowing at 320px. */}
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500">§ 9.2</span>
             <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Staleness rules</span>
             <span className="ml-auto rounded-lg bg-emerald-600/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-emerald-700 ring-1 ring-inset ring-emerald-600/30 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/30">
@@ -212,7 +214,7 @@ function HeroIllustration() {
       </div>
 
       <div className="mt-5 rounded-3xl bg-white p-5 shadow-lg shadow-zinc-900/5 ring-1 ring-zinc-900/10 lg:-mt-2 lg:ml-14 lg:-rotate-1 dark:bg-white/[.03] dark:ring-white/10">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{t('stills.suggestedEdit')}</span>
           <span className="rounded-lg bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/30">
             {t('stills.pendingChip')}
@@ -346,7 +348,9 @@ function AgentsTeaser() {
           aria-hidden="true"
           className="order-2 cursor-default rounded-3xl bg-white p-5 shadow-lg shadow-violet-600/5 ring-1 ring-violet-600/20 select-none lg:order-1 dark:bg-white/[.03] dark:ring-violet-500/20"
         >
-          <div className="flex items-center gap-2">
+          {/* Wraps like the hero still headers: localized chips + the meta run
+              wider than the English originals on narrow viewports. */}
+          <div className="flex flex-wrap items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-[10px] text-white">CL</span>
             <span className="text-sm font-semibold text-zinc-900 dark:text-white">Claude</span>
             <span className="rounded-lg bg-violet-600/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-violet-700 ring-1 ring-inset ring-violet-600/30 dark:bg-violet-400/10 dark:text-violet-400 dark:ring-violet-400/30">
@@ -466,7 +470,7 @@ function WorkspaceConsole() {
               </span>
             </div>
             <div className="mt-2 truncate font-mono text-[10px] text-zinc-400 dark:text-zinc-500">⎇ kedgehq/kedge · main · docs/**/*.md</div>
-            <div className="mt-3 flex items-center gap-3 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
+            <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
               <span>{t('workspace.console.docs6')}</span>
               <span>{t('workspace.console.open11')}</span>
               <span className="text-rose-600 dark:text-rose-400">{t('workspace.console.orphan1')}</span>
