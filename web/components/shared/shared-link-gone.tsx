@@ -1,18 +1,14 @@
+import { useTranslations } from 'next-intl';
 import type { ShareGoneReason } from '@/lib/share-types';
 
 // The friendly named page a dead share link lands on (SPEC 10.2) — never a bare
 // 403/404. Revoked, expired, and unknown tokens all arrive here; the heading is
 // constant ("This link is no longer active") and only the sub-copy differs, so a
 // mistyped or revoked link is never scary and never leaks whether it existed.
-
-const COPY: Record<ShareGoneReason, string> = {
-  revoked: 'The author has revoked this share link. Ask them for a fresh one if you still need access.',
-  expired: 'This share link has expired. Ask the author for a new one if you still need access.',
-  unknown:
-    "We couldn't find a document for this link. It may have been revoked, expired, or mistyped — double-check the URL, or ask the author for a fresh link.",
-};
+// Copy comes from the `shared` catalog (M3.9 #124), keyed by reason.
 
 export function SharedLinkGone({ reason }: { reason: ShareGoneReason }) {
+  const t = useTranslations('shared');
   return (
     <div className="mx-auto mt-16 max-w-md rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
       <span
@@ -28,10 +24,10 @@ export function SharedLinkGone({ reason }: { reason: ShareGoneReason }) {
         </svg>
       </span>
       <h1 className="mt-5 text-lg font-semibold text-zinc-900 dark:text-white">
-        This link is no longer active
+        {t('gone.heading')}
       </h1>
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        {COPY[reason]}
+        {t(`gone.${reason}`)}
       </p>
     </div>
   );

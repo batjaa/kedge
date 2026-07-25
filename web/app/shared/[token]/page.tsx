@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { headers } from 'next/headers';
 import { getSharedDocument } from '@/lib/shared-document';
 import { DocumentBody } from '@/components/app/document-body';
@@ -38,6 +39,7 @@ export default async function SharedDocumentPage({
 }) {
   const { token } = await params;
   const query = await searchParams;
+  const t = await getTranslations('shared');
   const result = await getSharedDocument(token, await headers());
 
   if (result.kind === 'gone') {
@@ -53,10 +55,10 @@ export default async function SharedDocumentPage({
       <PageContainer>
         <div className="mx-auto mt-16 max-w-md rounded-2xl bg-white p-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">
-            Couldn&apos;t load this document
+            {t('loadError.heading')}
           </h1>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            Something went wrong reaching the server. Try again in a moment.
+            {t('loadError.body')}
           </p>
         </div>
       </PageContainer>
@@ -79,14 +81,14 @@ export default async function SharedDocumentPage({
         {query.verified === '1' ? (
           <PageContainer flush>
             <div className="pt-6">
-              <ReviewStatePanel message="Email verified. You can comment on this document now." />
+              <ReviewStatePanel message={t('emailVerified')} />
             </div>
           </PageContainer>
         ) : null}
         <DocumentReviewSurface
           documentId={doc.document_id!}
           title={doc.title}
-          surfaceLabel="Shared document · verified reviewer"
+          surfaceLabel={t('eyebrow.verifiedReviewer')}
           viewedVersionId={doc.current_version.id}
           currentVersionId={doc.current_version.id}
           versionLabel={versionLabel(doc.current_version)}
@@ -118,7 +120,13 @@ export default async function SharedDocumentPage({
       {showShareHeader ? (
         <DocumentStaticHeader
           title={doc.title}
-          eyebrow={isDemo ? 'Demo document' : verifiedReviewer ? 'Shared document · verified reviewer' : 'Shared document · read-only'}
+          eyebrow={
+            isDemo
+              ? t('eyebrow.demo')
+              : verifiedReviewer
+                ? t('eyebrow.verifiedReviewer')
+                : t('eyebrow.readOnly')
+          }
           bordered
         />
       ) : null}
@@ -144,7 +152,7 @@ export default async function SharedDocumentPage({
         <SharedDocumentPoller token={token} />
       ) : (
         <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          This document is still being prepared. Refresh in a moment.
+          {t('preparing')}
         </p>
       )}
 
