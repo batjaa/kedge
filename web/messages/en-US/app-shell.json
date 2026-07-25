@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "documents": "Documents",
+    "queue": "Queue",
+    "queueHint": "Review queue arrives with M5"
+  },
+  "actions": {
+    "import": "Import",
+    "settings": "Settings",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…"
+  },
+  "theme": {
+    "toggle": "Toggle theme"
+  },
+  "switcher": {
+    "label": "Language"
+  }
+}

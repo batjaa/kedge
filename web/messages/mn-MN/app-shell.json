@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "documents": "Баримтууд",
+    "queue": "Дараалал",
+    "queueHint": "Хянан магадлах дараалал M5-д нэмэгдэнэ"
+  },
+  "actions": {
+    "import": "Импортлох",
+    "settings": "Тохиргоо",
+    "signOut": "Гарах",
+    "signingOut": "Гарч байна …"
+  },
+  "theme": {
+    "toggle": "Загвар солих"
+  },
+  "switcher": {
+    "label": "Хэл"
+  }
+}
