@@ -1,0 +1,45 @@
+{
+  "footerCta": "Revisa tu propia especificación con Kedge →",
+  "eyebrow": {
+    "demo": "Documento de demostración",
+    "verifiedReviewer": "Documento compartido · revisor verificado",
+    "readOnly": "Documento compartido · solo lectura"
+  },
+  "loadError": {
+    "heading": "No se pudo cargar este documento",
+    "body": "Algo salió mal al contactar con el servidor. Inténtalo de nuevo en un momento."
+  },
+  "emailVerified": "Correo verificado. Ya puedes comentar en este documento.",
+  "preparing": "Este documento aún se está preparando. Actualiza en un momento.",
+  "rendering": "Renderizando tu documento: esta página se actualizará sola cuando esté lista.",
+  "gone": {
+    "heading": "Este enlace ya no está activo",
+    "revoked": "El autor ha revocado este enlace para compartir. Pídele uno nuevo si aún necesitas acceso.",
+    "expired": "Este enlace para compartir ha expirado. Pídele al autor uno nuevo si aún necesitas acceso.",
+    "unknown": "No encontramos ningún documento para este enlace. Puede que haya sido revocado, haya expirado o esté mal escrito: revisa la URL o pide al autor un enlace nuevo."
+  },
+  "verify": {
+    "heading": "Verifica tu correo para comentar",
+    "emailLabel": "Correo del revisor",
+    "verifyingEmail": "Verificando tu correo…",
+    "send": "Enviar enlace",
+    "sending": "Enviando",
+    "sent": "Enviado",
+    "verifying": "Verificando",
+    "sentFallback": "Busca en tu correo un enlace para continuar revisando.",
+    "errors": {
+      "validation": "Introduce una dirección de correo válida.",
+      "rateLimited": "Demasiadas solicitudes. Espera un minuto e inténtalo de nuevo.",
+      "gone": "Este enlace para compartir ya no está activo.",
+      "sendFailed": "No pudimos enviar el correo. Inténtalo de nuevo.",
+      "completeRateLimited": "Demasiados intentos de verificación. Espera un minuto e inténtalo de nuevo.",
+      "completeFailed": "No pudimos verificar este enlace. Inténtalo de nuevo."
+    },
+    "returnState": {
+      "expired": "Ese enlace de verificación expiró. Solicita uno nuevo para seguir comentando.",
+      "used": "Ese enlace de verificación ya se usó. Solicita uno nuevo si este navegador no está verificado.",
+      "invalid": "No se pudo verificar ese enlace. Solicita uno nuevo para seguir comentando.",
+      "account_required": "Este correo ya tiene una cuenta de Kedge. Inicia sesión para revisar este documento."
+    }
+  }
+}

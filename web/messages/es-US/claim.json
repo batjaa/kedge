@@ -1,0 +1,14 @@
+{
+  "cta": {
+    "heading": "Reclama este documento",
+    "body": "Regístrate para conservarlo, compartirlo y recopilar comentarios, antes de que esta demostración expire en 48 horas. Se traslada a tu espacio de trabajo sin perder nada.",
+    "button": "Reclamar este documento →"
+  },
+  "claiming": "Reclamando tu documento",
+  "completing": "Reclamando este documento en tu espacio de trabajo…",
+  "failed": {
+    "heading": "No se pudo reclamar este documento",
+    "body": "No se pudo reclamar este documento. Inténtalo de nuevo.",
+    "tryAgain": "Inténtalo de nuevo"
+  }
+}
