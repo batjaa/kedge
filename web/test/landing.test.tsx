@@ -1,5 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it, vi } from 'vitest';
+import { loadMessages } from '@/lib/i18n/messages';
 
 // The hero form (LandingHeroForm) calls useRouter, and there is no app-router
 // context under renderToStaticMarkup — stub next/navigation. We assert static
@@ -13,7 +15,13 @@ vi.mock('next/navigation', () => ({
 const { Landing } = await import('@/components/app/landing/landing');
 
 describe('Landing (Open Harbor marketing home, conversion pass 2026-07-24)', () => {
-  const html = renderToStaticMarkup(<Landing />);
+  // The landing header's ThemeToggle is localized (M3.9), so it needs the intl
+  // context the root layout provides in production — supply en-US here.
+  const html = renderToStaticMarkup(
+    <NextIntlClientProvider locale="en-US" messages={loadMessages('en-US')}>
+      <Landing />
+    </NextIntlClientProvider>,
+  );
 
   it('renders the hero with the reused paste box (Document URL + Render it)', () => {
     expect(html).toContain('Paste a link.');
