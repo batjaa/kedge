@@ -47,8 +47,9 @@ test('an owner switches the review page to Spanish around verbatim content', asy
   await page.getByLabel('Language', { exact: true }).selectOption('es-US');
   await expect(page.locator('html')).toHaveAttribute('lang', 'es-US');
 
-  // Review header: the open-thread counter localizes ({count, number} abiertos).
-  await expect(page.getByText('1 abiertos', { exact: true })).toBeVisible();
+  // Review header: the open-thread counter localizes with a proper Spanish
+  // singular (ICU plural — "1 abierto", never "1 abiertos").
+  await expect(page.getByText('1 abierto', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Aprobar', exact: true })).toBeVisible();
 
   // Sidebar: contents + threads headings and the nav status label.

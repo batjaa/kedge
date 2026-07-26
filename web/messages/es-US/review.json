@@ -1,7 +1,7 @@
 {
   "header": {
     "synced": "sincronizado {when}",
-    "openCount": "{count, number} abiertos"
+    "openCount": "{count, plural, one {# abierto} other {# abiertos}}"
   },
   "sidebar": {
     "hide": "Ocultar contenido e hilos",

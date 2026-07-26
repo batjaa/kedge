@@ -1,6 +1,6 @@
 {
   "_notes": {
-    "badges": "badge.*, status.* and suggestionStatus.* render inside small uppercase mono badges on thread cards and comment rows — labels, not prose. Keep them short (abbreviate like the English 'sugg'); unlike the chips glossary they have no truncation clamp, so an over-long label would stretch the row."
+    "badges": "badge.*, status.* and suggestionStatus.* render inside small uppercase mono badges on thread cards and comment rows — labels, not prose. Keep them short (abbreviate like the English 'sugg'): they ride the same 16ch truncation clamp as the chips glossary, and the length guard (test/i18n-review-surface.test.tsx) holds every locale to 15 characters per label."
   },
   "rail": {
     "label": "Thread-Leiste",
@@ -61,6 +61,9 @@
     "pending": "ausstehend",
     "accepted": "angenommen",
     "declined": "abgelehnt"
+  },
+  "suggestionDiff": {
+    "empty": "leer"
   },
   "composer": {
     "comment": "Kommentieren",

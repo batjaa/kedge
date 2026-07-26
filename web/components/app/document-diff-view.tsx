@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, MessageSquare } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { listThreads } from '@/lib/comments-client';
 import type { DocumentVersionDiff, VersionDiffVersion } from '@/lib/document-types';
 import {
@@ -292,13 +292,14 @@ function DiffThreadList({
   onFocusMarker: (key: string) => void;
 }) {
   const t = useTranslations('diff');
+  const format = useFormatter();
 
   return (
     <section>
       <div className="mb-2 flex items-center gap-2">
         <MetaChip>{side === 'a' ? 'A' : 'B'}</MetaChip>
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">{title}</h2>
-        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-500">{entries.length}</span>
+        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-500">{format.number(entries.length)}</span>
       </div>
       <div className="space-y-3">
         {entries.length === 0 ? (

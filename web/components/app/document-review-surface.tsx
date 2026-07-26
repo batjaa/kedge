@@ -11,7 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import {
   DocumentNewVersionBanner,
@@ -142,6 +142,7 @@ export function DocumentReviewSurface({
   const router = useRouter();
   const t = useTranslations('review');
   const tChips = useTranslations('chips');
+  const format = useFormatter();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const headingPositionsRef = useRef<HeadingPosition[]>([]);
   const [threads, setThreads] = useState<ReviewThread[]>([]);
@@ -1039,7 +1040,7 @@ export function DocumentReviewSurface({
                 title={t('surface.openThreadsCount', { count: openThreadCount })}
                 className="rounded-full bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10"
               >
-                {openThreadCount}
+                {format.number(openThreadCount)}
               </span>
             ) : null}
             {railCollapsed && orphanedThreadCount > 0 ? (

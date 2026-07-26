@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Check, GitFork, Pencil, RotateCcw, ThumbsUp, Trash2, X } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { AgentBadge, SuggestionStatusBadge } from './document-thread-badges';
 import { IconButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
 import { cn } from '@/lib/cn';
@@ -191,6 +191,7 @@ function ReactionButton({
   onToggle: () => void;
 }) {
   const t = useTranslations('threads');
+  const format = useFormatter();
 
   return (
     <button
@@ -208,7 +209,7 @@ function ReactionButton({
       )}
     >
       <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
-      <span>{count}</span>
+      <span>{format.number(count)}</span>
     </button>
   );
 }

@@ -4,7 +4,7 @@
   "current": "actual {label}",
   "plainTextDiff": "Diferencia de texto sin formato",
   "projection": "proyección {version}",
-  "openCount": "{count, number} abiertos",
+  "openCount": "{count, plural, one {# abierto} other {# abiertos}}",
   "synced": "{label} sincronizado {when}",
   "syncUnavailable": "{label} hora de sincronización no disponible",
   "anchorsTitle": "Anclas de {label}",

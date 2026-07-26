@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from './render-intl';
 import { CommentRow } from '@/components/app/document-thread-comment-row';
 import { StatusBadge, SuggestionStatusBadge } from '@/components/app/document-thread-badges';
 import { DocumentShares } from '@/components/app/document-shares';
+import { SUPPORTED_LOCALES } from '@/lib/i18n/config';
+import { readCatalog, type MessageTree } from '@/lib/i18n/messages';
 import type { ThreadComment } from '@/lib/thread-types';
 
 // The #126 unit seam: review-surface components read the threads/shares
@@ -108,4 +110,77 @@ describe('review-surface chrome localizes; comment bodies never do (#126)', () =
     expect(html).toContain('Cargando enlaces…');
     expect(html).not.toContain('Share links');
   });
+
+  it('suggested-edit text renders verbatim inside localized chrome', () => {
+    const proposed = 'Replacement prose stays exactly as typed.';
+    const note = 'A suggestion note that stays exactly as typed.';
+    const html = renderToStaticMarkup(
+      <CommentRow
+        comment={fixtureComment({
+          type: 'suggestion',
+          suggestion_status: 'pending',
+          proposed_text: proposed,
+          body_md: note,
+          can_resolve_suggestion: true,
+          edited_at: null,
+        })}
+        isReply={false}
+        editing={false}
+        editBody=""
+        forking={false}
+        deleting={false}
+        anchorExact={null}
+        suggestionBusy={false}
+        reactionBusy={false}
+        onStartEdit={() => {}}
+        onCancelEdit={() => {}}
+        onEditBodyChange={() => {}}
+        onSaveEdit={() => {}}
+        onFork={() => {}}
+        onDelete={() => {}}
+        onSetSuggestionStatus={() => {}}
+        onToggleReaction={() => {}}
+      />,
+      'es-US',
+    );
+
+    // The user's replacement text and note are byte-identical. The diff view
+    // tokenizes the replacement into word spans, so compare rendered TEXT —
+    // adjacent token spans reassemble the exact authored sentence.
+    expect(html.replace(/<[^>]+>/g, '')).toContain(proposed);
+    expect(html).toContain(note);
+
+    // …while every layer of chrome around them localizes: the status badge,
+    // the empty before-side placeholder, and the resolve action titles.
+    expect(html).toContain('pendiente');
+    expect(html).toContain('vacío');
+    expect(html).toContain('Aceptar sugerencia');
+    expect(html).not.toContain('Accept suggestion');
+    expect(html).not.toContain('>empty<');
+  });
+});
+
+describe('thread badge glossary budget (#126, 13A pattern)', () => {
+  // The badges clamp at 16ch (document-thread-badges.tsx); this lint keeps
+  // every locale comfortably inside it — the same budget the chips glossary
+  // enforces — so the clamp stays belt-and-braces, never load-bearing.
+  const BUDGET = 15;
+  const GROUPS = ['badge', 'status', 'suggestionStatus'] as const;
+
+  for (const locale of SUPPORTED_LOCALES) {
+    it(`${locale} badge labels fit the ${BUDGET}-character budget`, () => {
+      const catalog = readCatalog(locale, 'threads') as MessageTree;
+
+      for (const group of GROUPS) {
+        const labels = catalog[group] as Record<string, string>;
+        expect(Object.keys(labels).length).toBeGreaterThan(0);
+        for (const [key, label] of Object.entries(labels)) {
+          expect(
+            label.length,
+            `${locale} threads.${group}.${key} ("${label}") exceeds ${BUDGET} chars`,
+          ).toBeLessThanOrEqual(BUDGET);
+        }
+      }
+    });
+  }
 });

@@ -3,7 +3,11 @@ import { cn } from '@/lib/cn';
 import type { SuggestionStatus, ThreadStatus } from '@/lib/thread-types';
 
 // Amended DESIGN.md chip recipe (Open Harbor): -500 tint + -700 text on light,
-// -400 on dark; neutral metadata rides the zinc-400 tint.
+// -400 on dark; neutral metadata rides the zinc-400 tint. Labels come from the
+// threads catalog (translator note: threads.json _notes.badges) and ride the
+// same 16ch truncation clamp as the chips glossary — belt-and-braces so an
+// over-long translation can never stretch a row (eng-review 13A pattern).
+const BADGE_CLAMP = 'inline-block max-w-[16ch] truncate align-bottom';
 export function StatusBadge({ status, suggestion, agent }: { status: ThreadStatus; suggestion: boolean; agent: boolean }) {
   const t = useTranslations('threads');
   const classes = agent
@@ -15,7 +19,7 @@ export function StatusBadge({ status, suggestion, agent }: { status: ThreadStatu
         : 'ring-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:ring-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400';
 
   return (
-    <span className={cn('rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase ring-1 ring-inset', classes)}>
+    <span className={cn(BADGE_CLAMP, 'rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase ring-1 ring-inset', classes)}>
       {agent ? t('badge.agent') : suggestion ? t('badge.suggestion') : t(`status.${status}`)}
     </span>
   );
@@ -30,7 +34,7 @@ export function SuggestionStatusBadge({ status }: { status: SuggestionStatus }) 
   }[status];
 
   return (
-    <span className={cn('rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase ring-1 ring-inset', classes)}>
+    <span className={cn(BADGE_CLAMP, 'rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase ring-1 ring-inset', classes)}>
       {t(`suggestionStatus.${status}`)}
     </span>
   );
@@ -40,7 +44,7 @@ export function AgentBadge() {
   const t = useTranslations('threads');
 
   return (
-    <span className="rounded-lg bg-violet-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-violet-700 ring-1 ring-inset ring-violet-500/30 dark:bg-violet-400/10 dark:text-violet-400 dark:ring-violet-400/30">
+    <span className={cn(BADGE_CLAMP, 'rounded-lg bg-violet-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-violet-700 ring-1 ring-inset ring-violet-500/30 dark:bg-violet-400/10 dark:text-violet-400 dark:ring-violet-400/30')}>
       {t('badge.mcp')}
     </span>
   );

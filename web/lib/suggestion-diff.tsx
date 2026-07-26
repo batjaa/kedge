@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 
 export type DiffKind = 'equal' | 'added' | 'removed';
 
@@ -74,6 +75,10 @@ function DiffLine({
   tokens: DiffToken[];
   kind: 'before' | 'after';
 }) {
+  // The empty-side placeholder is chrome (threads catalog); the diff tokens
+  // themselves are the user's before/after text and render verbatim (#126).
+  const t = useTranslations('threads');
+
   return (
     <div className="grid grid-cols-[1.5rem_minmax(0,1fr)] border-t border-zinc-700/50 first:border-t-0">
       <span className="select-none px-3 py-1.5 text-zinc-600">{marker}</span>
@@ -81,7 +86,7 @@ function DiffLine({
         ? 'min-w-0 whitespace-pre-wrap break-words px-3 py-1.5 text-rose-400/90'
         : 'min-w-0 whitespace-pre-wrap break-words px-3 py-1.5 text-emerald-400'}
       >
-        {tokens.length > 0 ? renderTokens(tokens) : <span className="text-zinc-400">empty</span>}
+        {tokens.length > 0 ? renderTokens(tokens) : <span className="text-zinc-400">{t('suggestionDiff.empty')}</span>}
       </p>
     </div>
   );
