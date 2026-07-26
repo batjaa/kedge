@@ -1,0 +1,31 @@
+{
+  "title": "Freigabelinks",
+  "description": "Erstellen Sie einen nicht erratbaren, schreibgeschützten Link, damit Prüfer dieses Dokument ohne Konto lesen können. Widerrufen Sie ihn jederzeit.",
+  "activeCount": "{count, plural, one {# aktiver Link} other {# aktive Links}}",
+  "expiryLabel": "Ablauf des Links",
+  "expiry": {
+    "none": "Kein Ablauf",
+    "days7": "Läuft in 7 Tagen ab",
+    "days30": "Läuft in 30 Tagen ab"
+  },
+  "create": "Freigabelink erstellen",
+  "creating": "Wird erstellt…",
+  "createdOnce": "Kopieren Sie diesen Link jetzt — er wird nur einmal angezeigt.",
+  "copy": "Kopieren",
+  "copied": "Kopiert",
+  "copyFailed": "Kopieren fehlgeschlagen — markieren Sie den Link und kopieren Sie ihn manuell.",
+  "loading": "Links werden geladen…",
+  "empty": "Noch keine Freigabelinks.",
+  "linkNumber": "Link #{id}",
+  "revoke": "Widerrufen",
+  "revoking": "Wird widerrufen…",
+  "status": {
+    "active": "aktiv",
+    "revoked": "widerrufen",
+    "expired": "abgelaufen"
+  },
+  "revokedOn": "Widerrufen {date}",
+  "expiredOn": "Abgelaufen {date}",
+  "expiresOn": "Läuft ab {date}",
+  "neverExpires": "Läuft nie ab"
+}

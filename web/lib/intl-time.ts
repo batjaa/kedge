@@ -1,10 +1,9 @@
 // Locale-aware time formatting for the app chrome (M3.9 #123): the compact
 // relative-time idiom the rows and the activity feed use, rendered through
 // Intl.RelativeTimeFormat on the ACTIVE locale — never hand-built suffixes, so
-// CLDR owns the wording for es/de/mn. Deliberate sibling of lib/relative-time.ts,
-// which stays the locale-blind English helper the review surface still consumes
-// (#126 migrates it here); unit thresholds mirror it exactly so the two never
-// disagree about "how old" a timestamp reads.
+// CLDR owns the wording for es/de/mn. This is now the sole relative-time helper:
+// #126 migrated the review surface here and removed the old locale-blind
+// lib/relative-time.ts, so every timestamp in the app agrees on "how old" it is.
 
 const formatters = new Map<string, Intl.RelativeTimeFormat>();
 
@@ -31,8 +30,8 @@ function relativeFormatter(locale: string): Intl.RelativeTimeFormat {
 }
 
 /**
- * "5 min. ago" / "vor 5 Min." / "5 мин өмнө" — relativeTime()'s exact unit
- * ladder (minutes → hours → days, floor 1 minute) on the active locale.
+ * "5 min. ago" / "vor 5 Min." / "5 мин өмнө" — a fixed unit ladder
+ * (minutes → hours → days, floor 1 minute) on the active locale.
  * Empty string for null/invalid input, matching the English helper.
  */
 export function formatRelativeTime(value: string | null, locale: string): string {

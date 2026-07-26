@@ -1,0 +1,14 @@
+{
+  "trigger": "Inhalt aktualisieren",
+  "dialogLabel": "Dokumentinhalt aktualisieren",
+  "heading": "Inhalt aktualisieren",
+  "description": "Fügen Sie das neue Markdown ein. Kedge erstellt eine neue Version und verankert Ihre Kommentare neu — identischer Inhalt erzeugt keine neue Version.",
+  "contentLabel": "Inhalt",
+  "placeholder": "# Fügen Sie hier das aktualisierte Markdown ein",
+  "cancel": "Abbrechen",
+  "submit": "Inhalt aktualisieren",
+  "submitting": "Wird aktualisiert…",
+  "close": "Schließen",
+  "errorEmpty": "Fügen Sie zuerst den aktualisierten Inhalt ein.",
+  "errorGeneric": "Beim Aktualisieren des Inhalts ist etwas schiefgelaufen. Bitte versuchen Sie es erneut."
+}

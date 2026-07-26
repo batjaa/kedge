@@ -1,0 +1,19 @@
+{
+  "loadingThreads": "Хэлэлцүүлэг ачаалж байна.",
+  "backToDocument": "Баримт руу буцах",
+  "current": "одоогийн {label}",
+  "plainTextDiff": "Энгийн текстийн харьцуулалт",
+  "projection": "проекц {version}",
+  "openCount": "{count, number} нээлттэй",
+  "synced": "{label} {when} синкэлсэн",
+  "syncUnavailable": "{label} синкийн хугацаа боломжгүй",
+  "anchorsTitle": "{label} бэхэлгээ",
+  "versionA": "Хувилбар A",
+  "versionB": "Хувилбар B",
+  "threadMarker": "{version} хэлэлцүүлэг {id}",
+  "noAnchoredThreads": "{label} дээр бэхэлсэн хэлэлцүүлэг алга.",
+  "jumpToMarker": "Тэмдэглэгээ рүү очих",
+  "anchorNotPlacedTitle": "Энэ харьцуулалтад бэхэлгээ байрлаагүй",
+  "threadNumber": "Хэлэлцүүлэг #{id}",
+  "anchorNotPlaced": "Энэ харьцуулалтад бэхэлгээ байрлаагүй."
+}

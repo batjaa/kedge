@@ -1,0 +1,14 @@
+{
+  "trigger": "Update content",
+  "dialogLabel": "Update document content",
+  "heading": "Update content",
+  "description": "Paste the new Markdown. Kedge creates a new version and re-anchors your comments — identical content makes no new version.",
+  "contentLabel": "Content",
+  "placeholder": "# Paste the updated Markdown here",
+  "cancel": "Cancel",
+  "submit": "Update content",
+  "submitting": "Updating…",
+  "close": "Close",
+  "errorEmpty": "Paste the updated content first.",
+  "errorGeneric": "Something went wrong updating the content. Please try again."
+}

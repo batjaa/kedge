@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { FilePenLine, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { runContentUpdate } from '@/lib/content-update';
 import { updateDocumentContent } from '@/lib/documents-client';
 import { refreshSurfaceAfterResync, waitForResyncCompletion } from '@/lib/resync-polling';
@@ -27,6 +28,7 @@ export function UpdateContentAction({
   refreshThreads: () => Promise<void>;
   onServerRefresh: () => void;
 }) {
+  const t = useTranslations('update-content');
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
   const [pending, setPending] = useState(false);
@@ -72,7 +74,7 @@ export function UpdateContentAction({
     event.preventDefault();
     if (submittingRef.current) return;
     if (content.trim() === '') {
-      setError('Paste the updated content first.');
+      setError(t('errorEmpty'));
       return;
     }
 
@@ -106,7 +108,7 @@ export function UpdateContentAction({
 
       setError(result.message);
     } catch {
-      setError('Something went wrong updating the content. Please try again.');
+      setError(t('errorGeneric'));
     } finally {
       submittingRef.current = false;
       setPending(false);
@@ -121,19 +123,19 @@ export function UpdateContentAction({
     <>
       <button type="button" onClick={() => setOpen(true)} className={BUTTON_CLASS}>
         <FilePenLine className="h-4 w-4" aria-hidden="true" />
-        Update content
+        {t('trigger')}
       </button>
 
       {open ? (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Update document content"
+          aria-label={t('dialogLabel')}
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-6"
         >
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t('close')}
             className="fixed inset-0 cursor-default bg-zinc-900/45"
             onClick={close}
           />
@@ -142,18 +144,17 @@ export function UpdateContentAction({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                  Update content
+                  {t('heading')}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  Paste the new Markdown. Kedge creates a new version and re-anchors
-                  your comments — identical content makes no new version.
+                  {t('description')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={close}
                 disabled={pending}
-                aria-label="Close"
+                aria-label={t('close')}
                 className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:hover:bg-white/5 dark:hover:text-zinc-200"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -165,14 +166,14 @@ export function UpdateContentAction({
                 htmlFor="update-content-body"
                 className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
               >
-                Content
+                {t('contentLabel')}
               </label>
               <textarea
                 id="update-content-body"
                 ref={textareaRef}
                 name="content"
                 rows={12}
-                placeholder={'# Paste the updated Markdown here'}
+                placeholder={t('placeholder')}
                 value={content}
                 onChange={(event) => {
                   setContent(event.target.value);
@@ -200,10 +201,10 @@ export function UpdateContentAction({
                   disabled={pending}
                   className="rounded-full px-3.5 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-white/5"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button type="submit" disabled={pending} className={BUTTON_CLASS}>
-                  {pending ? 'Updating…' : 'Update content'}
+                  {pending ? t('submitting') : t('submit')}
                 </button>
               </div>
             </form>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, MessageSquare } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { listThreads } from '@/lib/comments-client';
 import type { DocumentVersionDiff, VersionDiffVersion } from '@/lib/document-types';
 import {
@@ -15,7 +16,7 @@ import {
   type InlineDiffSegment,
 } from '@/lib/inline-diff';
 import { renderCommentMarkdown } from '@/lib/render-comment-markdown';
-import { relativeTime } from '@/lib/relative-time';
+import { formatRelativeTime } from '@/lib/intl-time';
 import type { ReviewThread } from '@/lib/thread-types';
 import { cn } from '@/lib/cn';
 import { ApprovalRoster } from './approval-roster';
@@ -40,6 +41,7 @@ interface DiffThreadEntry {
 }
 
 export function DocumentDiffView({ diff }: { diff: DocumentVersionDiff }) {
+  const t = useTranslations('diff');
   const [threadsA, setThreadsA] = useState<ReviewThread[]>([]);
   const [threadsB, setThreadsB] = useState<ReviewThread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
@@ -113,7 +115,7 @@ export function DocumentDiffView({ diff }: { diff: DocumentVersionDiff }) {
               <ArrowRight className="h-4 w-4 text-zinc-400" aria-hidden="true" />
               <MetaChip>{diff.versions.b.label}</MetaChip>
               <span className="ml-auto font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
-                projection {diff.versions.a.projection_version}
+                {t('projection', { version: diff.versions.a.projection_version ?? '' })}
               </span>
             </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-words p-4 font-mono text-[13px] leading-6 text-zinc-800 dark:text-zinc-200">
@@ -135,12 +137,12 @@ export function DocumentDiffView({ diff }: { diff: DocumentVersionDiff }) {
         <aside className="space-y-5 xl:sticky xl:top-32">
           {loadingThreads ? (
             <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-              Loading threads.
+              {t('loadingThreads')}
             </p>
           ) : null}
 
           <DiffThreadList
-            title={`${diff.versions.a.label} anchors`}
+            title={t('anchorsTitle', { label: diff.versions.a.label })}
             side="a"
             version={diff.versions.a}
             entries={entries.filter((entry) => entry.side === 'a')}
@@ -148,7 +150,7 @@ export function DocumentDiffView({ diff }: { diff: DocumentVersionDiff }) {
             onFocusMarker={focusMarker}
           />
           <DiffThreadList
-            title={`${diff.versions.b.label} anchors`}
+            title={t('anchorsTitle', { label: diff.versions.b.label })}
             side="b"
             version={diff.versions.b}
             entries={entries.filter((entry) => entry.side === 'b')}
@@ -168,6 +170,8 @@ function DiffHeader({
   diff: DocumentVersionDiff;
   openThreadCount: number;
 }) {
+  const t = useTranslations('diff');
+  const locale = useLocale();
   const currentVersionLabel = diff.current_version?.label ?? null;
 
   return (
@@ -178,27 +182,27 @@ function DiffHeader({
             href={`/documents/${diff.document.id}?version=${diff.versions.b.id}`}
             className="mb-1 inline-flex text-sm text-emerald-600 hover:text-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
           >
-            ← Back to document
+            ← {t('backToDocument')}
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <MetaChip>{diff.versions.a.label}</MetaChip>
             <ArrowRight className="h-4 w-4 text-zinc-400" aria-hidden="true" />
             <MetaChip>{diff.versions.b.label}</MetaChip>
-            {currentVersionLabel ? <MetaChip>current {currentVersionLabel}</MetaChip> : null}
-            <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500">Plain-text diff</span>
+            {currentVersionLabel ? <MetaChip>{t('current', { label: currentVersionLabel })}</MetaChip> : null}
+            <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500">{t('plainTextDiff')}</span>
           </div>
           <h1 className="mt-1 truncate text-xl font-semibold text-zinc-900 dark:text-white sm:text-2xl">
             {diff.document.title}
           </h1>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-500">
-            <span>{versionSyncedLabel(diff.versions.a)}</span>
-            <span>{versionSyncedLabel(diff.versions.b)}</span>
+            <span>{versionSyncedLabel(diff.versions.a, t, locale)}</span>
+            <span>{versionSyncedLabel(diff.versions.b, t, locale)}</span>
           </div>
           <ApprovalRoster approvals={diff.approvals} currentVersionLabel={currentVersionLabel} />
         </div>
         <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10">
           <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          <span>{openThreadCount} open</span>
+          <span>{t('openCount', { count: openThreadCount })}</span>
         </div>
       </div>
     </header>
@@ -216,9 +220,11 @@ function DiffSegmentView({
   activeKey: string | null;
   onActivateMarker: (key: string) => void;
 }) {
+  const t = useTranslations('diff');
+
   return (
     <span className={segmentClassName(segment.kind)}>
-      {renderTextWithMarkers(segment.text, markers, activeKey, onActivateMarker)}
+      {renderTextWithMarkers(segment.text, markers, activeKey, onActivateMarker, t)}
     </span>
   );
 }
@@ -228,6 +234,7 @@ function renderTextWithMarkers(
   markers: DiffThreadMarker[],
   activeKey: string | null,
   onActivateMarker: (key: string) => void,
+  t: ReturnType<typeof useTranslations>,
 ) {
   if (markers.length === 0) return text;
 
@@ -255,7 +262,7 @@ function renderTextWithMarkers(
               diffSideMarkerClassName(marker.side),
               activeKey === marker.key ? 'ring-2 ring-zinc-900 dark:ring-white' : null,
             )}
-            aria-label={`${marker.side === 'a' ? 'Version A' : 'Version B'} thread ${marker.thread.id}`}
+            aria-label={t('threadMarker', { version: marker.side === 'a' ? t('versionA') : t('versionB'), id: marker.thread.id })}
           >
             {marker.displayLabel}
           </button>
@@ -284,6 +291,8 @@ function DiffThreadList({
   activeKey: string | null;
   onFocusMarker: (key: string) => void;
 }) {
+  const t = useTranslations('diff');
+
   return (
     <section>
       <div className="mb-2 flex items-center gap-2">
@@ -294,7 +303,7 @@ function DiffThreadList({
       <div className="space-y-3">
         {entries.length === 0 ? (
           <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-            No anchored threads on {version.label}.
+            {t('noAnchoredThreads', { label: version.label })}
           </p>
         ) : null}
         {entries.map((entry) => (
@@ -319,6 +328,8 @@ function DiffThreadCard({
   active: boolean;
   onFocusMarker: (key: string) => void;
 }) {
+  const t = useTranslations('diff');
+  const tThreads = useTranslations('threads');
   const comment = entry.thread.first_comment ?? entry.thread.comments?.[0] ?? null;
   const hasMarker = entry.placement !== null;
   const body = comment && !comment.is_deleted && (comment.body_md ?? '').trim() !== ''
@@ -344,15 +355,15 @@ function DiffThreadCard({
             'inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 font-mono text-[11px] font-semibold ring-1 ring-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50',
             diffSideMarkerClassName(entry.side),
           )}
-          title={hasMarker ? 'Jump to marker' : 'Anchor is not placed in this diff'}
+          title={hasMarker ? t('jumpToMarker') : t('anchorNotPlacedTitle')}
         >
           {entry.displayLabel}
         </button>
         <span className="font-medium text-zinc-900 dark:text-white">
-          Thread #{entry.thread.id}
+          {t('threadNumber', { id: entry.thread.id })}
         </span>
         <span className="ml-auto rounded-lg bg-zinc-400/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-zinc-500 ring-1 ring-inset ring-zinc-400/30 dark:text-zinc-400">
-          {entry.thread.status}
+          {tThreads(`status.${entry.thread.status}`)}
         </span>
       </div>
       {entry.thread.anchor ? (
@@ -367,7 +378,7 @@ function DiffThreadCard({
       ) : null}
       {!hasMarker ? (
         <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
-          Anchor not placed in this diff.
+          {t('anchorNotPlaced')}
         </p>
       ) : null}
     </article>
@@ -431,10 +442,16 @@ function diffSideMarkerClassName(side: DiffAnchorSide): string {
     : 'bg-emerald-100 text-emerald-700 ring-emerald-400/40 dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-emerald-400/35';
 }
 
-function versionSyncedLabel(version: VersionDiffVersion): string {
-  const synced = relativeTime(version.synced_at);
+function versionSyncedLabel(
+  version: VersionDiffVersion,
+  t: ReturnType<typeof useTranslations>,
+  locale: string,
+): string {
+  const synced = formatRelativeTime(version.synced_at, locale);
 
-  return synced === '' ? `${version.label} sync time unavailable` : `${version.label} synced ${synced}`;
+  return synced === ''
+    ? t('syncUnavailable', { label: version.label })
+    : t('synced', { label: version.label, when: synced });
 }
 
 function segmentClassName(kind: InlineDiffKind): string {
