@@ -1,5 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentCommentComposer, type ComposerState } from '@/components/app/document-comment-composer';
 import { DocumentThreadRail } from '@/components/app/document-thread-rail';
@@ -333,22 +333,33 @@ function clickComposerButton(
 }
 
 function renderedComposer(overrides: Partial<Parameters<typeof DocumentCommentComposer>[0]>): ReactElement {
-  const node = DocumentCommentComposer({
-    documentId: 67,
-    composer: { open: true, stage: 'panel', mode: 'document', anchor: null, failure: null, x: 0, y: 0 },
-    commentType: 'comment',
-    body: '',
-    proposedText: '',
-    message: null,
-    submitting: false,
-    onBodyChange: () => {},
-    onProposedTextChange: () => {},
-    onCommentTypeChange: () => {},
-    onClose: () => {},
-    onOpenPanel: () => {},
-    onSubmit: () => {},
-    ...overrides,
-  });
+  // Invoke the component as a function so the returned element tree keeps its
+  // live handlers — but do it INSIDE a provider-wrapped render (the renderDraft
+  // pattern below), because useTranslations reads the intl context (M3.9 #126).
+  let node: ReactNode = null;
+
+  function Harness() {
+    node = DocumentCommentComposer({
+      documentId: 67,
+      composer: { open: true, stage: 'panel', mode: 'document', anchor: null, failure: null, x: 0, y: 0 },
+      commentType: 'comment',
+      body: '',
+      proposedText: '',
+      message: null,
+      submitting: false,
+      onBodyChange: () => {},
+      onProposedTextChange: () => {},
+      onCommentTypeChange: () => {},
+      onClose: () => {},
+      onOpenPanel: () => {},
+      onSubmit: () => {},
+      ...overrides,
+    });
+
+    return null;
+  }
+
+  renderToStaticMarkup(<Harness />);
   if (!isValidElement(node)) throw new Error('Composer did not render');
 
   return node;

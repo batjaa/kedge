@@ -1,0 +1,5 @@
+{
+  "approved": "approved {version}",
+  "approvedCurrent": "approved {version} · current {current}",
+  "reviewerFallback": "Reviewer"
+}

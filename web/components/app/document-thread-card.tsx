@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Flag, RotateCcw } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { StatusBadge } from './document-thread-badges';
 import { CommentRow, useCommentEditState } from './document-thread-comment-row';
 import { ReplyComposer } from './document-thread-reply-composer';
@@ -46,6 +47,7 @@ export function ThreadCard({
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
 }) {
+  const t = useTranslations('threads');
   const comments = thread.comments && thread.comments.length > 0
     ? thread.comments
     : thread.first_comment
@@ -129,22 +131,22 @@ export function ThreadCard({
           className="min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         >
           <span className="text-xs font-semibold text-zinc-900 dark:text-white">
-            {isAgentThread ? 'Agent' : isSuggestionThread ? 'Suggestion' : 'Thread'}
+            {isAgentThread ? t('card.agent') : isSuggestionThread ? t('card.suggestion') : t('card.thread')}
           </span>
         </button>
         {thread.anchor?.state === 'relocated' ? <RelocatedBadge /> : null}
         <span className="truncate font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
-          {sectionLabel(thread.anchor)}
+          {sectionLabel(thread.anchor, t)}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           <StatusBadge status={thread.status} suggestion={isSuggestionThread} agent={isAgentThread} />
           {controls.resolve ? (
-            <IconButton title="Resolve thread" disabled={statusBusy} onClick={() => void changeStatus('resolved')}>
+            <IconButton title={t('card.resolve')} disabled={statusBusy} onClick={() => void changeStatus('resolved')}>
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
             </IconButton>
           ) : null}
           {controls.reopen ? (
-            <IconButton title="Reopen thread" disabled={statusBusy} onClick={() => void changeStatus('open')}>
+            <IconButton title={t('card.reopen')} disabled={statusBusy} onClick={() => void changeStatus('open')}>
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
             </IconButton>
           ) : null}
@@ -158,7 +160,7 @@ export function ThreadCard({
       >
         {thread.forked_from_comment_id ? (
           <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-500">
-            Forked from comment #{thread.forked_from_comment_id}
+            {t('card.forkedFrom', { id: thread.forked_from_comment_id })}
           </p>
         ) : null}
         {thread.anchor ? <Quote anchor={thread.anchor} /> : null}
@@ -191,12 +193,12 @@ export function ThreadCard({
         </div>
         {!expanded && comments.length > 1 ? (
           <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-            {comments.length - 1} more {comments.length === 2 ? 'reply' : 'replies'}
+            {t('card.moreReplies', { count: comments.length - 1 })}
           </p>
         ) : null}
         {thread.forked_into_count > 0 ? (
           <p className="mt-3 text-[11px] text-zinc-500 dark:text-zinc-500">
-            Forked into {thread.forked_into_count} {thread.forked_into_count === 1 ? 'thread' : 'threads'}
+            {t('card.forkedInto', { count: thread.forked_into_count })}
           </p>
         ) : null}
         {expanded ? (
@@ -226,19 +228,23 @@ function Quote({ anchor }: { anchor: ThreadAnchor }) {
 }
 
 function RelocatedBadge() {
+  const t = useTranslations('threads');
+
   return (
     <span
-      title="Relocated after re-anchoring; verify the moved selection."
+      title={t('card.relocatedTitle')}
       className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 ring-1 ring-inset ring-amber-400/35 dark:text-amber-300 dark:ring-amber-400/25"
     >
       <Flag className="h-3 w-3" aria-hidden="true" />
-      Moved
+      {t('card.moved')}
     </span>
   );
 }
 
-function sectionLabel(anchor: ThreadAnchor | null): string {
-  if (!anchor) return 'document';
+// The `§ {section}` value is a document heading (user content) — only the
+// fallback words ("document"/"selection") are chrome; the § glyph is universal.
+function sectionLabel(anchor: ThreadAnchor | null, t: ReturnType<typeof useTranslations>): string {
+  if (!anchor) return t('card.sectionDocument');
   const section = anchor.heading_path.at(-1);
-  return section ? `§ ${section}` : '§ selection';
+  return section ? `§ ${section}` : `§ ${t('card.selection')}`;
 }

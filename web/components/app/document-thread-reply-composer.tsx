@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { ModeButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
 import { MentionTextarea } from './mention-textarea';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
@@ -19,6 +20,7 @@ export function ReplyComposer({
   onReply: (thread: ReviewThread, input: ReplyToThreadInput, idempotencyKey: string) => Promise<string | null>;
   onMessage: (message: string | null) => void;
 }) {
+  const t = useTranslations('threads');
   const [replying, setReplying] = useState(false);
   const replyingRef = useRef(false);
   const canSuggest = thread.type === 'inline' && thread.anchor !== null;
@@ -91,13 +93,13 @@ export function ReplyComposer({
   return (
     <div className="mt-4 border-t border-zinc-900/5 pt-3 dark:border-white/5">
       {thread.status === 'resolved' ? (
-        <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">resolved - reopen?</p>
+        <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">{t('composer.resolvedReopen')}</p>
       ) : null}
       {canSuggest ? (
         <div className="mb-2 grid w-full grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-white/5">
           <ModeButton active={!isSuggestion} disabled={replying} onClick={() => setDraftMode('comment')}>
             <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-            Comment
+            {t('composer.comment')}
           </ModeButton>
           <ModeButton
             active={isSuggestion}
@@ -105,7 +107,7 @@ export function ReplyComposer({
             onClick={() => setDraftMode('suggestion')}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-            Suggest
+            {t('composer.suggest')}
           </ModeButton>
         </div>
       ) : null}
@@ -118,12 +120,12 @@ export function ReplyComposer({
             }}
             rows={3}
             className={TEXTAREA_CLASS_NAME}
-            placeholder="Replacement text"
-            aria-label="Reply suggested replacement"
+            placeholder={t('composer.replacementText')}
+            aria-label={t('composer.replySuggestedReplacement')}
             disabled={replying}
           />
           {suggestionUnchanged ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Edit the text to suggest a change.</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('composer.suggestionUnchanged')}</p>
           ) : null}
           <MentionTextarea
             documentId={thread.document_id}
@@ -133,8 +135,8 @@ export function ReplyComposer({
             }}
             rows={2}
             className={TEXTAREA_CLASS_NAME}
-            placeholder="Add a note"
-            ariaLabel="Reply suggestion note"
+            placeholder={t('composer.addNote')}
+            ariaLabel={t('composer.replySuggestionNote')}
             disabled={replying}
           />
         </div>
@@ -147,8 +149,8 @@ export function ReplyComposer({
           }}
           rows={2}
           className={TEXTAREA_CLASS_NAME}
-          placeholder="Reply"
-          ariaLabel="Reply"
+          placeholder={t('composer.reply')}
+          ariaLabel={t('composer.reply')}
           disabled={replying}
         />
       )}
@@ -159,17 +161,17 @@ export function ReplyComposer({
           disabled={replying}
           className="rounded-full px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/5"
         >
-          Cancel
+          {t('composer.cancel')}
         </button>
         <button
           type="button"
           onClick={() => void submitReply()}
           disabled={submitDisabled}
-          aria-label={isSuggestion ? 'Submit suggestion reply' : 'Post reply'}
+          aria-label={isSuggestion ? t('composer.submitSuggestionReply') : t('composer.postReply')}
           className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />
-          {isSuggestion ? 'Suggest' : 'Reply'}
+          {isSuggestion ? t('composer.suggest') : t('composer.reply')}
         </button>
       </div>
     </div>

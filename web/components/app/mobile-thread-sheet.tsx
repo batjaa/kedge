@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { ThreadCard } from './document-thread-card';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
@@ -31,6 +32,7 @@ export function MobileThreadSheet({
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
 }) {
+  const t = useTranslations('threads');
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -62,7 +64,7 @@ export function MobileThreadSheet({
     <div className="fixed inset-0 z-50 xl:hidden">
       <button
         type="button"
-        aria-label="Close thread sheet"
+        aria-label={t('sheet.closeSheet')}
         className="absolute inset-0 cursor-default bg-zinc-900/45"
         onClick={onClose}
       />
@@ -70,20 +72,20 @@ export function MobileThreadSheet({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Thread"
+        aria-label={t('sheet.thread')}
         tabIndex={-1}
         onKeyDown={trapFocus}
         className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl ring-1 ring-zinc-900/10 dark:bg-zinc-950 dark:ring-white/10"
       >
         <div className="mb-3 flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Thread</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">{t('sheet.thread')}</h2>
           <button
             type="button"
             onClick={onClose}
             className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
           >
             <X className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('sheet.close')}</span>
           </button>
         </div>
         {thread ? (
@@ -106,7 +108,7 @@ export function MobileThreadSheet({
           />
         ) : (
           <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-            No threads yet.
+            {t('rail.empty')}
           </p>
         )}
       </div>

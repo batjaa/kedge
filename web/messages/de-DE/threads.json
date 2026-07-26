@@ -1,0 +1,92 @@
+{
+  "_notes": {
+    "badges": "badge.*, status.* and suggestionStatus.* render inside small uppercase mono badges on thread cards and comment rows — labels, not prose. Keep them short (abbreviate like the English 'sugg'); unlike the chips glossary they have no truncation clamp, so an over-long label would stretch the row."
+  },
+  "rail": {
+    "label": "Thread-Leiste",
+    "empty": "Noch keine Threads.",
+    "loadMore": "Weitere Threads laden"
+  },
+  "orphan": {
+    "label": "Verwaiste Threads",
+    "title": "Ablage für verwaiste",
+    "empty": "leer",
+    "emptyBody": "Noch keine verwaisten Threads.",
+    "itemLabel": "Verwaister Thread",
+    "selectHint": "Ersatztext im Dokument auswählen",
+    "reattaching": "Wird neu verankert...",
+    "selectText": "Text auswählen",
+    "reattach": "Neu verankern"
+  },
+  "card": {
+    "agent": "Agent",
+    "suggestion": "Vorschlag",
+    "thread": "Thread",
+    "resolve": "Thread auflösen",
+    "reopen": "Thread wieder öffnen",
+    "forkedFrom": "Abgezweigt von Kommentar #{id}",
+    "moreReplies": "{count, plural, one {# weitere Antwort} other {# weitere Antworten}}",
+    "forkedInto": "{count, plural, one {In # Thread abgezweigt} other {In # Threads abgezweigt}}",
+    "relocatedTitle": "Nach der Neuverankerung verschoben; überprüfen Sie die verschobene Auswahl.",
+    "moved": "Verschoben",
+    "sectionDocument": "Dokument",
+    "selection": "Auswahl"
+  },
+  "comment": {
+    "reviewerFallback": "Prüfer",
+    "edited": "bearbeitet",
+    "editBodyLabel": "Kommentartext bearbeiten",
+    "cancelEdit": "Bearbeitung abbrechen",
+    "saveEdit": "Bearbeitung speichern",
+    "deleted": "Kommentar gelöscht",
+    "edit": "Kommentar bearbeiten",
+    "delete": "Kommentar löschen",
+    "fork": "In neuen Thread abzweigen",
+    "removeReaction": "Reaktion entfernen",
+    "react": "Reagieren",
+    "acceptSuggestion": "Vorschlag annehmen",
+    "declineSuggestion": "Vorschlag ablehnen",
+    "reopenSuggestion": "Vorschlag wieder öffnen"
+  },
+  "badge": {
+    "agent": "agent",
+    "suggestion": "vorschl",
+    "mcp": "mcp"
+  },
+  "status": {
+    "open": "offen",
+    "resolved": "gelöst"
+  },
+  "suggestionStatus": {
+    "pending": "ausstehend",
+    "accepted": "angenommen",
+    "declined": "abgelehnt"
+  },
+  "composer": {
+    "comment": "Kommentieren",
+    "suggest": "Vorschlagen",
+    "reply": "Antworten",
+    "post": "Senden",
+    "cancel": "Abbrechen",
+    "resolvedReopen": "gelöst – erneut öffnen?",
+    "replacementText": "Ersatztext",
+    "addNote": "Notiz hinzufügen",
+    "writeComment": "Kommentar schreiben",
+    "inlineComment": "Inline-Kommentar",
+    "suggestedReplacement": "Vorgeschlagener Ersatz",
+    "suggestionNote": "Vorschlagsnotiz",
+    "replySuggestedReplacement": "Vorgeschlagener Ersatz der Antwort",
+    "replySuggestionNote": "Vorschlagsnotiz der Antwort",
+    "suggestionUnchanged": "Bearbeiten Sie den Text, um eine Änderung vorzuschlagen.",
+    "selectionNotAnchored": "Die Auswahl konnte nicht verankert werden. Kommentieren Sie stattdessen das ganze Dokument.",
+    "submitSuggestion": "Vorschlag senden",
+    "postComment": "Kommentar senden",
+    "submitSuggestionReply": "Vorschlagsantwort senden",
+    "postReply": "Antwort senden"
+  },
+  "sheet": {
+    "thread": "Thread",
+    "closeSheet": "Thread-Blatt schließen",
+    "close": "Schließen"
+  }
+}
