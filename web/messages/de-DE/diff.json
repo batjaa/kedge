@@ -1,0 +1,19 @@
+{
+  "loadingThreads": "Threads werden geladen.",
+  "backToDocument": "Zurück zum Dokument",
+  "current": "aktuell {label}",
+  "plainTextDiff": "Klartext-Vergleich",
+  "projection": "Projektion {version}",
+  "openCount": "{count, number} offen",
+  "synced": "{label} synchronisiert {when}",
+  "syncUnavailable": "{label} Synchronisierungszeit nicht verfügbar",
+  "anchorsTitle": "Anker von {label}",
+  "versionA": "Version A",
+  "versionB": "Version B",
+  "threadMarker": "{version} Thread {id}",
+  "noAnchoredThreads": "Keine verankerten Threads in {label}.",
+  "jumpToMarker": "Zum Marker springen",
+  "anchorNotPlacedTitle": "Der Anker ist in diesem Vergleich nicht platziert",
+  "threadNumber": "Thread #{id}",
+  "anchorNotPlaced": "Anker in diesem Vergleich nicht platziert."
+}

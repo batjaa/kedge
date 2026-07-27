@@ -1,0 +1,58 @@
+{
+  "panel": {
+    "title": "Rastrear un repositorio",
+    "body": "Apunta a un repo de GitHub y un patrón de rutas, previsualiza exactamente qué archivos coinciden y luego impórtalos todos a este proyecto — queda rastreado para un re-escaneo posterior.",
+    "repoUrlLabel": "URL del repositorio",
+    "repoUrlPlaceholder": "https://github.com/owner/repo",
+    "branchLabel": "Rama",
+    "optional": "— opcional",
+    "branchPlaceholder": "rama predeterminada",
+    "patternLabel": "Patrón de rutas",
+    "patternPlaceholder": "docs/**/*.md",
+    "patternHelp": "<code>*</code> coincide dentro de una carpeta, <code>**</code> abarca carpetas, <code>?</code> un carácter — distingue mayúsculas. Solo se importan archivos <code>.md</code>, <code>.mdx</code> y <code>.html</code>.",
+    "patHint": "¿Rastreas un repo público grande? Conecta el PAT de GitHub del espacio de trabajo en Configuración para un límite mayor — GitHub sin autenticar permite solo 60 solicitudes por hora.",
+    "preview": "Previsualizar archivos",
+    "previewing": "Previsualizando…",
+    "previewFailed": "Algo salió mal al consultar el repositorio. Inténtalo de nuevo.",
+    "confirmFailed": "Algo salió mal al iniciar el escaneo. Inténtalo de nuevo."
+  },
+  "preview": {
+    "checking": "Consultando el repositorio…",
+    "zeroMatches": "0 archivos coinciden con este patrón. Ajusta el patrón y previsualiza de nuevo.",
+    "matches": "{count, plural, one {# archivo coincide} other {# archivos coinciden}}",
+    "overlap": "· {count, number} ya rastreados en otro lugar",
+    "overlapTitle": "Otro repositorio rastreado en este espacio de trabajo ya importa esta ruta — importarla aquí la duplicaría.",
+    "confirm": "Agregar y escanear",
+    "confirming": "Iniciando escaneo…",
+    "confirmHint": "Importa estos archivos al proyecto y mantiene el repo rastreado."
+  },
+  "row": {
+    "defaultRef": "predeterminada",
+    "scanning": "Escaneando el repositorio…",
+    "scanFailedFallback": "El escaneo falló. Verifica los detalles del repositorio e inténtalo de nuevo.",
+    "notScanned": "Aún sin escanear.",
+    "rescan": "Re-escanear",
+    "retryScan": "Reintentar escaneo",
+    "rescanning": "Re-escaneando…",
+    "reconnect": "Reconectar GitHub",
+    "delete": "Eliminar",
+    "removing": "Eliminando…",
+    "cancel": "Cancelar",
+    "confirmRemove": "¿Quitar el rastreo?",
+    "removeHint": "Sus documentos permanecen en el proyecto — solo se elimina el rastreo."
+  },
+  "report": {
+    "zeroMatched": "0 archivos coincidieron",
+    "adjustPattern": " — ajusta el patrón.",
+    "upToDate": "Ya está al día",
+    "filesUnchanged": " · {count, plural, one {# archivo sin cambios} other {# archivos sin cambios}}",
+    "queued": "{count, number} en cola",
+    "resynced": " · {count, number} resincronizados",
+    "unchanged": "{count, number} sin cambios",
+    "missing": " · {count, number} ausentes",
+    "failed": " · {count, number} fallidos",
+    "staleTakeover": " · se recuperó un escaneo estancado",
+    "scanned": "{count, plural, one {# archivo escaneado} other {# archivos escaneados}}",
+    "scannedMissing": ", {count, number} ausentes"
+  }
+}

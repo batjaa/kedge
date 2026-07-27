@@ -1,0 +1,45 @@
+{
+  "footerCta": "Review your own spec with Kedge →",
+  "eyebrow": {
+    "demo": "Demo document",
+    "verifiedReviewer": "Shared document · verified reviewer",
+    "readOnly": "Shared document · read-only"
+  },
+  "loadError": {
+    "heading": "Couldn't load this document",
+    "body": "Something went wrong reaching the server. Try again in a moment."
+  },
+  "emailVerified": "Email verified. You can comment on this document now.",
+  "preparing": "This document is still being prepared. Refresh in a moment.",
+  "rendering": "Rendering your document — this page updates itself when it's ready.",
+  "gone": {
+    "heading": "This link is no longer active",
+    "revoked": "The author has revoked this share link. Ask them for a fresh one if you still need access.",
+    "expired": "This share link has expired. Ask the author for a new one if you still need access.",
+    "unknown": "We couldn't find a document for this link. It may have been revoked, expired, or mistyped — double-check the URL, or ask the author for a fresh link."
+  },
+  "verify": {
+    "heading": "Verify your email to comment",
+    "emailLabel": "Reviewer email",
+    "verifyingEmail": "Verifying your email…",
+    "send": "Send link",
+    "sending": "Sending",
+    "sent": "Sent",
+    "verifying": "Verifying",
+    "sentFallback": "Check your email for a link to continue reviewing.",
+    "errors": {
+      "validation": "Enter a valid email address.",
+      "rateLimited": "Too many requests. Wait a minute, then try again.",
+      "gone": "This share link is no longer active.",
+      "sendFailed": "We couldn't send the email. Try again.",
+      "completeRateLimited": "Too many verification attempts. Wait a minute, then try again.",
+      "completeFailed": "We couldn't verify this link. Try again."
+    },
+    "returnState": {
+      "expired": "That verification link expired. Request a fresh link to continue commenting.",
+      "used": "That verification link was already used. Request a fresh link if this browser is not verified.",
+      "invalid": "That verification link could not be verified. Request a fresh link to continue commenting.",
+      "account_required": "This email already has a Kedge account. Sign in to review this document."
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "page": {
+    "back": "← Cola de revisión",
+    "title": "Configuración del espacio de trabajo",
+    "managing": "Administrando <name>{workspace}</name> — tu espacio de trabajo personal."
+  },
+  "general": {
+    "title": "General",
+    "body": "El nombre y el identificador de tu espacio de trabajo. El nombre se muestra en toda la app; el slug es su identificador seguro para URL.",
+    "nameLabel": "Nombre",
+    "slugLabel": "Slug",
+    "nameAria": "Nombre del espacio de trabajo",
+    "slugAria": "Slug del espacio de trabajo",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "updated": "Espacio de trabajo actualizado."
+  },
+  "integrations": {
+    "heading": "GitHub",
+    "connectedCount": "{count, number} conectados",
+    "intro": "Conecta un <link>token de acceso personal de grano fino</link> para importar archivos de repositorios privados. El enlace preselecciona el mínimo que Kedge necesita (<strong>Contents: read-only</strong>) — solo elige <strong>“Only select repositories”</strong> y selecciona los repos a revisar. El token se cifra y no se vuelve a mostrar — quítalo cuando quieras.",
+    "orgLabel": "¿Repos de una organización?",
+    "orgPlaceholder": "nombre de la org (opcional)",
+    "ownerHint": "Un token de grano fino ve los repos de un solo propietario: los tuyos por defecto, o una organización — escríbela arriba para que el enlace se abra ya delimitado (cambiar el propietario dentro del formulario de GitHub restablece los permisos prellenados). Las orgs pueden bloquear estos tokens o requerir aprobación. Para un repo privado de otro usuario donde eres colaborador, los tokens de grano fino no sirven — usa un <classic>token clásico</classic> (alcance <code>repo</code> más amplio).",
+    "tokenAria": "Token de acceso personal de GitHub",
+    "tokenPlaceholder": "ghp_… o github_pat_…",
+    "connect": "Conectar",
+    "connecting": "Conectando…",
+    "connectedNotice": "GitHub conectado. Los repositorios privados ahora se importan mediante este token.",
+    "loading": "Cargando conexiones…",
+    "none": "Aún no hay tokens conectados.",
+    "patBadge": "PAT de GitHub",
+    "connected": "Conectado",
+    "connectedAt": "Conectado el {date, date, medium}",
+    "remove": "Quitar",
+    "removing": "Quitando…"
+  }
+}

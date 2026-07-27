@@ -1,0 +1,28 @@
+{
+  "_notes": {
+    "context": "Constrained chip glossary (eng-review 13A): every string here renders inside a small uppercase mono chip or pill. These are labels, not prose — translate with the shortest natural word.",
+    "budget": "Hard budget: 15 characters max per label; chips clamp at 16ch with a truncation class as belt-and-braces. The vitest length lint (test/i18n-chip-glossary.test.ts) enforces the budget on de-DE — keep German deliberately short (OFFEN/PRÜFUNG style), never compound prose.",
+    "casing": "Chips uppercase themselves via CSS; author labels in the language's natural casing."
+  },
+  "lifecycle": {
+    "draft": "draft",
+    "in_review": "in review",
+    "approved": "approved",
+    "superseded": "superseded"
+  },
+  "source": {
+    "label": "Source:",
+    "pasted": "pasted"
+  },
+  "scan": {
+    "import_queued": "Queued",
+    "resync_queued": "Re-synced",
+    "missing": "Missing",
+    "failed": "Failed",
+    "unchanged": "Unchanged",
+    "already_tracked": "Already tracked"
+  },
+  "workspace": {
+    "personal": "Personal"
+  }
+}

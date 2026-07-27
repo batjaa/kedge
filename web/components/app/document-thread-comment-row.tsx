@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { Check, GitFork, Pencil, RotateCcw, ThumbsUp, Trash2, X } from 'lucide-react';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { AgentBadge, SuggestionStatusBadge } from './document-thread-badges';
 import { IconButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
 import { cn } from '@/lib/cn';
 import { commentControlsFor } from '@/lib/review-surface-layout';
 import { renderCommentMarkdown } from '@/lib/render-comment-markdown';
 import { diffSuggestionText, SuggestionDiff } from '@/lib/suggestion-diff';
-import { relativeTime } from '@/lib/relative-time';
+import { formatRelativeTime } from '@/lib/intl-time';
 import type { SuggestionStatus, ThreadComment } from '@/lib/thread-types';
 
 export function useCommentEditState(
@@ -82,7 +83,9 @@ export function CommentRow({
   onSetSuggestionStatus: (status: SuggestionStatus) => void;
   onToggleReaction: () => void;
 }) {
-  const author = comment.author?.name ?? 'Reviewer';
+  const t = useTranslations('threads');
+  const locale = useLocale();
+  const author = comment.author?.name ?? t('comment.reviewerFallback');
   const controls = commentControlsFor(comment, isReply);
   const body = useMemo(
     () => comment.is_deleted ? null : renderCommentMarkdown(comment.body_md ?? '', comment.mentions),
@@ -105,9 +108,9 @@ export function CommentRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{author}</span>
           {comment.client === 'mcp' ? <AgentBadge /> : null}
-          {comment.edited_at && !comment.is_deleted ? <span className="text-[10px] text-zinc-400">edited</span> : null}
+          {comment.edited_at && !comment.is_deleted ? <span className="text-[10px] text-zinc-400">{t('comment.edited')}</span> : null}
           {isSuggestion && comment.suggestion_status ? <SuggestionStatusBadge status={comment.suggestion_status} /> : null}
-          <span className="ml-auto text-[10px] text-zinc-400">{relativeTime(comment.created_at)}</span>
+          <span className="ml-auto text-[10px] text-zinc-400">{formatRelativeTime(comment.created_at, locale)}</span>
         </div>
         {editing ? (
           <div className="mt-2">
@@ -116,19 +119,19 @@ export function CommentRow({
               onChange={(event) => onEditBodyChange(event.target.value)}
               rows={3}
               className={TEXTAREA_CLASS_NAME}
-              aria-label="Edit comment body"
+              aria-label={t('comment.editBodyLabel')}
             />
             <div className="mt-2 flex justify-end gap-1.5">
-              <IconButton title="Cancel edit" onClick={onCancelEdit}>
+              <IconButton title={t('comment.cancelEdit')} onClick={onCancelEdit}>
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </IconButton>
-              <IconButton title="Save edit" disabled={editBody.trim() === ''} onClick={onSaveEdit}>
+              <IconButton title={t('comment.saveEdit')} disabled={editBody.trim() === ''} onClick={onSaveEdit}>
                 <Check className="h-3.5 w-3.5" aria-hidden="true" />
               </IconButton>
             </div>
           </div>
         ) : comment.is_deleted ? (
-          <p className="mt-1 text-sm italic leading-6 text-zinc-500 dark:text-zinc-500">comment deleted</p>
+          <p className="mt-1 text-sm italic leading-6 text-zinc-500 dark:text-zinc-500">{t('comment.deleted')}</p>
         ) : (
           <>
             {suggestionDiff ? <SuggestionDiff diff={suggestionDiff} /> : null}
@@ -156,17 +159,17 @@ export function CommentRow({
             />
           ) : null}
           {controls.edit ? (
-            <IconButton title="Edit comment" onClick={onStartEdit}>
+            <IconButton title={t('comment.edit')} onClick={onStartEdit}>
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </IconButton>
           ) : null}
           {controls.delete ? (
-            <IconButton title="Delete comment" disabled={deleting} onClick={onDelete}>
+            <IconButton title={t('comment.delete')} disabled={deleting} onClick={onDelete}>
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </IconButton>
           ) : null}
           {controls.fork ? (
-            <IconButton title="Fork into new thread" disabled={forking} onClick={onFork}>
+            <IconButton title={t('comment.fork')} disabled={forking} onClick={onFork}>
               <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
             </IconButton>
           ) : null}
@@ -187,11 +190,14 @@ function ReactionButton({
   busy: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations('threads');
+  const format = useFormatter();
+
   return (
     <button
       type="button"
-      title={active ? 'Remove reaction' : 'React'}
-      aria-label={active ? 'Remove reaction' : 'React'}
+      title={active ? t('comment.removeReaction') : t('comment.react')}
+      aria-label={active ? t('comment.removeReaction') : t('comment.react')}
       aria-pressed={active}
       disabled={busy}
       onClick={onToggle}
@@ -203,7 +209,7 @@ function ReactionButton({
       )}
     >
       <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
-      <span>{count}</span>
+      <span>{format.number(count)}</span>
     </button>
   );
 }
@@ -217,20 +223,22 @@ function SuggestionActions({
   busy: boolean;
   onSetStatus: (status: SuggestionStatus) => void;
 }) {
+  const t = useTranslations('threads');
+
   return (
     <>
       {controls.acceptSuggestion ? (
-        <IconButton title="Accept suggestion" disabled={busy} onClick={() => onSetStatus('accepted')}>
+        <IconButton title={t('comment.acceptSuggestion')} disabled={busy} onClick={() => onSetStatus('accepted')}>
           <Check className="h-3.5 w-3.5" aria-hidden="true" />
         </IconButton>
       ) : null}
       {controls.declineSuggestion ? (
-        <IconButton title="Decline suggestion" disabled={busy} onClick={() => onSetStatus('declined')}>
+        <IconButton title={t('comment.declineSuggestion')} disabled={busy} onClick={() => onSetStatus('declined')}>
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </IconButton>
       ) : null}
       {controls.reopenSuggestion ? (
-        <IconButton title="Reopen suggestion" disabled={busy} onClick={() => onSetStatus('pending')}>
+        <IconButton title={t('comment.reopenSuggestion')} disabled={busy} onClick={() => onSetStatus('pending')}>
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
         </IconButton>
       ) : null}

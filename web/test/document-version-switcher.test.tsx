@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { DocumentVersionSwitcher } from '@/components/app/document-version-switcher';
 import type { DocumentVersion } from '@/lib/document-types';

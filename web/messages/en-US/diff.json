@@ -1,0 +1,19 @@
+{
+  "loadingThreads": "Loading threads.",
+  "backToDocument": "Back to document",
+  "current": "current {label}",
+  "plainTextDiff": "Plain-text diff",
+  "projection": "projection {version}",
+  "openCount": "{count, number} open",
+  "synced": "{label} synced {when}",
+  "syncUnavailable": "{label} sync time unavailable",
+  "anchorsTitle": "{label} anchors",
+  "versionA": "Version A",
+  "versionB": "Version B",
+  "threadMarker": "{version} thread {id}",
+  "noAnchoredThreads": "No anchored threads on {label}.",
+  "jumpToMarker": "Jump to marker",
+  "anchorNotPlacedTitle": "Anchor is not placed in this diff",
+  "threadNumber": "Thread #{id}",
+  "anchorNotPlaced": "Anchor not placed in this diff."
+}

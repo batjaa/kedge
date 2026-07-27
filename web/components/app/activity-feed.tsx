@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { relativeTime } from '@/lib/relative-time';
+import { useLocale, useTranslations } from 'next-intl';
+import { formatRelativeTime } from '@/lib/intl-time';
 import type { ActivityContext, ActivityEvent, ActivityTarget } from '@/lib/activity-types';
 
 // The dashboard's Recent activity panel (SPEC §16, M3.8 #111;
@@ -20,12 +21,21 @@ import type { ActivityContext, ActivityEvent, ActivityTarget } from '@/lib/activ
 // imported document's untrusted title can never inject markup. The target link is
 // dropped (rendered as inert text) when the row carries no target — a dead
 // subject loses its link, never its row.
+//
+// i18n (M3.9 #123): each sentence is ONE whole ICU message per event type
+// (activity catalog) — an `{actor, select, …}` branch handles system rows so
+// word order is each language's own, never English glued together; <person> and
+// <target> tags carry the styled name and the link. Counts are ICU plurals
+// (CLDR covers Mongolian) and relative times ride Intl on the active locale.
+// Names, titles, and API `reason` prose are data, untranslated.
 export function ActivityFeed({ events }: { events: ActivityEvent[] | null }) {
+  const t = useTranslations('activity');
+
   if (events === null) return null;
 
   return (
-    <section data-slot="activity-feed" className="mt-10" aria-label="Recent activity">
-      <h2 className="px-1 text-sm font-semibold text-zinc-900 dark:text-white">Recent activity</h2>
+    <section data-slot="activity-feed" className="mt-10" aria-label={t('heading')}>
+      <h2 className="px-1 text-sm font-semibold text-zinc-900 dark:text-white">{t('heading')}</h2>
 
       {events.length === 0 ? (
         <EmptyState />
@@ -41,17 +51,21 @@ export function ActivityFeed({ events }: { events: ActivityEvent[] | null }) {
 }
 
 function EmptyState() {
+  const t = useTranslations('activity');
+
   return (
     <div className="mt-3 rounded-2xl bg-white px-4 py-8 text-center ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">No activity yet</p>
+      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('emptyTitle')}</p>
       <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-500">
-        Replies, accepted suggestions, re-syncs, and settling imports will show up here as you review.
+        {t('emptyBody')}
       </p>
     </div>
   );
 }
 
 function ActivityRow({ event }: { event: ActivityEvent }) {
+  const locale = useLocale();
+
   return (
     <li className="flex items-start gap-3 px-4 py-3">
       <Leading event={event} />
@@ -62,7 +76,7 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
         dateTime={event.created_at}
         className="ml-auto shrink-0 font-mono text-[10px] text-zinc-400 dark:text-zinc-600"
       >
-        {relativeTime(event.created_at)}
+        {formatRelativeTime(event.created_at, locale)}
       </time>
     </li>
   );
@@ -95,58 +109,84 @@ function Leading({ event }: { event: ActivityEvent }) {
   }
 }
 
-// The sentence per event type — every string is plain text (React-escaped), every
-// target a dropped-when-dead link. The re-sync digest is one line (1A).
+// The sentence per event type — one whole localized ICU message, so word order
+// belongs to the language. Every interpolation is plain text (React-escaped),
+// every target a dropped-when-dead link.
 function Sentence({ event }: { event: ActivityEvent }) {
+  const t = useTranslations('activity');
   const { type, actor, context, target } = event;
-  const title = <TargetLink target={target}>{documentLabel(context)}</TargetLink>;
+
+  // The rich-tag values every sentence shares: the actor select + styled name,
+  // and the <target> tag rendering the snapshot label as a link (or inert text).
+  const values = (label: string) => ({
+    actor: actor.name ? 'named' : 'system',
+    name: actor.name ?? '',
+    person: (chunks: ReactNode) => (
+      <span className="font-medium text-zinc-800 dark:text-zinc-200">{chunks}</span>
+    ),
+    target: () => <TargetLink target={target}>{label}</TargetLink>,
+  });
+
+  const docLabel = documentLabel(context, t('documentFallback'));
 
   switch (type) {
     case 'comment.created':
-      return <>{actorLead(actor.name, 'commented')} on {title}</>;
+      return <>{t.rich('sentence.commentCreated', values(docLabel))}</>;
     case 'suggestion.accepted':
-      return <>{actorLead(actor.name, 'accepted a suggestion')} on {title}</>;
+      return <>{t.rich('sentence.suggestionAccepted', values(docLabel))}</>;
     case 'suggestion.declined':
-      return <>{actorLead(actor.name, 'declined a suggestion')} on {title}</>;
+      return <>{t.rich('sentence.suggestionDeclined', values(docLabel))}</>;
     case 'approval.given':
-      return <>{actorLead(actor.name, 'approved')} {title}</>;
+      return <>{t.rich('sentence.approvalGiven', values(docLabel))}</>;
     case 'document.imported':
-      return <>{actorLead(actor.name, 'imported')} {title}</>;
+      return <>{t.rich('sentence.documentImported', values(docLabel))}</>;
     case 'workspace.renamed':
       return (
         <>
-          {actorLead(actor.name, 'renamed the workspace to')}{' '}
-          <TargetLink target={target}>{context.workspace_name ?? 'your workspace'}</TargetLink>
+          {t.rich(
+            'sentence.workspaceRenamed',
+            values(context.workspace_name ?? t('workspaceFallback')),
+          )}
         </>
       );
-    case 'approval.gone_stale': {
-      const count = context.count ?? 1;
+    case 'approval.gone_stale':
       return (
         <>
-          {count} {count === 1 ? 'approval' : 'approvals'} on {title} went stale after a re-sync
+          {t.rich('sentence.approvalsGoneStale', {
+            ...values(docLabel),
+            count: context.count ?? 1,
+          })}
         </>
       );
-    }
     case 'document.import_failed':
       return (
         <>
-          Import of {title} failed{context.reason ? <> — {context.reason}</> : null}
+          {t.rich('sentence.importFailed', {
+            ...values(docLabel),
+            hasReason: context.reason ? 'yes' : 'no',
+            reason: context.reason ?? '',
+          })}
         </>
       );
     case 'reanchor.completed':
       return (
         <>
-          Re-synced {title} — {context.anchored ?? 0} anchored, {context.relocated ?? 0} relocated,{' '}
-          {context.orphaned ?? 0} orphaned
+          {t.rich('sentence.reanchorCompleted', {
+            ...values(docLabel),
+            anchored: context.anchored ?? 0,
+            relocated: context.relocated ?? 0,
+            orphaned: context.orphaned ?? 0,
+          })}
         </>
       );
   }
 }
 
 // The document label a row links: title, plus the anchored section when the
-// snapshot froze one (comment/suggestion rows). Both plain text — inert on render.
-function documentLabel(context: ActivityContext): string {
-  const title = context.document_title ?? 'a document';
+// snapshot froze one (comment/suggestion rows). Both plain text — inert on
+// render. The fallback is the caller's localized "a document".
+function documentLabel(context: ActivityContext, fallback: string): string {
+  const title = context.document_title ?? fallback;
   return context.section ? `${title} § ${context.section}` : title;
 }
 
@@ -163,23 +203,6 @@ function TargetLink({ target, children }: { target: ActivityTarget | null; child
       {children}
     </Link>
   );
-}
-
-// "Sarah commented" when an actor is known; "Commented" (capitalized verb) for a
-// system-authored row with no snapshot name.
-function actorLead(name: string | null, verb: string): ReactNode {
-  if (!name) {
-    return capitalize(verb);
-  }
-  return (
-    <>
-      <span className="font-medium text-zinc-800 dark:text-zinc-200">{name}</span> {verb}
-    </>
-  );
-}
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function initials(name: string): string {

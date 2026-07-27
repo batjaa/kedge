@@ -1,0 +1,38 @@
+{
+  "page": {
+    "back": "← Review queue",
+    "title": "Workspace settings",
+    "managing": "Managing <name>{workspace}</name> — your personal workspace."
+  },
+  "general": {
+    "title": "General",
+    "body": "The name and handle for your workspace. The name shows across the app; the slug is its URL-safe handle.",
+    "nameLabel": "Name",
+    "slugLabel": "Slug",
+    "nameAria": "Workspace name",
+    "slugAria": "Workspace slug",
+    "save": "Save",
+    "saving": "Saving…",
+    "updated": "Workspace updated."
+  },
+  "integrations": {
+    "heading": "GitHub",
+    "connectedCount": "{count, number} connected",
+    "intro": "Connect a <link>fine-grained personal access token</link> to import files from private repositories. The link pre-selects the minimum Kedge needs (<strong>Contents: read-only</strong>) — just choose <strong>“Only select repositories”</strong> and pick the repos to review. The token is encrypted and never shown again — remove it any time.",
+    "orgLabel": "Repos owned by an organization?",
+    "orgPlaceholder": "org name (optional)",
+    "ownerHint": "A fine-grained token sees one owner's repos: yours by default, or one organization — enter it above so the link opens pre-scoped (changing the owner inside GitHub's form resets the pre-filled permissions). Orgs can block these tokens or require approval. For a private repo owned by another user where you're a collaborator, fine-grained tokens can't help — use a <classic>classic token</classic> (broader <code>repo</code> scope) instead.",
+    "tokenAria": "GitHub personal access token",
+    "tokenPlaceholder": "ghp_… or github_pat_…",
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "connectedNotice": "GitHub connected. Private repositories now import through this token.",
+    "loading": "Loading connections…",
+    "none": "No tokens connected yet.",
+    "patBadge": "GitHub PAT",
+    "connected": "Connected",
+    "connectedAt": "Connected {date, date, medium}",
+    "remove": "Remove",
+    "removing": "Removing…"
+  }
+}

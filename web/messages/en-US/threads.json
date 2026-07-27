@@ -1,0 +1,95 @@
+{
+  "_notes": {
+    "badges": "badge.*, status.* and suggestionStatus.* render inside small uppercase mono badges on thread cards and comment rows — labels, not prose. Keep them short (abbreviate like the English 'sugg'): they ride the same 16ch truncation clamp as the chips glossary, and the length guard (test/i18n-review-surface.test.tsx) holds every locale to 15 characters per label."
+  },
+  "rail": {
+    "label": "Thread rail",
+    "empty": "No threads yet.",
+    "loadMore": "Load more threads"
+  },
+  "orphan": {
+    "label": "Orphaned threads",
+    "title": "Orphaned tray",
+    "empty": "empty",
+    "emptyBody": "No orphaned threads yet.",
+    "itemLabel": "Orphaned thread",
+    "selectHint": "Select replacement text in the document",
+    "reattaching": "Re-attaching...",
+    "selectText": "Select text",
+    "reattach": "Re-attach"
+  },
+  "card": {
+    "agent": "Agent",
+    "suggestion": "Suggestion",
+    "thread": "Thread",
+    "resolve": "Resolve thread",
+    "reopen": "Reopen thread",
+    "forkedFrom": "Forked from comment #{id}",
+    "moreReplies": "{count, plural, one {# more reply} other {# more replies}}",
+    "forkedInto": "{count, plural, one {Forked into # thread} other {Forked into # threads}}",
+    "relocatedTitle": "Relocated after re-anchoring; verify the moved selection.",
+    "moved": "Moved",
+    "sectionDocument": "document",
+    "selection": "selection"
+  },
+  "comment": {
+    "reviewerFallback": "Reviewer",
+    "edited": "edited",
+    "editBodyLabel": "Edit comment body",
+    "cancelEdit": "Cancel edit",
+    "saveEdit": "Save edit",
+    "deleted": "comment deleted",
+    "edit": "Edit comment",
+    "delete": "Delete comment",
+    "fork": "Fork into new thread",
+    "removeReaction": "Remove reaction",
+    "react": "React",
+    "acceptSuggestion": "Accept suggestion",
+    "declineSuggestion": "Decline suggestion",
+    "reopenSuggestion": "Reopen suggestion"
+  },
+  "badge": {
+    "agent": "agent",
+    "suggestion": "sugg",
+    "mcp": "mcp"
+  },
+  "status": {
+    "open": "open",
+    "resolved": "resolved"
+  },
+  "suggestionStatus": {
+    "pending": "pending",
+    "accepted": "accepted",
+    "declined": "declined"
+  },
+  "suggestionDiff": {
+    "empty": "empty"
+  },
+  "composer": {
+    "comment": "Comment",
+    "suggest": "Suggest",
+    "reply": "Reply",
+    "post": "Post",
+    "cancel": "Cancel",
+    "resolvedReopen": "resolved - reopen?",
+    "replacementText": "Replacement text",
+    "addNote": "Add a note",
+    "writeComment": "Write a comment",
+    "inlineComment": "Inline comment",
+    "suggestedReplacement": "Suggested replacement",
+    "suggestionNote": "Suggestion note",
+    "replySuggestedReplacement": "Reply suggested replacement",
+    "replySuggestionNote": "Reply suggestion note",
+    "suggestionUnchanged": "Edit the text to suggest a change.",
+    "selectionNotAnchored": "Selection could not be anchored. Comment on the whole document instead.",
+    "submitSuggestion": "Submit suggestion",
+    "postComment": "Post comment",
+    "submitSuggestionReply": "Submit suggestion reply",
+    "postReply": "Post reply"
+  },
+  "sheet": {
+    "thread": "Thread",
+    "closeSheet": "Close thread sheet",
+    "close": "Close"
+  }
+}

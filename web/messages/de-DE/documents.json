@@ -1,0 +1,45 @@
+{
+  "list": {
+    "heading": "Deine Dokumente",
+    "emptyTitle": "Noch keine Dokumente",
+    "emptyBody": "Importiere eine Spezifikation oder einen RFC über das Feld oben und sie landet hier — jedes Dokument deines Arbeitsbereichs, das neueste zuerst.",
+    "degradedTitle": "Deine Dokumente konnten nicht geladen werden",
+    "degradedBody": "Die API ist gerade nicht erreichbar. Dein Import-Feld oben funktioniert weiterhin — lade gleich neu.",
+    "degradedNotice": "Deine Dokumente konnten nicht geladen werden — es werden nur die Importe dieser Sitzung angezeigt. Lade neu, um alles zu sehen.",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Lädt…",
+    "unfiled": "Unsortiert"
+  },
+  "row": {
+    "projectFor": "Projekt für {title}",
+    "unfiledOption": "Unsortiert",
+    "openThreads": "{count, plural, one {offener Thread} other {offene Threads}}"
+  },
+  "sync": {
+    "importing": "Import läuft…",
+    "importFailed": "Import fehlgeschlagen",
+    "syncFailed": "Sync fehlgeschlagen",
+    "ready": "bereit",
+    "synced": "synchronisiert {when}"
+  },
+  "announce": {
+    "ready": "Import bereit: {title}",
+    "failed": "Import fehlgeschlagen: {title}"
+  },
+  "page": {
+    "claiming": "Dein Dokument wird übernommen",
+    "backToQueue": "← Prüf-Warteschlange",
+    "surfaceLabel": "Authentifiziertes Dokument",
+    "loadFailedTitle": "Dieses Dokument konnte nicht geladen werden",
+    "loadFailedBody": "Die API ist gerade nicht erreichbar. Versuche es gleich noch einmal.",
+    "versionFailedTitle": "Diese Version konnte nicht geladen werden"
+  },
+  "diff": {
+    "loadFailedTitle": "Dieser Vergleich konnte nicht geladen werden",
+    "loadFailedBody": "Die API ist gerade nicht erreichbar. Versuche es gleich noch einmal.",
+    "backToDocument": "← Zurück zum Dokument",
+    "current": "aktuell {label}",
+    "notComparableTitle": "Diese Versionen lassen sich nicht vergleichen",
+    "notComparableBody": "Ihre Projektionssubstrate unterscheiden sich, daher würden Kommentar-Offsets nicht sicher übereinstimmen."
+  }
+}

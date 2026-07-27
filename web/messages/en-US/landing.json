@@ -1,0 +1,157 @@
+{
+  "header": {
+    "navLabel": "Primary",
+    "nav": {
+      "how": "How it works",
+      "workspace": "Workspace",
+      "roadmap": "Roadmap",
+      "selfHost": "Self-host"
+    },
+    "signIn": "Sign in",
+    "getStarted": "Get started"
+  },
+  "hero": {
+    "badge": "Open source · AGPL-3.0 · self-hostable",
+    "title": {
+      "line1": "Paste a link.",
+      "line2": "Review a spec.",
+      "accent": "Zero signup."
+    },
+    "lede": "Specs live in GitHub and Confluence, but their reviews die in PR threads and meeting chat. Kedge turns any source into one readable review page: discussion anchored to the text, approvals pinned to versions, and AI on tap to strengthen the doc."
+  },
+  "stills": {
+    "openChip": "Open",
+    "pendingChip": "Pending",
+    "reply": "Reply",
+    "resolve": "Resolve",
+    "draftReply": "Draft reply →",
+    "suggestedEdit": "Suggested edit",
+    "accept": "Accept",
+    "decline": "Decline",
+    "survivedBadge": "14 comments survived the last re-sync",
+    "agentChip": "Agent · MCP",
+    "justNow": "just now",
+    "viaMcp": "posted via MCP · human review pending"
+  },
+  "demo": {
+    "formLabel": "Render a document",
+    "urlLabel": "Document URL",
+    "submit": "Render it",
+    "pending": "Rendering…",
+    "hintSources": "Public GitHub & raw URLs",
+    "hintDiagrams": "PlantUML & Mermaid via Kroki",
+    "sampleIntro": "No URL handy?",
+    "sampleChip": "Render Kedge’s own SPEC.md",
+    "disabledError": "Demo mode is off on this instance. Sign in to import a document."
+  },
+  "surface": {
+    "heading": "Comments that keep their place",
+    "body": "A real review in Kedge: the doc rendered for reading, threads pinned to the exact sentences they question, approvals pinned to the version they saw. Ship a new version and the discussion re-anchors instead of washing away.",
+    "screenshotAlt": "A spec rendered in Kedge, with comment threads anchored to sentences in the text and version-pinned approve and re-sync actions"
+  },
+  "how": {
+    "heading": "Review where the doc is readable, not where it’s stored",
+    "body": "Three steps from a URL to a running review. No migration, no new home for your docs, and reviewers never need accounts.",
+    "steps": {
+      "import": {
+        "title": "Import from anywhere",
+        "body": "A GitHub file, a whole repo directory, a raw URL, an upload. Diagrams render, broken markup never crashes the page, and a share link exists in seconds."
+      },
+      "discuss": {
+        "title": "Discuss on the text itself",
+        "body": "Select a sentence, start a thread. Propose the fix as a suggested edit the author accepts in one click. Reviewers join by magic link, no accounts to herd."
+      },
+      "resync": {
+        "title": "Ship a new version, keep the review",
+        "body": "Re-sync pulls the latest doc and every comment finds its place again: exact match first, fuzzy match second, the orphan tray as the safety net. Approvals show exactly which version they vouch for."
+      }
+    }
+  },
+  "agents": {
+    "kicker": "In development",
+    "heading": "Your next reviewer might not be human",
+    "body1": "Kedge’s MCP server makes AI agents first-class reviewers. They read the rendered doc, anchor comments to real passages, and wear a badge that says exactly what they are. Nothing an agent writes posts without a human confirming it.",
+    "body2": "Then close the loop: fold the review into an AI digest, hand your coding agent the improve-prompt, re-sync the revised doc, and the whole discussion is still there."
+  },
+  "workspace": {
+    "kicker": "Projects & tracked repos",
+    "heading": "Point it at your <code>docs/</code> folder and every spec arrives review-ready",
+    "body": "A project tracks a repo, a branch, and a path pattern. Kedge previews the matches, bulk-imports them, and a re-scan after each push imports new files, re-syncs changed ones, and flags deletions. It never deletes anything itself.",
+    "points": {
+      "status": "Live import status on every doc, retry inline",
+      "glance": "Lifecycle, open threads, and sync state at a glance",
+      "unfiled": "An Unfiled bucket, so nothing needs a home first"
+    },
+    "console": {
+      "activeChip": "Active",
+      "docs6": "6 docs",
+      "open11": "11 open",
+      "orphan1": "1 orphan",
+      "rescan": "Re-scan",
+      "docs3": "3 docs",
+      "docs2": "2 docs",
+      "unfiled": "Unfiled",
+      "dragHint": "drag docs here… or anywhere",
+      "colDocument": "Document",
+      "colMeta": "Lifecycle · Threads · Sync",
+      "chipInReview": "In review",
+      "chipApproved": "Approved",
+      "chipOrphan": "1 orphan",
+      "chipImporting": "Importing…",
+      "chipFailed": "Failed",
+      "retry": "Retry",
+      "metaSpec": "v4 · 7 open · 2 h ago",
+      "metaDesign": "v2 · 0 open · 2 h ago",
+      "metaRfc": "v6 · 3 open · 40 min ago",
+      "metaScan": "found by re-scan · just now",
+      "metaRoadmap": "v3 · 1 open · 2 h ago",
+      "metaFailed": "unreachable · 1 d ago"
+    }
+  },
+  "roadmap": {
+    "heading": "Live today, charted next",
+    "intro": "Six releases in July, each one demoed on Kedge’s own docs the week it landed. The chart from here:",
+    "liveTitle": "Live today",
+    "chartedTitle": "Charted next",
+    "live": {
+      "import": "Import from GitHub, raw URLs, uploads, private repos",
+      "threads": "Anchored threads and one-click suggested edits",
+      "versions": "Versions, diffs, and approvals that go visibly stale",
+      "projects": "Workspace projects and tracked repos with re-scan"
+    },
+    "charted": {
+      "ai": "AI reviewers and digests over MCP, in development now",
+      "inbox": "A review inbox: mentions, digests, what needs you",
+      "sync": "GitHub App and Confluence sync: push once, it re-syncs itself",
+      "selfhost": "Self-host GA: one command, full parity, AGPL-3.0"
+    },
+    "closer": "Both editions launch together: the SaaS for anyone with a URL, the compose file for teams whose specs stay home."
+  },
+  "selfHost": {
+    "heading": "Your specs never have to leave home",
+    "body": "The open-source edition is the entire product: anchoring, approvals, the MCP server, all of it. AGPL-3.0, full parity with the SaaS, one compose file.",
+    "guideCta": "Read the self-hosting guide",
+    "starCta": "Star on GitHub",
+    "terminal": {
+      "frontDoor": "sign in is the front door",
+      "ready": "ready. nothing left the machine."
+    }
+  },
+  "cta": {
+    "heading": "Start your first review in 60 seconds",
+    "body": "Leave your email to open a workspace for your team’s specs. Nothing to install, no credit card, and the demo works before you decide.",
+    "proofPrompt": "Want proof first?",
+    "proofCta": "Render Kedge’s own SPEC.md, zero signup"
+  },
+  "email": {
+    "formLabel": "Create your workspace",
+    "emailLabel": "Email",
+    "placeholder": "you@company.com",
+    "submit": "Create my workspace"
+  },
+  "footer": {
+    "tagline": "Comments that keep their place.",
+    "docs": "Docs",
+    "roadmap": "Roadmap"
+  }
+}

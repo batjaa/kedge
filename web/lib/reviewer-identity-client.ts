@@ -7,14 +7,19 @@ import {
   type VerifyReturnState,
 } from './reviewer-verification-status';
 
+// Outcome messages are API prose when the response body provided one (passed
+// through untranslated, SPEC m3.9 scope) and null otherwise — the consuming
+// component supplies the localized fallback per kind/status from the `shared`
+// catalog (M3.9 #124).
+
 export type MagicLinkRequestOutcome =
-  | { ok: true; message: string }
-  | { ok: false; kind: 'validation' | 'send-failed' | 'rate-limited' | 'gone' | 'error'; message: string };
+  | { ok: true; message: string | null }
+  | { ok: false; kind: 'validation' | 'send-failed' | 'rate-limited' | 'gone' | 'error'; message: string | null };
 
 export type MagicLinkCompletionOutcome =
-  | { ok: true; message: string }
-  | { ok: false; status: VerifyReturnState; message: string }
-  | { ok: false; status: 'gone' | 'rate-limited' | 'error'; message: string };
+  | { ok: true }
+  | { ok: false; status: VerifyReturnState; message: string | null }
+  | { ok: false; status: 'gone' | 'rate-limited' | 'error'; message: string | null };
 
 async function postVerifyEmail(token: string, email: string): Promise<Response> {
   return fetch(`${publicApiBaseUrl}/api/v1/shared/${encodeURIComponent(token)}/verify-email`, {
@@ -53,27 +58,27 @@ export async function requestReviewerMagicLink(token: string, email: string): Pr
 
   if (res.status === 202) {
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
-    return { ok: true, message: body?.message ?? 'Check your email for a link to continue reviewing.' };
+    return { ok: true, message: body?.message ?? null };
   }
 
   if (res.status === 422) {
-    return { ok: false, kind: 'validation', message: 'Enter a valid email address.' };
+    return { ok: false, kind: 'validation', message: null };
   }
 
   if (res.status === 429) {
-    return { ok: false, kind: 'rate-limited', message: 'Too many requests. Wait a minute, then try again.' };
+    return { ok: false, kind: 'rate-limited', message: null };
   }
 
   if (res.status === 410) {
-    return { ok: false, kind: 'gone', message: 'This share link is no longer active.' };
+    return { ok: false, kind: 'gone', message: null };
   }
 
   if (res.status === 503) {
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
-    return { ok: false, kind: 'send-failed', message: body?.message ?? "We couldn't send the email. Try again." };
+    return { ok: false, kind: 'send-failed', message: body?.message ?? null };
   }
 
-  return { ok: false, kind: 'error', message: "We couldn't send the email. Try again." };
+  return { ok: false, kind: 'error', message: null };
 }
 
 export async function completeReviewerMagicLink(
@@ -89,36 +94,28 @@ export async function completeReviewerMagicLink(
   }
 
   if (res.status === 200) {
-    return { ok: true, message: 'Email verified. You can comment on this document now.' };
+    return { ok: true };
   }
 
   if (res.status === 410) {
-    return { ok: false, status: 'gone', message: 'This share link is no longer active.' };
+    return { ok: false, status: 'gone', message: null };
   }
 
   if (res.status === 409 || res.status === 422) {
     const body = (await res.json().catch(() => null)) as { status?: string; message?: string } | null;
-    const status = verifyReturnState(body?.status);
     return {
       ok: false,
-      status,
-      message: body?.message ?? RETURN_COPY[status],
+      status: verifyReturnState(body?.status),
+      message: body?.message ?? null,
     };
   }
 
   if (res.status === 429) {
-    return { ok: false, status: 'rate-limited', message: 'Too many verification attempts. Wait a minute, then try again.' };
+    return { ok: false, status: 'rate-limited', message: null };
   }
 
-  return { ok: false, status: 'error', message: "We couldn't verify this link. Try again." };
+  return { ok: false, status: 'error', message: null };
 }
-
-export const RETURN_COPY: Record<VerifyReturnState, string> = {
-  [REVIEWER_VERIFICATION_STATUS.expired]: 'That verification link expired. Request a fresh link to continue commenting.',
-  [REVIEWER_VERIFICATION_STATUS.used]: 'That verification link was already used. Request a fresh link if this browser is not verified.',
-  [REVIEWER_VERIFICATION_STATUS.invalid]: 'That verification link could not be verified. Request a fresh link to continue commenting.',
-  [REVIEWER_VERIFICATION_STATUS.accountRequired]: 'This email already has a Kedge account. Sign in to review this document.',
-};
 
 function verifyReturnState(value: string | undefined): VerifyReturnState {
   return value === REVIEWER_VERIFICATION_STATUS.expired

@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { ImportWarning } from '@/lib/document-types';
 
 // The author-facing import warning list (SPEC 5.2, §19). Anything that didn't
@@ -6,6 +7,11 @@ import type { ImportWarning } from '@/lib/document-types';
 // DESIGN.md callout anatomy (rounded-2xl, hairline ring, status hue amber);
 // native <details> keeps it accessible and server-rendered with no client JS.
 export function ImportWarnings({ warnings }: { warnings: ImportWarning[] }) {
+  // Chrome from the imports catalog (M3.9); each warning's `message` is API
+  // prose and passes through untranslated (the code-mapping path is future
+  // work on the sync_error_code debt item).
+  const t = useTranslations('imports');
+
   if (warnings.length === 0) return null;
 
   const count = warnings.length;
@@ -26,11 +32,11 @@ export function ImportWarnings({ warnings }: { warnings: ImportWarning[] }) {
           </svg>
         </span>
         <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
-          {count} import {count === 1 ? 'warning' : 'warnings'}
+          {t('warnings.count', { count })}
         </span>
         <span className="ml-auto font-mono text-[10px] font-semibold uppercase tracking-wide text-amber-700/70 dark:text-amber-300/70">
-          <span className="group-open:hidden">Show</span>
-          <span className="hidden group-open:inline">Hide</span>
+          <span className="group-open:hidden">{t('warnings.show')}</span>
+          <span className="hidden group-open:inline">{t('warnings.hide')}</span>
         </span>
       </summary>
       <ul className="space-y-2.5 border-t border-amber-500/15 px-4 py-3">

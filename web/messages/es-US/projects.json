@@ -1,0 +1,43 @@
+{
+  "create": {
+    "title": "Proyectos",
+    "body": "Agrupa tus documentos por lo que estés trabajando. Tu lista de abajo se lee como una sección por proyecto.",
+    "nameLabel": "Nombre del proyecto",
+    "namePlaceholder": "Anchoring",
+    "descriptionLabel": "Descripción",
+    "optional": "— opcional",
+    "descriptionPlaceholder": "Para qué es este proyecto",
+    "submit": "Crear proyecto",
+    "submitting": "Creando…",
+    "created": "Se creó <link>{name}</link>. Asigna documentos desde el chip de proyecto de cualquier fila."
+  },
+  "header": {
+    "edit": "Editar",
+    "nameLabel": "Nombre del proyecto",
+    "descriptionLabel": "Descripción",
+    "optional": "— opcional",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "cancel": "Cancelar",
+    "noDescription": "Sin descripción todavía."
+  },
+  "page": {
+    "back": "← Cola de revisión",
+    "degradedTitle": "No se pudo cargar este proyecto",
+    "degradedBody": "La API no está disponible en este momento — recarga en un momento."
+  },
+  "importPanel": {
+    "title": "Importar a este proyecto",
+    "body": "Pega un enlace o contenido y aterriza aquí, archivado bajo este proyecto."
+  },
+  "sections": {
+    "other": "Otros documentos",
+    "documents": "Documentos",
+    "repoEmptyTitle": "Aún no hay documentos de esta fuente",
+    "repoEmptyBody": "Un escaneo de este repositorio importa aquí sus archivos coincidentes.",
+    "otherEmptyTitle": "No hay otros documentos",
+    "otherEmptyBody": "Todo en este proyecto proviene de un repositorio rastreado arriba.",
+    "emptyTitle": "Aún no hay documentos en este proyecto",
+    "emptyBody": "Importa uno con el cuadro de arriba, o asigna un documento existente desde su encabezado de revisión o el chip de proyecto en cualquier fila de inicio."
+  }
+}

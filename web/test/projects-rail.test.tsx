@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { ProjectsRail } from '@/components/app/projects-rail';
 import { unfiledDocumentCount } from '@/lib/projects-rail';

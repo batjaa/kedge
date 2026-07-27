@@ -1,0 +1,38 @@
+{
+  "page": {
+    "back": "← Хяналтын дараалал",
+    "title": "Ажлын талбарын тохиргоо",
+    "managing": "<name>{workspace}</name>-г удирдаж байна — таны хувийн ажлын талбар."
+  },
+  "general": {
+    "title": "Ерөнхий",
+    "body": "Таны ажлын талбарын нэр болон таних тэмдэг. Нэр нь апп даяар харагдана; slug нь URL-д аюулгүй таних тэмдэг.",
+    "nameLabel": "Нэр",
+    "slugLabel": "Slug",
+    "nameAria": "Ажлын талбарын нэр",
+    "slugAria": "Ажлын талбарын slug",
+    "save": "Хадгалах",
+    "saving": "Хадгалж байна…",
+    "updated": "Ажлын талбар шинэчлэгдлээ."
+  },
+  "integrations": {
+    "heading": "GitHub",
+    "connectedCount": "{count, number} холбогдсон",
+    "intro": "Хувийн repository-с файл импортлохын тулд <link>нарийн эрхтэй personal access token</link> холбоорой. Холбоос Kedge-д хэрэгтэй хамгийн бага эрхийг (<strong>Contents: read-only</strong>) урьдчилан сонгоно — та зөвхөн <strong>“Only select repositories”</strong>-г сонгоод хянах repo-нуудаа сонгоорой. Token шифрлэгдэж, дахин хэзээ ч харагдахгүй — хүссэн үедээ устгаж болно.",
+    "orgLabel": "Repo-нууд байгууллагынх уу?",
+    "orgPlaceholder": "байгууллагын нэр (заавал биш)",
+    "ownerHint": "Нарийн эрхтэй token зөвхөн нэг эзэмшигчийн repo-г хардаг: анхдагчаар таных, эсвэл нэг байгууллага — дээр нь бичвэл холбоос шууд тохируулагдан нээгдэнэ (GitHub-ийн форм дотор эзэмшигчийг солиход урьдчилан бөглөсөн эрхүүд арилдаг). Байгууллагууд эдгээр token-ыг хориглох эсвэл зөвшөөрөл шаардаж болно. Өөр хүний хувийн repo-д хамтрагчаар ажилладаг бол нарийн эрхтэй token тус болохгүй — оронд нь <classic>сонгодог token</classic> (илүү өргөн <code>repo</code> эрхтэй) ашиглаарай.",
+    "tokenAria": "GitHub-ийн personal access token",
+    "tokenPlaceholder": "ghp_… эсвэл github_pat_…",
+    "connect": "Холбох",
+    "connecting": "Холбож байна…",
+    "connectedNotice": "GitHub холбогдлоо. Хувийн repository-ууд одоо энэ token-оор импортлогдоно.",
+    "loading": "Холболтуудыг ачаалж байна…",
+    "none": "Одоогоор холбогдсон token алга.",
+    "patBadge": "GitHub PAT",
+    "connected": "Холбогдсон",
+    "connectedAt": "{date, date, medium}-нд холбогдсон",
+    "remove": "Устгах",
+    "removing": "Устгаж байна…"
+  }
+}

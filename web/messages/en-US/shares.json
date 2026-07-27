@@ -1,0 +1,31 @@
+{
+  "title": "Share links",
+  "description": "Create an unguessable read-only link so reviewers can read this document without an account. Revoke it any time.",
+  "activeCount": "{count, plural, one {# active link} other {# active links}}",
+  "expiryLabel": "Share expiry",
+  "expiry": {
+    "none": "No expiry",
+    "days7": "Expires in 7 days",
+    "days30": "Expires in 30 days"
+  },
+  "create": "Create share link",
+  "creating": "Creating…",
+  "createdOnce": "Copy this link now — it is shown only once.",
+  "copy": "Copy",
+  "copied": "Copied",
+  "copyFailed": "Copy failed — select the link and copy it manually.",
+  "loading": "Loading links…",
+  "empty": "No share links yet.",
+  "linkNumber": "Link #{id}",
+  "revoke": "Revoke",
+  "revoking": "Revoking…",
+  "status": {
+    "active": "active",
+    "revoked": "revoked",
+    "expired": "expired"
+  },
+  "revokedOn": "Revoked {date}",
+  "expiredOn": "Expired {date}",
+  "expiresOn": "Expires {date}",
+  "neverExpires": "Never expires"
+}

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 
 // The header's primary nav — Documents (the workspace home) and a ghosted Queue
 // chip that marks the M5 review-queue roadmap slot in-product (honest ghosting,
@@ -13,6 +14,7 @@ import { usePathname } from 'next/navigation';
 export function HeaderNav() {
   const pathname = usePathname();
   const onDashboard = pathname === '/';
+  const t = useTranslations('app-shell');
 
   return (
     <nav aria-label="Primary" className="hidden items-center gap-5 text-sm lg:flex">
@@ -25,13 +27,13 @@ export function HeaderNav() {
             : 'rounded-md text-zinc-500 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:text-white'
         }
       >
-        Documents
+        {t('nav.documents')}
       </Link>
       <span
         className="flex cursor-default items-center gap-1.5 text-zinc-400 dark:text-zinc-600"
-        title="Review queue arrives with M5"
+        title={t('nav.queueHint')}
       >
-        Queue
+        {t('nav.queue')}
         <span className="rounded-lg bg-zinc-400/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-zinc-400 ring-1 ring-inset ring-zinc-400/30 dark:text-zinc-500">
           M5
         </span>

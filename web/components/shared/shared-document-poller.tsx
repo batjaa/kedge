@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { publicApiBaseUrl } from '@/lib/config';
 import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import type { SharedDocument } from '@/lib/share-types';
@@ -15,6 +16,7 @@ import type { SharedDocument } from '@/lib/share-types';
 // usePollUntilSettled hook (12A); this owns only the read and the settle action.
 export function SharedDocumentPoller({ token }: { token: string }) {
   const router = useRouter();
+  const t = useTranslations('shared');
 
   usePollUntilSettled({
     // A non-ok response or a thrown fetch is a transient hiccup → null keeps the
@@ -47,7 +49,7 @@ export function SharedDocumentPoller({ token }: { token: string }) {
         className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500"
       />
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Rendering your document — this page updates itself when it&apos;s ready.
+        {t('rendering')}
       </p>
     </div>
   );

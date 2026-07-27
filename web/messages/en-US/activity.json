@@ -1,0 +1,18 @@
+{
+  "heading": "Recent activity",
+  "emptyTitle": "No activity yet",
+  "emptyBody": "Replies, accepted suggestions, re-syncs, and settling imports will show up here as you review.",
+  "documentFallback": "a document",
+  "workspaceFallback": "your workspace",
+  "sentence": {
+    "commentCreated": "{actor, select, system {Commented on <target></target>} other {<person>{name}</person> commented on <target></target>}}",
+    "suggestionAccepted": "{actor, select, system {Accepted a suggestion on <target></target>} other {<person>{name}</person> accepted a suggestion on <target></target>}}",
+    "suggestionDeclined": "{actor, select, system {Declined a suggestion on <target></target>} other {<person>{name}</person> declined a suggestion on <target></target>}}",
+    "approvalGiven": "{actor, select, system {Approved <target></target>} other {<person>{name}</person> approved <target></target>}}",
+    "documentImported": "{actor, select, system {Imported <target></target>} other {<person>{name}</person> imported <target></target>}}",
+    "workspaceRenamed": "{actor, select, system {Renamed the workspace to <target></target>} other {<person>{name}</person> renamed the workspace to <target></target>}}",
+    "approvalsGoneStale": "{count, plural, one {# approval} other {# approvals}} on <target></target> went stale after a re-sync",
+    "importFailed": "{hasReason, select, yes {Import of <target></target> failed — {reason}} other {Import of <target></target> failed}}",
+    "reanchorCompleted": "Re-synced <target></target> — {anchored, number} anchored, {relocated, number} relocated, {orphaned, number} orphaned"
+  }
+}

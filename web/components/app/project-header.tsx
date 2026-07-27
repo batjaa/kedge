@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { updateProject } from '@/lib/projects-client';
 import type { Project } from '@/lib/document-types';
 
@@ -9,6 +10,7 @@ import type { Project } from '@/lib/document-types';
 // The name obeys the same 6A rules the API enforces; a collision surfaces inline.
 // Client-owned so a rename updates in place without a full navigation.
 export function ProjectHeader({ project }: { project: Project }) {
+  const t = useTranslations('projects');
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? '');
   const [editing, setEditing] = useState(false);
@@ -52,7 +54,7 @@ export function ProjectHeader({ project }: { project: Project }) {
     return (
       <form onSubmit={onSubmit} noValidate className="mt-2">
         <label htmlFor="project-edit-name" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-          Project name
+          {t('header.nameLabel')}
         </label>
         <input
           id="project-edit-name"
@@ -69,8 +71,8 @@ export function ProjectHeader({ project }: { project: Project }) {
         />
 
         <label htmlFor="project-edit-description" className="mt-3 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-          Description{' '}
-          <span className="font-normal text-zinc-400 dark:text-zinc-500">— optional</span>
+          {t('header.descriptionLabel')}{' '}
+          <span className="font-normal text-zinc-400 dark:text-zinc-500">{t('header.optional')}</span>
         </label>
         <input
           id="project-edit-description"
@@ -86,14 +88,14 @@ export function ProjectHeader({ project }: { project: Project }) {
             disabled={pending || draftName.trim() === ''}
             className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
           >
-            {pending ? 'Saving…' : 'Save'}
+            {pending ? t('header.saving') : t('header.save')}
           </button>
           <button
             type="button"
             onClick={() => setEditing(false)}
             className="rounded-full px-4 py-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            Cancel
+            {t('header.cancel')}
           </button>
         </div>
 
@@ -115,13 +117,13 @@ export function ProjectHeader({ project }: { project: Project }) {
           onClick={startEditing}
           className="rounded-full px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/5"
         >
-          Edit
+          {t('header.edit')}
         </button>
       </div>
       {description ? (
         <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-600 dark:text-zinc-400">{description}</p>
       ) : (
-        <p className="mt-2 text-sm italic leading-7 text-zinc-400 dark:text-zinc-500">No description yet.</p>
+        <p className="mt-2 text-sm italic leading-7 text-zinc-400 dark:text-zinc-500">{t('header.noDescription')}</p>
       )}
     </div>
   );

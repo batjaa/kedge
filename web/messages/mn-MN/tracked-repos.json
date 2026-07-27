@@ -1,0 +1,58 @@
+{
+  "panel": {
+    "title": "Repository бүртгэх",
+    "body": "GitHub repo болон замын хэв (pattern) зааж, ямар файлууд таарахыг урьдчилан харж, дараа нь бүгдийг нь энэ төсөлд импортлоорой — дараа дахин scan хийхээр бүртгэлтэй үлдэнэ.",
+    "repoUrlLabel": "Repository-ийн URL",
+    "repoUrlPlaceholder": "https://github.com/owner/repo",
+    "branchLabel": "Branch",
+    "optional": "— заавал биш",
+    "branchPlaceholder": "үндсэн branch",
+    "patternLabel": "Замын хэв",
+    "patternPlaceholder": "docs/**/*.md",
+    "patternHelp": "<code>*</code> нэг хавтас дотор, <code>**</code> хавтас дамнан, <code>?</code> нэг тэмдэгт таарна — том, жижиг үсэг ялгаатай. Зөвхөн <code>.md</code>, <code>.mdx</code>, <code>.html</code> файлууд импортлогдоно.",
+    "patHint": "Том нээлттэй repo бүртгэх гэж байна уу? Илүү өндөр хязгаарын тулд Тохиргоо хэсэгт ажлын талбарын GitHub PAT-аа холбоорой — нэвтрээгүй GitHub цагт ердөө 60 хүсэлт зөвшөөрдөг.",
+    "preview": "Файлуудыг урьдчилан харах",
+    "previewing": "Урьдчилан харж байна…",
+    "previewFailed": "Repository-г шалгахад алдаа гарлаа. Дахин оролдоно уу.",
+    "confirmFailed": "Scan эхлүүлэхэд алдаа гарлаа. Дахин оролдоно уу."
+  },
+  "preview": {
+    "checking": "Repository-г шалгаж байна…",
+    "zeroMatches": "Энэ хэвэнд 0 файл таарлаа. Хэвээ засаад дахин урьдчилан хараарай.",
+    "matches": "{count, plural, one {# файл таарч байна} other {# файл таарч байна}}",
+    "overlap": "· {count, number} өөр газар аль хэдийн бүртгэлтэй",
+    "overlapTitle": "Энэ ажлын талбарын өөр бүртгэлтэй repo энэ замыг аль хэдийн импортолдог — энд импортловол давхардана.",
+    "confirm": "Нэмээд scan хийх",
+    "confirming": "Scan эхэлж байна…",
+    "confirmHint": "Эдгээр файлыг төсөлд импортолж, repo-г бүртгэлтэй хэвээр үлдээнэ."
+  },
+  "row": {
+    "defaultRef": "үндсэн",
+    "scanning": "Repository-г scan хийж байна…",
+    "scanFailedFallback": "Scan амжилтгүй боллоо. Repository-ийн мэдээллээ шалгаад дахин оролдоно уу.",
+    "notScanned": "Одоогоор scan хийгээгүй.",
+    "rescan": "Дахин scan",
+    "retryScan": "Scan дахин оролдох",
+    "rescanning": "Дахин scan хийж байна…",
+    "reconnect": "GitHub дахин холбох",
+    "delete": "Устгах",
+    "removing": "Устгаж байна…",
+    "cancel": "Болих",
+    "confirmRemove": "Бүртгэлийг хасах уу?",
+    "removeHint": "Баримтууд нь төсөлд үлдэнэ — зөвхөн бүртгэл хасагдана."
+  },
+  "report": {
+    "zeroMatched": "0 файл таарлаа",
+    "adjustPattern": " — хэвээ засна уу.",
+    "upToDate": "Аль хэдийн шинэ байна",
+    "filesUnchanged": " · {count, plural, one {# файл хэвээрээ} other {# файл хэвээрээ}}",
+    "queued": "{count, number} дараалалд",
+    "resynced": " · {count, number} шинэчилсэн",
+    "unchanged": "{count, number} хэвээрээ",
+    "missing": " · {count, number} алга",
+    "failed": " · {count, number} алдаатай",
+    "staleTakeover": " · гацсан scan-ийг сэргээв",
+    "scanned": "{count, plural, one {# файл scan хийгдсэн} other {# файл scan хийгдсэн}}",
+    "scannedMissing": ", {count, number} алга"
+  }
+}

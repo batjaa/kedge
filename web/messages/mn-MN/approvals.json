@@ -1,0 +1,5 @@
+{
+  "approved": "{version} батласан",
+  "approvedCurrent": "{version} батласан · одоогийн {current}",
+  "reviewerFallback": "Хянагч"
+}

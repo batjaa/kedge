@@ -1,6 +1,7 @@
 'use client';
 
 import { PanelLeftClose } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { MetaChip } from './meta-chip';
 import { cn } from '@/lib/cn';
 import type { LifecycleStatus } from '@/lib/document-types';
@@ -28,6 +29,8 @@ export function DocumentReviewSidebar({
   onFocusThread: (thread: ReviewThread) => void;
   onCollapse?: () => void;
 }) {
+  const t = useTranslations('review');
+
   return (
     <aside>
       <div className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10">
@@ -38,8 +41,8 @@ export function DocumentReviewSidebar({
             <button
               type="button"
               onClick={onCollapse}
-              aria-label="Hide contents and threads"
-              title="Hide contents and threads"
+              aria-label={t('sidebar.hide')}
+              title={t('sidebar.hide')}
               className="ml-auto rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/5 dark:hover:text-zinc-200"
             >
               <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
@@ -47,8 +50,8 @@ export function DocumentReviewSidebar({
           ) : null}
         </div>
 
-        <h2 className="text-xs font-semibold text-zinc-900 dark:text-white">Document</h2>
-        <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label="Document table of contents">
+        <h2 className="text-xs font-semibold text-zinc-900 dark:text-white">{t('sidebar.document')}</h2>
+        <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label={t('sidebar.tocLabel')}>
           {tocEntries.length > 0 ? (
             tocEntries.map((entry) => (
               <button
@@ -67,12 +70,12 @@ export function DocumentReviewSidebar({
               </button>
             ))
           ) : (
-            <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">No headings</p>
+            <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">{t('sidebar.noHeadings')}</p>
           )}
         </nav>
 
-        <h2 className="mt-8 text-xs font-semibold text-zinc-900 dark:text-white">Threads</h2>
-        <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label="Threads">
+        <h2 className="mt-8 text-xs font-semibold text-zinc-900 dark:text-white">{t('sidebar.threads')}</h2>
+        <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label={t('sidebar.threads')}>
           {threads.length > 0 ? (
             threads.map((thread) => (
               <button
@@ -86,12 +89,12 @@ export function DocumentReviewSidebar({
                     : 'border-transparent text-zinc-600 dark:text-zinc-400',
                 )}
               >
-                <span className="min-w-0 flex-1 truncate">{threadNavLabel(thread)}</span>
+                <span className="min-w-0 flex-1 truncate">{threadNavLabel(thread, t)}</span>
                 <ThreadStatusLabel thread={thread} />
               </button>
             ))
           ) : (
-            <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">No threads</p>
+            <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">{t('sidebar.noThreads')}</p>
           )}
         </nav>
 
@@ -99,28 +102,35 @@ export function DocumentReviewSidebar({
           href="#orphaned-threads"
           className="mt-8 inline-flex text-xs font-medium text-rose-700 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-rose-300 dark:hover:text-rose-200"
         >
-          Orphaned threads
+          {t('sidebar.orphanedThreads')}
         </a>
       </div>
     </aside>
   );
 }
 
-function threadNavLabel(thread: ReviewThread): string {
+function threadNavLabel(thread: ReviewThread, t: ReturnType<typeof useTranslations>): string {
   const quote = thread.anchor?.exact.trim();
   if (quote) return quote;
 
   const body = thread.first_comment?.body_md?.replace(/\s+/g, ' ').trim();
   if (body) return body;
 
-  return thread.type === 'document' ? 'Document thread' : 'Inline thread';
+  return thread.type === 'document' ? t('sidebar.documentThread') : t('sidebar.inlineThread');
 }
 
 function ThreadStatusLabel({ thread }: { thread: ReviewThread }) {
+  const t = useTranslations('review');
   const firstComment = thread.first_comment;
   const isSuggestion = firstComment?.type === 'suggestion';
   const isAgent = firstComment?.client === 'mcp';
-  const label = isAgent ? 'agent' : isSuggestion ? 'sugg' : thread.status === 'resolved' ? 'done' : 'open';
+  const label = isAgent
+    ? t('sidebar.navStatus.agent')
+    : isSuggestion
+      ? t('sidebar.navStatus.suggestion')
+      : thread.status === 'resolved'
+        ? t('sidebar.navStatus.resolved')
+        : t('sidebar.navStatus.open');
   const classes = isAgent
     ? 'text-violet-600 dark:text-violet-400'
     : isSuggestion
@@ -137,9 +147,14 @@ function ThreadStatusLabel({ thread }: { thread: ReviewThread }) {
 }
 
 function LifecycleChip({ status }: { status: LifecycleStatus }) {
+  // Lifecycle labels are the constrained chip glossary (eng-review 13A) — read
+  // them from the shared `chips` namespace so this chip never drifts from the
+  // header's StatusChip, and stays inside the truncation budget.
+  const t = useTranslations('chips');
+
   return (
     <span className="rounded-lg bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/30">
-      {status.replace('_', ' ')}
+      {t(`lifecycle.${status}`)}
     </span>
   );
 }

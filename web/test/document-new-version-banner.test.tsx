@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it } from 'vitest';
 import { DocumentNewVersionBanner, newerVersionNoticeFromDocument } from '@/components/app/document-new-version-banner';
 import type { Document, DocumentVersion } from '@/lib/document-types';

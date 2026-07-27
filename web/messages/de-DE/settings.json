@@ -1,0 +1,38 @@
+{
+  "page": {
+    "back": "← Prüf-Warteschlange",
+    "title": "Arbeitsbereich-Einstellungen",
+    "managing": "Du verwaltest <name>{workspace}</name> — deinen persönlichen Arbeitsbereich."
+  },
+  "general": {
+    "title": "Allgemein",
+    "body": "Name und Kennung deines Arbeitsbereichs. Der Name erscheint überall in der App; der Slug ist seine URL-sichere Kennung.",
+    "nameLabel": "Name",
+    "slugLabel": "Slug",
+    "nameAria": "Arbeitsbereich-Name",
+    "slugAria": "Arbeitsbereich-Slug",
+    "save": "Speichern",
+    "saving": "Speichert…",
+    "updated": "Arbeitsbereich aktualisiert."
+  },
+  "integrations": {
+    "heading": "GitHub",
+    "connectedCount": "{count, number} verbunden",
+    "intro": "Verbinde ein <link>fein abgestuftes persönliches Zugriffstoken</link>, um Dateien aus privaten Repositories zu importieren. Der Link wählt das Minimum vor, das Kedge braucht (<strong>Contents: read-only</strong>) — wähle einfach <strong>„Only select repositories“</strong> und die zu prüfenden Repos. Das Token wird verschlüsselt und nie wieder angezeigt — entferne es jederzeit.",
+    "orgLabel": "Repos gehören einer Organisation?",
+    "orgPlaceholder": "Org-Name (optional)",
+    "ownerHint": "Ein fein abgestuftes Token sieht die Repos eines Besitzers: standardmäßig deine, oder eine Organisation — trage sie oben ein, damit der Link bereits eingegrenzt öffnet (den Besitzer im GitHub-Formular zu wechseln setzt die vorausgefüllten Berechtigungen zurück). Organisationen können diese Tokens blockieren oder eine Genehmigung verlangen. Für ein privates Repo eines anderen Nutzers, bei dem du Mitwirkender bist, helfen fein abgestufte Tokens nicht — nutze stattdessen ein <classic>klassisches Token</classic> (breiterer <code>repo</code>-Scope).",
+    "tokenAria": "Persönliches GitHub-Zugriffstoken",
+    "tokenPlaceholder": "ghp_… oder github_pat_…",
+    "connect": "Verbinden",
+    "connecting": "Verbindet…",
+    "connectedNotice": "GitHub verbunden. Private Repositories importieren jetzt über dieses Token.",
+    "loading": "Verbindungen werden geladen…",
+    "none": "Noch keine Tokens verbunden.",
+    "patBadge": "GitHub-PAT",
+    "connected": "Verbunden",
+    "connectedAt": "Verbunden am {date, date, medium}",
+    "remove": "Entfernen",
+    "removing": "Entfernt…"
+  }
+}

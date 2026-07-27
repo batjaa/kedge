@@ -1,8 +1,12 @@
 import { createMDX } from 'fumadocs-mdx/next';
+import createNextIntlPlugin from 'next-intl/plugin';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const withMDX = createMDX();
+// next-intl in "without i18n routing" mode: no middleware, just the request
+// config that resolves the cookie/Accept-Language locale (i18n/request.ts).
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const webRoot = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
@@ -32,4 +36,4 @@ const config = {
   },
 };
 
-export default withMDX(config);
+export default withNextIntl(withMDX(config));

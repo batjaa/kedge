@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "documents": "Dokumente",
+    "queue": "Warteschlange",
+    "queueHint": "Die Prüf-Warteschlange kommt mit M5"
+  },
+  "actions": {
+    "import": "Importieren",
+    "settings": "Einstellungen",
+    "signOut": "Abmelden",
+    "signingOut": "Abmeldung …"
+  },
+  "theme": {
+    "toggle": "Design umschalten"
+  },
+  "switcher": {
+    "label": "Sprache"
+  }
+}

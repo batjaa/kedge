@@ -1,0 +1,95 @@
+{
+  "_notes": {
+    "badges": "badge.*, status.* and suggestionStatus.* render inside small uppercase mono badges on thread cards and comment rows — labels, not prose. Keep them short (abbreviate like the English 'sugg'): they ride the same 16ch truncation clamp as the chips glossary, and the length guard (test/i18n-review-surface.test.tsx) holds every locale to 15 characters per label."
+  },
+  "rail": {
+    "label": "Panel de hilos",
+    "empty": "Aún no hay hilos.",
+    "loadMore": "Cargar más hilos"
+  },
+  "orphan": {
+    "label": "Hilos huérfanos",
+    "title": "Bandeja de huérfanos",
+    "empty": "vacío",
+    "emptyBody": "Aún no hay hilos huérfanos.",
+    "itemLabel": "Hilo huérfano",
+    "selectHint": "Selecciona el texto de reemplazo en el documento",
+    "reattaching": "Volviendo a anclar...",
+    "selectText": "Seleccionar texto",
+    "reattach": "Volver a anclar"
+  },
+  "card": {
+    "agent": "Agente",
+    "suggestion": "Sugerencia",
+    "thread": "Hilo",
+    "resolve": "Resolver hilo",
+    "reopen": "Reabrir hilo",
+    "forkedFrom": "Bifurcado del comentario n.º {id}",
+    "moreReplies": "{count, plural, one {# respuesta más} other {# respuestas más}}",
+    "forkedInto": "{count, plural, one {Bifurcado en # hilo} other {Bifurcado en # hilos}}",
+    "relocatedTitle": "Reubicado tras el reanclaje; verifica la selección movida.",
+    "moved": "Movido",
+    "sectionDocument": "documento",
+    "selection": "selección"
+  },
+  "comment": {
+    "reviewerFallback": "Revisor",
+    "edited": "editado",
+    "editBodyLabel": "Editar el cuerpo del comentario",
+    "cancelEdit": "Cancelar edición",
+    "saveEdit": "Guardar edición",
+    "deleted": "comentario eliminado",
+    "edit": "Editar comentario",
+    "delete": "Eliminar comentario",
+    "fork": "Bifurcar en un nuevo hilo",
+    "removeReaction": "Quitar reacción",
+    "react": "Reaccionar",
+    "acceptSuggestion": "Aceptar sugerencia",
+    "declineSuggestion": "Rechazar sugerencia",
+    "reopenSuggestion": "Reabrir sugerencia"
+  },
+  "badge": {
+    "agent": "agente",
+    "suggestion": "sug",
+    "mcp": "mcp"
+  },
+  "status": {
+    "open": "abierto",
+    "resolved": "resuelto"
+  },
+  "suggestionStatus": {
+    "pending": "pendiente",
+    "accepted": "aceptada",
+    "declined": "rechazada"
+  },
+  "suggestionDiff": {
+    "empty": "vacío"
+  },
+  "composer": {
+    "comment": "Comentar",
+    "suggest": "Sugerir",
+    "reply": "Responder",
+    "post": "Publicar",
+    "cancel": "Cancelar",
+    "resolvedReopen": "resuelto - ¿reabrir?",
+    "replacementText": "Texto de reemplazo",
+    "addNote": "Añadir una nota",
+    "writeComment": "Escribe un comentario",
+    "inlineComment": "Comentario en línea",
+    "suggestedReplacement": "Reemplazo sugerido",
+    "suggestionNote": "Nota de la sugerencia",
+    "replySuggestedReplacement": "Reemplazo sugerido en la respuesta",
+    "replySuggestionNote": "Nota de la sugerencia en la respuesta",
+    "suggestionUnchanged": "Edita el texto para sugerir un cambio.",
+    "selectionNotAnchored": "No se pudo anclar la selección. Comenta todo el documento en su lugar.",
+    "submitSuggestion": "Enviar sugerencia",
+    "postComment": "Publicar comentario",
+    "submitSuggestionReply": "Enviar respuesta con sugerencia",
+    "postReply": "Publicar respuesta"
+  },
+  "sheet": {
+    "thread": "Hilo",
+    "closeSheet": "Cerrar la hoja del hilo",
+    "close": "Cerrar"
+  }
+}

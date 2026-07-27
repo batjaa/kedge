@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "documents": "Documentos",
+    "queue": "Cola",
+    "queueHint": "La cola de revisión llega con M5"
+  },
+  "actions": {
+    "import": "Importar",
+    "settings": "Ajustes",
+    "signOut": "Cerrar sesión",
+    "signingOut": "Cerrando sesión…"
+  },
+  "theme": {
+    "toggle": "Cambiar tema"
+  },
+  "switcher": {
+    "label": "Idioma"
+  }
+}

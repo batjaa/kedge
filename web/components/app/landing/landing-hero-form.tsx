@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState, type FormEvent } from 'react';
 import { sharePath, startDemo } from '@/lib/demo-client';
 import { SampleDemoButton } from './landing-sample-demo';
@@ -13,11 +14,18 @@ import { SampleDemoButton } from './landing-sample-demo';
 // component only owns the field, the pending/error UI, and the same-origin
 // navigation. Reused, never reimplemented.
 //
+// i18n (M3.9, #125): every visitor-facing string reads from the `landing`
+// catalog. The placeholder URL and the format names (Markdown/MDX/HTML) are
+// content, not chrome, and stay literal; an API error message (`outcome.message`)
+// passes through untranslated (SPEC m3.9: API prose passes through as-is).
+//
 // Open Harbor register (docs/designs/variant-3-open-harbor.html): a single
 // rounded-full pill with the solid-emerald hero CTA (DESIGN.md reserves that
 // variant for hero/approve actions). Roles/labels are explicit and stable so the
-// M1 demo journey (#26) and the new landing journey drive it cleanly.
+// M1 demo journey (#26) and the landing journey drive it cleanly (those run
+// under the default en-US context, so their English selectors still hold).
 export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
+  const t = useTranslations('landing');
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [pending, setPending] = useState(false);
@@ -39,11 +47,7 @@ export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
       return;
     }
 
-    setError(
-      outcome.kind === 'disabled'
-        ? 'Demo mode is off on this instance. Sign in to import a document.'
-        : outcome.message,
-    );
+    setError(outcome.kind === 'disabled' ? t('demo.disabledError') : outcome.message);
     setPending(false);
   }
 
@@ -52,9 +56,9 @@ export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
     : 'ring-zinc-900/10 focus-within:ring-emerald-500 dark:ring-white/10';
 
   return (
-    <form onSubmit={onSubmit} noValidate aria-label="Render a document" className="mt-8">
+    <form onSubmit={onSubmit} noValidate aria-label={t('demo.formLabel')} className="mt-8">
       <label htmlFor="demo-url" className="sr-only">
-        Document URL
+        {t('demo.urlLabel')}
       </label>
       <div
         className={`flex max-w-md items-center gap-2 rounded-full bg-white p-1.5 pl-4 shadow-sm ring-1 ring-inset focus-within:ring-2 dark:bg-white/5 ${pillRing}`}
@@ -80,7 +84,7 @@ export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
           disabled={pending}
           className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15 dark:focus-visible:ring-offset-zinc-900"
         >
-          {pending ? 'Rendering…' : 'Render it'}
+          {pending ? t('demo.pending') : t('demo.submit')}
         </button>
       </div>
 
@@ -93,7 +97,7 @@ export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
           {/* Honest to the demo's contract: the anonymous endpoint accepts only
               public GitHub file links and raw Markdown/MDX/HTML URLs (private
               repos via PAT are a signed-in feature, so not advertised here). */}
-          <span>Public GitHub &amp; raw URLs</span>
+          <span>{t('demo.hintSources')}</span>
           <span aria-hidden="true">·</span>
           <span>Markdown</span>
           <span aria-hidden="true">·</span>
@@ -101,7 +105,7 @@ export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
           <span aria-hidden="true">·</span>
           <span>HTML</span>
           <span aria-hidden="true">·</span>
-          <span>PlantUML &amp; Mermaid via Kroki</span>
+          <span>{t('demo.hintDiagrams')}</span>
         </p>
       )}
 
@@ -109,8 +113,8 @@ export function LandingHeroForm({ sampleUrl }: { sampleUrl?: string }) {
           seeing a render. Dogfooding doubles as social proof. */}
       {sampleUrl ? (
         <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-          <span>No URL handy?</span>
-          <SampleDemoButton url={sampleUrl} label="Render Kedge’s own SPEC.md" variant="chip" />
+          <span>{t('demo.sampleIntro')}</span>
+          <SampleDemoButton url={sampleUrl} label={t('demo.sampleChip')} variant="chip" />
         </p>
       ) : null}
     </form>

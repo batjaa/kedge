@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Link } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
 import { ThreadCard } from './document-thread-card';
 import { cn } from '@/lib/cn';
 import { placeThreadCards, type ThreadPlacement } from '@/lib/review-surface-layout';
@@ -68,6 +69,7 @@ export function DocumentThreadRail({
   reattachingThreadId: number | null;
   reattachStatus: ReattachStatus | null;
 }) {
+  const t = useTranslations('threads');
   const [cardHeights, setCardHeights] = useState<Record<number, number>>({});
   const [footerHeight, setFooterHeight] = useState(128);
   const railThreads = useMemo(
@@ -100,7 +102,7 @@ export function DocumentThreadRail({
   const footerTop = Math.max(0, railHeight - footerHeight);
 
   return (
-    <aside className="relative hidden xl:block" data-review-rail aria-label="Thread rail">
+    <aside className="relative hidden xl:block" data-review-rail aria-label={t('rail.label')}>
       <div className="relative" style={{ minHeight: railHeight }}>
         {railThreads.map((thread) => {
           const placement = placementByThread.get(thread.id);
@@ -139,7 +141,7 @@ export function DocumentThreadRail({
         })}
         {railThreads.length === 0 && orphanedThreads.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-            No threads yet.
+            {t('rail.empty')}
           </p>
         ) : null}
         <MeasuredRailFooter
@@ -154,7 +156,7 @@ export function DocumentThreadRail({
               onClick={onLoadMore}
               className="w-full rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/10"
             >
-              Load more threads
+              {t('rail.loadMore')}
             </button>
           ) : null}
 
@@ -328,22 +330,25 @@ function OrphanedTray({
   reattachingThreadId: number | null;
   reattachStatus: ReattachStatus | null;
 }) {
+  const t = useTranslations('threads');
+  const format = useFormatter();
+
   return (
     <section
       id="orphaned-threads"
-      aria-label="Orphaned threads"
+      aria-label={t('orphan.label')}
       className="rounded-2xl bg-rose-400/5 p-4 text-sm ring-1 ring-inset ring-rose-500/20"
     >
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />
-        <h2 className="text-xs font-semibold text-rose-700 dark:text-rose-300">Orphaned tray</h2>
+        <h2 className="text-xs font-semibold text-rose-700 dark:text-rose-300">{t('orphan.title')}</h2>
         <span className="ml-auto rounded-lg bg-rose-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-rose-700 ring-1 ring-inset ring-rose-500/30 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/30">
-          {threads.length === 0 ? 'empty' : threads.length}
+          {threads.length === 0 ? t('orphan.empty') : format.number(threads.length)}
         </span>
       </div>
       {threads.length === 0 ? (
         <p className="mt-2 text-xs leading-5 text-rose-700/80 dark:text-rose-300/80">
-          No orphaned threads yet.
+          {t('orphan.emptyBody')}
         </p>
       ) : (
         <div className="mt-3 space-y-2">
@@ -356,22 +361,22 @@ function OrphanedTray({
                 className="space-y-2 rounded-md border border-rose-500/20 bg-white/70 p-2 dark:bg-zinc-950/30"
               >
                 <p className="px-1 text-[11px] font-semibold uppercase text-rose-700 dark:text-rose-300">
-                  Orphaned thread
+                  {t('orphan.itemLabel')}
                 </p>
                 {thread.can_reanchor ? (
                   <button
                     type="button"
-                    title="Select replacement text in the document"
+                    title={t('orphan.selectHint')}
                     disabled={reattachingThreadId === thread.id}
                     onClick={() => onStartReattach(thread)}
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:bg-rose-400/10 dark:text-rose-200 dark:ring-1 dark:ring-inset dark:ring-rose-300/20 dark:hover:bg-rose-400/15"
                   >
                     <Link className="h-3.5 w-3.5" aria-hidden="true" />
                     {reattachingThreadId === thread.id
-                      ? 'Re-attaching...'
+                      ? t('orphan.reattaching')
                       : pendingReattachThreadId === thread.id
-                        ? 'Select text'
-                        : 'Re-attach'}
+                        ? t('orphan.selectText')
+                        : t('orphan.reattach')}
                   </button>
                 ) : null}
                 {threadReattachStatus ? (

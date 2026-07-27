@@ -1,0 +1,55 @@
+{
+  "header": {
+    "synced": "sincronizado {when}",
+    "openCount": "{count, plural, one {# abierto} other {# abiertos}}"
+  },
+  "sidebar": {
+    "hide": "Ocultar contenido e hilos",
+    "show": "Mostrar contenido e hilos",
+    "document": "Documento",
+    "tocLabel": "Tabla de contenido del documento",
+    "noHeadings": "Sin encabezados",
+    "threads": "Hilos",
+    "noThreads": "Sin hilos",
+    "orphanedThreads": "Hilos huérfanos",
+    "documentThread": "Hilo del documento",
+    "inlineThread": "Hilo en línea",
+    "navStatus": {
+      "agent": "agente",
+      "suggestion": "sug",
+      "resolved": "listo",
+      "open": "abierto"
+    }
+  },
+  "surface": {
+    "projectLabel": "Proyecto",
+    "unfiled": "Sin archivar",
+    "lifecycleLabel": "Estado del ciclo de vida",
+    "saving": "Guardando...",
+    "revoke": "Revocar",
+    "approve": "Aprobar",
+    "resyncing": "Resincronizando...",
+    "resync": "Resincronizar",
+    "showRail": "Mostrar panel de hilos",
+    "hideRail": "Ocultar panel de hilos",
+    "openThreadsCount": "{count, plural, one {# hilo abierto} other {# hilos abiertos}}",
+    "orphanedThreadsCount": "{count, plural, one {# hilo huérfano} other {# hilos huérfanos}}",
+    "captureFailed": "No se pudo capturar esa selección. Vuelve a anclar seleccionando texto del documento.",
+    "suggestionUnchanged": "Edita el texto para sugerir un cambio.",
+    "reattachPrompt": "Selecciona el texto de reemplazo en el documento para volver a anclar este hilo.",
+    "resyncError": "Algo salió mal al iniciar la solicitud. Inténtalo de nuevo."
+  },
+  "versions": {
+    "navLabel": "Versiones del documento",
+    "latest": "(última)",
+    "compare": "Comparar"
+  },
+  "newVersion": {
+    "notice": "Estás viendo una versión anterior. La última es <b>{label}</b>.",
+    "viewLatest": "Ver la última"
+  },
+  "body": {
+    "mdxBadge": "MDX",
+    "mdxFallback": "No se pudo compilar el MDX de este documento; se muestra el markdown sin formato."
+  }
+}

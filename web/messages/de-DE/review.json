@@ -1,0 +1,55 @@
+{
+  "header": {
+    "synced": "synchronisiert {when}",
+    "openCount": "{count, number} offen"
+  },
+  "sidebar": {
+    "hide": "Inhalt und Threads ausblenden",
+    "show": "Inhalt und Threads anzeigen",
+    "document": "Dokument",
+    "tocLabel": "Inhaltsverzeichnis des Dokuments",
+    "noHeadings": "Keine Überschriften",
+    "threads": "Threads",
+    "noThreads": "Keine Threads",
+    "orphanedThreads": "Verwaiste Threads",
+    "documentThread": "Dokument-Thread",
+    "inlineThread": "Inline-Thread",
+    "navStatus": {
+      "agent": "Agent",
+      "suggestion": "Vorschl",
+      "resolved": "erledigt",
+      "open": "offen"
+    }
+  },
+  "surface": {
+    "projectLabel": "Projekt",
+    "unfiled": "Nicht abgelegt",
+    "lifecycleLabel": "Lebenszyklusstatus",
+    "saving": "Wird gespeichert...",
+    "revoke": "Widerrufen",
+    "approve": "Genehmigen",
+    "resyncing": "Wird neu synchronisiert...",
+    "resync": "Neu synchronisieren",
+    "showRail": "Thread-Leiste anzeigen",
+    "hideRail": "Thread-Leiste ausblenden",
+    "openThreadsCount": "{count, plural, one {# offener Thread} other {# offene Threads}}",
+    "orphanedThreadsCount": "{count, plural, one {# verwaister Thread} other {# verwaiste Threads}}",
+    "captureFailed": "Diese Auswahl konnte nicht verankert werden. Verankern Sie sie neu, indem Sie Dokumenttext auswählen.",
+    "suggestionUnchanged": "Bearbeiten Sie den Text, um eine Änderung vorzuschlagen.",
+    "reattachPrompt": "Wählen Sie Ersatztext im Dokument aus, um diesen Thread neu zu verankern.",
+    "resyncError": "Beim Starten der Anfrage ist etwas schiefgelaufen. Bitte versuchen Sie es erneut."
+  },
+  "versions": {
+    "navLabel": "Dokumentversionen",
+    "latest": "(neueste)",
+    "compare": "Vergleichen"
+  },
+  "newVersion": {
+    "notice": "Sie sehen eine ältere Version. Die neueste ist <b>{label}</b>.",
+    "viewLatest": "Neueste anzeigen"
+  },
+  "body": {
+    "mdxBadge": "MDX",
+    "mdxFallback": "Das MDX dieses Dokuments konnte nicht kompiliert werden; einfaches Markdown wird angezeigt."
+  }
+}

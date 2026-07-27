@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useImportRetry } from '@/lib/import-retry';
 
 // The failed-import state (SPEC 19): shows why it failed and offers a retry CTA.
@@ -18,7 +19,10 @@ export function ImportFailed({
   error: string | null;
 }) {
   // The doc page's success behaviour: refresh the route so it re-enters the
-  // importing/poll state (the row consumer flips its own row instead).
+  // importing/poll state (the row consumer flips its own row instead). Chrome
+  // strings share the imports catalog with the row consumer (M3.9), so the two
+  // recovery surfaces can never drift; API error prose passes through.
+  const t = useTranslations('imports');
   const router = useRouter();
   const { needsReconnect, pending, retryError, onRetry } = useImportRetry({
     id,
@@ -41,10 +45,10 @@ export function ImportFailed({
         </svg>
       </span>
       <h2 className="mt-4 text-base font-semibold text-zinc-900 dark:text-white">
-        Import failed
+        {t('failed.title')}
       </h2>
       <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        {error ?? 'The document could not be imported.'}
+        {error ?? t('failed.fallback')}
       </p>
       <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
         <button
@@ -53,14 +57,14 @@ export function ImportFailed({
           disabled={pending}
           className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
-          {pending ? 'Retrying…' : 'Retry import'}
+          {pending ? t('retry.pending') : t('retry.action')}
         </button>
         {needsReconnect ? (
           <Link
             href="/settings"
             className="inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
           >
-            Reconnect GitHub
+            {t('retry.reconnect')}
           </Link>
         ) : null}
       </div>

@@ -1,0 +1,14 @@
+{
+  "cta": {
+    "heading": "Dieses Dokument beanspruchen",
+    "body": "Registriere dich, um es zu behalten, zu teilen und Kommentare zu sammeln – bevor diese Demo in 48 Stunden abläuft. Es wandert in deinen Arbeitsbereich, ohne dass etwas verloren geht.",
+    "button": "Dieses Dokument beanspruchen →"
+  },
+  "claiming": "Dein Dokument wird beansprucht",
+  "completing": "Dieses Dokument wird in deinen Arbeitsbereich übernommen…",
+  "failed": {
+    "heading": "Dieses Dokument konnte nicht beansprucht werden",
+    "body": "Dieses Dokument konnte nicht beansprucht werden. Bitte versuche es erneut.",
+    "tryAgain": "Erneut versuchen"
+  }
+}

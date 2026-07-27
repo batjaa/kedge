@@ -1,0 +1,45 @@
+{
+  "footerCta": "Prüfe deine eigene Spezifikation mit Kedge →",
+  "eyebrow": {
+    "demo": "Demo-Dokument",
+    "verifiedReviewer": "Geteiltes Dokument · verifizierter Prüfer",
+    "readOnly": "Geteiltes Dokument · schreibgeschützt"
+  },
+  "loadError": {
+    "heading": "Dieses Dokument konnte nicht geladen werden",
+    "body": "Beim Erreichen des Servers ist etwas schiefgelaufen. Versuche es gleich noch einmal."
+  },
+  "emailVerified": "E-Mail verifiziert. Du kannst dieses Dokument jetzt kommentieren.",
+  "preparing": "Dieses Dokument wird noch vorbereitet. Aktualisiere gleich noch einmal.",
+  "rendering": "Dein Dokument wird gerendert – diese Seite aktualisiert sich selbst, sobald es fertig ist.",
+  "gone": {
+    "heading": "Dieser Link ist nicht mehr aktiv",
+    "revoked": "Der Autor hat diesen Freigabelink widerrufen. Bitte um einen neuen, wenn du weiterhin Zugriff brauchst.",
+    "expired": "Dieser Freigabelink ist abgelaufen. Bitte den Autor um einen neuen, wenn du weiterhin Zugriff brauchst.",
+    "unknown": "Wir konnten kein Dokument für diesen Link finden. Er wurde möglicherweise widerrufen, ist abgelaufen oder wurde falsch eingegeben – prüfe die URL oder bitte den Autor um einen neuen Link."
+  },
+  "verify": {
+    "heading": "Bestätige deine E-Mail, um zu kommentieren",
+    "emailLabel": "E-Mail des Prüfers",
+    "verifyingEmail": "Deine E-Mail wird verifiziert…",
+    "send": "Link senden",
+    "sending": "Wird gesendet",
+    "sent": "Gesendet",
+    "verifying": "Wird verifiziert",
+    "sentFallback": "Sieh in deinem E-Mail-Postfach nach einem Link, um weiter zu prüfen.",
+    "errors": {
+      "validation": "Gib eine gültige E-Mail-Adresse ein.",
+      "rateLimited": "Zu viele Anfragen. Warte eine Minute und versuche es dann erneut.",
+      "gone": "Dieser Freigabelink ist nicht mehr aktiv.",
+      "sendFailed": "Wir konnten die E-Mail nicht senden. Versuche es erneut.",
+      "completeRateLimited": "Zu viele Bestätigungsversuche. Warte eine Minute und versuche es dann erneut.",
+      "completeFailed": "Wir konnten diesen Link nicht verifizieren. Versuche es erneut."
+    },
+    "returnState": {
+      "expired": "Dieser Bestätigungslink ist abgelaufen. Fordere einen neuen an, um weiter zu kommentieren.",
+      "used": "Dieser Bestätigungslink wurde bereits verwendet. Fordere einen neuen an, falls dieser Browser nicht verifiziert ist.",
+      "invalid": "Dieser Bestätigungslink konnte nicht verifiziert werden. Fordere einen neuen an, um weiter zu kommentieren.",
+      "account_required": "Für diese E-Mail besteht bereits ein Kedge-Konto. Melde dich an, um dieses Dokument zu prüfen."
+    }
+  }
+}

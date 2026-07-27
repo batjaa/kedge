@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import type { CreatedShare, Share, ShareStatus } from '@/lib/share-types';
 import { createShare, listShares, revokeShare } from '@/lib/shares-client';
 
@@ -10,13 +11,14 @@ import { createShare, listShares, revokeShare } from '@/lib/shares-client';
 // Mounted with a single line on the doc page so a parallel edit there stays
 // conflict-free.
 
-const EXPIRY_OPTIONS: { label: string; days: number | null }[] = [
-  { label: 'No expiry', days: null },
-  { label: 'Expires in 7 days', days: 7 },
-  { label: 'Expires in 30 days', days: 30 },
-];
-
 export function DocumentShares({ documentId }: { documentId: number }) {
+  const t = useTranslations('shares');
+  const locale = useLocale();
+  const expiryOptions: { label: string; days: number | null }[] = [
+    { label: t('expiry.none'), days: null },
+    { label: t('expiry.days7'), days: 7 },
+    { label: t('expiry.days30'), days: 30 },
+  ];
   const [shares, setShares] = useState<Share[]>([]);
   const [loading, setLoading] = useState(true);
   const [expiryDays, setExpiryDays] = useState<number | null>(null);
@@ -62,7 +64,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError('Copy failed — select the link and copy it manually.');
+      setError(t('copyFailed'));
     }
   }
 
@@ -87,26 +89,25 @@ export function DocumentShares({ documentId }: { documentId: number }) {
   return (
     <section className="mt-10 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Share links</h2>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">{t('title')}</h2>
         {activeCount > 0 ? (
           <span className="text-xs text-zinc-500 dark:text-zinc-500">
-            {activeCount} active {activeCount === 1 ? 'link' : 'links'}
+            {t('activeCount', { count: activeCount })}
           </span>
         ) : null}
       </div>
       <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Create an unguessable read-only link so reviewers can read this document without an
-        account. Revoke it any time.
+        {t('description')}
       </p>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <select
           value={expiryDays ?? ''}
           onChange={(e) => setExpiryDays(e.target.value === '' ? null : Number(e.target.value))}
-          aria-label="Share expiry"
+          aria-label={t('expiryLabel')}
           className="rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset ring-zinc-900/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/[.03] dark:text-white dark:ring-white/10"
         >
-          {EXPIRY_OPTIONS.map((opt) => (
+          {expiryOptions.map((opt) => (
             <option key={opt.label} value={opt.days ?? ''}>
               {opt.label}
             </option>
@@ -118,7 +119,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
           disabled={creating}
           className="shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
         >
-          {creating ? 'Creating…' : 'Create share link'}
+          {creating ? t('creating') : t('create')}
         </button>
       </div>
 
@@ -131,7 +132,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
       {created ? (
         <div className="mt-4 rounded-xl bg-emerald-500/5 p-4 ring-1 ring-emerald-500/20">
           <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-            Copy this link now — it is shown only once.
+            {t('createdOnce')}
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
@@ -145,7 +146,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
               onClick={() => onCopy(created.url)}
               className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('copied') : t('copy')}
             </button>
           </div>
         </div>
@@ -153,9 +154,9 @@ export function DocumentShares({ documentId }: { documentId: number }) {
 
       <div className="mt-6">
         {loading ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-500">Loading links…</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('loading')}</p>
         ) : shares.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-500">No share links yet.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('empty')}</p>
         ) : (
           <ul className="divide-y divide-zinc-900/5 dark:divide-white/5">
             {shares.map((share) => (
@@ -164,11 +165,11 @@ export function DocumentShares({ documentId }: { documentId: number }) {
                   <div className="flex items-center gap-2">
                     <StatusBadge status={share.status} />
                     <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                      Link #{share.id}
+                      {t('linkNumber', { id: share.id })}
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
-                    {expiryLabel(share)}
+                    {expiryLabel(share, t, locale)}
                   </p>
                 </div>
                 {share.status === 'active' ? (
@@ -178,7 +179,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
                     disabled={revokingId === share.id}
                     className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-500/30 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-60 dark:text-rose-400"
                   >
-                    {revokingId === share.id ? 'Revoking…' : 'Revoke'}
+                    {revokingId === share.id ? t('revoking') : t('revoke')}
                   </button>
                 ) : null}
               </li>
@@ -191,6 +192,7 @@ export function DocumentShares({ documentId }: { documentId: number }) {
 }
 
 function StatusBadge({ status }: { status: ShareStatus }) {
+  const t = useTranslations('shares');
   const styles: Record<ShareStatus, string> = {
     active: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
     revoked: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
@@ -200,25 +202,30 @@ function StatusBadge({ status }: { status: ShareStatus }) {
     <span
       className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${styles[status]}`}
     >
-      {status}
+      {t(`status.${status}`)}
     </span>
   );
 }
 
-function expiryLabel(share: Share): string {
+function expiryLabel(
+  share: Share,
+  t: ReturnType<typeof useTranslations>,
+  locale: string,
+): string {
   if (share.status === 'revoked' && share.revoked_at) {
-    return `Revoked ${formatDate(share.revoked_at)}`;
+    return t('revokedOn', { date: formatDate(share.revoked_at, locale) });
   }
   if (share.expires_at) {
-    const verb = share.status === 'expired' ? 'Expired' : 'Expires';
-    return `${verb} ${formatDate(share.expires_at)}`;
+    return share.status === 'expired'
+      ? t('expiredOn', { date: formatDate(share.expires_at, locale) })
+      : t('expiresOn', { date: formatDate(share.expires_at, locale) });
   }
-  return 'Never expires';
+  return t('neverExpires');
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ''
-    : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    : date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
 }

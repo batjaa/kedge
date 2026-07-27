@@ -1,4 +1,5 @@
 import { CheckCircle2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { Approval } from '@/lib/document-types';
 import { cn } from '@/lib/cn';
 
@@ -31,9 +32,10 @@ function ApprovalRosterItem({
   approval: Approval;
   currentVersionLabel?: string | null;
 }) {
+  const t = useTranslations('approvals');
   const label = approval.stale && currentVersionLabel
-    ? `approved ${approval.version_label} · current ${currentVersionLabel}`
-    : `approved ${approval.version_label}`;
+    ? t('approvedCurrent', { version: approval.version_label, current: currentVersionLabel })
+    : t('approved', { version: approval.version_label });
 
   return (
     <li
@@ -47,7 +49,7 @@ function ApprovalRosterItem({
     >
       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-100">
-        {approval.user.name ?? 'Reviewer'}
+        {approval.user.name ?? t('reviewerFallback')}
       </span>
       <span className="shrink-0 font-mono text-[10px]">{label}</span>
     </li>

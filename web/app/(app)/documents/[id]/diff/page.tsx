@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { getTranslations } from 'next-intl/server';
+import { useTranslations } from 'next-intl';
 import { ApprovalRoster } from '@/components/app/approval-roster';
 import { DocumentDiffView } from '@/components/app/document-diff-view';
 import { MetaChip } from '@/components/app/meta-chip';
@@ -21,6 +23,7 @@ export default async function DocumentDiffPage({
   const { a, b } = await searchParams;
   const baseVersionId = parseRequiredVersionParam(a);
   const targetVersionId = parseRequiredVersionParam(b);
+  const t = await getTranslations('documents');
   const { status, diff } = await getDocumentVersionDiff(id, baseVersionId, targetVersionId);
 
   if (status === 403 || status === 404) notFound();
@@ -28,10 +31,7 @@ export default async function DocumentDiffPage({
   if (!diff) {
     return (
       <PageContainer>
-        <StatePanel
-          title="Couldn't load this diff"
-          body="The API is unreachable right now. Try again in a moment."
-        />
+        <StatePanel title={t('diff.loadFailedTitle')} body={t('diff.loadFailedBody')} />
       </PageContainer>
     );
   }
@@ -54,30 +54,38 @@ function parseRequiredVersionParam(value: string | string[] | undefined): string
   return value;
 }
 
+// Sync server component, so useTranslations reads the request config directly
+// (next-intl RSC support) — the page's own chrome (M3.9 #123). The diff view and
+// approval roster keep their own strings (#126's lane); the API's `diff.message`
+// prose passes through untranslated with a localized fallback.
 function ProjectionGuard({ diff }: { diff: DocumentVersionDiff }) {
+  const t = useTranslations('documents');
+
   return (
     <div className="mx-auto max-w-3xl">
       <Link
         href={`/documents/${diff.document.id}?version=${diff.versions.b.id}`}
         className="mb-4 inline-flex text-sm text-emerald-600 hover:text-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400"
       >
-        ← Back to document
+        {t('diff.backToDocument')}
       </Link>
       <div className="rounded-lg bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10">
         <div className="flex flex-wrap items-center gap-2">
           <MetaChip>{diff.versions.a.label}</MetaChip>
           <ArrowRight className="h-4 w-4 text-zinc-400" aria-hidden="true" />
           <MetaChip>{diff.versions.b.label}</MetaChip>
-          {diff.current_version ? <MetaChip>current {diff.current_version.label}</MetaChip> : null}
+          {diff.current_version ? (
+            <MetaChip>{t('diff.current', { label: diff.current_version.label })}</MetaChip>
+          ) : null}
         </div>
         <div className="mt-5 flex items-start gap-3">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
           <div>
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-white">
-              These versions can't be compared
+              {t('diff.notComparableTitle')}
             </h1>
             <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-              {diff.message ?? 'Their projection substrates differ, so comment offsets would not line up safely.'}
+              {diff.message ?? t('diff.notComparableBody')}
             </p>
           </div>
         </div>

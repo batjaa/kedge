@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { MetaChip } from './meta-chip';
 import { StatusChip } from './status-chip';
 import { ApprovalRoster } from './approval-roster';
 import type { Approval, LifecycleStatus } from '@/lib/document-types';
-import { relativeTime } from '@/lib/relative-time';
+import { formatRelativeTime } from '@/lib/intl-time';
 
 export function DocumentReviewHeader({
   title,
@@ -36,6 +37,9 @@ export function DocumentReviewHeader({
   syncError?: string | null;
   actions?: ReactNode;
 }) {
+  const t = useTranslations('review');
+  const locale = useLocale();
+
   return (
     <header className="sticky top-14 z-30 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -54,7 +58,7 @@ export function DocumentReviewHeader({
             <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500">{surfaceLabel}</span>
             {syncedAt ? (
               <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
-                synced {relativeTime(syncedAt)}
+                {t('header.synced', { when: formatRelativeTime(syncedAt, locale) })}
               </span>
             ) : null}
           </div>
@@ -77,7 +81,7 @@ export function DocumentReviewHeader({
           {actions}
           <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700 ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10">
             <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            <span>{openThreadCount} open</span>
+            <span>{t('header.openCount', { count: openThreadCount })}</span>
           </div>
         </div>
       </div>

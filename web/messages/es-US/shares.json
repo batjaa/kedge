@@ -1,0 +1,31 @@
+{
+  "title": "Enlaces para compartir",
+  "description": "Crea un enlace de solo lectura imposible de adivinar para que los revisores puedan leer este documento sin una cuenta. Revócalo cuando quieras.",
+  "activeCount": "{count, plural, one {# enlace activo} other {# enlaces activos}}",
+  "expiryLabel": "Caducidad del enlace",
+  "expiry": {
+    "none": "Sin caducidad",
+    "days7": "Caduca en 7 días",
+    "days30": "Caduca en 30 días"
+  },
+  "create": "Crear enlace para compartir",
+  "creating": "Creando…",
+  "createdOnce": "Copia este enlace ahora — solo se muestra una vez.",
+  "copy": "Copiar",
+  "copied": "Copiado",
+  "copyFailed": "No se pudo copiar — selecciona el enlace y cópialo manualmente.",
+  "loading": "Cargando enlaces…",
+  "empty": "Aún no hay enlaces para compartir.",
+  "linkNumber": "Enlace n.º {id}",
+  "revoke": "Revocar",
+  "revoking": "Revocando…",
+  "status": {
+    "active": "activo",
+    "revoked": "revocado",
+    "expired": "caducado"
+  },
+  "revokedOn": "Revocado {date}",
+  "expiredOn": "Caducó {date}",
+  "expiresOn": "Caduca {date}",
+  "neverExpires": "Nunca caduca"
+}

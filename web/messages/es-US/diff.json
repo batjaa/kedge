@@ -1,0 +1,19 @@
+{
+  "loadingThreads": "Cargando hilos.",
+  "backToDocument": "Volver al documento",
+  "current": "actual {label}",
+  "plainTextDiff": "Diferencia de texto sin formato",
+  "projection": "proyección {version}",
+  "openCount": "{count, plural, one {# abierto} other {# abiertos}}",
+  "synced": "{label} sincronizado {when}",
+  "syncUnavailable": "{label} hora de sincronización no disponible",
+  "anchorsTitle": "Anclas de {label}",
+  "versionA": "Versión A",
+  "versionB": "Versión B",
+  "threadMarker": "{version} hilo {id}",
+  "noAnchoredThreads": "No hay hilos anclados en {label}.",
+  "jumpToMarker": "Ir al marcador",
+  "anchorNotPlacedTitle": "El ancla no está colocada en esta diferencia",
+  "threadNumber": "Hilo n.º {id}",
+  "anchorNotPlaced": "El ancla no está colocada en esta diferencia."
+}

@@ -1,0 +1,95 @@
+{
+  "_notes": {
+    "badges": "badge.*, status.* and suggestionStatus.* render inside small uppercase mono badges on thread cards and comment rows — labels, not prose. Keep them short (abbreviate like the English 'sugg'): they ride the same 16ch truncation clamp as the chips glossary, and the length guard (test/i18n-review-surface.test.tsx) holds every locale to 15 characters per label."
+  },
+  "rail": {
+    "label": "Хэлэлцүүлгийн самбар",
+    "empty": "Одоогоор хэлэлцүүлэг алга.",
+    "loadMore": "Илүү олон хэлэлцүүлэг ачаалах"
+  },
+  "orphan": {
+    "label": "Тасарсан хэлэлцүүлэг",
+    "title": "Тасарсан сан",
+    "empty": "хоосон",
+    "emptyBody": "Одоогоор тасарсан хэлэлцүүлэг алга.",
+    "itemLabel": "Тасарсан хэлэлцүүлэг",
+    "selectHint": "Баримт доторх орлуулах текстийг сонго",
+    "reattaching": "Дахин бэхэлж байна...",
+    "selectText": "Текст сонгох",
+    "reattach": "Дахин бэхлэх"
+  },
+  "card": {
+    "agent": "Агент",
+    "suggestion": "Санал",
+    "thread": "Хэлэлцүүлэг",
+    "resolve": "Хэлэлцүүлгийг шийдэх",
+    "reopen": "Хэлэлцүүлгийг дахин нээх",
+    "forkedFrom": "#{id} сэтгэгдлээс салбарласан",
+    "moreReplies": "{count, plural, one {өөр # хариу} other {өөр # хариу}}",
+    "forkedInto": "{count, plural, one {# хэлэлцүүлэг рүү салбарласан} other {# хэлэлцүүлэг рүү салбарласан}}",
+    "relocatedTitle": "Дахин бэхэлсний дараа шилжсэн; шилжсэн сонголтыг шалгана уу.",
+    "moved": "Шилжсэн",
+    "sectionDocument": "баримт",
+    "selection": "сонголт"
+  },
+  "comment": {
+    "reviewerFallback": "Хянагч",
+    "edited": "засварласан",
+    "editBodyLabel": "Сэтгэгдлийн текстийг засах",
+    "cancelEdit": "Засварыг цуцлах",
+    "saveEdit": "Засварыг хадгалах",
+    "deleted": "сэтгэгдэл устгагдсан",
+    "edit": "Сэтгэгдэл засах",
+    "delete": "Сэтгэгдэл устгах",
+    "fork": "Шинэ хэлэлцүүлэг рүү салбарлах",
+    "removeReaction": "Урвалыг хасах",
+    "react": "Урвал үзүүлэх",
+    "acceptSuggestion": "Саналыг зөвшөөрөх",
+    "declineSuggestion": "Саналаас татгалзах",
+    "reopenSuggestion": "Саналыг дахин нээх"
+  },
+  "badge": {
+    "agent": "агент",
+    "suggestion": "санал",
+    "mcp": "mcp"
+  },
+  "status": {
+    "open": "нээлттэй",
+    "resolved": "шийдсэн"
+  },
+  "suggestionStatus": {
+    "pending": "хүлээгдэж буй",
+    "accepted": "зөвшөөрсөн",
+    "declined": "татгалзсан"
+  },
+  "suggestionDiff": {
+    "empty": "хоосон"
+  },
+  "composer": {
+    "comment": "Сэтгэгдэл",
+    "suggest": "Санал болгох",
+    "reply": "Хариулах",
+    "post": "Нийтлэх",
+    "cancel": "Цуцлах",
+    "resolvedReopen": "шийдсэн - дахин нээх үү?",
+    "replacementText": "Орлуулах текст",
+    "addNote": "Тэмдэглэл нэмэх",
+    "writeComment": "Сэтгэгдэл бичих",
+    "inlineComment": "Мөрийн сэтгэгдэл",
+    "suggestedReplacement": "Санал болгосон орлуулга",
+    "suggestionNote": "Саналын тэмдэглэл",
+    "replySuggestedReplacement": "Хариултын санал болгосон орлуулга",
+    "replySuggestionNote": "Хариултын саналын тэмдэглэл",
+    "suggestionUnchanged": "Өөрчлөлт санал болгохын тулд текстийг засна уу.",
+    "selectionNotAnchored": "Сонголтыг бэхэлж чадсангүй. Оронд нь бүх баримтад сэтгэгдэл бичнэ үү.",
+    "submitSuggestion": "Санал илгээх",
+    "postComment": "Сэтгэгдэл нийтлэх",
+    "submitSuggestionReply": "Саналын хариу илгээх",
+    "postReply": "Хариу нийтлэх"
+  },
+  "sheet": {
+    "thread": "Хэлэлцүүлэг",
+    "closeSheet": "Хэлэлцүүлгийн хуудсыг хаах",
+    "close": "Хаах"
+  }
+}

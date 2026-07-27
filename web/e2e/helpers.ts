@@ -39,37 +39,38 @@ export function uniqueIdentity(prefix: string): Identity {
  */
 export async function register(page: Page, identity: Identity): Promise<void> {
   await page.goto('/signup');
-  await expect(
-    page.getByRole('heading', { name: 'Create your account' }),
-  ).toBeVisible();
+  // Structural selectors, not copy: the auth chrome renders in the browser's
+  // negotiated locale (M3.9), so English strings are not a stable contract here.
+  await expect(page.locator('input[name="name"]')).toBeVisible();
 
-  await page.getByLabel('Name', { exact: true }).fill(identity.name);
-  await page.getByLabel('Email', { exact: true }).fill(identity.email);
-  await page.getByLabel('Password', { exact: true }).fill(identity.password);
-  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await page.locator('input[name="name"]').fill(identity.name);
+  await page.locator('input[name="email"]').fill(identity.email);
+  await page.locator('input[name="password"]').fill(identity.password);
+  await page.locator('form button[type="submit"]').click();
 
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { name: 'Review queue' })).toBeVisible();
+  // Locale-agnostic (M3.9): the queue heading is a catalog string and the i18n
+  // journeys register under es-US/de-DE contexts.
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
 
 /**
  * Sign in through the real browser. `expectUrl` is where the app should land
  * afterwards (default `/`); a deep-link sign-in lands on the `next` target
- * instead. "Sign in" is matched exactly so it never collides with the
- * "Continue with GitHub" button (the M0 selector lesson).
+ * instead. The submit is targeted structurally (`form button[type="submit"]`)
+ * so it never collides with the "Continue with GitHub" button (the M0 selector
+ * lesson) and stays valid in every negotiated locale (M3.9).
  */
 export async function signIn(
   page: Page,
   identity: Pick<Identity, 'email' | 'password'>,
   expectUrl: string | RegExp = '/',
 ): Promise<void> {
-  await expect(
-    page.getByRole('button', { name: 'Sign in', exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('input[name="email"]')).toBeVisible();
 
-  await page.getByLabel('Email', { exact: true }).fill(identity.email);
-  await page.getByLabel('Password', { exact: true }).fill(identity.password);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.locator('input[name="email"]').fill(identity.email);
+  await page.locator('input[name="password"]').fill(identity.password);
+  await page.locator('form button[type="submit"]').click();
 
   await expect(page).toHaveURL(expectUrl);
 }

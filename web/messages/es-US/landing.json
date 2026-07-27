@@ -1,0 +1,157 @@
+{
+  "header": {
+    "navLabel": "Principal",
+    "nav": {
+      "how": "Cómo funciona",
+      "workspace": "Espacio de trabajo",
+      "roadmap": "Hoja de ruta",
+      "selfHost": "Autoalojamiento"
+    },
+    "signIn": "Iniciar sesión",
+    "getStarted": "Comenzar"
+  },
+  "hero": {
+    "badge": "Código abierto · AGPL-3.0 · autoalojable",
+    "title": {
+      "line1": "Pega un enlace.",
+      "line2": "Revisa una spec.",
+      "accent": "Cero registro."
+    },
+    "lede": "Las specs viven en GitHub y Confluence, pero sus revisiones mueren en hilos de PR y chats de reunión. Kedge convierte cualquier fuente en una sola página de revisión legible: discusión anclada al texto, aprobaciones fijadas a versiones e IA a la mano para fortalecer el documento."
+  },
+  "stills": {
+    "openChip": "Abierto",
+    "pendingChip": "Pendiente",
+    "reply": "Responder",
+    "resolve": "Resolver",
+    "draftReply": "Borrador de respuesta →",
+    "suggestedEdit": "Edición sugerida",
+    "accept": "Aceptar",
+    "decline": "Rechazar",
+    "survivedBadge": "14 comentarios sobrevivieron a la última resincronización",
+    "agentChip": "Agente · MCP",
+    "justNow": "ahora mismo",
+    "viaMcp": "publicado vía MCP · pendiente de revisión humana"
+  },
+  "demo": {
+    "formLabel": "Renderizar un documento",
+    "urlLabel": "URL del documento",
+    "submit": "Renderízalo",
+    "pending": "Renderizando…",
+    "hintSources": "GitHub público y URLs directas",
+    "hintDiagrams": "PlantUML y Mermaid vía Kroki",
+    "sampleIntro": "¿No tienes una URL a la mano?",
+    "sampleChip": "Renderiza la SPEC.md de Kedge",
+    "disabledError": "El modo demo está apagado en esta instancia. Inicia sesión para importar un documento."
+  },
+  "surface": {
+    "heading": "Comentarios que no pierden su lugar",
+    "body": "Una revisión real en Kedge: el documento renderizado para leerse, hilos fijados a las oraciones exactas que cuestionan, aprobaciones fijadas a la versión que vieron. Publica una versión nueva y la discusión se vuelve a anclar en lugar de borrarse.",
+    "screenshotAlt": "Una spec renderizada en Kedge, con hilos de comentarios anclados a oraciones del texto y acciones de aprobar y resincronizar fijadas a la versión"
+  },
+  "how": {
+    "heading": "Revisa donde el documento se lee, no donde se guarda",
+    "body": "Tres pasos de una URL a una revisión en marcha. Sin migración, sin un nuevo hogar para tus documentos, y los revisores nunca necesitan cuentas.",
+    "steps": {
+      "import": {
+        "title": "Importa desde cualquier parte",
+        "body": "Un archivo de GitHub, un directorio completo de un repo, una URL directa, una carga. Los diagramas se renderizan, el marcado roto nunca rompe la página y en segundos existe un enlace para compartir."
+      },
+      "discuss": {
+        "title": "Discute sobre el texto mismo",
+        "body": "Selecciona una oración, inicia un hilo. Propón el arreglo como una edición sugerida que el autor acepta con un clic. Los revisores entran por enlace mágico, sin cuentas que administrar."
+      },
+      "resync": {
+        "title": "Publica una versión nueva, conserva la revisión",
+        "body": "La resincronización trae el documento más reciente y cada comentario vuelve a encontrar su lugar: coincidencia exacta primero, coincidencia difusa después, y la bandeja de huérfanos como red de seguridad. Las aprobaciones muestran exactamente qué versión respaldan."
+      }
+    }
+  },
+  "agents": {
+    "kicker": "En desarrollo",
+    "heading": "Tu próximo revisor podría no ser humano",
+    "body1": "El servidor MCP de Kedge convierte a los agentes de IA en revisores de primera clase. Leen el documento renderizado, anclan comentarios a pasajes reales y llevan una insignia que dice exactamente lo que son. Nada de lo que escribe un agente se publica sin que un humano lo confirme.",
+    "body2": "Luego cierra el ciclo: convierte la revisión en un resumen de IA, entrega a tu agente de código el prompt de mejora, resincroniza el documento revisado y toda la discusión sigue ahí."
+  },
+  "workspace": {
+    "kicker": "Proyectos y repos vinculados",
+    "heading": "Apúntalo a tu carpeta <code>docs/</code> y cada spec llega lista para revisar",
+    "body": "Un proyecto rastrea un repo, una rama y un patrón de rutas. Kedge previsualiza las coincidencias, las importa en bloque y, tras cada push, un reescaneo importa archivos nuevos, resincroniza los cambiados y marca las eliminaciones. Él nunca borra nada por sí mismo.",
+    "points": {
+      "status": "Estado de importación en vivo en cada documento, reintento en línea",
+      "glance": "Ciclo de vida, hilos abiertos y estado de sincronización de un vistazo",
+      "unfiled": "Una bandeja Sin archivar, para que nada necesite un hogar primero"
+    },
+    "console": {
+      "activeChip": "Activo",
+      "docs6": "6 docs",
+      "open11": "11 abiertos",
+      "orphan1": "1 huérfano",
+      "rescan": "Reescanear",
+      "docs3": "3 docs",
+      "docs2": "2 docs",
+      "unfiled": "Sin archivar",
+      "dragHint": "arrastra docs aquí… o a donde sea",
+      "colDocument": "Documento",
+      "colMeta": "Ciclo · Hilos · Sync",
+      "chipInReview": "En revisión",
+      "chipApproved": "Aprobado",
+      "chipOrphan": "1 huérfano",
+      "chipImporting": "Importando…",
+      "chipFailed": "Falló",
+      "retry": "Reintentar",
+      "metaSpec": "v4 · 7 abiertos · hace 2 h",
+      "metaDesign": "v2 · 0 abiertos · hace 2 h",
+      "metaRfc": "v6 · 3 abiertos · hace 40 min",
+      "metaScan": "hallado por reescaneo · ahora mismo",
+      "metaRoadmap": "v3 · 1 abierto · hace 2 h",
+      "metaFailed": "inalcanzable · hace 1 d"
+    }
+  },
+  "roadmap": {
+    "heading": "Disponible hoy, lo próximo en la carta",
+    "intro": "Seis lanzamientos en julio, cada uno demostrado sobre los propios documentos de Kedge la semana en que llegó. La carta desde aquí:",
+    "liveTitle": "Disponible hoy",
+    "chartedTitle": "Próximo en la carta",
+    "live": {
+      "import": "Importación desde GitHub, URLs directas, cargas y repos privados",
+      "threads": "Hilos anclados y ediciones sugeridas con un clic",
+      "versions": "Versiones, diffs y aprobaciones que caducan a la vista",
+      "projects": "Proyectos del espacio de trabajo y repos vinculados con reescaneo"
+    },
+    "charted": {
+      "ai": "Revisores de IA y resúmenes vía MCP, ya en desarrollo",
+      "inbox": "Una bandeja de revisión: menciones, resúmenes, lo que te necesita",
+      "sync": "GitHub App y sincronización con Confluence: haz push una vez y se resincroniza solo",
+      "selfhost": "Autoalojamiento GA: un comando, paridad total, AGPL-3.0"
+    },
+    "closer": "Ambas ediciones se lanzan juntas: el SaaS para cualquiera con una URL, el archivo compose para equipos cuyas specs se quedan en casa."
+  },
+  "selfHost": {
+    "heading": "Tus specs nunca tienen que salir de casa",
+    "body": "La edición de código abierto es el producto completo: anclaje, aprobaciones, el servidor MCP, todo. AGPL-3.0, paridad total con el SaaS, un solo archivo compose.",
+    "guideCta": "Lee la guía de autoalojamiento",
+    "starCta": "Dale una estrella en GitHub",
+    "terminal": {
+      "frontDoor": "iniciar sesión es la puerta principal",
+      "ready": "listo. nada salió de la máquina."
+    }
+  },
+  "cta": {
+    "heading": "Empieza tu primera revisión en 60 segundos",
+    "body": "Deja tu correo para abrir un espacio de trabajo para las specs de tu equipo. Nada que instalar, sin tarjeta de crédito, y la demo funciona antes de que decidas.",
+    "proofPrompt": "¿Quieres pruebas primero?",
+    "proofCta": "Renderiza la SPEC.md de Kedge, cero registro"
+  },
+  "email": {
+    "formLabel": "Crea tu espacio de trabajo",
+    "emailLabel": "Correo electrónico",
+    "placeholder": "tu@empresa.com",
+    "submit": "Crear mi espacio de trabajo"
+  },
+  "footer": {
+    "tagline": "Comentarios que no pierden su lugar.",
+    "docs": "Documentación",
+    "roadmap": "Hoja de ruta"
+  }
+}

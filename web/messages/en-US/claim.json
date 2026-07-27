@@ -1,0 +1,14 @@
+{
+  "cta": {
+    "heading": "Claim this doc",
+    "body": "Sign up to keep it, share it, and collect comments — before this demo expires in 48 hours. It moves into your workspace with nothing lost.",
+    "button": "Claim this doc →"
+  },
+  "claiming": "Claiming your document",
+  "completing": "Claiming this document into your workspace…",
+  "failed": {
+    "heading": "Couldn't claim this document",
+    "body": "Couldn't claim this document. Please try again.",
+    "tryAgain": "Try again"
+  }
+}

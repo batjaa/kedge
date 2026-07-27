@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ImportForm } from './import-form';
 import { DocumentSection, type SectionInjection } from './document-section';
 import { TrackedRepoPanel } from './tracked-repo-panel';
@@ -50,6 +51,7 @@ export function ProjectDocuments({
   /** Server-rendered page 1 for "Other documents" (the exclude-attached read). */
   initialOtherPage: DocumentListPage | null;
 }) {
+  const t = useTranslations('projects');
   const projectId = project.id;
   const [repos, setRepos] = useState<TrackedRepo[]>(initialTrackedRepos);
   // Per-section injection batches (keyed by section: repo id or 'other'), each a
@@ -110,10 +112,10 @@ export function ProjectDocuments({
 
       <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-zinc-900/10 dark:bg-white/[.03] dark:ring-white/10 sm:p-8">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-          Import into this project
+          {t('importPanel.title')}
         </h2>
         <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paste a link or content and it lands here, filed under this project.
+          {t('importPanel.body')}
         </p>
         <ImportForm onImported={handleImported} projectId={projectId} />
       </div>
@@ -127,8 +129,8 @@ export function ProjectDocuments({
           section={{ trackedRepo: repo.id, order: 'path' }}
           heading={<span className="font-mono">{repoShortName(repo.repo_url)}</span>}
           headingId={`section-repo-${repo.id}`}
-          emptyTitle="No documents yet from this source"
-          emptyBody="A scan of this repository imports its matching files here."
+          emptyTitle={t('sections.repoEmptyTitle')}
+          emptyBody={t('sections.repoEmptyBody')}
           projects={projects}
           injection={injections[String(repo.id)]}
           directoryDividers
@@ -142,14 +144,10 @@ export function ProjectDocuments({
         projectId={projectId}
         initialPage={initialOtherPage}
         section={excludeIds.length > 0 ? { excludeTrackedRepos: excludeIds } : {}}
-        heading={hasRepos ? 'Other documents' : 'Documents'}
+        heading={hasRepos ? t('sections.other') : t('sections.documents')}
         headingId={`section-${OTHER_SECTION}`}
-        emptyTitle={hasRepos ? 'No other documents' : 'No documents in this project yet'}
-        emptyBody={
-          hasRepos
-            ? 'Everything in this project came from a tracked repository above.'
-            : 'Import one with the box above, or assign an existing document from its review header or the project chip on any home row.'
-        }
+        emptyTitle={hasRepos ? t('sections.otherEmptyTitle') : t('sections.emptyTitle')}
+        emptyBody={hasRepos ? t('sections.otherEmptyBody') : t('sections.emptyBody')}
         projects={projects}
         injection={injections[String(OTHER_SECTION)]}
       />

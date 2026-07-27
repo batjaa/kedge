@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from './render-intl';
 import { describe, expect, it, vi } from 'vitest';
 
 // Static-markup coverage for the Settings → General card (SPEC §16, M3.7 decision

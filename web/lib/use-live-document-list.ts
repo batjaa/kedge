@@ -1,4 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   appendItems,
   applyFilterPage,
@@ -8,7 +9,7 @@ import {
   markRetrying,
   mergeSettled,
   nextLoadMorePage,
-  settleAnnouncement,
+  settleOutcome,
 } from './document-list-live';
 import { readDocumentPage } from './documents-client';
 import type {
@@ -187,11 +188,15 @@ export function useLiveDocumentList({
     [replaceWithFilter],
   );
 
+  // The settle announcement is localized here (M3.9): the pure classifier names
+  // the outcome, the documents catalog words it — the title is user data and
+  // interpolates untranslated.
+  const t = useTranslations('documents');
   const handleSettled = useCallback((doc: Document) => {
     setItems((prev) => mergeSettled(prev, doc));
-    const message = settleAnnouncement(doc);
-    if (message) setAnnouncement(message);
-  }, [setItems]);
+    const outcome = settleOutcome(doc);
+    if (outcome) setAnnouncement(t(`announce.${outcome}`, { title: doc.title }));
+  }, [setItems, t]);
 
   // The ref guards the synchronous double-click batched state cannot (#86); a
   // failed fetch keeps every loaded row and leaves meta untouched so Load more
