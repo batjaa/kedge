@@ -44,7 +44,7 @@ Laravel 13 per SPEC §4.1: PHPUnit (never Pest) · `vendor/bin/pint --dirty` bef
 1. **This is a public AGPL repo.** No proprietary code — in particular, **never copy Tailwind Plus / Protocol template code**. The design is a clean-room rebuild; DESIGN.md and the mockup are the only design sources. No secrets, keys, or tokens in any commit.
 2. **Rendering never crashes on untrusted input.** Unknown fence langs → plain text; MDX compile failure → plain-markdown fallback + banner; diagram render failure → show-source error panel. Imported documents are untrusted (MDX is code): imports/exports rejected, components allowlisted.
 3. **Kroki is the sole diagram engine** (SPEC §6.2), self-hosted in both editions; only the explicit engine allowlist is ever forwarded to it.
-4. **Nova is SaaS-ops tooling** — it must never become a runtime dependency of the open-source app.
+4. **Nova and Nightwatch are SaaS-ops tooling** — neither may become a runtime dependency of the open-source app. Nightwatch ships in `composer.json` but is a token-gated no-op: no `NIGHTWATCH_TOKEN` → disabled, no agent process, no outbound traffic (`api/config/nightwatch.php`).
 5. **AI output is always a human-confirmed draft.** No AI feature auto-posts or has side effects. Document/comment content is untrusted input to prompts (injection channel).
 6. Comment persistence must never depend on notification fan-out succeeding.
 

@@ -31,7 +31,10 @@ preview shows the SaaS edition — marketing landing + hero demo; set `true` in
 the platform env to preview the self-hosted sign-in branch).
 `SANCTUM_STATEFUL_DOMAINS` and `FRONTEND_URL` derive from `APP_URL` when
 unset. `NEXT_PUBLIC_API_URL` is a build arg baked empty — same-origin relative
-calls behind the proxy.
+calls behind the proxy. Optional: `NIGHTWATCH_TOKEN` (Laravel Nightwatch
+observability, 2026-07-28) — unset means fully off (package no-ops, no agent
+starts); set it and the api entrypoint runs the agent in-container on
+`0.0.0.0:2407`, with worker/scheduler shipping to `api:2407`.
 
 ## Known preview-grade shortcuts (revisit at M7)
 
@@ -40,3 +43,7 @@ calls behind the proxy.
   set explicitly instead. TLS terminates upstream (SWAG → Coolify proxy).
 - Single-stage web image (no standalone output pruning).
 - No Kroki container yet — lands with the M1 diagram ticket, add it here then.
+- Nightwatch agent runs inside the api container (entrypoint backgrounds it
+  when `NIGHTWATCH_TOKEN` is set). M7's reference compose should use the
+  official `laravelphp/nightwatch-agent` sidecar image — as an optional
+  service, never a required one.

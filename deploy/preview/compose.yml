@@ -17,6 +17,10 @@ x-api-env: &api-env
   APP_URL: ${APP_URL:-}
   APP_KEY: ${APP_KEY:-}
   LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+  # For Nightwatch log shipping set LOG_CHANNEL=stack and include both sinks,
+  # e.g. LOG_STACK=stderr,nightwatch — keep stderr so `docker logs`/Coolify
+  # still see the app; the nightwatch channel is a no-op without a token.
+  LOG_STACK: ${LOG_STACK:-single}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DB_CONNECTION: pgsql
   DB_HOST: db
@@ -40,6 +44,13 @@ x-api-env: &api-env
   PROJECTION_SHARED_SECRET: ${PROJECTION_SHARED_SECRET:-}
   KROKI_URL: http://kroki:8000
   DIAGRAM_SHARED_SECRET: ${DIAGRAM_SHARED_SECRET:-}
+  # Optional Laravel Nightwatch observability. Unset token = fully off: the
+  # package no-ops (config/nightwatch.php) and no agent process starts — the
+  # stack must never require it (SPEC self-host-clean, same stance as Nova).
+  # With a token, the api entrypoint runs the agent on 0.0.0.0:2407 inside the
+  # api container; worker/scheduler ship their events to it via this URI.
+  NIGHTWATCH_TOKEN: ${NIGHTWATCH_TOKEN:-}
+  NIGHTWATCH_INGEST_URI: api:2407
 
 x-api-build: &api-build
   context: ./api
@@ -65,6 +76,8 @@ services:
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
     expose:
       - "80"
+      # Nightwatch agent ingest (only listening when NIGHTWATCH_TOKEN is set).
+      - "2407"
     healthcheck:
       # Healthy only once migrations have run and the app answers — workers
       # gate on this so they never race the first boot's migrations.

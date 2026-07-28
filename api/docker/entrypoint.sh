@@ -34,6 +34,16 @@ case "$mode" in
     if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
       php artisan migrate --force
     fi
+    # Optional observability (SPEC self-host-clean): the Nightwatch agent runs
+    # only when a token is provisioned — out of the box nothing starts and the
+    # package no-ops (config/nightwatch.php gates `enabled` on the token).
+    # Preview-grade shortcut: the agent shares the api container and listens on
+    # 0.0.0.0 so worker/scheduler reach it at api:2407; M7's reference deploy
+    # should use the official sidecar image instead. Backgrounded so an agent
+    # crash never takes the app down with it.
+    if [ -n "${NIGHTWATCH_TOKEN:-}" ]; then
+      php artisan nightwatch:agent --listen-on=0.0.0.0:2407 &
+    fi
     exec php artisan serve --host=0.0.0.0 --port=80
     ;;
   worker)
