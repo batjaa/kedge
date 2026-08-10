@@ -41,6 +41,7 @@ class ReviewerMagicLinkMail extends Mailable
     {
         return new Content(
             view: 'mail.reviewer-magic-link',
+            text: 'mail.reviewer-magic-link-text',
             with: [
                 'magicLinkUrl' => $this->magicLinkUrl,
                 'documentTitle' => $this->documentTitle,
