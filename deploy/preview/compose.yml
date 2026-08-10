@@ -44,6 +44,15 @@ x-api-env: &api-env
   PROJECTION_SHARED_SECRET: ${PROJECTION_SHARED_SECRET:-}
   KROKI_URL: http://kroki:8000
   DIAGRAM_SHARED_SECRET: ${DIAGRAM_SHARED_SECRET:-}
+  # Outbound email (reviewer magic links). Default stays `log` so a bare stack
+  # needs no mail provider and sends nothing (self-host-clean, same stance as
+  # Nightwatch); the preview sets MAIL_MAILER=postmark + POSTMARK_API_KEY in
+  # the platform env. From-identity must be a confirmed Postmark sender
+  # signature on the token's account.
+  MAIL_MAILER: ${MAIL_MAILER:-log}
+  POSTMARK_API_KEY: ${POSTMARK_API_KEY:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@example.com}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Kedge}
   # Optional Laravel Nightwatch observability. Unset token = fully off: the
   # package no-ops (config/nightwatch.php) and no agent process starts — the
   # stack must never require it (SPEC self-host-clean, same stance as Nova).
