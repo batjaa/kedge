@@ -1,6 +1,7 @@
 'use client';
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FilePenLine, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { runContentUpdate } from '@/lib/content-update';
@@ -126,7 +127,10 @@ export function UpdateContentAction({
         {t('trigger')}
       </button>
 
-      {open ? (
+      {/* Portaled to <body>: the trigger sits inside the sticky header, whose
+          backdrop-blur makes it the containing block for fixed descendants —
+          rendered in place, this overlay would be confined to the header strip. */}
+      {open ? createPortal(
         <div
           role="dialog"
           aria-modal="true"
@@ -209,7 +213,8 @@ export function UpdateContentAction({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
