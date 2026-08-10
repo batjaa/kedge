@@ -11,7 +11,14 @@
 
 	@api path /api/* /sanctum/* /auth/* /login /logout /register /up /storage/*
 	handle @api {
-		reverse_proxy api:80
+		reverse_proxy api:80 {
+			# TLS always terminates upstream of this box, so the public
+			# scheme is https by construction. Stamping it here (rather
+			# than trusting the variable SWAG/Traefik forwarded-header
+			# chain) is what lets the api mint and validate https signed
+			# URLs — reviewer magic links (bootstrap trustProxies).
+			header_up X-Forwarded-Proto https
+		}
 	}
 
 	handle {

@@ -1,8 +1,11 @@
-{{ $inviterName }} invited you to review "{{ $documentTitle }}" on Kedge.
+{{-- Plain-text part: raw output ({!! !!}) is correct here — Blade's {{ }}
+     HTML-entity escaping would corrupt this non-HTML body (an & in the signed
+     URL's query string became &amp;, breaking a pasted link). --}}
+{!! $inviterName !!} invited you to review "{!! $documentTitle !!}" on Kedge.
 
 Confirm this email address to open the document and leave review comments:
 
-{{ $magicLinkUrl }}
+{!! $magicLinkUrl !!}
 
 This link can be used once and expires {{ $expiresAt->copy()->utc()->format('M j, Y \a\t g:ia') }} UTC.
 

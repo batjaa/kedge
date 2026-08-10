@@ -20,6 +20,20 @@ return Application::configure(basePath: dirname(__DIR__))
         // the session cookie instead of tokens (SPEC 4).
         $middleware->statefulApi();
 
+        // Every hosted topology (preview: SWAG -> Coolify -> Caddy; M7 compose:
+        // Caddy) terminates TLS upstream and reaches the api only through that
+        // chain, so forwarded proto/for/port are trusted — absolute URLs the
+        // api mints (signed magic links) must carry the public https scheme,
+        // and signature validation must reconstruct the same scheme.
+        // X-Forwarded-Host is deliberately excluded: Host stays authoritative
+        // so a spoofed forwarded host can never steer a generated URL.
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_PROTO
+                | Request::HEADER_X_FORWARDED_PORT,
+        );
+
         // Byte-for-byte fields exempted from the global TrimStrings middleware:
         //   content — pasted/uploaded document body (#22); trimming would alter the
         //             rendered document and its content_hash.

@@ -14,10 +14,12 @@ use Tests\TestCase;
  */
 class ReviewerMagicLinkMailTest extends TestCase
 {
+    private const URL = 'https://kedge.test/shared/tok/verify/1/secret?expires=1786378753&signature=abc123';
+
     private function mailable(): ReviewerMagicLinkMail
     {
         return new ReviewerMagicLinkMail(
-            magicLinkUrl: 'https://kedge.test/shared/tok/verify/1/secret',
+            magicLinkUrl: self::URL,
             documentTitle: 'RFC 017 <Anchoring>',
             inviterName: 'Ada & Co',
             expiresAt: Carbon::parse('2026-08-11 15:30:00', 'UTC'),
@@ -28,7 +30,8 @@ class ReviewerMagicLinkMailTest extends TestCase
     {
         $html = $this->mailable()->render();
 
-        $this->assertStringContainsString('https://kedge.test/shared/tok/verify/1/secret', $html);
+        // In HTML the query-string & is correctly entity-escaped.
+        $this->assertStringContainsString('href="'.str_replace('&', '&amp;', self::URL).'"', $html);
         $this->assertStringContainsString('Verify email and open review', $html);
         $this->assertStringContainsString('Comments that keep their place', $html);
         $this->assertStringContainsString('Aug 11, 2026 at 3:30pm', $html);
@@ -38,10 +41,14 @@ class ReviewerMagicLinkMailTest extends TestCase
         $this->assertStringNotContainsString('<Anchoring>', $html);
     }
 
-    public function test_text_part_carries_link_and_expiry(): void
+    public function test_text_part_carries_raw_link_and_expiry(): void
     {
         $mailable = $this->mailable();
-        $mailable->assertSeeInText('https://kedge.test/shared/tok/verify/1/secret');
+        // The text/plain part must carry the URL byte-for-byte: an
+        // entity-escaped &amp; here breaks the pasted link.
+        $mailable->assertSeeInText('expires=1786378753&signature=abc123');
+        $mailable->assertDontSeeInText('&amp;');
+        $mailable->assertSeeInText('Ada & Co');
         $mailable->assertSeeInText('Aug 11, 2026 at 3:30pm');
         $mailable->assertSeeInText('can be used once');
     }
