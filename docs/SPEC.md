@@ -156,7 +156,7 @@ MCP --> API : same policies, same data
 **api/ — Laravel 13** (standard scaffold recipe):
 - PHP 8.5, PHPUnit (never Pest), Pint, `app/Services/` + `app/Enums/` + `app/Actions/`.
 - SQLite dev / Postgres prod. `QUEUE_CONNECTION=database`, `SESSION_DRIVER=database`, `CACHE_STORE=database`.
-- Auth: **Sanctum** (SPA cookies for web; tokens for MCP/agents) + **Socialite** (GitHub login). **Every resource route is guarded by a Policy** — no inline ownership checks.
+- Auth: **Sanctum** (SPA cookies for web; tokens for MCP/agents) + **Socialite** (GitHub login). **Every resource route is guarded by a Policy** — no inline ownership checks. Sessions are persistent: every sign-in path (password, registration, GitHub, reviewer magic link) sets Laravel's long-lived remember-me cookie, so the short server session (`SESSION_LIFETIME`, 120 min) is silently re-established after idle — a review tool must not demand daily sign-in (decided 2026-08-10).
 - Backed enums for all fixed-value columns: `DocumentStatus`, `SyncStatus`, `LifecycleStatus`, `ThreadStatus`, `AnchorState`, `CommentType`, `SuggestionStatus`, `AiRunType`, `AiRunStatus`.
 - `laravel/nova`, `laravel/nightwatch`, `laravel/boost` (dev), `symfony/postmark-mailer`, `league/flysystem-aws-s3-v3` → R2 via `MEDIA_DISK`, `laravel/ai` (Claude), `laravel/mcp` for the MCP server, `league/html-to-markdown`.
 - 4-way `composer dev` script (serve + queue:listen + pail + npm).

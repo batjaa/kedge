@@ -92,7 +92,7 @@ class ReviewerMagicLinkController extends Controller
         }
 
         if ($result['status'] === ReviewerVerificationStatus::Verified) {
-            Auth::guard('web')->login($result['user']);
+            Auth::guard('web')->login($result['user'], remember: true);
             $request->session()->regenerate();
 
             return response()->json([

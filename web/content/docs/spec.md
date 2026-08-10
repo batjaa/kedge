@@ -159,7 +159,7 @@ MCP --> API : same policies, same data
 **api/ — Laravel 13** (standard scaffold recipe):
 - PHP 8.5, PHPUnit (never Pest), Pint, `app/Services/` + `app/Enums/` + `app/Actions/`.
 - SQLite dev / Postgres prod. `QUEUE_CONNECTION=database`, `SESSION_DRIVER=database`, `CACHE_STORE=database`.
-- Auth: **Sanctum** (SPA cookies for web; tokens for MCP/agents) + **Socialite** (GitHub login). **Every resource route is guarded by a Policy** — no inline ownership checks.
+- Auth: **Sanctum** (SPA cookies for web; tokens for MCP/agents) + **Socialite** (GitHub login). **Every resource route is guarded by a Policy** — no inline ownership checks. Sessions are persistent: every sign-in path (password, registration, GitHub, reviewer magic link) sets Laravel's long-lived remember-me cookie, so the short server session (`SESSION_LIFETIME`, 120 min) is silently re-established after idle — a review tool must not demand daily sign-in (decided 2026-08-10).
 - Backed enums for all fixed-value columns: `DocumentStatus`, `SyncStatus`, `LifecycleStatus`, `ThreadStatus`, `AnchorState`, `CommentType`, `SuggestionStatus`, `AiRunType`, `AiRunStatus`.
 - `laravel/nova`, `laravel/nightwatch`, `laravel/boost` (dev), `symfony/postmark-mailer`, `league/flysystem-aws-s3-v3` → R2 via `MEDIA_DISK`, `laravel/ai` (Claude), `laravel/mcp` for the MCP server, `league/html-to-markdown`.
 - 4-way `composer dev` script (serve + queue:listen + pail + npm).
@@ -570,7 +570,7 @@ Reference deployment in `deploy/`: **one hostname, one `docker compose up`**.
 ```
 
 - **Single-origin mode**: Caddy proxies `/api/*` to Laravel — same-origin Sanctum cookies, **zero CORS/cookie-domain configuration for self-hosters**. (Auth code identical to SaaS; the split-domain config is SaaS-only.)
-- **Pluggable services**: mail → any SMTP (`MAIL_MAILER=smtp`) · media → local disk (`MEDIA_DISK=local`) · diagrams → bundled Kroki (private by default) · AI → BYO `ANTHROPIC_API_KEY` or the surface hides itself · GitHub → PAT, or register-your-own GitHub App (guided docs) · Nova → not installed (SaaS-ops only, never a runtime dependency).
+- **Pluggable services**: mail → any SMTP (`MAIL_MAILER=smtp`) · media → local disk (`MEDIA_DISK=local`) · diagrams → bundled Kroki (private by default) · AI → BYO `ANTHROPIC_API_KEY` or the surface hides itself · GitHub → PAT, or register-your-own GitHub App (guided docs) · Nova → not installed (SaaS-ops only, never a runtime dependency) · observability → Laravel Nightwatch, token-gated no-op (decided 2026-07-28: the `laravel/nightwatch` package ships in composer.json, but with no `NIGHTWATCH_TOKEN` it is fully disabled and no agent process runs — self-hosters get zero behavior change, zero outbound traffic; a token turns it on, `NIGHTWATCH_ENABLED=false` always wins).
 - **Lifecycle**: migrations run on container boot (additive-only policy makes this safe) · semver releases + tagged images + changelog · upgrade = pull new tag, restart · backup = `pg_dump` + media volume.
 - **Telemetry**: anonymous version/update-check ping only, `TELEMETRY_ENABLED=false` kills it entirely, content never leaves the instance. Documented prominently — this audience reads the source.
 - `SELF_HOSTED=true` disables demo mode and any billing surface.
@@ -579,7 +579,7 @@ Reference deployment in `deploy/`: **one hostname, one `docker compose up`**.
 
 B′ order (moat first), expansions folded in. Each milestone ends demoable; commit per logical unit.
 
-**Standing constraint from M0 — self-host-clean**: 12-factor env config only, no hard dependency on any paid/SaaS service (Nova optional, Postmark→SMTP, R2→local), SaaS-only surfaces behind `SELF_HOSTED`, and the repo is written as if public from the first commit (no secrets, no proprietary code — Protocol code stays out).
+**Standing constraint from M0 — self-host-clean**: 12-factor env config only, no hard dependency on any paid/SaaS service (Nova optional, Nightwatch token-gated off, Postmark→SMTP, R2→local), SaaS-only surfaces behind `SELF_HOSTED`, and the repo is written as if public from the first commit (no secrets, no proprietary code — Protocol code stays out).
 
 - **M0 — Scaffold**: monorepo (AGPL LICENSE from commit one); `api/` via standard Laravel recipe (Sanctum, Socialite, enums, Policies wired; Nova as optional SaaS-ops install); `web/` on Fumadocs (**spike: validate the shell fits the review-page + gutter layout; fallback Nextra**); pinned auth handshake (BFF pattern). ✅ log in from the Next.js app.
 - **M1 — Render, share & demo**: import public GitHub / raw URL / upload + **PAT stopgap** for private GitHub; normalization pipeline with warnings; projection service; Fumadocs rendering; **Kroki diagrams (self-hosted container, full engine allowlist, hash-cached, click-to-zoom)**; MDX allowlist + compile cache + fallback; share links; **instant demo mode** (TTL + claim). ✅ a stranger pastes a URL and gets a beautiful doc with zero signup.

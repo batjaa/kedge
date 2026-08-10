@@ -23,7 +23,7 @@ class RegisteredUserController extends Controller
             ip: $request->ip(),
         );
 
-        Auth::guard('web')->login($user);
+        Auth::guard('web')->login($user, remember: true);
 
         $request->session()->regenerate();
 

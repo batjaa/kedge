@@ -64,7 +64,7 @@ class GitHubController extends Controller
 
         $user = $this->github->resolve($githubUser, $verifiedEmail, $request->ip());
 
-        Auth::guard('web')->login($user);
+        Auth::guard('web')->login($user, remember: true);
         $request->session()->regenerate();
 
         return redirect()->away(config('kedge.frontend_url').'/');

@@ -18,7 +18,7 @@ class SessionController extends Controller
      */
     public function store(LoginRequest $request): JsonResponse
     {
-        if (! Auth::guard('web')->attempt($request->validated())) {
+        if (! Auth::guard('web')->attempt($request->validated(), remember: true)) {
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);

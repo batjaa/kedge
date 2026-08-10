@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 /**
@@ -33,6 +34,22 @@ class LoginTest extends TestCase
             ->assertJsonPath('user.email', 'ada@example.com');
 
         $this->assertAuthenticated();
+    }
+
+    public function test_login_issues_a_persistent_remember_cookie(): void
+    {
+        $ada = $this->registerAda();
+
+        $response = $this->postJson('/login', [
+            'email' => 'ada@example.com',
+            'password' => 'correct-horse-battery',
+        ]);
+
+        // The recaller cookie outlives the short session, so an idle browser
+        // is silently re-authenticated instead of bounced to sign-in.
+        $response->assertOk()->assertCookie(Auth::guard('web')->getRecallerName());
+
+        $this->assertNotNull($ada->fresh()->remember_token);
     }
 
     public function test_login_with_wrong_password_fails_with_a_clear_error(): void
