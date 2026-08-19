@@ -1,0 +1,28 @@
+{
+  "trigger": "Verbesserungs-Prompt",
+  "dialogLabel": "Prompt zur Dokumentverbesserung",
+  "heading": "Prompt zur Dokumentverbesserung",
+  "description": "Ein Prompt zum Einfügen in einen Coding-Agenten: offenes Feedback nach Abschnitt, angenommene Änderungsvorschläge wortwörtlich und das zitierte Ankertext jedes Threads.",
+  "idle": "Für dieses Dokument gibt es noch keinen Verbesserungs-Prompt.",
+  "generate": "Prompt erstellen",
+  "generating": "Wird erstellt…",
+  "retry": "Erneut versuchen",
+  "takingTooLong": "Das dauert länger als erwartet. Versuchen Sie es erneut oder schauen Sie gleich wieder vorbei.",
+  "failed": "Die Erstellung ist fehlgeschlagen. Bitte erneut versuchen.",
+  "copy": "Prompt kopieren",
+  "copied": "Kopiert",
+  "copyFailed": "Konnte nicht in die Zwischenablage kopiert werden.",
+  "close": "Schließen",
+  "nothingToAsk": "In dieser Review ist nichts offen, daher gibt es keinen Prompt zum Kopieren.",
+  "stats": "{threads, plural, one {# offener Thread} other {# offene Threads}} · {edits, plural, =0 {keine erforderlichen Änderungen} one {# erforderliche Änderung} other {# erforderliche Änderungen}}",
+  "artifactLabel": "Der Prompt",
+  "draftNotice": "Ein Entwurf zum Lesen und Einfügen. Es wurde nichts veröffentlicht.",
+  "draftNoticeWithModel": "Ein Entwurf zum Lesen und Einfügen, erstellt von {model}. Es wurde nichts veröffentlicht.",
+  "errors": {
+    "unavailable": "KI-Funktionen sind auf dieser Instanz nicht aktiviert.",
+    "forbidden": "Sie dürfen hier keinen Prompt erstellen.",
+    "conflict": "Für dieses Dokument gibt es noch keine importierte Version.",
+    "rateLimited": "Zu viele Anfragen. Warten Sie eine Minute und versuchen Sie es erneut.",
+    "error": "Beim Starten des Prompts ist etwas schiefgelaufen. Bitte erneut versuchen."
+  }
+}

@@ -170,7 +170,7 @@ export default async function DocumentPage({
             canUpdateContent={
               document.source_type === 'upload' && (document.capabilities?.update_content ?? false)
             }
-            canRunAiDigest={aiEnabled}
+            canRunAi={aiEnabled}
             lastSyncStatus={document.last_sync_status}
             syncError={document.sync_error}
           >
