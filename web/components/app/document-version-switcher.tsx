@@ -36,7 +36,11 @@ export function DocumentVersionSwitcher({
     // The positioned wrapper is what the overflow menu anchors to: its
     // containing block sits OUTSIDE the strip's `overflow-x-auto`, so the panel
     // is not clipped by it (the strip keeps the scroller as belt-and-braces).
-    <div className="relative">
+    // `min-w-0 max-w-full` because this wrapper — not the nav — is now the flex
+    // item in the header actions row: a flex item's automatic minimum size is
+    // content-based, so without it the pills (all `shrink-0`) would push the
+    // header wider instead of letting the strip's own scroller take over.
+    <div className="relative min-w-0 max-w-full">
       <nav
         aria-label={t('versions.navLabel')}
         className="flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-zinc-100 p-1 text-sm ring-1 ring-inset ring-zinc-900/10 dark:bg-white/5 dark:ring-white/10"
