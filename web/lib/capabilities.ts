@@ -12,7 +12,12 @@ import type { Capabilities } from './auth-types';
 // feature therefore hides rather than rendering a button that 404s (the BYO-key
 // pattern, SPEC §14); and the public demo surface never shows on an instance we
 // can't confirm is the SaaS (#25).
-export const FAIL_CLOSED: Capabilities = { github: false, selfHosted: true, ai: false };
+export const FAIL_CLOSED: Capabilities = {
+  github: false,
+  selfHosted: true,
+  ai: false,
+  mcp: false,
+};
 
 /**
  * The payload → capabilities mapping, split out from the fetch so the
@@ -26,6 +31,7 @@ export function parseCapabilities(payload: unknown): Capabilities {
     auth?: { github?: unknown };
     self_hosted?: unknown;
     ai?: { enabled?: unknown };
+    mcp?: { enabled?: unknown };
   };
 
   // The edition MUST arrive as an explicit boolean. A 200 with a missing or
@@ -44,6 +50,12 @@ export function parseCapabilities(payload: unknown): Capabilities {
     // an older api) reads as OFF, which is the BYO-key rule (SPEC §14): the AI
     // surface hides rather than offering a button that 404s.
     ai: data.ai?.enabled === true,
+    // The MCP surface (SPEC §15, #135) — read the same fail-closed way, and
+    // read SEPARATELY from `ai`: the two M4 gates are independent, so an
+    // instance with no Anthropic key still shows the agent-token panel. A
+    // missing `mcp` block is an api from before #135, which has no MCP endpoint
+    // — hiding the panel there is correct, not conservative.
+    mcp: data.mcp?.enabled === true,
   };
 }
 

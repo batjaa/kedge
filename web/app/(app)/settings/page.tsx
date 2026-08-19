@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import { getCapabilities } from '@/lib/capabilities';
 import { getSession } from '@/lib/session';
 import { AgentTokensPanel } from '@/components/app/agent-tokens-panel';
 import { IntegrationsPanel } from '@/components/app/integrations-panel';
@@ -22,9 +23,10 @@ export default async function SettingsPage() {
   if (!session) redirect('/signin'); // defensive; the layout already guards
 
   const { workspace } = session;
-  const [t, chips] = await Promise.all([
+  const [t, chips, capabilities] = await Promise.all([
     getTranslations('settings'),
     getTranslations('chips'),
+    getCapabilities(),
   ]);
 
   return (
@@ -55,7 +57,13 @@ export default async function SettingsPage() {
       <div className="space-y-6">
         <WorkspaceGeneralCard workspace={workspace} />
         <IntegrationsPanel />
-        <AgentTokensPanel />
+        {/* An agent token is a credential FOR the MCP endpoint (SPEC §15), so
+            the panel follows that endpoint's gate: with `mcp.enabled` off — or
+            with the API unreachable, which fails closed — minting one would hand
+            the operator a key to a door that isn't there. Gated on `mcp`, never
+            on `ai`: the two M4 gates are independent, and a self-host with no
+            Anthropic key still runs agent reviewers. */}
+        {capabilities.mcp ? <AgentTokensPanel /> : null}
       </div>
     </PageContainer>
   );
