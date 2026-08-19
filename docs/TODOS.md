@@ -306,6 +306,16 @@
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (sticky sidebar #146, 2026-08-19)
+
+- ✅ **The review-surface pin offset is measured, not guessed** — the surface observes the document header (ResizeObserver + resize, rAF-coalesced) and publishes its bottom edge as `--kedge-pin-top`; the sidebar and both column toggles pin there. The header's own sticky offset is read from its computed `top`, so nothing restates the constant. Fixing the inert sticky (auto-height `<aside>` gave it zero slack) exposed that `top-32` was a guess at a header that measures 107–164px depending on approvals and width.
+
+## Known debt (#146 branch gate, 2026-08-19)
+
+- **`document-diff-view.tsx:137` carries the same `xl:top-32` under-header defect** — its DiffHeader also renders an ApprovalRoster; lift the measured-offset mechanism into a shared hook. (S)
+- **`SCROLL_SPY_OFFSET = 136` is a constant while real clearance is dynamic** — the TOC highlight can lead the visible heading under a tall header; pre-existing. (S)
+- **Tailwind v4 scans comments and docs content** — any class-shaped string (an arbitrary-value utility spelled with square brackets, even in prose or a code comment, even in `web/content/docs/`) is emitted into the build; an invalid one breaks global.css and 500s the server until `.next`/`.source` are cleared. This very entry originally triggered it. Keep bracketed utility literals out of prose. (XS)
+
 ## Decision log (ask-about-the-doc #139, 2026-08-19)
 
 - ✅ **Dedupe exemption is a property of the run type, not a branch** — `AiRunType::isDedupeExempt()` sits beside `isPerActor()`, and `AiRunLedger::joinable()` returns before the document row lock for an exempt type. A sixth type's author has to answer the question deliberately.
