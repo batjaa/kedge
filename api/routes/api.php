@@ -314,8 +314,9 @@ Route::prefix('v1')->group(function () {
         });
 
         // AI runs (SPEC §14, §17, M4), all behind AiRunPolicy and the BYO-key
-        // gate: with no Anthropic key configured every route here 404s, so a
-        // keyless self-host has no AI surface at all rather than broken buttons.
+        // gate: with no credential configured for the SELECTED provider (#140)
+        // every route here 404s, so a keyless self-host has no AI surface at all
+        // rather than broken buttons.
         //
         // The generation POST carries `throttle:ai` — each request can queue a
         // model call against the workspace's key, so the limiter bounds spend as

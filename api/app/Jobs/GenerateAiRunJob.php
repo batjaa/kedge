@@ -92,6 +92,11 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
         // key pulled (or AI_ENABLED=false set) while runs sit in the queue would
         // still bill that key once per queued run — the gate would close the door
         // and leave the window open.
+        //
+        // Deliberately the SAME expression the request-time gate reads
+        // (`kedge.ai.enabled`), so the two can never diverge: switching the
+        // selected provider to one with no credential (#140) stops queued runs
+        // here exactly as it 404s new ones at the door.
         if (! config('kedge.ai.enabled', false)) {
             $ledger->markFailed($run, new AiFailure(
                 AiFailureKind::Deterministic,

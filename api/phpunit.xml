@@ -23,8 +23,14 @@
         <!-- The AI surface is off unless a test turns it on with
              config(['kedge.ai.enabled' => true]). Pinned here so a developer
              with a real key in .env can't accidentally green a suite that would
-             be red in CI — and so no suite can ever reach a live provider. -->
+             be red in CI — and so no suite can ever reach a live provider.
+             AI_ENABLED=false is the kill switch, which forces the gate off for
+             EVERY provider (#140) — a developer running against Ollama or
+             OpenAI gets the same off-by-default suite. AI_PROVIDER is pinned
+             too, so the provider-keyed pricing table and the agents' provider
+             are the certified ones no matter what the developer selected. -->
         <env name="AI_ENABLED" value="false"/>
+        <env name="AI_PROVIDER" value="anthropic"/>
         <env name="ANTHROPIC_API_KEY" value=""/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

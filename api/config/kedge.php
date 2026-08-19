@@ -1,5 +1,70 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| The selected AI provider and its credential (SPEC §14)
+|--------------------------------------------------------------------------
+|
+| Resolved here, above the array, because the `ai` block needs both values and
+| they must agree: the provider the agents call and the provider the enable-gate
+| checks a credential for can never be two different providers.
+|
+| Both come from the SDK's own provider table (config/ai.php) rather than from a
+| second list of provider names kept here — the operator selects a provider with
+| `AI_PROVIDER`, that table says which credentials the provider takes, and Kedge
+| names no provider anywhere else (config is the only permitted place, SPEC §14).
+|
+| A missing config/ai.php (never published, or deleted) yields no providers and
+| therefore no credential: the AI surface stays off. Every unknown in this file
+| resolves toward OFF, because the failure it exists to prevent is a surface that
+| offers generation an unconfigured provider cannot deliver.
+|
+*/
+
+$aiConfig = (static function (): array {
+    $path = __DIR__.'/ai.php';
+
+    // `require`, never `require_once`: the AI gate's tests re-evaluate this file
+    // under a substituted environment, and a once-loaded provider table would
+    // hand every later case the first case's credentials.
+    $config = is_file($path) ? require $path : [];
+
+    return is_array($config) ? $config : [];
+})();
+
+/**
+ * The selected provider, normalized. Blank (unset, or an operator who cleared
+ * it) means the default, and case is forgiving because the SDK's table is
+ * lowercase while `AI_PROVIDER=OpenAI` is the natural thing to type.
+ */
+$aiProvider = strtolower(trim((string) ($aiConfig['default'] ?? ''))) ?: 'anthropic';
+
+/**
+ * Whether the SELECTED provider has a credential configured.
+ *
+ * Only secret-bearing fields count. A provider entry also carries non-secret
+ * settings — `url` most of all, which every provider ships a working default for
+ * — so "any filled field" would read as configured for a provider that has been
+ * given nothing, and turn the AI surface on against no credential at all. That
+ * is the exact failure this gate exists to prevent, so the fields are an
+ * allowlist, not an exclusion list, and an unknown provider name matches nothing.
+ */
+$aiCredentialConfigured = (static function (array $providers, string $provider): bool {
+    $entry = $providers[$provider] ?? null;
+
+    if (! is_array($entry)) {
+        return false;
+    }
+
+    foreach (['key', 'access_key_id', 'secret_access_key'] as $credential) {
+        if (filled($entry[$credential] ?? null)) {
+            return true;
+        }
+    }
+
+    return false;
+})(is_array($aiConfig['providers'] ?? null) ? $aiConfig['providers'] : [], $aiProvider);
+
 return [
 
     /*
@@ -283,9 +348,9 @@ return [
     | AI features (SPEC §14, M4)
     |--------------------------------------------------------------------------
     |
-    | BYO key: the entire AI surface is gated on a configured ANTHROPIC_API_KEY.
-    | No key -> `enabled` is false, /config reports `ai.enabled: false`, the web
-    | hides every AI affordance, and the AI routes 404 (the established
+    | BYO key: the entire AI surface is gated on the SELECTED provider having a
+    | credential. None -> `enabled` is false, /config reports `ai.enabled: false`,
+    | the web hides every AI affordance, and the AI routes 404 (the established
     | feature-flag middleware pattern). A self-hosted instance without a key is
     | complete, not crippled — there are no broken buttons to click.
     |
@@ -294,29 +359,37 @@ return [
     | turns AI on, so no env typo can surface a button backed by no key. Test
     | suites enable the surface through config() directly, never through env.
     |
-    | The provider is the v1 pin (SPEC §14: laravel/ai -> Claude), deliberately
-    | NOT env-driven — a knob that could point elsewhere while the gate still
-    | reads ANTHROPIC_API_KEY would let the surface enable itself against an
-    | unconfigured provider. Models ARE env-overridable per SPEC §14:
-    | `claude-sonnet-5` by default, with the cheap high-volume model reserved for
-    | thread summaries (M4, later ticket). `pricing` is the USD-per-million-token
-    | table cost accounting reads; an unpriced model records a null cost rather
-    | than a wrong number.
+    | The provider is an OPERATOR CHOICE (`AI_PROVIDER`, #140): the gate follows
+    | whichever provider is selected, so pointing Kedge at a provider whose key is
+    | absent hides the surface rather than enabling it off some OTHER provider's
+    | key — the coupling that made the earlier Anthropic-only pin the safe
+    | shape. Claude stays the default and the only certified path; anything else
+    | the SDK supports (including a local Ollama) is best-effort and needs its
+    | models named too, since the defaults below are Claude's.
+    |
+    | Models are env-overridable per SPEC §14: `claude-sonnet-5` by default, with
+    | the cheap high-volume model reserved for thread summaries. `pricing` is the
+    | USD-per-million-token table cost accounting reads, keyed BY PROVIDER because
+    | the same model id is resold at different rates; an unpriced model records a
+    | null cost rather than a wrong number.
     |
     */
 
     'ai' => [
-        'enabled' => (static function (): bool {
+        'enabled' => (static function () use ($aiCredentialConfigured): bool {
             $override = env('AI_ENABLED');
 
             if ($override !== null && ! filter_var($override, FILTER_VALIDATE_BOOL)) {
                 return false;
             }
 
-            return filled(env('ANTHROPIC_API_KEY'));
+            // The ONLY expression in this file that can return true: a credential
+            // for the selected provider. Nothing else — not the kill switch above,
+            // not the E2E fake below — is allowed to open the gate.
+            return $aiCredentialConfigured;
         })(),
 
-        'provider' => 'anthropic',
+        'provider' => $aiProvider,
         'model' => (string) env('AI_MODEL', 'claude-sonnet-5'),
         'summary_model' => (string) env('AI_SUMMARY_MODEL', 'claude-haiku-4-5'),
 
@@ -339,10 +412,21 @@ return [
             return in_array((string) env('APP_ENV', 'production'), ['e2e', 'testing'], true);
         })(),
 
-        // USD per 1M tokens, per model: [input, output].
+        // USD per 1M tokens, per provider, per model: [input, output].
+        //
+        // Keyed by PROVIDER, not by model alone (#140): a model id says nothing
+        // about what it costs — `claude-sonnet-5` billed through a reseller or a
+        // cloud marketplace is a different price than the same id billed by
+        // Anthropic, and a local model is free. Pricing a run against whoever
+        // happened to serve it would put a confidently wrong number into the
+        // AI-cost metric (SPEC §19); an operator on another provider adds their
+        // own block here, and until they do their runs record a null cost —
+        // missing, and honest about it.
         'pricing' => [
-            'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
-            'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+            'anthropic' => [
+                'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
+                'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+            ],
         ],
 
         // Context budget (SPEC §14). `context_tokens` is the assembled-input
