@@ -136,3 +136,10 @@ The position the author picks before the model reads anything — accept, push
 back, or clarify. Choosing what to say is the human's act; the AI drafts only
 the wording, and there is deliberately no "let the AI decide" stance.
 _Avoid_: tone, sentiment, mood
+
+**Split Proposal**:
+An AI-drafted division of one sprawling comment into N threads — title,
+fragment, and its own anchor per split — inert until the author approves each
+one. Approval is the client calling the ordinary fork endpoint with the
+proposal's anchor; there is deliberately no server-side materialize endpoint.
+_Avoid_: auto-split, comment split (the act; this is the proposal artifact)

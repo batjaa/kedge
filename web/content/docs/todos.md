@@ -309,6 +309,19 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (M4 comment splits #134, 2026-08-18)
+
+- ✅ **The model proposes text; the server computes offsets** — `SplitAnchorLocator` finds the model's verbatim quote in the live projection and derives UTF-16 offsets itself, bounded to the source thread's newest current-version anchor. A repeated passage or quote yields NO anchor rather than a plausible wrong one (fork validation cannot tell identical copies apart); the proposal still forks, inheriting the source anchor like a manual fork.
+- ✅ **Approval is a client-side fork POST** — there is deliberately no server-side materialize endpoint; the run's output is inert until the author approves each proposal through the same Policy, validation, and idempotency as a manual fork.
+- ✅ **The split POST carries the viewed `document_version_id` and the server 409s a mismatch** — the version gate cannot be a UI race; a stale page is never handed anchors into passages it is not displaying.
+- ✅ **`ai_runs.target` is part of the dedupe key** (#133's migration carries the columns) — a per-comment run never joins another comment's; null is its own bucket, not a wildcard.
+
+## Known debt (M4 #134 branch gate, 2026-08-18)
+
+- **An approved split forks the WHOLE comment** — the proposal's title and fragment never persist; threads differ by anchor only, per eng review §9 (the fork endpoint gains *only* an optional anchor). The panel states this plainly, but whether a split should carry its fragment (fork accepting a body — a real spec amendment) is an open product question for the module review. (M)
+- **Split proposals may only anchor inside the source thread's passage.** (S)
+- **`AiRunResource` doesn't expose `target`** — the panel doesn't need it; MCP artifact reads may. (S)
+
 ## Decision log (M4 MCP server #135, 2026-08-18)
 
 - ✅ **The MCP tool list is a backed enum** (`App\Enums\McpTool`) with tests asserting it stays closed — no approve/lifecycle/resolve/suggestion/share tool exists, and the server instructions say so plainly. Suggestion creation is refused with an explicit error, never silently dropped.
