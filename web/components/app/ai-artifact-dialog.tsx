@@ -3,6 +3,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { AI_TONE_CLASS } from './ai-tone';
 
 /**
  * The modal shell every document-header AI artifact opens (DESIGN.md): heading,
@@ -107,11 +108,20 @@ export function AiArtifactDialog({
 }
 
 /**
- * The header's AI buttons, shared so the digest and the improve-prompt read as
- * one row of controls. The agent register is violet per DESIGN.md.
+ * The header's AI buttons, shared so the digest, the improve-prompt, and the ask
+ * read as one row of controls — in the violet agent register (`ai-tone.ts`), in
+ * both themes.
  */
 export const AI_BUTTON_CLASS =
-  'inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-1 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15';
+  `inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 ${AI_TONE_CLASS}`;
 
-export const AI_SECONDARY_BUTTON_CLASS =
+/**
+ * The zinc utility action inside an AI panel — today, Copy.
+ *
+ * Deliberately NOT the agent register: copying an artifact to the clipboard
+ * runs no model and writes nothing, so it must not borrow the colour that says
+ * one is about to run. Named for what it IS rather than for where it sits, so
+ * the next AI CTA added to a dialog cannot reach for it by mistake (#143).
+ */
+export const AI_NEUTRAL_BUTTON_CLASS =
   'inline-flex items-center gap-2 rounded-full bg-zinc-100 px-3.5 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10';

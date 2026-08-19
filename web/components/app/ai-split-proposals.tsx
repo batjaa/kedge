@@ -99,7 +99,13 @@ export function AiSplitProposals({
                         type="button"
                         onClick={() => onApprove(index)}
                         disabled={busy || approval.status === 'approving'}
-                        className="shrink-0 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-1 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15"
+                        // The HUMAN register, deliberately (#143). Approving is
+                        // the person's write: it posts a real forked thread
+                        // under their name through the same endpoint Fork uses,
+                        // and hard rule 5 turns on that act being theirs. The
+                        // model already ran — the violet it wore here until
+                        // #143 said the opposite.
+                        className="shrink-0 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-1 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
                       >
                         {approval.status === 'approving' ? t('approving') : t('approve')}
                       </button>

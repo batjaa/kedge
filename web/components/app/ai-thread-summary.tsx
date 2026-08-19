@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { AI_TONE_CLASS } from './ai-tone';
 import { readAiRun, readLatestThreadSummary, startThreadSummary } from '@/lib/ai-client';
 import { aiRunPhase, aiRunSettled, canRequestAiRun, isAiRunInFlight } from '@/lib/ai-run';
 import type { AiRun, ThreadSummaryOutput } from '@/lib/ai-types';
@@ -91,7 +92,7 @@ export function AiThreadSummary({ threadId }: { threadId: number }) {
             type="button"
             onClick={() => void request()}
             disabled={requesting}
-            className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/5 dark:text-violet-200 dark:ring-violet-400/25 dark:hover:bg-white/10"
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 ${AI_TONE_CLASS}`}
           >
             {phase === 'idle' ? t('summary.trigger') : t('summary.regenerate')}
           </button>

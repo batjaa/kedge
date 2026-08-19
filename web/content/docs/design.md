@@ -5,6 +5,7 @@ description: "Approved brand, tokens, components, and rules (dogfood copy)"
 
 > **Approved 2026-07-03** from the design exploration round (6 variants; "Protocol Rebuild" won).
 > **Amended 2026-07-23** — second exploration round (3 variants) locked **"Open Harbor"**: light-first warm register + Space Grotesk display headings. Canonical mockups are now the `docs/designs/app-*.html` set (app surfaces) plus `variant-3-open-harbor.html` (marketing landing); `review-page.html` remains the **anatomy** reference for the review surface.
+> **Amended 2026-08-19** — status hues may now carry an **agent action register** on AI CTAs in both themes (see Tokens → Color). One deliberate widening of "chips, rings, and marks only", forced by light mode putting AI buttons in the same zinc as human ones.
 > Provenance: clean-room rebuild of the Tailwind Plus **Protocol** template aesthetic — studied from the live
 > preview, every line of markup written from scratch. **No Tailwind Plus code may ever enter this repo** (AGPL).
 
@@ -23,7 +24,7 @@ description: "Approved brand, tokens, components, and rules (dogfood copy)"
 3. **Code-things stay dark in light mode.** Code panels and suggestion diffs keep the dark `zinc-900` treatment in both themes (the signature move). Comment prose follows the theme.
 4. **Mono chips carry metadata.** Statuses, versions, roles, and section refs render as tiny uppercase mono chips — never colored prose.
 5. **System fonts for prose/UI; Space Grotesk for display** (amended 2026-07-23). Headings, wordmark, and page/panel titles use **Space Grotesk** (OFL — self-host the woff2 in `web/`, never a runtime Google Fonts fetch; mockups may use the CDN). Body, UI chrome, and prose stay on `ui-sans-serif/system-ui`; `ui-monospace` for code/chips.
-6. **Calm surface, quiet color.** Zinc carries the page; emerald is the only brand accent. Status hues (amber/violet/rose) appear only inside chips, rings, and marks.
+6. **Calm surface, quiet color.** Zinc carries the page; emerald is the only brand accent. Status hues (amber/violet/rose) appear only inside chips, rings, and marks — plus the **agent action register** (Tokens → Color), the single deliberate extension of that rule.
 
 ## Tokens
 
@@ -42,6 +43,30 @@ description: "Approved brand, tokens, components, and rules (dogfood copy)"
 | Code panel (both themes) | `zinc-900` + `ring-white/10` | same (`dark:bg-white/[.03]`) |
 
 **Status hues** (chips, rings, marks only): open/success `emerald` · suggestion/pending `amber` · agent `violet` · orphan/danger `rose` · neutral/resolved `zinc`.
+
+**Agent action register** (amended 2026-08-19, #143) — the one place a status hue is allowed onto a control instead of a mark. A CTA whose click leads to a model run wears violet in **both** themes.
+
+*Filled* — the default, for any pill-shaped AI CTA:
+
+| | Light | Dark |
+|---|---|---|
+| Fill | `bg-violet-50` | `bg-violet-400/10` |
+| Text | `text-violet-700` | `text-violet-300` |
+| Ring | `ring-1 ring-inset ring-violet-600/20` | `ring-violet-400/20` |
+| Hover | `hover:bg-violet-100 hover:text-violet-800` | `hover:bg-violet-400/15 hover:text-violet-200` |
+
+Two variants keep the text and the ring but change the resting fill, each for a stated reason:
+
+- **Quiet** (`bg-white` / `dark:bg-white/5`, hover `bg-violet-50` / `dark:bg-white/10`) — for an AI control inside a **pick-one group**, where the fill already means "selected" and so cannot also mean "agent". Used by the reply-draft stance pills; the selected pill takes `bg-violet-500/10` with a stronger ring.
+- **Icon square** (no resting fill; `text-violet-600` / `dark:text-violet-300`, hover `bg-violet-50` / `dark:bg-violet-400/10`) — for an AI affordance sitting in a row of neutral icon buttons. Those siblings have no fill either, so a filled square there would read as "selected" rather than "agent". Used by the comment-split trigger.
+
+The register is **colour only**: every control keeps its own geometry. A header pill stays `rounded-full`, the selection-popover Ask stays the `rounded-lg` shape of the Comment pill beside it, and the split trigger stays an `h-7 w-7` square. Hue is the signal; shape belongs to the surface.
+
+*Why the rule widened.* Light mode had every AI button fall back to the human primary (`bg-zinc-900`, white text), so a Sparkles icon was the only thing separating "this invokes a model" from "this posts as you" — a distinction the product's whole AI posture (hard rule 5: AI output is always a human-confirmed draft) depends on a reader making before they click. Dark mode had carried the violet since M4. The treatment stays inside the register's spirit — a tint and a hairline ring, never a solid violet fill — so violet still never competes with emerald as an accent.
+
+*Where the line falls.* Violet means **a model runs**: Generate / Retry, Ask, Summarize, a reply-draft stance pill, the button that drops a draft into your composer, and any trigger that opens a panel whose only button starts a run (the header digest / improve-prompt / ask, the comment-split square). It does **not** mean "AI was involved": a write the person makes under their own name — post a comment, reply, approve a split proposal, approve the document — keeps the human register (`bg-zinc-900` light / `emerald` dark), and a neutral utility that touches no model (Copy) stays zinc in both themes. Focus rings stay emerald everywhere per Interaction rules; the register is about the *resting* colour.
+
+Implementation source of truth: `web/components/app/ai-tone.ts`. Contrast checked: violet-700 on violet-50 is 6.5:1, violet-700 on white 7.2:1, violet-300 on zinc-900 9.6:1 — all clear of WCAG AA for the type sizes in use.
 
 ### Status chip recipe
 
@@ -81,13 +106,14 @@ Both side columns are **collapsible** (added 2026-07-21): the sidebar collapses 
 - **Thread panel** — header (type + `§ section` mono ref + status chip) / body (avatar `h-5 w-5` initials, name, relative time; replies indented with `border-l-2`) / footer (Reply · Resolve · Fork + right-aligned AI "Draft reply →").
 - **Suggestion panel** — same anatomy; body holds a dark `rounded-xl` diff (`- ` line `rose-400/90`, `+ ` line `emerald-400`, `select-none` markers); footer = primary Accept / secondary Decline.
 - **Agent thread** — same anatomy with violet ring (`ring-violet-500/20`) + `AGENT · MCP` chip. Agents are visually peers, tinted—not boxed away.
+- **AI control** — any CTA that starts a model run, or opens the panel that does: the agent action register (Tokens → Color) laid over whatever shape the surface already uses — the `rounded-full` header and panel pills, the `rounded-lg` Ask in the selection popover, the `h-7 w-7` split square in a row of thread icon buttons. Sparkles/wand/question icon, never a solid fill, never emerald. A pick-one group (the stance pills) takes the quiet variant and lets the fill mean "selected".
 - **Collapsed rows** — resolved threads and the orphan tray as full-width `rounded-2xl` ghost buttons; orphan row uses rose ring/tint + "Re-attach →".
 - **Section-approve control** — "Is this section ready to approve?" + segmented Yes/No pill (the Protocol feedback-widget idiom, repurposed).
 - **Mobile** — sidebar and rail hidden below `lg`/`xl`; floating bottom pill ("3 open threads") opens the thread sheet.
 
 ## Interaction rules
 
-- Hover: text-color shifts and `bg-*/5` tints only — no scale/translate effects. Respect `prefers-reduced-motion` for anything animated.
+- Hover: text-color shifts and `bg-*/5` tints only — no scale/translate effects. Respect `prefers-reduced-motion` for anything animated. **Exception** (2026-08-19): a control that already carries a resting tint deepens it instead of stacking another translucent layer on top — the agent action register's `hover:bg-violet-100` / `dark:hover:bg-violet-400/15`, and the emerald human primaries' `dark:hover:bg-emerald-400/15`. The rule is about hover staying a tint, not about the exact step.
 - Focus: visible `focus-visible:ring-2 ring-emerald-500` on all interactive elements (mockup omits this; implementation must not).
 - Highlight contrast in dark mode must keep body text readable through the tint — validated per hue before adding new mark colors.
 

@@ -5,7 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { AiDigestReport } from './ai-digest-report';
 import { AiRunPoller } from './ai-run-poller';
-import { AI_BUTTON_CLASS, AI_SECONDARY_BUTTON_CLASS, AiArtifactDialog } from './ai-artifact-dialog';
+import { AI_BUTTON_CLASS, AI_NEUTRAL_BUTTON_CLASS, AiArtifactDialog } from './ai-artifact-dialog';
 import { readLatestDigest, startDigest } from '@/lib/ai-client';
 import { digestToMarkdown } from '@/lib/ai-digest-markdown';
 import { canRequestAiArtifact } from '@/lib/ai-run';
@@ -78,7 +78,7 @@ export function AiDigestAction({ documentId, documentTitle }: { documentId: numb
         actions={
           <>
             {phase === 'completed' && output ? (
-              <button type="button" onClick={() => copy(output)} className={AI_SECONDARY_BUTTON_CLASS}>
+              <button type="button" onClick={() => copy(output)} className={AI_NEUTRAL_BUTTON_CLASS}>
                 {copied ? t('copied') : t('copy')}
               </button>
             ) : null}

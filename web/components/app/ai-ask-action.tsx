@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MessageCircleQuestion } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { AI_BUTTON_CLASS, AI_SECONDARY_BUTTON_CLASS, AiArtifactDialog } from './ai-artifact-dialog';
+import { AI_BUTTON_CLASS, AI_NEUTRAL_BUTTON_CLASS, AiArtifactDialog } from './ai-artifact-dialog';
 import { readAiRun, startAsk } from '@/lib/ai-client';
 import type { StartRunFailure } from '@/lib/ai-client';
 import { aiRunPhase, aiRunSettled, isAiRunInFlight } from '@/lib/ai-run';
@@ -160,7 +160,7 @@ function AskDialog({
       actions={
         <>
           {output ? (
-            <button type="button" onClick={() => void copy()} className={AI_SECONDARY_BUTTON_CLASS}>
+            <button type="button" onClick={() => void copy()} className={AI_NEUTRAL_BUTTON_CLASS}>
               {copied ? t('copied') : t('copy')}
             </button>
           ) : null}
