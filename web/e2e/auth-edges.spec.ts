@@ -65,7 +65,14 @@ test('anonymous deep-link to a document → signin?next= → lands back on the d
   const id = await importDocumentFromUrl(page, PLAIN_DOC.url);
   await expect(documentTitle(page, PLAIN_DOC.title)).toBeVisible();
 
-  // Go anonymous.
+  // Go anonymous — but only once the doc page's request fan-out (threads,
+  // shares, AI panel) has settled. An authenticated request still in flight
+  // when POST /logout lands re-saves the old session row at terminate (Laravel
+  // persists sessions after the response goes out) and its response re-sets
+  // the stale cookie, resurrecting the session and turning the guard
+  // assertion below into a parallel-worker flake. The journey asserts the
+  // guard, not that logout race.
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/signin(\?|$)/);
 
