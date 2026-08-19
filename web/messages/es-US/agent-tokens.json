@@ -1,0 +1,22 @@
+{
+  "heading": "Tokens de agente",
+  "activeCount": "{count, number} activos",
+  "intro": "Dale a un agente de IA su propia credencial para revisar tus documentos por MCP. Cada token tiene nombre, está limitado a este espacio de trabajo y funciona <strong>solo</strong> en el punto de acceso para agentes — nunca en el resto de la API, así que un agente nunca puede aprobar, cambiar el estado de un documento ni crear otro token.",
+  "namePlaceholder": "¿Qué agente es? p. ej. Claude Code",
+  "nameAria": "Nombre del token de agente",
+  "create": "Crear token",
+  "creating": "Creando…",
+  "createdOnce": "Copia este token ahora — se muestra una sola vez y no se puede recuperar.",
+  "valueAria": "Nuevo token de agente",
+  "copy": "Copiar",
+  "copied": "Copiado",
+  "copyFailed": "No se pudo copiar. Selecciona el token y cópialo manualmente.",
+  "loading": "Cargando tokens…",
+  "none": "Aún no hay tokens de agente.",
+  "badge": "Agente",
+  "neverUsed": "Nunca usado",
+  "lastUsedAt": "Último uso: {date, date, medium}",
+  "revoke": "Revocar",
+  "revoking": "Revocando…",
+  "scopeHint": "La revocación es inmediata: la siguiente llamada del agente falla. Los tokens solo alcanzan los documentos de este espacio de trabajo."
+}

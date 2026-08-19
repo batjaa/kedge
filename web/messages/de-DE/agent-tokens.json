@@ -1,0 +1,22 @@
+{
+  "heading": "Agent-Tokens",
+  "activeCount": "{count, number} aktiv",
+  "intro": "Gib einem KI-Agenten eigene Zugangsdaten, um deine Dokumente über MCP zu prüfen. Jedes Token trägt einen Namen, gilt nur für diesen Workspace und funktioniert <strong>ausschließlich</strong> am Agenten-Endpunkt — nie im Rest der API. Ein Agent kann damit weder freigeben noch den Status eines Dokuments ändern oder ein weiteres Token anlegen.",
+  "namePlaceholder": "Welcher Agent ist das? z. B. Claude Code",
+  "nameAria": "Name des Agent-Tokens",
+  "create": "Token erstellen",
+  "creating": "Wird erstellt…",
+  "createdOnce": "Kopiere das Token jetzt — es wird nur einmal angezeigt und lässt sich nicht wiederherstellen.",
+  "valueAria": "Neues Agent-Token",
+  "copy": "Kopieren",
+  "copied": "Kopiert",
+  "copyFailed": "Kopieren fehlgeschlagen. Markiere das Token und kopiere es manuell.",
+  "loading": "Tokens werden geladen…",
+  "none": "Noch keine Agent-Tokens.",
+  "badge": "Agent",
+  "neverUsed": "Nie benutzt",
+  "lastUsedAt": "Zuletzt benutzt am {date, date, medium}",
+  "revoke": "Widerrufen",
+  "revoking": "Wird widerrufen…",
+  "scopeHint": "Der Widerruf gilt sofort: Der nächste Aufruf des Agenten schlägt fehl. Tokens erreichen nur Dokumente dieses Workspace."
+}
