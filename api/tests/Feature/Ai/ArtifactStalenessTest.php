@@ -166,6 +166,33 @@ class ArtifactStalenessTest extends TestCase
         $this->assertContains(StalenessReport::REASON_ACTIVITY_MOVED, $report->reasons);
     }
 
+    public function test_re_anchoring_a_thread_ages_the_artifact(): void
+    {
+        // A re-attach writes only the anchor (M3's re-anchor ladder): no thread
+        // row changes, no comment changes, no new version. But the anchor IS the
+        // quoted passage an improve-the-doc prompt puts in front of a coding
+        // agent, so an artifact quoting the old passage is out of date.
+        $thread = Thread::query()->where('document_id', $this->document->id)->firstOrFail();
+        $anchor = $thread->anchors()->create([
+            'document_version_id' => $this->version->id,
+            'exact' => 'Anchors survive',
+            'start' => 0,
+            'end' => 15,
+            'heading_path' => ['Anchoring RFC'],
+            'projection_version' => '2',
+        ]);
+
+        $prompt = $this->completedRun(AiRunType::ImprovePrompt);
+
+        $this->travel(1)->second();
+        $anchor->forceFill(['exact' => 'survive versions', 'start' => 8, 'end' => 24])->save();
+
+        $report = app(AiArtifactStaleness::class)->for($prompt->fresh(), $this->document->fresh());
+
+        $this->assertTrue($report->stale);
+        $this->assertSame([StalenessReport::REASON_ACTIVITY_MOVED], $report->reasons);
+    }
+
     public function test_resolving_a_thread_moves_the_improve_prompt_population_and_not_the_digests(): void
     {
         // Why the two thread counts are not one count: an improve-prompt is

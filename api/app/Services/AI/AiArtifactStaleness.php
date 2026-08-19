@@ -5,6 +5,7 @@ namespace App\Services\AI;
 use App\Enums\AiRunType;
 use App\Enums\SuggestionStatus;
 use App\Models\AiRun;
+use App\Models\Anchor;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\Thread;
@@ -88,12 +89,15 @@ class AiArtifactStaleness
 
     /**
      * When this document's review last moved: a thread opened or triaged, a
-     * comment posted, edited, deleted, or a suggestion accepted or declined.
+     * comment posted, edited, deleted, a suggestion accepted or declined, or an
+     * orphaned thread re-attached to a passage.
      *
-     * Both tables are read because they move independently — a thread's status
-     * change never touches its comments, and a new comment never has to touch
-     * its thread. Trashed comments are INCLUDED: a deletion is movement, and
-     * excluding it would let a review shrink invisibly.
+     * All three tables are read because they move independently — a thread's
+     * status change never touches its comments, a new comment never has to touch
+     * its thread, and a manual re-anchor writes only the anchor while changing
+     * the quote an improve-the-doc prompt would put in front of a coding agent.
+     * Trashed comments are INCLUDED: a deletion is movement, and excluding it
+     * would let a review shrink invisibly.
      */
     private function reviewLastChangedAt(Document $document): ?CarbonInterface
     {
@@ -102,6 +106,9 @@ class AiArtifactStaleness
         $latest = collect([
             (clone $threads)->max('updated_at'),
             Comment::withTrashed()
+                ->whereIn('thread_id', (clone $threads)->select('id'))
+                ->max('updated_at'),
+            Anchor::query()
                 ->whereIn('thread_id', (clone $threads)->select('id'))
                 ->max('updated_at'),
         ])
@@ -126,6 +133,15 @@ class AiArtifactStaleness
      * `gt` (not `gte`) keeps activity in the run's own second — the thread a
      * digest was requested about milliseconds after it was opened — from reading
      * as movement.
+     *
+     * **The residual gap, named**: a change landing in the SAME second the run
+     * was requested, but after the prompt was assembled, is invisible here. `gte`
+     * would close it by declaring every artifact requested in the same second as
+     * the last comment permanently stale from birth — which is the common
+     * comment-then-generate flow, so the flag would become noise exactly where it
+     * needs to be trusted. Closing it properly means the builders freezing a
+     * monotonic review watermark (max comment/anchor id) into `ai_runs.input` at
+     * assembly, which is a change to the builders and a follow-up ticket.
      */
     private function reviewMovedAfter(?CarbonInterface $changedAt, AiRun $run): bool
     {
