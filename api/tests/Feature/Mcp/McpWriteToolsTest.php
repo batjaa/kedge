@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Mockery;
+use Throwable;
 
 /**
  * The two write tools (SPEC §15; user story 14): an agent posts a comment and a
@@ -626,16 +627,26 @@ class McpWriteToolsTest extends McpTestCase
     }
 
     /**
-     * The two-connection barrier the linearizability claim really rests on:
-     * a concurrent revoke must serialize against an in-flight write rather than
+     * The two-connection barrier the linearizability claim really rests on: a
+     * concurrent revoke must serialize BEHIND an in-flight write rather than
      * interleave with it.
      *
-     * That needs real row locks AND two real connections, and the suite runs on
-     * an in-memory SQLite where a second connection is a different database
-     * entirely — so this is gated to a lock-capable engine
-     * (`DB_CONNECTION=mysql|pgsql`) rather than faked. The ordering it would
-     * prove is asserted lock-free above; what only this can show is that revoke
-     * BLOCKS behind the write instead of racing it.
+     * Gated to an engine with real row locks (`DB_CONNECTION=mysql|pgsql`); the
+     * suite's in-memory SQLite has none, and a second connection to it is a
+     * different database entirely. The ordering this would prove is asserted
+     * lock-free above; what only this can show is the blocking.
+     *
+     * Two harness details are load-bearing, and both bite silently if missed:
+     *
+     *   - The fixture is committed FROM the second connection. RefreshDatabase
+     *     holds the default connection inside an uncommitted transaction, so a
+     *     token row created the normal way is invisible to any other session —
+     *     the "concurrent" delete would match zero rows, block on nothing, and
+     *     report a passing race that never happened. (A locking read still sees
+     *     it from this side: `SELECT ... FOR UPDATE` reads the latest committed
+     *     version even under MySQL's REPEATABLE READ snapshot.)
+     *   - That committed row is therefore ours to clean up; RefreshDatabase will
+     *     not roll it back.
      */
     public function test_a_concurrent_revoke_serializes_behind_an_in_flight_write(): void
     {
@@ -643,14 +654,10 @@ class McpWriteToolsTest extends McpTestCase
 
         if (! in_array($driver, ['mysql', 'pgsql'], true)) {
             $this->markTestSkipped(
-                "The barrier needs real row locks; [{$driver}] has none. "
+                "The barrier needs real row locks and two real connections; [{$driver}] has neither. "
                 .'Run the suite against MySQL or Postgres to exercise it.'
             );
         }
-
-        $issued = $this->issueToken();
-        $agent = $this->operator->fresh()->withAccessToken($issued->accessToken);
-        $tokenId = $issued->accessToken->id;
 
         // A genuinely separate connection — its own PDO, not the cached default
         // one, which would share the transaction and prove nothing.
@@ -660,22 +667,42 @@ class McpWriteToolsTest extends McpTestCase
         );
         $barrier->statement($driver === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 1' : "SET lock_timeout = '1s'");
 
-        // Connection A: hold the token row inside a transaction, as a write does.
-        DB::beginTransaction();
-        app(AgentTokenService::class)->revalidateForWrite($agent);
+        $tokenId = $barrier->table('personal_access_tokens')->insertGetId([
+            'tokenable_type' => $this->operator->getMorphClass(),
+            'tokenable_id' => $this->operator->id,
+            'name' => 'Barrier agent',
+            'token' => hash('sha256', 'barrier-'.uniqid()),
+            'abilities' => json_encode([AgentToken::workspaceAbility($this->workspace->id)]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        $blocked = false;
         try {
+            $token = new AgentToken;
+            $token->id = $tokenId;
+            $token->exists = true;
+            $agent = $this->operator->withAccessToken($token);
+
+            // Connection A: the real revalidation, holding the row as a write does.
+            DB::beginTransaction();
+            app(AgentTokenService::class)->revalidateForWrite($agent);
+
+            // Connection B: a revoke arriving mid-write must wait, not interleave.
+            $blocked = false;
+            try {
+                $barrier->table('personal_access_tokens')->where('id', $tokenId)->delete();
+            } catch (Throwable) {
+                $blocked = true;
+            }
+
+            DB::rollBack();
+
+            $this->assertTrue($blocked, 'A concurrent revoke must block behind the in-flight write, not interleave.');
+            $this->assertNotNull($barrier->table('personal_access_tokens')->find($tokenId));
+        } finally {
             $barrier->table('personal_access_tokens')->where('id', $tokenId)->delete();
-        } catch (\Throwable) {
-            $blocked = true;
+            $barrier->disconnect();
         }
-
-        DB::rollBack();
-        $barrier->disconnect();
-
-        $this->assertTrue($blocked, 'A concurrent revoke must block behind the in-flight write, not interleave.');
-        $this->assertNotNull(AgentToken::query()->find($tokenId));
     }
 
     protected function tearDown(): void
