@@ -498,6 +498,7 @@ POST   /documents/{id}/ai/improve-prompt
 POST   /threads/{id}/ai/reply-draft {stance}
 POST   /threads/{id}/ai/summary
 POST   /comments/{id}/ai/split
+POST   /documents/{id}/ai/ask {question, quote?} → always a NEW run (dedupe-exempt); ephemeral answer, no latest-ask read
 GET    /documents/{id}/ai/digest            → latest digest run (panel re-attach on mount); 204 when none
 GET    /documents/{id}/ai/improve-prompt    → latest improve-prompt run (panel re-attach on mount); 204 when none
 GET    /threads/{id}/ai/summary             → latest summary run for the thread; 204 when none

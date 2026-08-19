@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property-read AiRunType $type
  * @property-read AiRunStatus $status
  */
-#[Fillable(['workspace_id', 'document_id', 'created_by', 'target_type', 'target_id', 'type', 'variant', 'status', 'input', 'model', 'tokens', 'cost'])]
+#[Fillable(['workspace_id', 'document_id', 'created_by', 'target_type', 'target_id', 'type', 'variant', 'request', 'status', 'input', 'model', 'tokens', 'cost'])]
 class AiRun extends Model
 {
     /** @use HasFactory<AiRunFactory> */
@@ -61,6 +61,19 @@ class AiRun extends Model
     }
 
     /**
+     * What the requester asked for in their own words, for the types that carry
+     * free-form content — today the ask's question and its quoted passage
+     * (#139). Never serialized to the client: the panel already holds what it
+     * typed, and the row is operator/ledger detail like `input`.
+     *
+     * @return array<string, mixed>
+     */
+    public function requestPayload(): array
+    {
+        return is_array($this->request) ? $this->request : [];
+    }
+
+    /**
      * Runs still on their way to an answer. The single definition of "in flight":
      * the server-side dedupe probe reads it, and nothing else may re-spell it.
      *
@@ -96,6 +109,7 @@ class AiRun extends Model
         return [
             'type' => AiRunType::class,
             'status' => AiRunStatus::class,
+            'request' => 'array',
             'input' => 'array',
             'output' => 'array',
             'error' => 'array',

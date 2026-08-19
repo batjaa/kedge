@@ -14,6 +14,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `error` carries the classified failure so the panel can name what went wrong
  * next to the retry action. `input` — prompt metadata and scope refs — is
  * deliberately NOT serialized: it is operator/ledger detail, not client contract.
+ * Neither is `request`: the panel that asked a question already holds it, and an
+ * ask is meant to be ephemeral — echoing the question back through the poll
+ * would turn the ledger into somewhere to go and read it again.
  *
  * Hand-kept in sync with web/lib/ai-types.ts.
  *

@@ -68,6 +68,8 @@
   "composer": {
     "comment": "Kommentieren",
     "suggest": "Vorschlagen",
+    "ask": "KI fragen",
+    "selectionActions": "Was mit dieser Auswahl geschehen soll",
     "reply": "Antworten",
     "post": "Senden",
     "cancel": "Abbrechen",

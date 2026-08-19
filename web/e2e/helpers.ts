@@ -268,13 +268,17 @@ export async function selectDocumentText(page: Page, exact: string, occurrence =
 }
 
 /**
- * The floating "Comment" affordance that pops over a fresh text selection. Scoped
- * to the fixed-position composer button so it never collides with a thread card's
- * "Comment" reply-mode toggle once a comment already exists in the rail — the case
- * a multi-comment journey (e.g. update-content) hits.
+ * The floating "Comment" affordance that pops over a fresh text selection.
+ *
+ * Scoped to the fixed-position affordance ROW rather than to a button class:
+ * since #139 the row holds Comment and (when AI is enabled) Ask AI side by side,
+ * so `fixed` lives on the row. The scoping still does the job it was written for
+ * — keeping this off a thread card's "Comment" reply-mode toggle once a comment
+ * already exists in the rail, the case a multi-comment journey (e.g.
+ * update-content) hits.
  */
 function inlineCommentAffordance(page: Page): Locator {
-  return page.locator('button.fixed', { hasText: 'Comment' });
+  return page.locator('div.fixed[role="group"]').getByRole('button', { name: 'Comment' });
 }
 
 export async function openInlineComposerForText(page: Page, exact: string): Promise<void> {

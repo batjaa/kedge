@@ -6,6 +6,7 @@ use App\Enums\AiRunType;
 use App\Models\AiRun;
 use App\Services\AI\Exceptions\UnsupportedAiRunTypeException;
 use App\Services\AI\Generators\CommentSplitGenerator;
+use App\Services\AI\Generators\DocumentAskGenerator;
 use App\Services\AI\Generators\ImprovePromptGenerator;
 use App\Services\AI\Generators\ReplyDraftGenerator;
 use App\Services\AI\Generators\ReviewDigestGenerator;
@@ -28,6 +29,7 @@ class AiGeneratorRegistry
         AiRunType::ReplyDraft->value => ReplyDraftGenerator::class,
         AiRunType::Split->value => CommentSplitGenerator::class,
         AiRunType::Summary->value => ThreadSummaryGenerator::class,
+        AiRunType::Ask->value => DocumentAskGenerator::class,
     ];
 
     public function __construct(

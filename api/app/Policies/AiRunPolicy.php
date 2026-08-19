@@ -26,11 +26,13 @@ class AiRunPolicy
      * Read a run — the polling target, and the panel's re-attach on mount.
      *
      * Workspace membership is the floor. A PER-ACTOR run adds a second gate: a
-     * reply draft is one person's unposted words in their own voice, and run ids
-     * are sequential, so without this any member could walk the ledger and read
-     * what a colleague was considering saying. Shared artifacts — digests,
-     * improve-prompts, thread summaries — stay workspace-readable, which is what
-     * makes re-attaching to someone else's completed run free.
+     * reply draft is one person's unposted words in their own voice, and an ask
+     * is one person's question and the answer to it (#139) — and run ids are
+     * sequential, so without this any member could walk the ledger and read what
+     * a colleague was considering saying, or what they were confused about.
+     * Shared artifacts — digests, improve-prompts, thread summaries — stay
+     * workspace-readable, which is what makes re-attaching to someone else's
+     * completed run free.
      */
     public function view(User $user, AiRun $aiRun): bool
     {

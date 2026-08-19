@@ -585,6 +585,71 @@ class AuthorizationMatrixTest extends TestCase
         }
     }
 
+    /**
+     * Ask-about-the-doc rides the same column (#139) and must never be a looser
+     * door than the digest: it spends the same key over the same document, so a
+     * share reviewer who may not request a digest may not ask a question either.
+     *
+     * The expected 202 is the dedupe-exempt version of the row — an ask always
+     * mints, so unlike the digest there is no 200-join case to spell.
+     */
+    #[DataProvider('aiRunRoleMatrix')]
+    public function test_ai_ask_create_authorization(string $role, int $expectedStatus): void
+    {
+        Queue::fake();
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/ask", ['question' => 'What does this say?'])
+            ->assertStatus($expectedStatus);
+
+        if ($expectedStatus === 202) {
+            Queue::assertPushed(GenerateAiRunJob::class);
+        } else {
+            Queue::assertNotPushed(GenerateAiRunJob::class);
+            $this->assertDatabaseCount('ai_runs', 0);
+        }
+    }
+
+    /**
+     * Reading an ask is narrower than reading a digest: the run carries one
+     * person's question, so it is per-actor like a reply draft. A workspace
+     * COLLEAGUE — who can poll anyone's digest — is refused here.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function askRunReadRoleMatrix(): array
+    {
+        return [
+            'the asker can poll their own ask' => ['author', 200],
+            'another workspace member cannot read it' => ['member', 403],
+            'reviewer via active share cannot read it' => ['reviewer', 403],
+            'reviewer via a different share cannot read it' => ['other_reviewer', 403],
+            'non-member cannot read it' => ['non_member', 403],
+            'guest cannot read it' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('askRunReadRoleMatrix')]
+    public function test_ai_ask_run_read_authorization(string $role, int $expectedStatus): void
+    {
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        $run = AiRun::factory()->for($document)->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $owner->id,
+            'type' => AiRunType::Ask,
+            'request' => ['question' => 'Something I would rather not broadcast.'],
+        ]);
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/ai-runs/{$run->id}")
+            ->assertStatus($expectedStatus);
+    }
+
     #[DataProvider('aiRunReadRoleMatrix')]
     public function test_ai_latest_improve_prompt_read_authorization(string $role, int $expectedStatus): void
     {

@@ -68,6 +68,8 @@
   "composer": {
     "comment": "Сэтгэгдэл",
     "suggest": "Санал болгох",
+    "ask": "AI-аас асуух",
+    "selectionActions": "Энэ сонголттой юу хийх вэ",
     "reply": "Хариулах",
     "post": "Нийтлэх",
     "cancel": "Цуцлах",
