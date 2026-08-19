@@ -42,7 +42,11 @@
   "versions": {
     "navLabel": "Dokumentversionen",
     "latest": "(neueste)",
-    "compare": "Vergleichen"
+    "compare": "Vergleichen",
+    "older": "+{count, number} ältere",
+    "olderLabel": "{count, plural, one {# ältere Version anzeigen} other {# ältere Versionen anzeigen}}",
+    "olderListLabel": "Ältere Versionen",
+    "viewing": "(angezeigt)"
   },
   "newVersion": {
     "notice": "Sie sehen eine ältere Version. Die neueste ist <b>{label}</b>.",
