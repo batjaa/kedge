@@ -54,17 +54,29 @@ class AiRunLedger
             // could never get a digest again. Past the cutoff it is failed —
             // honestly, as an abandoned run keeping whatever it already spent —
             // and a replacement is minted.
+            //
+            // The kill is conditional, and we HONOUR ITS RESULT: if it lands on
+            // nothing, the run reached a terminal state between the probe above
+            // and this write, and re-reading is the only truthful next move —
+            // declaring it dead and billing a replacement would throw away a
+            // digest the author already paid for.
             if ($existing !== null && $this->isAbandoned($existing)) {
-                $this->markFailed($existing, new AiFailure(
+                $killed = $this->markFailed($existing, new AiFailure(
                     AiFailureKind::Transient,
                     'abandoned',
                     'Generation was interrupted and never finished. Retry.',
                 ));
 
-                $existing = null;
+                if (! $killed) {
+                    $existing->refresh();
+                }
             }
 
-            if ($existing !== null) {
+            // Anything but a failed run is worth handing back: still in flight
+            // (the dedupe case), or completed under us during a takeover. A
+            // failed run — ours or its own — falls through to a replacement,
+            // which is what "retry mints a new run" means.
+            if ($existing !== null && $existing->status !== AiRunStatus::Failed) {
                 return [$existing, false];
             }
 
@@ -142,10 +154,24 @@ class AiRunLedger
      */
     public function recordScope(AiRun $run, array $meta): void
     {
-        AiRun::query()
-            ->whereKey($run->id)
-            ->inFlight()
-            ->update(['input' => json_encode($meta), 'updated_at' => now()]);
+        DB::transaction(function () use ($run, $meta): void {
+            $fresh = AiRun::query()->whereKey($run->id)->lockForUpdate()->first();
+
+            if ($fresh === null || $fresh->isTerminal()) {
+                return;
+            }
+
+            // The FIRST assembly is the run's declared scope, and it is frozen
+            // there. A transient retry re-reads live data, so overwriting would
+            // leave the terminal row describing only the last attempt while its
+            // accumulated spend covers them all — a row that quietly disagrees
+            // with itself. The attempt count is kept instead, so the retries are
+            // visible rather than the scope being rewritten to hide them.
+            $input = $fresh->input ?? $meta;
+            $input['attempts'] = (int) ($fresh->input['attempts'] ?? 0) + 1;
+
+            $fresh->forceFill(['input' => $input])->save();
+        });
 
         $run->refresh();
     }
@@ -184,10 +210,29 @@ class AiRunLedger
     }
 
     /**
+     * Mark the run's cost UNKNOWN — a model call was issued but died before it
+     * could report what it used.
+     *
+     * The provider may well have accepted and billed that request, so sealing the
+     * row at its last known figure would state a number we know to be too low.
+     * Null is the honest answer: "something was spent here, and we cannot say how
+     * much." Tokens keep whatever earlier calls did report.
+     */
+    public function markSpendUnknown(AiRun $run): void
+    {
+        AiRun::query()
+            ->whereKey($run->id)
+            ->inFlight()
+            ->update(['cost' => null, 'updated_at' => now()]);
+
+        $run->refresh();
+    }
+
+    /**
      * Land a completed run. A no-op on an already-terminal run. Spend is NOT
      * written here — it was recorded call by call as it was incurred.
      */
-    public function markCompleted(AiRun $run, AiGeneration $generation): void
+    public function markCompleted(AiRun $run, AiGeneration $generation): bool
     {
         $landed = $this->landTerminal($run, [
             'status' => AiRunStatus::Completed->value,
@@ -195,7 +240,7 @@ class AiRunLedger
         ]);
 
         if (! $landed) {
-            return;
+            return false;
         }
 
         $coverage = $run->coverage() ?? [];
@@ -211,14 +256,20 @@ class AiRunLedger
             'chunked' => (bool) ($coverage['chunked'] ?? false),
             'coverage' => ($coverage['covered'] ?? null).'/'.($coverage['total'] ?? null),
         ]);
+
+        return true;
     }
 
     /**
      * Land a failed run with its classified error. A no-op on an already-terminal
      * run: a failed run is never rewritten, and a completed one is never undone
      * by a late handler.
+     *
+     * Returns whether THIS call is the one that landed it, so a caller racing
+     * another writer (stale takeover vs. a live worker) can tell the difference
+     * between "I killed it" and "someone else finished it first".
      */
-    public function markFailed(AiRun $run, AiFailure $failure): void
+    public function markFailed(AiRun $run, AiFailure $failure): bool
     {
         $landed = $this->landTerminal($run, [
             'status' => AiRunStatus::Failed->value,
@@ -226,7 +277,7 @@ class AiRunLedger
         ]);
 
         if (! $landed) {
-            return;
+            return false;
         }
 
         Log::warning('ai_run.failed', [
@@ -240,17 +291,27 @@ class AiRunLedger
             'kind' => $failure->kind->value,
             'code' => $failure->code,
         ]);
+
+        return true;
     }
 
     /**
-     * A run in flight for longer than any legitimate execution could take, so no
-     * worker is coming back for it.
+     * A run that has shown no sign of life for longer than any legitimate
+     * execution could take, so no worker is coming back for it.
+     *
+     * Measured from `updated_at`, NOT `created_at`: every step a live run takes —
+     * claiming it, recording its scope, banking each call's spend — stamps that
+     * column, so an actively generating run keeps renewing its own lease. Judging
+     * by creation time instead would kill a run that merely waited a long while
+     * in a backed-up queue before starting, discarding the spend it was in the
+     * middle of incurring and billing a replacement for the same work.
      */
     private function isAbandoned(AiRun $run): bool
     {
         $cutoff = max(1, (int) config('kedge.ai.stale_after', 1800));
+        $lastSign = $run->updated_at ?? $run->created_at;
 
-        return $run->created_at !== null && $run->created_at->lt(now()->subSeconds($cutoff));
+        return $lastSign !== null && $lastSign->lt(now()->subSeconds($cutoff));
     }
 
     /**

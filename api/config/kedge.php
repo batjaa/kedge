@@ -353,14 +353,17 @@ return [
         // the web poller's own ceiling covers even a hard-killed worker.
         'job_timeout' => (int) env('AI_JOB_TIMEOUT', 300),
 
-        // How long an in-flight run may go without landing before a fresh
+        // How long an in-flight run may go WITHOUT SIGN OF LIFE before a fresh
         // request treats it as ABANDONED — fails it and mints a replacement (the
         // M3.6 stale-scan-takeover idiom). This is the last line against a run
         // that no worker will ever finish: a hard-killed worker never runs the
         // terminal handler, and without this every later request would join the
-        // dead row forever. Sized well past the worst legitimate case (tries x
-        // job_timeout plus backoff), so it never kills a run that is still
-        // honestly retrying.
+        // dead row forever.
+        //
+        // Measured from the run's last write, not its creation, so a run that sat
+        // in a backed-up queue and is now genuinely working keeps renewing its
+        // own lease. Still sized well past the worst legitimate quiet period
+        // (one model call under job_timeout, plus backoff).
         'stale_after' => (int) env('AI_STALE_AFTER', 1800),
     ],
 

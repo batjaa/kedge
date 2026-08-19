@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\AiFailureKind;
 use App\Enums\AiRunStatus;
 use App\Jobs\GenerateAiRunJob;
 use App\Models\AiRun;
@@ -10,10 +11,11 @@ use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
 use App\Services\AI\Agents\ReviewDigestAgent;
+use App\Services\AI\AiFailure;
 use App\Services\AI\AiFailureClassifier;
+use App\Services\AI\AiGeneration;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
-use App\Services\AI\Exceptions\UnparseableOutputException;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -163,7 +165,9 @@ class AiDigestTest extends TestCase
                 new Usage(promptTokens: 1_000_000, completionTokens: 200_000),
                 new Meta('anthropic', 'claude-sonnet-5'),
             ),
-            fn () => throw new UnparseableOutputException('bad shape'),
+            // Chunk two answers, but with a shape the digest cannot use — the
+            // call still happened, and still cost what it cost.
+            'not structured output at all',
         ]);
         config(['kedge.ai.context_tokens' => 1400, 'kedge.ai.max_chunks' => 2]);
         [$author, $document] = $this->reviewedDocument(threads: 2, commentPadding: 400);
@@ -277,6 +281,7 @@ class AiDigestTest extends TestCase
             'workspace_id' => $document->workspace_id,
             'created_by' => $author->id,
             'created_at' => now()->subMinutes(30),
+            'updated_at' => now()->subMinutes(30),
         ]);
 
         $response = $this->actingAs($author)->fromWebApp()
@@ -287,6 +292,87 @@ class AiDigestTest extends TestCase
         $this->assertSame(AiRunStatus::Failed, $stranded->refresh()->status);
         $this->assertSame('abandoned', $stranded->error['code']);
         Queue::assertPushed(GenerateAiRunJob::class, 1);
+    }
+
+    public function test_a_run_still_showing_signs_of_life_is_never_taken_over(): void
+    {
+        Queue::fake();
+        config(['kedge.ai.stale_after' => 600]);
+        [$author, $document] = $this->reviewedDocument();
+
+        // Created long ago (a backed-up queue), but the worker claimed it a
+        // moment ago — the lease is renewed by activity, not by birth.
+        $working = AiRun::factory()->for($document)->running()->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $author->id,
+            'created_at' => now()->subHours(3),
+            'updated_at' => now()->subSeconds(5),
+        ]);
+
+        $response = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/digest")
+            ->assertOk();
+
+        $this->assertSame($working->id, $response->json('id'));
+        $this->assertSame(AiRunStatus::Running, $working->refresh()->status);
+        $this->assertSame(1, AiRun::query()->count());
+        Queue::assertNotPushed(GenerateAiRunJob::class);
+    }
+
+    public function test_a_terminal_landing_reports_whether_this_caller_is_the_one_that_landed_it(): void
+    {
+        // The contract stale takeover leans on: a conditional kill that finds
+        // nothing to kill must SAY so, so the taker-over can tell "I ended this
+        // run" from "someone else already did" and never bills a replacement for
+        // work that already finished.
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+        $ledger = app(AiRunLedger::class);
+        $failure = new AiFailure(AiFailureKind::Transient, 'abandoned', 'Interrupted.');
+
+        $this->assertTrue($ledger->markFailed($run, $failure));
+        $this->assertFalse($ledger->markFailed($run, $failure));
+        $this->assertFalse($ledger->markCompleted($run, new AiGeneration(['themes' => []])));
+    }
+
+    public function test_a_call_that_dies_mid_flight_leaves_the_cost_unknown_not_zero(): void
+    {
+        ReviewDigestAgent::fake([fn () => throw new ConnectionException('timed out')]);
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+
+        try {
+            $this->runJob($run);
+        } catch (ConnectionException) {
+            // Transient: the job rethrows so the queue retries.
+        }
+
+        // The provider may have accepted and billed the request, so a confident
+        // $0 would be a lie.
+        $this->assertNull($run->refresh()->cost);
+    }
+
+    public function test_a_retry_keeps_the_first_scope_and_counts_the_attempts(): void
+    {
+        ReviewDigestAgent::fake([
+            fn () => throw ProviderOverloadedException::forProvider('anthropic'),
+            fn () => throw ProviderOverloadedException::forProvider('anthropic'),
+        ]);
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+
+        foreach ([1, 2] as $ignored) {
+            try {
+                $this->runJob($run);
+            } catch (ProviderOverloadedException) {
+                // Retried by the queue.
+            }
+        }
+
+        $run->refresh();
+
+        $this->assertSame(2, $run->input['attempts']);
+        $this->assertSame($document->id, $run->input['document_id']);
     }
 
     public function test_a_disabled_instance_fails_a_queued_run_instead_of_billing_the_key(): void
