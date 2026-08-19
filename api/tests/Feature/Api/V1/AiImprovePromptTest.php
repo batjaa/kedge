@@ -331,11 +331,48 @@ class AiImprovePromptTest extends TestCase
         $this->assertSame(1, $run->output['required_edits']);
         // And the omission of that discussion is confessed, not hidden.
         $this->assertStringContainsString(
-            'accepted suggested edit from threads too large to read is included verbatim anyway',
+            'accepted suggested edit from threads this pass could not read is included verbatim anyway',
             $run->output['coverage']['statement'],
         );
         // The thread the model DID read still gets its instruction.
         $this->assertStringContainsString('Bound the budget.', $artifact);
+    }
+
+    public function test_an_accepted_edit_survives_a_review_larger_than_the_hydration_cap(): void
+    {
+        $author = $this->author();
+        $document = $this->readyDocument($author);
+        $version = $document->current_version_id;
+
+        // Ordinary chatter first, the approved edit behind it — and room to
+        // hydrate exactly one thread's discussion.
+        $chatter = $this->thread($document, $author, $version, 'open', ['Anchoring', 'Budget'], 'the budget paragraph', [
+            ['body' => 'Say what happens over the context budget.'],
+        ]);
+        $accepted = $this->thread($document, $author, $version, 'open', ['Anchoring'], 'anchors are lost on re-import', [
+            ['body' => 'This wording is wrong.', 'type' => 'suggestion', 'proposed' => self::ACCEPTED_TEXT, 'status' => 'accepted'],
+        ]);
+
+        config(['kedge.ai.max_threads' => 1]);
+        ImprovePromptAgent::fake([[
+            'changes' => [['thread_id' => $chatter, 'instruction' => 'Bound the budget.']],
+        ]]);
+
+        $run = $this->request($document, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $artifact = $run->output['prompt'];
+
+        // The cap bounds how much CONVERSATION a run reads. It must never decide
+        // whether an edit the author already approved reaches them.
+        $this->assertStringContainsString(self::ACCEPTED_TEXT, $artifact);
+        $this->assertStringContainsString('(thread '.$accepted.')', $artifact);
+        $this->assertSame(1, $run->output['required_edits']);
+        $this->assertStringContainsString(
+            'accepted suggested edit from threads this pass could not read is included verbatim anyway',
+            $run->output['coverage']['statement'],
+        );
     }
 
     public function test_declined_only_threads_cannot_crowd_an_accepted_edit_out_of_the_cap(): void
@@ -571,6 +608,54 @@ class AiImprovePromptTest extends TestCase
         $this->assertSame('deterministic', $run->error['kind']);
         $this->assertSame('unparseable_output', $run->error['code']);
         $this->assertNull($run->output);
+    }
+
+    public function test_a_thread_id_that_is_not_a_whole_number_is_refused_not_rounded(): void
+    {
+        [$author, $document, $threads] = $this->reviewedDocument();
+
+        // `1.9` cast to an int would land on thread 1 — someone else's anchor,
+        // someone else's marching orders.
+        ImprovePromptAgent::fake([[
+            'changes' => [['thread_id' => 1.9, 'instruction' => 'Rewrite the wrong thread.']],
+        ]]);
+
+        $run = $this->request($document, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertSame('unparseable_output', $run->error['code']);
+        $this->assertNull($run->output);
+        $this->assertNotNull($threads['budget']);
+    }
+
+    public function test_an_omitted_document_body_is_confessed_without_overclaiming_anchors(): void
+    {
+        $author = $this->author();
+        $document = $this->readyDocument($author);
+
+        // A document-level thread has no anchor, so "read with their quoted
+        // anchors" would be a confident half-truth.
+        $thread = $this->thread($document, $author, $document->current_version_id, 'open', null, null, [
+            ['body' => 'The RFC needs a summary section.'],
+        ]);
+
+        $document->currentVersion->forceFill(['plain_text' => str_repeat('review prose ', 1000)])->save();
+        config(['kedge.ai.context_tokens' => 4000]);
+        ImprovePromptAgent::fake([[
+            'changes' => [['thread_id' => $thread, 'instruction' => 'Add a summary section.']],
+        ]]);
+
+        $run = $this->request($document, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertFalse($run->input['document_body_included']);
+        $this->assertStringContainsString(
+            'each thread was read with its quoted anchor where it had one, and with its comments alone otherwise',
+            $run->output['coverage']['statement'],
+        );
     }
 
     public function test_unstructured_output_fails_the_run_deterministically(): void

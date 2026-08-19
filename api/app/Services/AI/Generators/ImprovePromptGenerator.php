@@ -143,16 +143,40 @@ class ImprovePromptGenerator implements GeneratesAiRun
         $instructions = [];
 
         foreach ($changes as $change) {
-            if (! is_array($change)
-                || ! is_string($change['instruction'] ?? null)
-                || ! is_numeric($change['thread_id'] ?? null)) {
+            $threadId = is_array($change) ? $this->threadId($change['thread_id'] ?? null) : null;
+
+            if ($threadId === null || ! is_string($change['instruction'] ?? null)) {
                 throw new UnparseableOutputException('The improve-prompt model returned a malformed change.');
             }
 
-            $instructions[(int) $change['thread_id']] = $change['instruction'];
+            $instructions[$threadId] = $change['instruction'];
         }
 
         return $instructions;
+    }
+
+    /**
+     * A thread id, or null for anything that is not exactly one.
+     *
+     * Deliberately stricter than a numeric cast: `1.9` casts to thread 1, which
+     * would let a malformed answer attach its sentence to a real thread's quoted
+     * anchor. Only a whole number — however JSON happened to type it — counts.
+     */
+    private function threadId(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_float($value) && floor($value) === $value) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return null;
     }
 
     /**

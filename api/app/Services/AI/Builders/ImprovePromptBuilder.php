@@ -75,13 +75,32 @@ class ImprovePromptBuilder
         );
 
         $threads = (clone $carryingThreads)
-            ->with([
-                'comments' => fn ($query) => $query->withoutTrashed()->oldest('id'),
-                'anchors' => fn ($query) => $query->where('document_version_id', $document->current_version_id),
-            ])
+            ->with($this->eagerLoads($document))
             ->oldest('id')
             ->limit($cap)
             ->get();
+
+        // Accepted edits are hydrated on their OWN bounded query, not taken from
+        // the discussion set above. The cap bounds how much conversation one run
+        // reads; it must not decide whether an edit the author already approved
+        // reaches them — a review with 500 chatty threads ahead of the accepted
+        // one would otherwise drop the only part of this artifact that is a fact
+        // rather than a summary.
+        $editThreads = $document->threads()
+            ->open()
+            ->whereHas('comments', fn ($query) => $query->withoutTrashed()
+                ->where('type', CommentType::Suggestion->value)
+                ->where('suggestion_status', SuggestionStatus::Accepted->value)
+                ->whereNotNull('proposed_text'))
+            ->with($this->eagerLoads($document))
+            ->oldest('id')
+            ->limit($cap + 1)
+            ->get();
+
+        // One past the cap is enough to know some were left out, without paying
+        // to hydrate them all.
+        $editsOverCap = $editThreads->count() > $cap;
+        $editThreads = $editThreads->take($cap);
 
         /** @var list<Thread> $carrying */
         $carrying = $threads
@@ -127,20 +146,24 @@ class ImprovePromptBuilder
         $briefs = array_map($this->brief(...), $covered);
 
         // An accepted suggested edit needs no model: the author already approved
-        // that exact text. So the required edits are taken from EVERY hydrated
-        // thread, not just the covered ones — losing an approved edit because its
-        // discussion didn't fit the budget would break the one promise this
-        // artifact makes. The omission of its discussion is confessed instead.
+        // that exact text. So the required edits come from their own query, not
+        // just from the threads that fit the context budget — losing an approved
+        // edit because its discussion didn't fit would break the one promise this
+        // artifact makes. The omission of the discussion is confessed instead.
         $editBriefs = array_values(array_filter(
-            array_map($this->brief(...), $carrying),
+            array_map($this->brief(...), $editThreads->all()),
             fn (ThreadBrief $brief): bool => $brief->requiredEdits !== [],
         ));
 
         $coverage = $assembled->coverage;
 
         if ($bodyOmitted) {
+            // Precise about what the model actually had: a document-level thread
+            // has no anchor to be read with, so claiming otherwise would be the
+            // kind of confident half-truth coverage exists to prevent.
             $coverage = $coverage->withNote(
-                'The document body was too large to include, so threads were read with their quoted anchors.',
+                'The document body was too large to include, so each thread was read with its quoted anchor '
+                .'where it had one, and with its comments alone otherwise.',
             );
         }
 
@@ -152,12 +175,23 @@ class ImprovePromptBuilder
 
         if ($uncoveredEdits > 0) {
             $coverage = $coverage->withNote(sprintf(
-                '%d accepted suggested %s from threads too large to read %s included verbatim anyway, '
+                '%d accepted suggested %s from threads this pass could not read %s included verbatim anyway, '
                 .'without a summary of the discussion around %s.',
                 $uncoveredEdits,
                 $uncoveredEdits === 1 ? 'edit' : 'edits',
                 $uncoveredEdits === 1 ? 'is' : 'are',
                 $uncoveredEdits === 1 ? 'it' : 'them',
+            ));
+        }
+
+        // The last resort: even the edit query is bounded, so if a review has
+        // more accepted edits than one run may hydrate, the artifact says so
+        // rather than looking complete.
+        if ($editsOverCap) {
+            $coverage = $coverage->withNote(sprintf(
+                'This review has more than %d threads carrying accepted suggested edits; only the first %d are listed.',
+                $cap,
+                $cap,
             ));
         }
 
@@ -188,6 +222,20 @@ class ImprovePromptBuilder
     }
 
     /**
+     * What a thread needs to be rendered: its live comments, and its anchor on
+     * the version under review.
+     *
+     * @return array<string, callable>
+     */
+    private function eagerLoads(Document $document): array
+    {
+        return [
+            'comments' => fn ($query) => $query->withoutTrashed()->oldest('id'),
+            'anchors' => fn ($query) => $query->where('document_version_id', $document->current_version_id),
+        ];
+    }
+
+    /**
      * The trusted instruction block. Never contains document or comment content.
      */
     private function task(bool $bodyOmitted): string
@@ -202,7 +250,8 @@ class ImprovePromptBuilder
                 .'thread still asks for, or say that the accepted edit is the whole change.',
             'Write imperative and specific: one or two sentences per thread, no preamble.',
             $bodyOmitted
-                ? 'The document body is too large to include in this pass; work from each thread\'s quoted anchor.'
+                ? 'The document body is too large to include in this pass; work from each thread\'s quoted anchor '
+                    .'where it has one, and from its comments alone otherwise.'
                 : null,
         ]));
     }
