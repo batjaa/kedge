@@ -400,7 +400,7 @@ Agents are first-class reviewers. `laravel/mcp` server in the api app, exposing 
 |---|---|
 | `list_documents`, `get_document(version?)` | read |
 | `list_threads`, `get_thread` | read |
-| `post_comment(thread?/anchor?)`, `reply(thread)` | write — badged `client: mcp` |
+| `post_comment(document, anchor?, version?)` starts a thread; `reply(thread)` joins one | write — badged `client: mcp` |
 | `get_improve_prompt`, `get_digest` | read |
 
 - Auth: Sanctum tokens (workspace-scoped, named per agent, revocable, rate-limited). Approvals and lifecycle changes are **human-only** — no MCP tool exists for them.

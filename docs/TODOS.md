@@ -306,6 +306,20 @@
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (M4 MCP server #135, 2026-08-18)
+
+- ✅ **The MCP tool list is a backed enum** (`App\Enums\McpTool`) with tests asserting it stays closed — no approve/lifecycle/resolve/suggestion/share tool exists, and the server instructions say so plainly. Suggestion creation is refused with an explicit error, never silently dropped.
+- ✅ **`post_comment` starts a thread; `reply` joins one** — SPEC §15's sketched `post_comment(thread?/anchor?)` would duplicate `reply` via its optional `thread`; the table now matches the implemented pair.
+- ✅ **`RequireAgentTokenAuth` mirrors `RejectAgentTokenAuth`** — `auth:sanctum` also accepts the session cookie, so without the mirror a signed-in human's browser could drive the tools and write agent-badged comments. The MCP endpoint takes agent tokens and nothing else; agent payloads carry no `can_*` capability flags.
+- ✅ **MCP refusals are one unified not-found/not-yours answer**, closing the id oracle REST keeps for its UI; idempotency keys are namespaced and hashed per token so two credentials can't collide.
+- ✅ **Three limiters on three different things** — per-IP unauthenticated ingress, per-token authenticated calls, tighter per-token writes; `mcp.write` audit rows only for writes that actually wrote.
+
+## Known debt (M4 #135 branch gate, 2026-08-18)
+
+- **The two-connection revocation barrier is skipped on the suite's SQLite** — only exercised against MySQL/Postgres, where the row locks are real. (M)
+- **`mcp.write` is not in the M3.8 activity-feed allowlist** — agent writes don't surface in Recent activity; revisit whether they should. (S)
+- **MCP lists paginate page/per_page like REST, not cursors** (S) · **no per-tool token permissions** (SPEC out-of-scope) (S) · **`laravel/mcp` pinned `^0.9`** — revisit at v1. (S)
+
 ## Decision log (M4 AI substrate + digest tracer, 2026-08-18)
 
 - [ ] **`DB_QUEUE_RETRY_AFTER` (90s) sits below `AI_JOB_TIMEOUT` (300s)** — a slow generation on the shared `database` queue can be redelivered to a second worker and double-billed (both calls spend; the loser's spend is discarded). Folds into the dedicated-AI-queue item; found at the #133 gate, pre-existing from #130. (M)
