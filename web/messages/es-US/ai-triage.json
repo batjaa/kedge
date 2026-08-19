@@ -1,0 +1,34 @@
+{
+  "stance": {
+    "accept": "Aceptar",
+    "push_back": "Discrepar",
+    "clarify": "Aclarar"
+  },
+  "replyDraft": {
+    "label": "Borrador de respuesta",
+    "generating": "Redactando…",
+    "takingTooLong": "Está tardando más de lo esperado. Reintenta o vuelve en un momento.",
+    "failed": "No se pudo redactar una respuesta. Reintenta.",
+    "empty": "Este hilo era demasiado largo para leerlo, así que no hay nada con qué redactar.",
+    "confirmTitle": "¿Reemplazar lo que escribiste?",
+    "confirmBody": "Tu respuesta ya tiene texto. Elige cuál conservar.",
+    "replace": "Usar el borrador",
+    "keep": "Conservar el mío",
+    "draftNotice": "Un borrador para editar. No se publica nada hasta que pulses Responder.",
+    "draftNoticeWithModel": "Un borrador para editar, escrito por {model}. No se publica nada hasta que pulses Responder."
+  },
+  "summary": {
+    "heading": "Resumen del hilo",
+    "idle": "Hilo largo — mira en qué punto está y qué sigue abierto.",
+    "trigger": "Resumir",
+    "regenerate": "Resumir de nuevo",
+    "generating": "Resumiendo…",
+    "takingTooLong": "Está tardando más de lo esperado. Reintenta o vuelve en un momento.",
+    "failed": "No se pudo resumir este hilo. Reintenta.",
+    "empty": "Este hilo era demasiado largo para leerlo por completo.",
+    "currentState": "En qué punto está",
+    "openQuestion": "Pregunta abierta",
+    "draftNotice": "Un resumen para leer. Nada cambió en este hilo.",
+    "draftNoticeWithModel": "Un resumen para leer, escrito por {model}. Nada cambió en este hilo."
+  }
+}

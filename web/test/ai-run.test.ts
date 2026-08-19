@@ -16,6 +16,7 @@ function run(status: AiRunStatus, overrides: Partial<AiRun> = {}): AiRun {
     id: 7,
     document_id: 3,
     type: 'digest',
+    variant: null,
     status,
     model: 'claude-sonnet-5',
     tokens: 0,
