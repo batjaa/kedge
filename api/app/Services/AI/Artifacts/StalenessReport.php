@@ -26,6 +26,15 @@ final class StalenessReport
     public const REASON_THREADS_MOVED = 'thread_count_changed';
 
     /**
+     * The conversation moved INSIDE the threads that were already there — a new
+     * comment, an edit, a deletion, a suggestion accepted or declined. None of
+     * that changes the thread count, and an improve-the-doc prompt missing an
+     * edit the author approved five minutes ago is exactly the artifact this
+     * flag exists to catch.
+     */
+    public const REASON_ACTIVITY_MOVED = 'review_activity_changed';
+
+    /**
      * The run never recorded what it was built against, so freshness cannot be
      * proven. Reported as stale: "we cannot tell" and "it is current" are
      * different answers, and only one of them is safe to act on.
@@ -42,6 +51,7 @@ final class StalenessReport
         public readonly ?int $currentVersionId,
         public readonly ?int $threadsAtGeneration,
         public readonly int $currentThreads,
+        public readonly ?string $reviewLastChangedAt = null,
     ) {}
 
     /**
@@ -60,6 +70,10 @@ final class StalenessReport
             'current_version_id' => $this->currentVersionId,
             'threads_at_generation' => $this->threadsAtGeneration,
             'current_threads' => $this->currentThreads,
+            // When the review itself last moved — the timestamp behind
+            // REASON_ACTIVITY_MOVED, so a consumer can see how far past the run
+            // the conversation has travelled rather than only that it has.
+            'review_last_changed_at' => $this->reviewLastChangedAt,
         ];
     }
 
@@ -88,6 +102,13 @@ final class StalenessReport
                 'the review has moved from %s to %d threads',
                 $this->threadsAtGeneration ?? 'unknown',
                 $this->currentThreads,
+            );
+        }
+
+        if (in_array(self::REASON_ACTIVITY_MOVED, $this->reasons, true)) {
+            $moved[] = sprintf(
+                'the review was last changed at %s, after this was generated',
+                $this->reviewLastChangedAt ?? 'an unknown time',
             );
         }
 

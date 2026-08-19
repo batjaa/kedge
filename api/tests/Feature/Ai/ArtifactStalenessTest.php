@@ -107,34 +107,90 @@ class ArtifactStalenessTest extends TestCase
         $digest = $this->completedRun(AiRunType::Digest);
         $prompt = $this->completedRun(AiRunType::ImprovePrompt);
 
+        // Timestamps are second-resolution, so the clock is moved rather than
+        // left to decide whether "after the run" is observable on this run.
+        $this->travel(1)->second();
         $this->thread('open', [['body' => 'Something nobody has answered yet.']]);
 
         foreach ([$digest, $prompt] as $run) {
             $report = app(AiArtifactStaleness::class)->for($run->fresh(), $this->document->fresh());
 
             $this->assertTrue($report->stale);
-            $this->assertSame([StalenessReport::REASON_THREADS_MOVED], $report->reasons);
+            $this->assertSame([
+                StalenessReport::REASON_THREADS_MOVED,
+                StalenessReport::REASON_ACTIVITY_MOVED,
+            ], $report->reasons);
             $this->assertStringContainsString('Re-read the document', (string) $report->statement());
         }
     }
 
-    public function test_resolving_a_thread_ages_the_improve_prompt_and_leaves_the_digest_alone(): void
+    public function test_a_comment_inside_an_existing_thread_ages_both_artifacts(): void
     {
-        // Deliberate, and the reason the two counts are not one count: an
-        // improve-prompt is marching orders, so triaging its last live thread
-        // makes it obsolete. A digest summarizes the whole conversation,
-        // resolved threads included, so it still describes what was said.
+        // The blind spot the two specced signals share: neither the version nor
+        // the thread count moves, and the review moved anyway.
         $digest = $this->completedRun(AiRunType::Digest);
         $prompt = $this->completedRun(AiRunType::ImprovePrompt);
 
+        $this->travel(1)->second();
+        Thread::query()
+            ->where('document_id', $this->document->id)
+            ->firstOrFail()
+            ->comments()
+            ->create(['author_id' => $this->author->id, 'body_md' => 'One more thing.']);
+
+        foreach ([$digest, $prompt] as $run) {
+            $report = app(AiArtifactStaleness::class)->for($run->fresh(), $this->document->fresh());
+
+            $this->assertTrue($report->stale);
+            $this->assertSame([StalenessReport::REASON_ACTIVITY_MOVED], $report->reasons);
+        }
+    }
+
+    public function test_accepting_a_suggestion_ages_the_improve_prompt(): void
+    {
+        // The sharpest case: this artifact's whole promise is that accepted edits
+        // appear verbatim as required changes, so one accepted a minute later
+        // makes it wrong — while leaving both the version and every count alone.
+        $prompt = $this->completedRun(AiRunType::ImprovePrompt);
+
+        $this->travel(1)->second();
+        Comment::query()
+            ->where('suggestion_status', 'declined')
+            ->firstOrFail()
+            ->forceFill(['suggestion_status' => 'accepted'])
+            ->save();
+
+        $report = app(AiArtifactStaleness::class)->for($prompt->fresh(), $this->document->fresh());
+
+        $this->assertTrue($report->stale);
+        $this->assertContains(StalenessReport::REASON_ACTIVITY_MOVED, $report->reasons);
+    }
+
+    public function test_resolving_a_thread_moves_the_improve_prompt_population_and_not_the_digests(): void
+    {
+        // Why the two thread counts are not one count: an improve-prompt is
+        // marching orders, so triaging its last live thread makes it obsolete. A
+        // digest summarizes the whole conversation, resolved threads included, so
+        // its population is untouched — it ages here on the activity signal
+        // alone, and the reasons say which.
+        $digest = $this->completedRun(AiRunType::Digest);
+        $prompt = $this->completedRun(AiRunType::ImprovePrompt);
+
+        $this->travel(1)->second();
         Thread::query()
             ->where('document_id', $this->document->id)
             ->where('status', 'open')
             ->whereHas('comments', fn ($query) => $query->whereNull('suggestion_status'))
-            ->update(['status' => 'resolved']);
+            ->update(['status' => 'resolved', 'updated_at' => now()]);
 
-        $this->assertFalse(app(AiArtifactStaleness::class)->for($digest, $this->document)->stale);
-        $this->assertTrue(app(AiArtifactStaleness::class)->for($prompt, $this->document)->stale);
+        $this->assertSame(
+            [StalenessReport::REASON_ACTIVITY_MOVED],
+            app(AiArtifactStaleness::class)->for($digest, $this->document)->reasons,
+        );
+        $this->assertSame(
+            [StalenessReport::REASON_THREADS_MOVED, StalenessReport::REASON_ACTIVITY_MOVED],
+            app(AiArtifactStaleness::class)->for($prompt, $this->document)->reasons,
+        );
     }
 
     public function test_a_re_synced_document_ages_the_artifact(): void

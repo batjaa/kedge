@@ -142,20 +142,45 @@ class McpArtifactToolsTest extends McpTestCase
                 ->etc());
     }
 
-    public function test_a_pending_run_is_never_served_as_an_artifact(): void
+    public function test_a_pending_run_is_never_served_as_an_artifact_but_is_reported(): void
     {
+        // "A generation is running" and "nobody has asked for one" are different
+        // answers: only the second one means the agent should go find a human.
         $this->runInState(AiRunType::Digest, AiRunStatus::Pending);
 
-        $this->assertNoArtifact(GetDigestTool::class, 'No review digest has been generated');
+        $this->assertNoArtifact(
+            GetDigestTool::class,
+            'A review digest is being generated right now',
+            latestRunStatus: 'pending',
+        );
     }
 
-    public function test_a_failed_run_is_never_served_as_an_artifact(): void
+    public function test_a_failed_run_is_never_served_as_an_artifact_but_is_reported(): void
     {
         // Serving one would hand an agent a null output it would read as "the
         // review said nothing" rather than "the generation broke".
         $this->runInState(AiRunType::ImprovePrompt, AiRunStatus::Failed);
 
-        $this->assertNoArtifact(GetImprovePromptTool::class, 'No improve-the-doc prompt has been generated');
+        $this->assertNoArtifact(
+            GetImprovePromptTool::class,
+            'The most recent improve-the-doc prompt generation failed',
+            latestRunStatus: 'failed',
+        );
+    }
+
+    public function test_a_served_artifact_reports_that_a_newer_run_is_in_flight(): void
+    {
+        $this->threadOn($this->document);
+        $completed = $this->completedRun(AiRunType::Digest);
+        $this->runInState(AiRunType::Digest, AiRunStatus::Running);
+
+        KedgeServer::actingAs($this->agentFor())
+            ->tool(GetDigestTool::class, ['document_id' => $this->document->id])
+            ->assertOk()
+            ->assertStructuredContent(fn (AssertableJson $json) => $json
+                ->where('artifact.ai_run_id', $completed->id)
+                ->where('latest_run_status', 'running')
+                ->etc());
     }
 
     public function test_the_newest_completed_run_wins(): void
@@ -180,6 +205,9 @@ class McpArtifactToolsTest extends McpTestCase
         $this->completedRun(AiRunType::Digest);
 
         // Wednesday happened: a reviewer opened a thread the digest never read.
+        // Timestamps are second-resolution, so the clock is moved rather than
+        // left to decide whether "after" is observable this run.
+        $this->travel(1)->second();
         $this->threadOn($this->document, body: 'A point raised after the digest.');
 
         KedgeServer::actingAs($this->agentFor())
@@ -187,11 +215,43 @@ class McpArtifactToolsTest extends McpTestCase
             ->assertOk()
             ->assertStructuredContent(fn (AssertableJson $json) => $json
                 ->where('artifact.stale', true)
-                ->where('artifact.stale_reasons', [StalenessReport::REASON_THREADS_MOVED])
+                ->where('artifact.stale_reasons', [
+                    StalenessReport::REASON_THREADS_MOVED,
+                    StalenessReport::REASON_ACTIVITY_MOVED,
+                ])
                 ->where('artifact.threads_at_generation', 1)
                 ->where('artifact.current_threads', 2)
-                ->where('note', 'Do not treat this artifact as current: the review has moved from 1 to 2 threads. '
-                    .'Re-read the document and its threads before acting on it.')
+                ->where('note', fn (string $note): bool => str_contains($note, 'the review has moved from 1 to 2 threads')
+                    && str_contains($note, 'Re-read the document and its threads before acting on it.'))
+                ->etc());
+    }
+
+    public function test_a_comment_on_an_existing_thread_makes_the_artifact_stale(): void
+    {
+        // The gap the two specced signals share: an accepted suggestion or a new
+        // comment inside a thread that was already there moves neither the
+        // version nor the thread count, and an improve-prompt missing an edit the
+        // author just approved must not report itself current.
+        $thread = $this->threadOn($this->document);
+        $this->completedRun(AiRunType::ImprovePrompt);
+
+        $this->travel(1)->second();
+        $thread->comments()->create([
+            'author_id' => $this->operator->id,
+            'body_md' => 'Actually, make this stronger.',
+        ]);
+
+        KedgeServer::actingAs($this->agentFor())
+            ->tool(GetImprovePromptTool::class, ['document_id' => $this->document->id])
+            ->assertOk()
+            ->assertStructuredContent(fn (AssertableJson $json) => $json
+                ->where('artifact.stale', true)
+                ->where('artifact.stale_reasons', [StalenessReport::REASON_ACTIVITY_MOVED])
+                // The counts are unchanged, and say so — the flag is not the
+                // whole story, the numbers behind it are.
+                ->where('artifact.threads_at_generation', 1)
+                ->where('artifact.current_threads', 1)
+                ->has('artifact.review_last_changed_at')
                 ->etc());
     }
 
@@ -218,6 +278,7 @@ class McpArtifactToolsTest extends McpTestCase
         $this->threadOn($this->document);
         $this->completedRun(AiRunType::Digest);
 
+        $this->travel(1)->second();
         $this->resync($this->document);
         $this->threadOn($this->document, body: 'Raised against the new version.');
 
@@ -229,6 +290,7 @@ class McpArtifactToolsTest extends McpTestCase
                 ->where('artifact.stale_reasons', [
                     StalenessReport::REASON_VERSION_MOVED,
                     StalenessReport::REASON_THREADS_MOVED,
+                    StalenessReport::REASON_ACTIVITY_MOVED,
                 ])
                 ->etc());
     }
@@ -384,7 +446,7 @@ class McpArtifactToolsTest extends McpTestCase
     /**
      * @param  class-string  $tool
      */
-    private function assertNoArtifact(string $tool, string $note): void
+    private function assertNoArtifact(string $tool, string $note, ?string $latestRunStatus = null): void
     {
         KedgeServer::actingAs($this->agentFor())
             ->tool($tool, ['document_id' => $this->document->id])
@@ -393,6 +455,7 @@ class McpArtifactToolsTest extends McpTestCase
             ->assertStructuredContent(fn (AssertableJson $json) => $json
                 ->where('artifact', null)
                 ->where('ai_enabled', true)
+                ->where('latest_run_status', $latestRunStatus)
                 ->where('note', fn (string $value): bool => str_contains($value, $note))
                 ->etc());
     }

@@ -172,6 +172,8 @@ class McpEndpointTest extends TestCase
             'document_id' => $this->document->id,
             'type' => 'digest',
             'ai_enabled' => false,
+            // Not looked up: with no provider there is nothing to report on.
+            'latest_run_status' => null,
             'artifact' => null,
             'note' => 'This Kedge instance has no AI provider configured, so no review digest exists to read. '
                 .'The rest of the review — documents, threads, comments — is unaffected.',

@@ -2,7 +2,9 @@
 
 namespace App\Services\Agents;
 
+use App\Enums\AiRunStatus;
 use App\Enums\AiRunType;
+use App\Models\AiRun;
 use App\Models\Document;
 use App\Services\AI\AiArtifactStaleness;
 use App\Services\AI\AiRunLedger;
@@ -32,7 +34,10 @@ use App\Services\AI\AiRunLedger;
  *     artifacts the rest of the product has withdrawn.
  *  3. **Only a COMPLETED run is ever served.** A pending, running, or failed run
  *     is not an artifact — serving one would hand an agent an empty output it
- *     would read as "the review said nothing".
+ *     would read as "the review said nothing". It is still REPORTED, in
+ *     `latest_run_status` and in the note: "a generation is running" and "nobody
+ *     has asked for one" are different answers, and only one of them means an
+ *     agent should go and ask a human.
  */
 class McpArtifactReader
 {
@@ -66,19 +71,18 @@ class McpArtifactReader
             );
         }
 
-        $run = $this->ledger->latestCompletedFor($document, $type);
+        // The newest run of any status, then — only if it is not the answer — the
+        // newest completed one. The common case (nothing newer since the last
+        // successful generation) costs a single query, and the run's status is in
+        // hand either way, so the empty result can say WHY it is empty.
+        $latest = $this->ledger->latestFor($document, $type);
+
+        $run = $latest?->status === AiRunStatus::Completed
+            ? $latest
+            : $this->ledger->latestCompletedFor($document, $type);
 
         if ($run === null) {
-            return $this->empty(
-                $document,
-                $type,
-                aiEnabled: true,
-                note: sprintf(
-                    'No %s has been generated for this document yet. Generating one is a person\'s decision in '
-                    .'the Kedge app — this tool only reads what already exists, and no MCP tool can start a run.',
-                    $this->noun($type),
-                ),
-            );
+            return $this->empty($document, $type, aiEnabled: true, latest: $latest, note: $this->emptyNote($type, $latest));
         }
 
         $staleness = $this->staleness->for($run, $document);
@@ -87,6 +91,7 @@ class McpArtifactReader
             $document,
             $type,
             aiEnabled: true,
+            latest: $latest,
             artifact: $this->payload->artifact($run, $staleness),
             // Null when the artifact is current: an agent should read a warning
             // here or nothing, never a reassurance it might skim past.
@@ -95,11 +100,48 @@ class McpArtifactReader
     }
 
     /**
+     * Why there is nothing to read — three different situations that a single
+     * "none has been generated" would flatten into a half-truth, telling an agent
+     * to go ask a human while a run that human already started is mid-flight.
+     */
+    private function emptyNote(AiRunType $type, ?AiRun $latest): string
+    {
+        $noun = $this->noun($type);
+
+        if ($latest === null) {
+            return sprintf(
+                'No %s has been generated for this document yet. Generating one is a person\'s decision in '
+                .'the Kedge app — this tool only reads what already exists, and no MCP tool can start a run.',
+                $noun,
+            );
+        }
+
+        if ($latest->status->isInFlight()) {
+            return sprintf(
+                'A %s is being generated right now and has not finished, and no earlier one ever completed. '
+                .'Nothing is ready to read; try again shortly. This tool cannot start or hurry a run.',
+                $noun,
+            );
+        }
+
+        return sprintf(
+            'The most recent %s generation failed, and no earlier one completed. A person can retry it in the '
+            .'Kedge app — this tool only reads what already exists, and no MCP tool can start a run.',
+            $noun,
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function empty(Document $document, AiRunType $type, bool $aiEnabled, string $note): array
-    {
-        return $this->envelope($document, $type, $aiEnabled, artifact: null, note: $note);
+    private function empty(
+        Document $document,
+        AiRunType $type,
+        bool $aiEnabled,
+        string $note,
+        ?AiRun $latest = null,
+    ): array {
+        return $this->envelope($document, $type, $aiEnabled, $latest, artifact: null, note: $note);
     }
 
     /**
@@ -110,6 +152,7 @@ class McpArtifactReader
         Document $document,
         AiRunType $type,
         bool $aiEnabled,
+        ?AiRun $latest,
         ?array $artifact,
         ?string $note,
     ): array {
@@ -120,6 +163,11 @@ class McpArtifactReader
             // can tell "nobody has asked for one" from "this deployment has no
             // model to ask", which are different things to report to an operator.
             'ai_enabled' => $aiEnabled,
+            // The newest run of this type, whatever became of it. Not the same
+            // question as `artifact`: `completed` here with a stale artifact
+            // means nothing newer was asked for, while `running` alongside a
+            // served artifact means a fresher answer is on its way.
+            'latest_run_status' => $latest?->status->value,
             'artifact' => $artifact,
             'note' => $note,
         ];

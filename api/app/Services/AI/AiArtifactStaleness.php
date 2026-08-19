@@ -5,8 +5,12 @@ namespace App\Services\AI;
 use App\Enums\AiRunType;
 use App\Enums\SuggestionStatus;
 use App\Models\AiRun;
+use App\Models\Comment;
 use App\Models\Document;
+use App\Models\Thread;
 use App\Services\AI\Artifacts\StalenessReport;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 
 /**
  * Is this completed AI artifact still describing the review it was built from?
@@ -18,12 +22,14 @@ use App\Services\AI\Artifacts\StalenessReport;
  * the same two facts NOW — no new column, no completion-time snapshot that
  * could disagree with what the prompt actually saw.
  *
- * Two movements count, per the eng review: the document was re-versioned (a
- * re-sync, a content update), or the thread population the run was built from
- * changed size. **Known limit, deliberate**: a new comment inside an existing
- * thread moves neither number, so an artifact can be reported fresh while the
- * argument inside a thread has moved on. The spec names version and thread
- * count; widening the signal is a product decision, not a silent one.
+ * Three movements count. The eng review names two — the document was
+ * re-versioned (a re-sync, a content update), or the thread population the run
+ * was built from changed size — and a third is added because those two share a
+ * blind spot: neither moves when the conversation changes INSIDE the threads
+ * that were already there. An improve-the-doc prompt that omits a suggested edit
+ * the author accepted five minutes ago, while reporting itself current, is
+ * exactly the artifact this flag exists to catch, so review activity is the
+ * third signal (#136 review gate).
  *
  * Deliberately NOT MCP-specific: the web's digest and improve-prompt panels
  * re-attach to a completed run on mount and render it as current with the same
@@ -46,6 +52,7 @@ class AiArtifactStaleness
 
         $currentVersionId = $this->intOrNull($document->current_version_id);
         $currentThreads = $this->threadsNow($document, $run->type);
+        $reviewChangedAt = $this->reviewLastChangedAt($document);
 
         $reasons = [];
 
@@ -64,6 +71,10 @@ class AiArtifactStaleness
             $reasons[] = StalenessReport::REASON_THREADS_MOVED;
         }
 
+        if ($this->reviewMovedAfter($reviewChangedAt, $run)) {
+            $reasons[] = StalenessReport::REASON_ACTIVITY_MOVED;
+        }
+
         return new StalenessReport(
             stale: $reasons !== [],
             reasons: $reasons,
@@ -71,7 +82,56 @@ class AiArtifactStaleness
             currentVersionId: $currentVersionId,
             threadsAtGeneration: $threadsAtGeneration,
             currentThreads: $currentThreads,
+            reviewLastChangedAt: $reviewChangedAt?->toJSON(),
         );
+    }
+
+    /**
+     * When this document's review last moved: a thread opened or triaged, a
+     * comment posted, edited, deleted, or a suggestion accepted or declined.
+     *
+     * Both tables are read because they move independently — a thread's status
+     * change never touches its comments, and a new comment never has to touch
+     * its thread. Trashed comments are INCLUDED: a deletion is movement, and
+     * excluding it would let a review shrink invisibly.
+     */
+    private function reviewLastChangedAt(Document $document): ?CarbonInterface
+    {
+        $threads = Thread::query()->where('document_id', $document->id);
+
+        $latest = collect([
+            (clone $threads)->max('updated_at'),
+            Comment::withTrashed()
+                ->whereIn('thread_id', (clone $threads)->select('id'))
+                ->max('updated_at'),
+        ])
+            ->filter()
+            ->map(fn (mixed $value): CarbonInterface => Carbon::parse((string) $value))
+            ->max();
+
+        return $latest instanceof CarbonInterface ? $latest : null;
+    }
+
+    /**
+     * Did the review move after this run was ASKED FOR?
+     *
+     * Measured from `created_at` rather than from the completion timestamp on
+     * purpose. The prompt is assembled somewhere between the two, and the exact
+     * moment is not recorded — so comparing against completion would call an
+     * artifact fresh when a comment landed mid-generation and never reached it.
+     * Comparing against the request instead can only err the safe way: an
+     * artifact reported stale that in fact read the change.
+     *
+     * Comparison is second-resolution, matching how these timestamps are stored;
+     * `gt` (not `gte`) keeps activity in the run's own second — the thread a
+     * digest was requested about milliseconds after it was opened — from reading
+     * as movement.
+     */
+    private function reviewMovedAfter(?CarbonInterface $changedAt, AiRun $run): bool
+    {
+        $requestedAt = $run->created_at;
+
+        return $changedAt !== null && $requestedAt !== null && $changedAt->gt($requestedAt);
     }
 
     /**
