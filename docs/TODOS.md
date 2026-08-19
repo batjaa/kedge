@@ -316,6 +316,22 @@
 - **`SCROLL_SPY_OFFSET = 136` is a constant while real clearance is dynamic** — the TOC highlight can lead the visible heading under a tall header; pre-existing. (S)
 - **Tailwind v4 scans comments and docs content** — any class-shaped string (an arbitrary-value utility spelled with square brackets, even in prose or a code comment, even in `web/content/docs/`) is emitted into the build; an invalid one breaks global.css and 500s the server until `.next`/`.source` are cleared. This very entry originally triggered it. Keep bracketed utility literals out of prose. (XS)
 
+## Decision log (ask-about-the-doc #139, 2026-08-19)
+
+- ✅ **Dedupe exemption is a property of the run type, not a branch** — `AiRunType::isDedupeExempt()` sits beside `isPerActor()`, and `AiRunLedger::joinable()` returns before the document row lock for an exempt type. A sixth type's author has to answer the question deliberately.
+- ✅ **Ask runs are per-actor** (a strengthening over the ticket, which is silent) — the run carries one person's question and run ids are sequential, so `AiRunPolicy::view` scopes it to the asker, exactly as for reply drafts.
+- ✅ **`ai_runs.request` is a new column, not a corner of `input`** — `input` is frozen at first assembly; folding the question in would drop every ask's scope metadata.
+- ✅ **No GET latest-ask, deliberately** — every other artifact has a re-attach read; an ask must not, or the ledger becomes somewhere to go and read one. Ephemerality is structural in the web too: the panel's state unmounts on close.
+- ✅ **"Ephemeral" is a claim about the surface, not storage** — the run lands in the cost ledger like every other; the copy promises only that nothing reaches the review and no other screen shows the answer.
+
+## Known debt (#139 branch gate, 2026-08-19)
+
+- **No e2e journey for the ask surface** — spec Testing Decisions §3 doesn't name one; a throwaway journey was verified against the served stack and removed. Land as `e2e/ai-ask.spec.ts` if wanted. (S)
+- **A long document is answered from its opening** — passages read in document order, overflow becomes coverage; proximity-to-selection ordering would serve passage-scoped asks better if coverage can stay truthful. (S)
+- **Quote/body version skew** — a re-sync between POST and job means the quote is from the page's version while the body reads at job time; nothing wrong persists (asks write nothing) and `input.document_version_id` records what was read. Same property as the digest. (S)
+- **`StoreThreadRequest.anchor.heading_path` is unbounded in depth** — same class as the prompt-payload bug fixed here, lower stakes (persisted, not prompted); the cap belongs there too. (S)
+- **Repo-wide question**: FormRequest validation runs ahead of the controller's Policy on every v1 endpoint using one — a non-member's malformed payload 422s before the 403. Consistent today; decide once, not per endpoint. (S)
+
 ## Decision log (AI provider gate #140, 2026-08-19)
 
 - ✅ **The AI gate follows the selected provider's credential** — `AI_PROVIDER` (default `anthropic`); enabled iff that provider's `key` in the SDK's published table (`api/config/ai.php`) is a non-blank string. Kedge keeps no second list of provider names and application code names no provider at all (tokenized scan test over app/, routes/, bootstrap/, database/). `AI_ENABLED` still only forces off.

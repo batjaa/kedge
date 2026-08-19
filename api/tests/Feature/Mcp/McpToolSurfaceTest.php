@@ -36,6 +36,12 @@ class McpToolSurfaceTest extends McpTestCase
         // is a human act too (#136): the artifact tools READ a completed run.
         // A future `generate_digest` fails here first.
         'generate', 'regenerate',
+        // Ask-about-the-doc is human-only for the same reason and one more
+        // (#139): an agent already has its own model, and it can read the whole
+        // document through `get_document`. An `ask_document` tool would spend
+        // the workspace's key to answer a question the agent is better placed to
+        // answer itself — so the run type exists with no tool that can mint one.
+        'ask', 'question',
     ];
 
     /**

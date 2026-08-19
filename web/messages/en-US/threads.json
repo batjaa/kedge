@@ -68,6 +68,8 @@
   "composer": {
     "comment": "Comment",
     "suggest": "Suggest",
+    "ask": "Ask AI",
+    "selectionActions": "What to do with this selection",
     "reply": "Reply",
     "post": "Post",
     "cancel": "Cancel",

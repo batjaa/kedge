@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
+import { AiAskAction, type AskRequest } from './ai-ask-action';
 import { AiDigestAction } from './ai-digest-action';
 import { AiImprovePromptAction } from './ai-improve-prompt-action';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
@@ -26,6 +27,7 @@ import { DocumentReviewSidebar } from './document-review-sidebar';
 import { DocumentThreadRail, type ReattachStatus } from './document-thread-rail';
 import { DocumentVersionSwitcher } from './document-version-switcher';
 import { MobileThreadSheet } from './mobile-thread-sheet';
+import { askQuoteFromSelector } from '@/lib/ai-ask';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
 import { postDocumentComposerDraft } from '@/lib/comment-composer-actions';
@@ -179,6 +181,12 @@ export function DocumentReviewSurface({
   const [anchorPositions, setAnchorPositions] = useState<Record<number, number>>({});
   const [documentHeight, setDocumentHeight] = useState(320);
   const [composer, setComposer] = useState<ComposerState>({ open: false });
+  // The ask panel (#139), open when non-null and carrying the passage it was
+  // opened for. Held here rather than in the component because two affordances
+  // open it — the header button and the selection popover — and a reader must
+  // never end up with two panels holding two different answers. Closing it
+  // unmounts the panel, which is what makes the answer ephemeral.
+  const [askRequest, setAskRequest] = useState<AskRequest | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [headerMessage, setHeaderMessage] = useState<string | null>(null);
@@ -986,6 +994,18 @@ export function DocumentReviewSurface({
   // the author approve anchors into passages they cannot see. The notice, not
   // the server-rendered ids, is the test: it also catches a version that landed
   // while this page was open.
+  // One gate for every read-only header AI artifact — digest, improve-prompt,
+  // and ask — and, because ask is also reachable from a text selection, for
+  // that affordance too. Shared deliberately: the panel must never be openable
+  // from a route that outlives the control rendering it.
+  //
+  // Ask sits with the read-only artifacts rather than with the split
+  // capability, which additionally requires `newerVersionNotice === null`. That
+  // extra condition exists because approving a split WRITES an anchor into the
+  // current version; an ask writes nothing, so a version landing mid-question
+  // costs a slightly stale answer, not a wrong row.
+  const canRunHeaderAi = canRunAi && viewedVersionId === currentVersionId;
+
   const splitCapability = canProposeCommentSplits
     && viewedVersionId === currentVersionId
     && newerVersionNotice === null
@@ -997,13 +1017,23 @@ export function DocumentReviewSurface({
   // poll loop; neither writes review data, so they need nothing from this
   // surface but the document they read.
   //
-  // Hidden while reading a historical version: both are taken over the CURRENT
-  // version and its threads, so offering them here would silently answer a
-  // different question than the one the page appears to be asking.
-  const aiArtifactControls = canRunAi && viewedVersionId === currentVersionId ? (
+  // Hidden while reading a historical version: all of them are taken over the
+  // CURRENT version and its threads, so offering them here would silently
+  // answer a different question than the one the page appears to be asking.
+  //
+  // Ask (#139) joins them with one difference: its panel is also reachable from
+  // a text selection, so the OPEN state lives here rather than inside the
+  // component — one panel, two ways in, and only one place an answer can be.
+  const aiArtifactControls = canRunHeaderAi ? (
     <>
       <AiDigestAction documentId={documentId} documentTitle={title} />
       <AiImprovePromptAction documentId={documentId} />
+      <AiAskAction
+        documentId={documentId}
+        request={askRequest}
+        onOpen={(quote) => setAskRequest({ quote })}
+        onClose={() => setAskRequest(null)}
+      />
     </>
   ) : null;
 
@@ -1245,6 +1275,14 @@ export function DocumentReviewSurface({
           if (submittingRef.current) return;
           if (composer.open) setComposer({ ...composer, stage: 'panel' });
         }}
+        onAsk={canRunHeaderAi ? () => {
+          if (!composer.open) return;
+          // The selection's own text becomes the quoted passage; a selection
+          // that failed to anchor still HAS text, so an ask about it is a
+          // doc-wide ask rather than nothing at all.
+          setAskRequest({ quote: composer.anchor ? askQuoteFromSelector(composer.anchor) : null });
+          setComposer({ open: false });
+        } : undefined}
         onSubmit={() => void submit()}
       />
     </div>
