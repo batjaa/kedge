@@ -20,9 +20,9 @@ use Laravel\Mcp\Server\Transport\FakeTransporter;
 class McpToolSurfaceTest extends McpTestCase
 {
     /**
-     * Capability verbs that must never reach the agent surface, in any spelling.
-     * Matched against tool names, titles, and descriptions, so a tool called
-     * `triage_thread` described as "resolve a thread" is caught either way.
+     * Capability verbs that must never name a tool, in any spelling. A future
+     * `triage_thread`, `mark_resolved`, or `share_document` fails here before it
+     * can ever be dispatched.
      */
     private const HUMAN_ONLY_CAPABILITIES = [
         'approve', 'approval',
@@ -79,6 +79,11 @@ class McpToolSurfaceTest extends McpTestCase
     public function test_no_tool_offers_a_human_only_capability(): void
     {
         foreach ($this->registeredTools() as $tool) {
+            // Name and title only — the dispatchable surface. Descriptions are
+            // prose and legitimately say the words ("this agent token", "deleted
+            // comments keep their place"); it is the callable identity that must
+            // never read as an offer. What the prose promises is covered instead
+            // by test_the_server_tells_agents_which_actions_are_human_only.
             $surface = strtolower($tool->name().' '.$tool->title());
 
             foreach (self::HUMAN_ONLY_CAPABILITIES as $capability) {

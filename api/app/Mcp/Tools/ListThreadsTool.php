@@ -79,7 +79,7 @@ class ListThreadsTool extends Tool
             'document_id' => $schema->integer()->required()
                 ->description('The document whose threads to list.'),
             'version_id' => $schema->integer()
-                ->description('Resolve each thread\'s anchor against this version instead of the current one.'),
+                ->description('Read each thread\'s anchor as it stood on this version instead of the current one.'),
             'page' => $schema->integer()->min(1)->description('1-based page number. Defaults to 1.'),
             'per_page' => $schema->integer()->min(1)->max(50)
                 ->description('Threads per page, 1-50. Defaults to 20.'),
