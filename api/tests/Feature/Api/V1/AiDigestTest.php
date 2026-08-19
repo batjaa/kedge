@@ -228,6 +228,25 @@ class AiDigestTest extends TestCase
 
     // ---- Dedupe + re-attach ------------------------------------------------
 
+    public function test_an_omitted_document_body_is_confessed_in_the_coverage_line(): void
+    {
+        ReviewDigestAgent::fake([$this->digestPayload()]);
+        config(['kedge.ai.context_tokens' => 4000]);
+        // A body far past the 25% body share: left out whole, never truncated.
+        [$author, $document] = $this->reviewedDocument(threads: 1, body: str_repeat('review prose ', 1000));
+
+        $run = $this->requestDigest($document, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertFalse($run->input['document_body_included']);
+        $this->assertSame(
+            'Covers all 1 thread. The document body was too large to include, '
+            .'so threads were read with their quoted anchors.',
+            $run->output['coverage']['statement'],
+        );
+    }
+
     public function test_a_duplicate_request_joins_the_run_already_in_flight(): void
     {
         Queue::fake();

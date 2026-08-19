@@ -73,10 +73,10 @@ class DigestPromptBuilder
             ->values()
             ->all();
 
-        [$context, $bodyIncluded] = $this->context($document, $assembler, $fence);
+        [$context, $bodyIncluded, $bodyOmitted] = $this->context($document, $assembler, $fence);
 
         $assembled = $assembler->assemble(
-            task: $this->task($bodyIncluded),
+            task: $this->task($bodyOmitted),
             sections: $sections,
             context: $context,
             totalUnits: $total,
@@ -87,7 +87,7 @@ class DigestPromptBuilder
 
         // Own up to the omissions the thread count can't express, so the panel's
         // verbatim statement is the whole truth and not just the countable part.
-        if (! $bodyIncluded) {
+        if ($bodyOmitted) {
             $coverage = $coverage->withNote(
                 'The document body was too large to include, so threads were read with their quoted anchors.',
             );
@@ -109,7 +109,7 @@ class DigestPromptBuilder
     /**
      * The trusted instruction block. Never contains document or comment content.
      */
-    private function task(bool $bodyIncluded): string
+    private function task(bool $bodyOmitted): string
     {
         return implode("\n", array_filter([
             'TASK. You are summarizing a spec review for the document\'s author.',
@@ -121,18 +121,22 @@ class DigestPromptBuilder
             'Every entry needs a short title and a one-or-two-sentence summary.',
             'Base every entry on what the threads actually say. Invent nothing.',
             'Return empty lists for categories the review does not support.',
-            $bodyIncluded
-                ? null
-                : 'The document body is too large to include in this pass; work from each thread\'s quoted anchor.',
+            $bodyOmitted
+                ? 'The document body is too large to include in this pass; work from each thread\'s quoted anchor.'
+                : null,
         ]));
     }
 
     /**
      * Document context repeated in every chunk: the title, and the body when it
-     * fits the body share of the budget. Returns the fenced block and whether the
-     * body made it in — never a silently truncated body.
+     * fits the body share of the budget. Never a silently truncated body — an
+     * over-long body is left out whole and confessed.
      *
-     * @return array{string, bool}
+     * Returns the fenced block, whether the body made it in, and whether a body
+     * that EXISTS was left out. The two are not the same: a document with no
+     * projected text has nothing to omit, and must not be reported as if it had.
+     *
+     * @return array{string, bool, bool}
      */
     private function context(Document $document, PromptAssembler $assembler, UntrustedFence $fence): array
     {
@@ -151,6 +155,7 @@ class DigestPromptBuilder
         return [
             $fence->wrap('document '.$document->id, implode("\n", $lines)),
             $included,
+            $body !== '' && ! $included,
         ];
     }
 

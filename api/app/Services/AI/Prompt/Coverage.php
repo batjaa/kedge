@@ -2,6 +2,8 @@
 
 namespace App\Services\AI\Prompt;
 
+use Illuminate\Support\Str;
+
 /**
  * Honest coverage accounting (SPEC §14). When a review is too big for the
  * context budget the run chunks by section — and when it is too big even for the
@@ -53,7 +55,7 @@ final class Coverage
     private function headline(): string
     {
         if ($this->total === 0) {
-            return sprintf('No review %s yet — nothing to digest.', $this->unit);
+            return sprintf('No review %s yet — nothing to digest.', $this->noun(0));
         }
 
         if ($this->isPartial()) {
@@ -61,11 +63,20 @@ final class Coverage
                 'Covers %d of %d %s — the review was too large to read in full.',
                 $this->covered,
                 $this->total,
-                $this->unit,
+                $this->noun($this->total),
             );
         }
 
-        return sprintf('Covers all %d %s.', $this->total, $this->unit);
+        return sprintf('Covers all %d %s.', $this->total, $this->noun($this->total));
+    }
+
+    /**
+     * The unit noun agreeing with a count — the statement is user-facing prose,
+     * and "1 threads" reads like a bug report.
+     */
+    private function noun(int $count): string
+    {
+        return Str::plural(Str::singular($this->unit), $count);
     }
 
     /**
