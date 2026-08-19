@@ -173,6 +173,10 @@ class McpWriteToolsTest extends McpTestCase
 
         $this->assertSame(1, Thread::query()->count());
         $this->assertSame(1, Comment::query()->count());
+
+        // ...and the trail counts writes, not retries: a replay wrote nothing,
+        // so it records nothing. One comment, one mcp.write row.
+        $this->assertSame(1, AuditLog::query()->where('action', AuditEvent::McpWrite->value)->count());
     }
 
     public function test_a_write_into_another_workspace_is_denied_and_persists_nothing(): void

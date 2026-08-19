@@ -74,7 +74,7 @@ class McpReviewWriter
 
         $anchor = $arguments['anchor'] ?? null;
 
-        [$thread] = $this->guarded($agent, fn (callable $guard): array => $this->threads->create(
+        [$thread, $status] = $this->guarded($agent, fn (callable $guard): array => $this->threads->create(
             $document,
             $agent,
             [
@@ -93,7 +93,7 @@ class McpReviewWriter
             $guard,
         ));
 
-        $this->recordWrite(McpTool::PostComment, $document, $agent, $thread, $ip);
+        $this->recordWrite(McpTool::PostComment, $document, $agent, $thread, $status, $ip);
 
         return $this->payload->thread($thread);
     }
@@ -110,7 +110,7 @@ class McpReviewWriter
         $this->spendWriteBudget($agent);
         $thread->loadMissing('document');
 
-        [$comment] = $this->guarded($agent, fn (callable $guard): array => $this->threads->reply(
+        [$comment, $status] = $this->guarded($agent, fn (callable $guard): array => $this->threads->reply(
             $thread,
             $agent,
             [
@@ -122,7 +122,7 @@ class McpReviewWriter
             $guard,
         ));
 
-        $this->recordWrite(McpTool::Reply, $thread->document, $agent, $comment, $ip);
+        $this->recordWrite(McpTool::Reply, $thread->document, $agent, $comment, $status, $ip);
 
         return $this->payload->comment($comment);
     }
@@ -193,11 +193,26 @@ class McpReviewWriter
      * already committed by the time we are here, and comment persistence must
      * never depend on the trail (AGENTS.md hard rule 6).
      *
+     * An idempotent replay (200, not 201) wrote nothing, so it records nothing:
+     * a trail that counted retries as writes would tell an operator their agent
+     * posted five comments when it posted one and lost its connection four
+     * times. The invocation is still visible as an `mcp.tool_invoked` event.
+     *
      * The token's NAME is recorded, never its value — the plaintext exists once,
      * at mint, and never reaches a log or a trail.
      */
-    private function recordWrite(McpTool $tool, Document $document, User $agent, Comment|Thread $subject, ?string $ip): void
-    {
+    private function recordWrite(
+        McpTool $tool,
+        Document $document,
+        User $agent,
+        Comment|Thread $subject,
+        int $status,
+        ?string $ip,
+    ): void {
+        if ($status !== 201) {
+            return;
+        }
+
         $token = $agent->currentAccessToken();
         $document->loadMissing('workspace');
 
