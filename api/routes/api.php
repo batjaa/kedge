@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\AgentTokenController;
+use App\Http\Controllers\Api\V1\AiAskController;
 use App\Http\Controllers\Api\V1\AiRunController;
 use App\Http\Controllers\Api\V1\AiThreadRunController;
 use App\Http\Controllers\Api\V1\ApprovalController;
@@ -367,6 +368,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/comments/{comment}/ai/split', [CommentSplitController::class, 'show'])
                 ->withTrashed()
                 ->name('api.v1.comments.ai.split.latest');
+
+            // Ask about the doc (#139). One verb only, and deliberately no GET:
+            // every other artifact has a latest-run read so its panel can
+            // re-attach after a reload, but an ask's answer is ephemeral by
+            // design — there is no route back to one. Polling runs through
+            // `/ai-runs/{id}` like everything else.
+            Route::post('/documents/{document}/ai/ask', [AiAskController::class, 'store'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.documents.ai.ask');
 
             Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
                 ->name('api.v1.ai-runs.show');

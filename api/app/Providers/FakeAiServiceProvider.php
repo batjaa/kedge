@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AI\Agents\CommentSplitAgent;
+use App\Services\AI\Agents\DocumentAskAgent;
 use App\Services\AI\Agents\ImprovePromptAgent;
 use App\Services\AI\Agents\ReplyDraftAgent;
 use App\Services\AI\Agents\ReviewDigestAgent;
@@ -14,7 +15,7 @@ use Illuminate\Support\ServiceProvider;
  * deterministic fake instead of the provider.
  *
  * The Playwright journey pack drives the whole AI surface — digest,
- * improve-the-doc prompt, reply drafts, thread summaries, comment splits —
+ * improve-the-doc prompt, reply drafts, thread summaries, comment splits, asks —
  * against a SERVED api. That rules out the in-process `Agent::fake()` the
  * PHPUnit suites use (module spec, Testing Decisions §1): there is no test
  * process to call it from. So the fake is wired here, at boot, exactly the way
@@ -35,7 +36,7 @@ use Illuminate\Support\ServiceProvider;
  * a chunked run's second and third calls are scripted too rather than falling
  * through to generated data.
  *
- * Two of the five read their prompt, because their output has to line up with
+ * Two of the six read their prompt, because their output has to line up with
  * real database state for the journey to mean anything:
  *
  *  - the improve-the-doc prompt returns one instruction per thread id it was
@@ -77,6 +78,9 @@ class FakeAiServiceProvider extends ServiceProvider
 
     public const SUMMARY_OPEN_QUESTION = 'Who writes the worked example?';
 
+    /** The scripted ask answer (#139). */
+    public const ASK_ANSWER = 'The document says the anchor is re-resolved against the new version, not recreated.';
+
     public function boot(): void
     {
         if (! config('kedge.ai.fake')) {
@@ -88,6 +92,7 @@ class FakeAiServiceProvider extends ServiceProvider
         $this->fakeReplyDraft();
         $this->fakeThreadSummary();
         $this->fakeCommentSplit();
+        $this->fakeDocumentAsk();
     }
 
     /**
@@ -177,6 +182,16 @@ class FakeAiServiceProvider extends ServiceProvider
                 ],
             ],
         ]);
+    }
+
+    /**
+     * A single grounded answer. Scripted like the rest so no agent is left
+     * unfaked in an environment that has no key to fall back on — an ask reached
+     * from any journey answers deterministically rather than erroring.
+     */
+    private function fakeDocumentAsk(): void
+    {
+        DocumentAskAgent::fake(fn (): array => ['answer' => self::ASK_ANSWER]);
     }
 
     /**
