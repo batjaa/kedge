@@ -586,6 +586,22 @@ class AiCommentSplitTest extends TestCase
         $this->assertSame('unparseable_output', $run->error['code']);
     }
 
+    public function test_a_comment_deleted_while_the_run_was_queued_fails_it_by_name(): void
+    {
+        CommentSplitAgent::fake([$this->splitPayload()]);
+        [$author, , $reply] = $this->splittableThread();
+
+        $run = $this->requestSplit($reply, $author);
+        $reply->delete();
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertSame('deterministic', $run->error['kind']);
+        $this->assertSame('target_missing', $run->error['code']);
+        CommentSplitAgent::assertNeverPrompted();
+    }
+
     // ---- Prompt-injection fencing (G9 composition check) --------------------
 
     public function test_comment_content_reaches_the_model_only_inside_a_labeled_fence(): void

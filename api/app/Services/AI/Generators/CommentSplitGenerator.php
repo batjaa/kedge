@@ -10,6 +10,7 @@ use App\Services\AI\AiGeneration;
 use App\Services\AI\AiRunLedger;
 use App\Services\AI\Builders\CommentSplitPromptBuilder;
 use App\Services\AI\Exceptions\ContentRefusedException;
+use App\Services\AI\Exceptions\MissingRunTargetException;
 use App\Services\AI\Exceptions\UnparseableOutputException;
 use App\Services\AI\GeneratesAiRun;
 use App\Services\AI\Prompt\Coverage;
@@ -92,7 +93,7 @@ class CommentSplitGenerator implements GeneratesAiRun
         $comment = $run->target;
 
         if (! $comment instanceof Comment) {
-            throw new UnparseableOutputException('This split run has no comment to divide.');
+            throw new MissingRunTargetException('This split run has no comment to divide.');
         }
 
         return $comment->load(['thread.document.currentVersion', 'thread.anchors']);
