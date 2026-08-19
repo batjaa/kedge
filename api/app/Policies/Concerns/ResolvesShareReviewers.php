@@ -33,15 +33,24 @@ trait ResolvesShareReviewers
             || $this->reviewerOf($user, $document);
     }
 
+    /**
+     * Own-subject reach: whoever created a thread or comment may manage it.
+     *
+     * For a reviewer identity that reach is bounded by the share (a reviewer must
+     * still be able to see the document); M2 deliberately leaves it unbounded for
+     * everyone else, so a document author or thread creator who holds no
+     * workspace membership can still moderate what they started — see
+     * ThreadCommentTest's non-member author/creator cases.
+     *
+     * An agent token is bounded regardless. Its owner's authorship is not a way
+     * around workspace scope: the credential must name this document's workspace.
+     */
     protected function ownsSubjectInReachableDocument(User $user, mixed $userId, Document $document): bool
     {
         if (! $this->ownedBy($user, $userId)) {
             return false;
         }
 
-        // Authoring something is not, on its own, workspace reach: an agent token
-        // must still carry this document's workspace ability to touch its owner's
-        // own comment or thread.
         if (! $this->tokenReachesWorkspace($user, (int) $document->workspace_id)) {
             return false;
         }

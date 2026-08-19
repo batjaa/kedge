@@ -19,6 +19,15 @@ use Laravel\Sanctum\NewAccessToken;
 class AgentTokenService
 {
     /**
+     * How many tokens one member may hold at once.
+     *
+     * A ceiling, not a quota: nobody legitimately runs fifty agents, and it is
+     * what keeps the (unpaginated, owner-scoped) settings list bounded no matter
+     * how the mint limiter is tuned.
+     */
+    public const PER_MEMBER_CAP = 50;
+
+    /**
      * Mint a named token for one agent, scoped to a single workspace.
      *
      * Returns Sanctum's {@see NewAccessToken}, whose `plainTextToken` is the only
@@ -32,15 +41,19 @@ class AgentTokenService
 
     /**
      * Revoke a token. Deleting the row is the revocation: Sanctum resolves the
-     * bearer by digest on every request, so the agent's very next call finds
-     * nothing and fails — there is no cached grant to expire and no window to
-     * race.
+     * bearer by digest on every request, so the agent's next call finds nothing
+     * and fails — there is no cached grant to expire.
      *
-     * Idempotent: revoking an already-gone token is a no-op.
+     * Returns whether THIS call removed the row. Two operators revoking the same
+     * token concurrently both hold a bound model, so the delete is conditional on
+     * the row still existing and only the winner reports true — the audit trail
+     * gets one revocation event, not one per racer. (A request that authenticated
+     * before the delete still finishes; making that linearizable is the MCP
+     * server's write-path concern — #135, TODOS.)
      */
-    public function revoke(AgentToken $token): void
+    public function revoke(AgentToken $token): bool
     {
-        $token->delete();
+        return AgentToken::query()->whereKey($token->getKey())->delete() > 0;
     }
 
     /**
@@ -48,8 +61,16 @@ class AgentTokenService
      *
      * @return Collection<int, AgentToken>
      */
-    public function listFor(User $owner)
+    public function listFor(User $owner): Collection
     {
         return $owner->tokens()->latest('id')->get();
+    }
+
+    /**
+     * How many tokens the member already holds — the cap check at mint.
+     */
+    public function countFor(User $owner): int
+    {
+        return $owner->tokens()->count();
     }
 }

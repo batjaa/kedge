@@ -29,13 +29,30 @@ export function AgentTokensPanel() {
   const [minted, setMinted] = useState<MintedAgentToken | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+
+  // "No tokens" and "the list did not load" must never look the same on a
+  // revocation surface — an operator cutting an agent off has to know they are
+  // looking at the real list.
+  function load(): Promise<void> {
+    return listAgentTokens().then((outcome) => {
+      if (outcome.ok) {
+        setTokens(outcome.tokens);
+        setLoadFailed(false);
+      } else {
+        setLoadFailed(true);
+      }
+    });
+  }
 
   useEffect(() => {
     let active = true;
     listAgentTokens()
-      .then((list) => {
-        if (active) setTokens(list);
+      .then((outcome) => {
+        if (!active) return;
+        if (outcome.ok) setTokens(outcome.tokens);
+        else setLoadFailed(true);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -52,15 +69,21 @@ export function AgentTokensPanel() {
     setError(null);
     setCopied(false);
 
-    const outcome = await mintAgentToken(trimmed);
-    if (outcome.ok) {
-      setMinted(outcome.token);
-      setTokens((prev) => withMintedToken(prev, outcome.token));
-      setName('');
-    } else {
-      setError(outcome.message);
+    try {
+      const outcome = await mintAgentToken(trimmed);
+      if (outcome.ok) {
+        setMinted(outcome.token);
+        setTokens((prev) => withMintedToken(prev, outcome.token));
+        setName('');
+      } else {
+        setError(outcome.message);
+        // The mint may have landed even though we cannot show its value, so
+        // re-read the authoritative list rather than guess.
+        await load();
+      }
+    } finally {
+      setMinting(false);
     }
-    setMinting(false);
   }
 
   async function onCopy(value: string) {
@@ -78,15 +101,18 @@ export function AgentTokensPanel() {
     setRevokingId(id);
     setError(null);
 
-    const outcome = await revokeAgentToken(id);
-    if (outcome.ok) {
-      setTokens((prev) => withoutToken(prev, id));
-      // If the just-revoked token is the one on display, retire its copy box.
-      setMinted((current) => (current && current.id === id ? null : current));
-    } else {
-      setError(outcome.message);
+    try {
+      const outcome = await revokeAgentToken(id);
+      if (outcome.ok) {
+        setTokens((prev) => withoutToken(prev, id));
+        // If the just-revoked token is the one on display, retire its copy box.
+        setMinted((current) => (current && current.id === id ? null : current));
+      } else {
+        setError(outcome.message);
+      }
+    } finally {
+      setRevokingId(null);
     }
-    setRevokingId(null);
   }
 
   function lastUsedLabel(token: AgentToken): string {
@@ -172,6 +198,18 @@ export function AgentTokensPanel() {
             >
               {copied ? t('copied') : t('copy')}
             </button>
+            {/* Stored the token? Take it off the screen. Without this the value
+                sits in an unattended tab until something else clears it. */}
+            <button
+              type="button"
+              onClick={() => {
+                setMinted(null);
+                setCopied(false);
+              }}
+              className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-900/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/5"
+            >
+              {t('dismiss')}
+            </button>
           </div>
         </div>
       ) : null}
@@ -179,6 +217,10 @@ export function AgentTokensPanel() {
       <div className="mt-6">
         {loading ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('loading')}</p>
+        ) : loadFailed ? (
+          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+            {t('loadFailed')}
+          </p>
         ) : tokens.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('none')}</p>
         ) : (

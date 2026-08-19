@@ -35,6 +35,14 @@ class AuthorizationMatrixTest extends TestCase
     use RefreshDatabase;
 
     /**
+     * Framework-registered routes that belong to no middleware group and resolve
+     * no principal: the health probe and the local-disk file server. They are the
+     * only routes the agent-token sweep below skips, and the sweep proves they
+     * carry no authentication before skipping them.
+     */
+    private const GROUPLESS_INFRASTRUCTURE_ROUTES = ['up', 'storage/{path}'];
+
+    /**
      * @return array<string, array{string, string, string, int}>
      */
     public static function roleActionMatrix(): array
@@ -512,13 +520,14 @@ class AuthorizationMatrixTest extends TestCase
      * m4-ai-agents eng review §1).
      *
      * Agent tokens are MCP-only by construction, so the matrix's token row is not
-     * a hand-maintained list of endpoints — it is the whole versioned REST
-     * surface, enumerated from the router. A v1 route added by any future ticket
-     * is covered the moment it is registered: if someone ever lets a token
-     * authenticate as a human, this fails without anyone having remembered to
-     * extend a table.
+     * a hand-maintained list of endpoints — it is EVERY route the application
+     * registers, enumerated from the router. Not a URI prefix: prefixes were how
+     * `POST /logout` (a root-level `auth:sanctum` route outside `/api/v1`) stayed
+     * open to agent bearers through the first cut of this rule. A route added by
+     * any future ticket is covered the moment it is registered, and the MCP
+     * endpoint (#135) will have to declare itself here as the one exception.
      */
-    public function test_every_rest_v1_action_rejects_an_agent_token_principal(): void
+    public function test_every_route_in_the_application_rejects_an_agent_token_principal(): void
     {
         $owner = app(RegistrationService::class)->register(
             name: 'Agent Operator',
@@ -529,19 +538,38 @@ class AuthorizationMatrixTest extends TestCase
             ->createToken('Sweep agent', ['workspace:'.$owner->personalWorkspace()->id])
             ->plainTextToken;
 
-        $uris = collect(app('router')->getRoutes()->getRoutes())
-            ->filter(fn ($route): bool => str_starts_with($route->uri(), 'api/v1'))
-            ->flatMap(fn ($route): array => collect($route->methods())
-                ->reject(fn (string $method): bool => $method === 'HEAD')
-                // Route parameters are irrelevant here: authentication is refused
-                // before routing resolves a model, so any id stands in.
-                ->map(fn (string $method): string => $method.' /'.preg_replace('/\{[^}]+\}/', '1', $route->uri()))
-                ->all());
+        $routes = collect(app('router')->getRoutes()->getRoutes())
+            ->reject(fn ($route): bool => in_array($route->uri(), self::GROUPLESS_INFRASTRUCTURE_ROUTES, true));
+
+        // The exemption list cannot be used to smuggle a real surface past this
+        // sweep: an exempt route must resolve no principal at all.
+        foreach (self::GROUPLESS_INFRASTRUCTURE_ROUTES as $uri) {
+            foreach (app('router')->getRoutes()->getRoutes() as $route) {
+                if ($route->uri() !== $uri) {
+                    continue;
+                }
+
+                $this->assertEmpty(
+                    array_filter(
+                        app('router')->gatherRouteMiddleware($route),
+                        fn ($middleware): bool => is_string($middleware) && str_contains($middleware, 'auth'),
+                    ),
+                    "Exempt route {$uri} authenticates a principal and must not be exempt",
+                );
+            }
+        }
+
+        $uris = $routes->flatMap(fn ($route): array => collect($route->methods())
+            ->reject(fn (string $method): bool => $method === 'HEAD')
+            // Route parameters are irrelevant here: authentication is refused
+            // before routing resolves a model, so any id stands in.
+            ->map(fn (string $method): string => $method.' /'.preg_replace('/\{[^}]+\}/', '1', $route->uri()))
+            ->all());
 
         $this->assertGreaterThan(
-            30,
+            40,
             $uris->count(),
-            'The v1 route sweep found suspiciously few actions — check the filter.',
+            'The route sweep found suspiciously few actions — check the enumeration.',
         );
 
         $accepted = [];
@@ -562,7 +590,7 @@ class AuthorizationMatrixTest extends TestCase
         $this->assertSame(
             [],
             $accepted,
-            'These REST v1 actions did not refuse an agent-token principal: '.implode(', ', $accepted),
+            'These actions did not refuse an agent-token principal: '.implode(', ', $accepted),
         );
     }
 
@@ -623,8 +651,10 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     /**
-     * Another member's token id is never an access path: revoke resolves a row by
-     * id, so it must verify ownership, not merely membership.
+     * Another member's token id is never an access path — and never even an
+     * existence oracle. Token ids are globally sequential, so the Policy denies a
+     * foreign token as NOT FOUND: "not yours" and "never existed" are one answer,
+     * and probing the id space discloses nothing.
      */
     public function test_a_member_cannot_revoke_another_members_agent_token(): void
     {
@@ -634,9 +664,20 @@ class AuthorizationMatrixTest extends TestCase
 
         $this->fromWebApp()
             ->deleteJson('/api/v1/agent-tokens/'.$token->accessToken->id)
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->accessToken->id]);
+    }
+
+    public function test_a_foreign_token_id_is_indistinguishable_from_a_missing_one(): void
+    {
+        [$owner] = $this->ownedDocument();
+        $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
+        $this->actAsDocumentRole('other', $owner);
+
+        $this->fromWebApp()
+            ->deleteJson('/api/v1/agent-tokens/'.($token->accessToken->id + 9999))
+            ->assertNotFound();
     }
 
     /**

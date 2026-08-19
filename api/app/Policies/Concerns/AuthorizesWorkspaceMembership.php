@@ -6,6 +6,7 @@ use App\Enums\WorkspaceRole;
 use App\Models\AgentToken;
 use App\Models\Document;
 use App\Models\User;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * The one place workspace reach is decided (SPEC §13; m4-ai-agents eng review
@@ -23,6 +24,12 @@ use App\Models\User;
  * tool author cannot forget a check they never had to write. First-party cookie
  * requests carry Sanctum's TransientToken (not an AgentToken), so (2) is a
  * no-op for humans.
+ *
+ * The two are not always both required: authorship-based reach (see
+ * {@see authorOf()} and ResolvesShareReviewers::ownsSubjectInReachableDocument())
+ * deliberately survives losing membership, per M2. Credential scope, by
+ * contrast, applies everywhere without exception — there is no path by which an
+ * agent token reaches a workspace it does not name.
  */
 trait AuthorizesWorkspaceMembership
 {
@@ -45,6 +52,15 @@ trait AuthorizesWorkspaceMembership
             && $user->workspaces()->whereKey($workspaceId)->exists();
     }
 
+    /**
+     * The document's author.
+     *
+     * Authorship is deliberately NOT conditioned on current membership (M2: a
+     * non-member author still moderates what they wrote — ThreadCommentTest), but
+     * it IS conditioned on credential scope: an agent token must carry this
+     * document's workspace ability before its owner's authorship counts for
+     * anything.
+     */
     protected function authorOf(User $user, Document $document): bool
     {
         return $this->ownedBy($user, $document->created_by)
@@ -87,14 +103,25 @@ trait AuthorizesWorkspaceMembership
     }
 
     /**
-     * True unless the request authenticated with an agent token that lacks this
-     * workspace's ability. Session-authenticated humans always pass.
+     * True unless the request authenticated with a persistent token that does not
+     * carry this workspace's ability. Session-authenticated humans (Sanctum's
+     * TransientToken) and non-HTTP callers (no token at all) always pass.
+     *
+     * Written to fail CLOSED on anything unexpected: a persistent token that is
+     * not an {@see AgentToken} — a provider override, a future guard, a package
+     * that registers its own model — gets no reach at all, rather than silently
+     * inheriting a human's. The only way to reach a workspace with a stored
+     * credential is to be an agent token that names it.
      */
     protected function tokenReachesWorkspace(User $user, int $workspaceId): bool
     {
         $token = $user->currentAccessToken();
 
-        return ! $token instanceof AgentToken
-            || $token->scopedToWorkspace($workspaceId);
+        if (! $token instanceof PersonalAccessToken) {
+            return true;
+        }
+
+        return $token instanceof AgentToken
+            && $token->scopedToWorkspace($workspaceId);
     }
 }

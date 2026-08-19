@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Models\AgentToken;
 use App\Services\Fetch\CurlHttpTransport;
 use App\Services\Fetch\DnsResolver;
@@ -15,6 +16,7 @@ use App\Services\Import\Connectors\UploadConnector;
 use App\Services\SystemWorkspace;
 use App\Support\EmailDigest;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -68,7 +70,27 @@ class AppServiceProvider extends ServiceProvider
         // knows how to answer "does this credential reach that workspace?".
         Sanctum::usePersonalAccessTokenModel(AgentToken::class);
 
+        $this->configureAgentTokenRefusalPriority();
         $this->configureRateLimiting();
+    }
+
+    /**
+     * Hoist the agent-token refusal to the front of the middleware priority list
+     * (SPEC §15, #131).
+     *
+     * It is prepended to both route groups in bootstrap/app.php, but priority
+     * sorting can still reorder a group. Sanctum's own provider prepends
+     * `EnsureFrontendRequestsAreStateful` to that list at boot — which, left
+     * alone, sorts the session/CSRF stack in FRONT of the refusal, so a
+     * token-bearing request with a first-party Origin would open a database
+     * session and hit CSRF (419) before being refused. Prepending here, from a
+     * provider that boots after Sanctum's, puts the refusal back where the
+     * security property needs it: first, before anything with a side effect.
+     */
+    private function configureAgentTokenRefusalPriority(): void
+    {
+        $this->app->make(HttpKernel::class)
+            ->prependToMiddlewarePriority(RejectAgentTokenAuth::class);
     }
 
     /**

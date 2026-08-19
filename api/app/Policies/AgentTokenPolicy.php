@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\AgentToken;
 use App\Models\User;
 use App\Policies\Concerns\AuthorizesWorkspaceMembership;
+use Illuminate\Auth\Access\Response;
 
 /**
  * Who may mint, list, and revoke **Agent Tokens** (SPEC §15; m4-ai-agents eng
@@ -43,11 +44,28 @@ class AgentTokenPolicy
         return $this->fullMember($user);
     }
 
-    public function delete(User $user, AgentToken $token): bool
+    /**
+     * Revoking is owner-only, and a foreign token answers 404 rather than 403.
+     *
+     * The distinction matters: token ids are globally sequential, so a plain
+     * "forbidden" would confirm that id N is somebody's live credential. Denying
+     * as not-found collapses "not yours" and "never existed" into one answer, so
+     * the id space discloses nothing — while authorization stays where the house
+     * rule puts it, in the Policy, not in a hand-scoped controller query.
+     *
+     * A caller who is not a full member is refused before any of that, with a
+     * plain 403: they have no business on this surface at all.
+     */
+    public function delete(User $user, AgentToken $token): Response
     {
-        return $this->fullMember($user)
-            && $token->tokenable_type === $user->getMorphClass()
+        if (! $this->fullMember($user)) {
+            return Response::deny();
+        }
+
+        $isOwn = $token->tokenable_type === $user->getMorphClass()
             && (int) $token->tokenable_id === (int) $user->id;
+
+        return $isOwn ? Response::allow() : Response::denyAsNotFound();
     }
 
     private function fullMember(User $user): bool

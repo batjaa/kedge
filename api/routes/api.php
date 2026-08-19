@@ -22,7 +22,6 @@ use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
-use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
 
@@ -54,15 +53,15 @@ Route::post('/internal/diagrams', DiagramController::class)
 | so /v1 is a contract, never a moving target. Resource routes gain
 | Policies as they appear (SPEC 13); /me is identity, not a resource.
 |
-| The whole group is wrapped in RejectAgentTokenAuth (SPEC §15, #131): this is
-| the HUMAN API. An Agent Token is valid only on the MCP endpoint, so every
-| action here — present and future — refuses a bearer credential before routing.
-| The SPA cookie path is unaffected, and mint/revoke living inside this group is
-| what makes "an agent can never mint a token" structural.
+| This is the HUMAN API. RejectAgentTokenAuth is prepended to BOTH route groups
+| in bootstrap/app.php (SPEC §15, #131), so every action here — present and
+| future — refuses a bearer credential before routing; only the MCP endpoint
+| (#135) opts back in. The SPA cookie path is unaffected, and mint/revoke living
+| on this surface is what makes "an agent can never mint a token" structural.
 |
 */
 
-Route::prefix('v1')->middleware(RejectAgentTokenAuth::class)->group(function () {
+Route::prefix('v1')->group(function () {
     // Public runtime capabilities the web app reads to decide what to render
     // (e.g. the GitHub sign-in button). No auth; its own generous per-IP
     // limiter so a page-load config read never eats the login budget.

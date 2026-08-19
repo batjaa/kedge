@@ -5,9 +5,12 @@ namespace Tests\Feature\Api\V1;
 use App\Models\AgentToken;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\Agents\AgentTokenService;
+use App\Services\AuditLogger;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -200,6 +203,104 @@ class AgentTokenTest extends TestCase
         foreach (AuditLog::all() as $log) {
             $this->assertStringNotContainsString($plainText, json_encode($log->meta) ?: '');
         }
+    }
+
+    /**
+     * The mint response is the one place in the app that carries a credential, so
+     * it must not be storable by a cache, a proxy, or the back/forward store.
+     */
+    public function test_the_mint_response_is_never_cached(): void
+    {
+        $user = $this->member();
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/agent-tokens', ['name' => 'Claude Code'])
+            ->assertStatus(201);
+
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+    }
+
+    /**
+     * A credential and its trail entry commit together. If the audit write fails,
+     * the mint fails too — an unaudited live token whose value nobody received is
+     * strictly worse than no token at all, and nothing has been handed out yet.
+     */
+    public function test_a_failed_audit_write_leaves_no_orphaned_credential(): void
+    {
+        $user = $this->member();
+
+        $this->mock(AuditLogger::class)
+            ->shouldReceive('record')
+            ->andThrow(new RuntimeException('audit sink is down'));
+
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->actingAs($user)->fromWebApp()
+                ->postJson('/api/v1/agent-tokens', ['name' => 'Claude Code']);
+            $this->fail('The mint should have failed with the audit write.');
+        } catch (RuntimeException) {
+            // Expected — the point is what did NOT survive it.
+        }
+
+        $this->assertSame(0, AgentToken::count());
+    }
+
+    /**
+     * Revocation is security-first, so it is the inverse trade: the credential is
+     * already gone when the trail is written, and a dead log sink must not
+     * resurrect it or report failure to the operator.
+     */
+    public function test_revocation_survives_a_failed_audit_write(): void
+    {
+        $user = $this->member();
+        $token = $user->createToken('Claude Code', ['workspace:'.$user->personalWorkspace()->id]);
+
+        $this->mock(AuditLogger::class)
+            ->shouldReceive('recordSafely')
+            ->andReturn(null);
+
+        $this->actingAs($user)->fromWebApp()
+            ->deleteJson('/api/v1/agent-tokens/'.$token->accessToken->id)
+            ->assertStatus(204);
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->accessToken->id]);
+    }
+
+    /**
+     * Two operators revoking the same token both hold a bound model. Only the
+     * request that actually removed the row records the event, so the trail shows
+     * one revocation, not one per racer.
+     */
+    public function test_a_losing_concurrent_revoke_records_no_second_event(): void
+    {
+        $user = $this->member();
+        $token = $user->createToken('Claude Code', ['workspace:'.$user->personalWorkspace()->id]);
+        $id = $token->accessToken->id;
+
+        $service = app(AgentTokenService::class);
+        $first = AgentToken::findOrFail($id);
+        $second = AgentToken::findOrFail($id);
+
+        $this->assertTrue($service->revoke($first));
+        $this->assertFalse($service->revoke($second));
+    }
+
+    public function test_a_member_cannot_hold_more_than_the_token_cap(): void
+    {
+        $user = $this->member();
+        $ability = ['workspace:'.$user->personalWorkspace()->id];
+
+        for ($i = 0; $i < AgentTokenService::PER_MEMBER_CAP; $i++) {
+            $user->createToken("Agent {$i}", $ability);
+        }
+
+        $this->actingAs($user)->fromWebApp()
+            ->postJson('/api/v1/agent-tokens', ['name' => 'One too many'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
+
+        $this->assertSame(AgentTokenService::PER_MEMBER_CAP, AgentToken::count());
     }
 
     public function test_the_list_is_only_the_callers_own_tokens(): void

@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Models\Document;
 use App\Models\User;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Tests\TestCase;
 
 /**
@@ -161,6 +165,75 @@ class AgentTokenRestRejectionTest extends TestCase
         $this->withToken($token)
             ->getJson('/api/v1/documents/'.($document->id + 9999))
             ->assertUnauthorized();
+    }
+
+    /**
+     * `POST /logout` is a root-level `auth:sanctum` route outside `/api/v1`. A
+     * prefix-scoped rule left it open: an agent bearer got a 204 and a refreshed
+     * `last_used_at`, which is both a human-only action and a token-validity
+     * oracle. The rule is app-wide, so it is closed. (Found by the #131 codex
+     * gate.)
+     */
+    public function test_the_root_level_sign_out_route_refuses_a_token(): void
+    {
+        $user = $this->member();
+        $token = $this->mint($user);
+
+        $this->withToken($token)
+            ->postJson('/logout')
+            ->assertUnauthorized();
+
+        // No lookup happened, so the token learns nothing about its own validity.
+        $this->assertNull($user->tokens()->sole()->fresh()->last_used_at);
+    }
+
+    /**
+     * Ordering is the security property, not a detail: the refusal must precede
+     * Sanctum's stateful wrapper (which starts the session and CSRF stack), the
+     * rate limiters, and route-model binding. Asserted on the resolved pipeline
+     * so a future group edit that reorders it fails here.
+     */
+    public function test_the_refusal_is_ordered_ahead_of_session_throttling_and_binding(): void
+    {
+        $route = collect(app('router')->getRoutes()->getRoutes())
+            ->first(fn ($route): bool => $route->uri() === 'api/v1/agent-tokens');
+
+        $middleware = array_values(array_filter(
+            app('router')->gatherRouteMiddleware($route),
+            'is_string',
+        ));
+
+        $this->assertSame(RejectAgentTokenAuth::class, $middleware[0] ?? null);
+
+        foreach ([EnsureFrontendRequestsAreStateful::class, SubstituteBindings::class] as $later) {
+            $this->assertGreaterThan(
+                0,
+                array_search($later, $middleware, true),
+                $later.' must run after the agent-token refusal',
+            );
+        }
+    }
+
+    /**
+     * The corollary of that ordering, asserted as behaviour: a rejected request
+     * does no database work at all. With the database session driver, a session
+     * that had started would show up here immediately.
+     */
+    public function test_a_rejected_request_touches_no_database(): void
+    {
+        $user = $this->member();
+        $token = $this->mint($user);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        // A stateful Origin: the shape that previously reached session + CSRF.
+        $this->withToken($token)->fromWebApp()
+            ->postJson('/api/v1/agent-tokens', ['name' => 'Second agent'])
+            ->assertUnauthorized();
+
+        $this->assertSame([], DB::getRawQueryLog());
+        DB::disableQueryLog();
     }
 
     /**
