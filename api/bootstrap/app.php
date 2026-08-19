@@ -2,9 +2,11 @@
 
 use App\Http\Middleware\EnsureDemoModeEnabled;
 use App\Http\Middleware\EnsureResyncEnabled;
+use App\Http\Middleware\RejectAgentTokenAuth;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -48,6 +50,18 @@ return Application::configure(basePath: dirname(__DIR__))
             'demo.enabled' => EnsureDemoModeEnabled::class,
             'resync.enabled' => EnsureResyncEnabled::class,
         ]);
+
+        // "Agent tokens are MCP-only" runs FIRST on the routes that carry it
+        // (the whole /api/v1 group — SPEC §15, #131). Priority matters here for a
+        // reason beyond tidiness: without it, SubstituteBindings resolves route
+        // models before the credential is refused, so a token holder could tell an
+        // existing id (401) from a missing one (404) across every v1 resource —
+        // an enumeration oracle. Ordered first, a token-bearing request is
+        // rejected before it touches the session, a rate limiter, or the database.
+        $middleware->prependToPriorityList(
+            before: HandlePrecognitiveRequests::class,
+            prepend: RejectAgentTokenAuth::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // The API is a headless JSON backend: versioned routes and the

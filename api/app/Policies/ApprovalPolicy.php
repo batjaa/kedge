@@ -20,6 +20,7 @@ class ApprovalPolicy
 
     public function revoke(User $user, Approval $approval): bool
     {
-        return $this->ownedBy($user, $approval->user_id);
+        return $this->ownedBy($user, $approval->user_id)
+            && $this->tokenReachesWorkspace($user, (int) $approval->workspace_id);
     }
 }

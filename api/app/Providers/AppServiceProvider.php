@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\AgentToken;
 use App\Services\Fetch\CurlHttpTransport;
 use App\Services\Fetch\DnsResolver;
 use App\Services\Fetch\HttpTransport;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -60,6 +62,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Sanctum's token rows ARE Kedge's Agent Tokens (SPEC §15, #131), so they
+        // hydrate as the domain model: Policy discovery finds AgentTokenPolicy,
+        // and `$user->currentAccessToken()` hands the Policy trait something that
+        // knows how to answer "does this credential reach that workspace?".
+        Sanctum::usePersonalAccessTokenModel(AgentToken::class);
+
         $this->configureRateLimiting();
     }
 
@@ -91,6 +99,13 @@ class AppServiceProvider extends ServiceProvider
         // credential mutations are rare and worth bounding so a script can't churn
         // them (SPEC 13). Reads (the masked list) are free.
         RateLimiter::for('integrations', function (Request $request) {
+            return Limit::perMinute(15)->by($request->user()?->id ?: $request->ip());
+        });
+
+        // Agent-token writes (mint + revoke). Per authenticated user — minting a
+        // credential is a rare, deliberate act, and a script churning them is
+        // never legitimate (SPEC §13). The list is a free read.
+        RateLimiter::for('agent-tokens', function (Request $request) {
             return Limit::perMinute(15)->by($request->user()?->id ?: $request->ip());
         });
 

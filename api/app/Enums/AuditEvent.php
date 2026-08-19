@@ -65,6 +65,10 @@ enum AuditEvent: string
     case IntegrationConnected = 'integration.connected';
     case IntegrationRemoved = 'integration.removed';
 
+    // Agent tokens (SPEC §15).
+    case AgentTokenCreated = 'agent_token.created';
+    case AgentTokenRevoked = 'agent_token.revoked';
+
     // Approvals.
     case ApprovalGiven = 'approval.given';
     case ApprovalRevoked = 'approval.revoked';

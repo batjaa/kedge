@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\AgentTokenController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
+use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Http\Middleware\VerifyDiagramSecret;
 use Illuminate\Support\Facades\Route;
 
@@ -52,9 +54,15 @@ Route::post('/internal/diagrams', DiagramController::class)
 | so /v1 is a contract, never a moving target. Resource routes gain
 | Policies as they appear (SPEC 13); /me is identity, not a resource.
 |
+| The whole group is wrapped in RejectAgentTokenAuth (SPEC §15, #131): this is
+| the HUMAN API. An Agent Token is valid only on the MCP endpoint, so every
+| action here — present and future — refuses a bearer credential before routing.
+| The SPA cookie path is unaffected, and mint/revoke living inside this group is
+| what makes "an agent can never mint a token" structural.
+|
 */
 
-Route::prefix('v1')->group(function () {
+Route::prefix('v1')->middleware(RejectAgentTokenAuth::class)->group(function () {
     // Public runtime capabilities the web app reads to decide what to render
     // (e.g. the GitHub sign-in button). No auth; its own generous per-IP
     // limiter so a page-load config read never eats the login budget.
@@ -256,6 +264,22 @@ Route::prefix('v1')->group(function () {
             Route::post('/comments/{comment}/reactions', [CommentReactionController::class, 'store'])
                 ->withTrashed()
                 ->name('api.v1.comments.reactions.store');
+        });
+
+        // Agent tokens (SPEC §15, #131), all behind AgentTokenPolicy — full
+        // workspace membership to mint/list/revoke, plus ownership to revoke.
+        // Listing is a free read; mint and revoke share a per-user limiter
+        // (credential mutations are rare and worth bounding). These live INSIDE
+        // the v1 group on purpose: the group refuses token authentication, so an
+        // agent can never mint or revoke a token — its own or anyone else's.
+        Route::get('/agent-tokens', [AgentTokenController::class, 'index'])
+            ->name('api.v1.agent-tokens.index');
+
+        Route::middleware('throttle:agent-tokens')->group(function () {
+            Route::post('/agent-tokens', [AgentTokenController::class, 'store'])
+                ->name('api.v1.agent-tokens.store');
+            Route::delete('/agent-tokens/{agentToken}', [AgentTokenController::class, 'destroy'])
+                ->name('api.v1.agent-tokens.destroy');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.
