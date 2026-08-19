@@ -6,6 +6,7 @@ use App\Enums\AnchorState;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
 use App\Enums\WorkspaceRole;
+use App\Models\Anchor;
 use App\Models\AuditLog;
 use App\Models\Comment;
 use App\Models\Document;
@@ -24,6 +25,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class ThreadCommentTest extends TestCase
@@ -1279,6 +1281,252 @@ class ThreadCommentTest extends TestCase
             ->assertJsonPath('code', 'comment_not_reply');
     }
 
+    public function test_fork_with_a_client_anchor_persists_the_supplied_selector_not_the_source_one(): void
+    {
+        [$author, $document, $reply] = $this->forkableInlineThread('client-anchor');
+
+        $fork = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'client-anchor-fork',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2'),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.exact', 'Replacement text')
+            ->assertJsonPath('anchor.state', 'anchored')
+            ->assertJsonPath('anchor.projection_version', '2');
+
+        $anchors = Anchor::query()->where('thread_id', $fork->json('id'))->get();
+        $this->assertCount(1, $anchors);
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $fork->json('id'),
+            'document_version_id' => $document->currentVersion->id,
+            'exact' => 'Replacement text',
+            'projection_version' => '2',
+            'state' => 'anchored',
+        ]);
+        $this->assertDatabaseMissing('anchors', [
+            'thread_id' => $fork->json('id'),
+            'exact' => 'target text',
+        ]);
+    }
+
+    public function test_fork_with_a_stale_client_anchor_reprojects_and_stamps_the_current_projection(): void
+    {
+        [$author, $document, $reply] = $this->forkableInlineThread('stale-anchor');
+        $document->currentVersion->forceFill(['projection_version' => '1'])->save();
+        $this->fakeProjection($document->currentVersion->plain_text, '2');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'stale-anchor-fork',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '1'),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.exact', 'Replacement text')
+            ->assertJsonPath('anchor.projection_version', '2');
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/internal/projection'));
+    }
+
+    public function test_fork_with_an_invalid_client_anchor_is_rejected_and_persists_nothing(): void
+    {
+        [$author, $document, $reply] = $this->forkableInlineThread('invalid-anchor');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+        $anchor['exact'] = 'Missing text';
+        $this->fakeProjection($document->currentVersion->plain_text, '2');
+
+        $threads = Thread::query()->count();
+        $comments = Comment::withTrashed()->count();
+        $anchors = Anchor::query()->count();
+        $versions = DocumentVersion::query()->count();
+        $currentVersionId = $document->current_version_id;
+        $contentHash = $document->currentVersion->content_hash;
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'invalid-anchor-fork',
+                'anchor' => $anchor,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'anchor_document_changed');
+
+        $this->assertSame($threads, Thread::query()->count());
+        $this->assertSame($comments, Comment::withTrashed()->count());
+        $this->assertSame($anchors, Anchor::query()->count());
+        $this->assertDatabaseMissing('comments', ['idempotency_key' => 'invalid-anchor-fork']);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'thread.forked']);
+
+        // The shared trust boundary may still refresh the version's cached text
+        // projection while validating — that is M3's deliberate self-heal, and
+        // reusing it verbatim is the point of this endpoint. What a rejected
+        // fork must never do is move the document itself.
+        $document->refresh();
+        $this->assertSame($versions, DocumentVersion::query()->count());
+        $this->assertSame($currentVersionId, $document->current_version_id);
+        $this->assertSame($contentHash, $document->currentVersion->content_hash);
+    }
+
+    public function test_fork_with_an_explicit_null_anchor_keeps_the_copy_behavior(): void
+    {
+        [$author, , $reply] = $this->forkableInlineThread('null-anchor');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'null-anchor-fork',
+                'anchor' => null,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('anchor.exact', 'target text');
+    }
+
+    public function test_fork_with_a_malformed_client_anchor_fails_request_validation(): void
+    {
+        [$author, , $reply] = $this->forkableInlineThread('malformed-anchor');
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'malformed-anchor-fork',
+                'anchor' => ['exact' => 'Replacement text'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['anchor']);
+
+        $this->assertDatabaseMissing('comments', ['idempotency_key' => 'malformed-anchor-fork']);
+    }
+
+    public function test_fork_with_an_anchor_on_a_document_thread_is_rejected(): void
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'document',
+                'body' => 'Parent',
+                'idempotency_key' => 'document-anchor-parent',
+            ])
+            ->assertCreated();
+
+        $reply = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'body' => 'Fork me',
+                'idempotency_key' => 'document-anchor-reply',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'document-anchor-fork',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'thread_not_inline');
+
+        $this->assertDatabaseCount('anchors', 0);
+        $this->assertDatabaseMissing('comments', ['idempotency_key' => 'document-anchor-fork']);
+    }
+
+    public function test_fork_authorization_runs_before_client_anchor_validation(): void
+    {
+        // A denied actor must never learn whether their anchor matched the
+        // document: the Policy answers first, the projection check never runs.
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+        $outsider = User::factory()->create(['email' => 'outsider@example.com']);
+        $outsider->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $thread->comments()->create(['author_id' => $author->id, 'body_md' => 'Parent']);
+        $reply = $thread->comments()->create(['author_id' => $author->id, 'body_md' => 'Fork me']);
+        $thread->anchors()->create($this->anchorFor($document->currentVersion->plain_text, 'target text', '2') + [
+            'document_version_id' => $document->currentVersion->id,
+            'state' => AnchorState::Anchored,
+        ]);
+
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+        $anchor['exact'] = 'Missing text';
+
+        $this->actingAs($outsider)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->id}/fork", [
+                'idempotency_key' => 'anchor-authz-fork',
+                'anchor' => $anchor,
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('comments', ['idempotency_key' => 'anchor-authz-fork']);
+    }
+
+    public function test_anchored_fork_retry_is_idempotent_and_does_not_add_a_second_anchor(): void
+    {
+        [$author, $document, $reply] = $this->forkableInlineThread('anchor-idempotency');
+        $anchor = $this->anchorFor($document->currentVersion->plain_text, 'Replacement text', '2');
+
+        $first = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'anchor-idempotency-fork',
+                'anchor' => $anchor,
+            ])
+            ->assertCreated();
+
+        $retry = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
+                'idempotency_key' => 'anchor-idempotency-fork',
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'target text', '2'),
+            ])
+            ->assertOk();
+
+        $this->assertSame($first->json('id'), $retry->json('id'));
+        $this->assertDatabaseCount('threads', 2);
+        $this->assertSame(1, Anchor::query()->where('thread_id', $first->json('id'))->count());
+        $this->assertDatabaseHas('anchors', [
+            'thread_id' => $first->json('id'),
+            'exact' => 'Replacement text',
+        ]);
+    }
+
+    /**
+     * G8's critical regression guard: an anchor-less fork must keep copying the
+     * source thread's anchor rows verbatim — every selector column, the version
+     * they were captured against, and their state (orphaned rows included).
+     */
+    public function test_fork_without_an_anchor_copies_the_source_anchors_byte_for_byte(): void
+    {
+        $plainText = 'Alpha target text. Replacement text.';
+        [$author, $document] = $this->readyDocument(plainText: $plainText, projectionVersion: '1');
+        $firstVersion = $document->currentVersion;
+        $secondVersion = $this->attachVersion($document, '# Doc', $plainText, '2');
+
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'inline',
+            'status' => 'open',
+            'created_by' => $author->id,
+        ]);
+        $thread->comments()->create(['author_id' => $author->id, 'body_md' => 'Parent']);
+        $reply = $thread->comments()->create(['author_id' => $author->id, 'body_md' => 'Fork me']);
+        $thread->anchors()->create($this->anchorFor($plainText, 'target text', '1') + [
+            'document_version_id' => $firstVersion->id,
+            'state' => AnchorState::Orphaned,
+        ]);
+        $thread->anchors()->create($this->anchorFor($plainText, 'Replacement text', '2') + [
+            'document_version_id' => $secondVersion->id,
+            'state' => AnchorState::Anchored,
+        ]);
+
+        $fork = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->id}/fork", ['idempotency_key' => 'byte-for-byte-fork'])
+            ->assertCreated();
+
+        $this->assertSame(
+            $this->anchorSelectors($thread->id),
+            $this->anchorSelectors((int) $fork->json('id')),
+        );
+        $this->assertCount(2, $this->anchorSelectors((int) $fork->json('id')));
+    }
+
     public function test_thread_rail_counts_forks_from_soft_deleted_replies_in_bulk_hydration(): void
     {
         [$author, $document] = $this->readyDocument();
@@ -2113,6 +2361,57 @@ class ThreadCommentTest extends TestCase
         $document->setRelation('currentVersion', $version);
 
         return $version;
+    }
+
+    /**
+     * An inline thread anchored to "target text" with one reply ready to fork.
+     *
+     * @return array{User, Document, TestResponse}
+     */
+    private function forkableInlineThread(string $prefix): array
+    {
+        [$author, $document] = $this->readyDocument(plainText: 'Alpha target text. Replacement text.');
+
+        $thread = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/threads", [
+                'type' => 'inline',
+                'body' => 'Parent',
+                'idempotency_key' => "{$prefix}-parent",
+                'anchor' => $this->anchorFor($document->currentVersion->plain_text, 'target text', '2'),
+            ])
+            ->assertCreated();
+
+        $reply = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->json('id')}/comments", [
+                'body' => 'Fork me',
+                'idempotency_key' => "{$prefix}-reply",
+            ])
+            ->assertCreated();
+
+        return [$author, $document, $reply];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function anchorSelectors(int $threadId): array
+    {
+        return Anchor::query()
+            ->where('thread_id', $threadId)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Anchor $anchor) => $anchor->only([
+                'document_version_id',
+                'exact',
+                'prefix',
+                'suffix',
+                'start',
+                'end',
+                'heading_path',
+                'projection_version',
+                'state',
+            ]))
+            ->all();
     }
 
     private function orphanedThread(Document $document, User $author, string $exact): Thread

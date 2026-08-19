@@ -403,7 +403,7 @@ Agents are first-class reviewers. `laravel/mcp` server in the api app, exposing 
 |---|---|
 | `list_documents`, `get_document(version?)` | read |
 | `list_threads`, `get_thread` | read |
-| `post_comment(thread?/anchor?)`, `reply(thread)` | write — badged `client: mcp` |
+| `post_comment(document, anchor?, version?)` starts a thread; `reply(thread)` joins one | write — badged `client: mcp` |
 | `get_improve_prompt`, `get_digest` | read |
 
 - Auth: Sanctum tokens (workspace-scoped, named per agent, revocable, rate-limited). Approvals and lifecycle changes are **human-only** — no MCP tool exists for them.
@@ -455,7 +455,7 @@ documents ||--o{ ai_runs
 @enduml
 ```
 
-Indexes: every FK; `shares.token` unique; `(document_id, content_hash)` unique; `(thread_id, document_version_id)`; `(document_id, status)` on threads; notifications read-state. `notifications` = standard Laravel table.
+Indexes: every FK; `shares.token` unique; `(document_id, content_hash)` unique; `(thread_id, document_version_id)`; `(document_id, status)` on threads; notifications read-state. `notifications` = standard Laravel table. `personal_access_tokens` = standard Sanctum table — the **Agent Token** (§15): named per agent, workspace scope carried as a `workspace:{id}` ability, revoked by deleting the row.
 
 ## 17. API sketch (`/api/v1`)
 
@@ -495,7 +495,12 @@ GET    /me/review-queue
 POST   /documents/{id}/ai/digest            POST /documents/{id}/ai/digest/post-back
 POST   /documents/{id}/ai/improve-prompt
 POST   /threads/{id}/ai/reply-draft {stance}
+POST   /threads/{id}/ai/summary
 POST   /comments/{id}/ai/split
+GET    /documents/{id}/ai/digest            → latest digest run (panel re-attach on mount); 204 when none
+GET    /documents/{id}/ai/improve-prompt    → latest improve-prompt run (panel re-attach on mount); 204 when none
+GET    /threads/{id}/ai/summary             → latest summary run for the thread; 204 when none
+GET    /comments/{id}/ai/split              → latest split run for that comment (panel re-attach); 204 when none
 GET    /ai-runs/{id}
 
 GET    /notifications ?page=       PATCH /notifications/read

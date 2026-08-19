@@ -278,4 +278,152 @@ return [
         'secret' => env('DIAGRAM_SHARED_SECRET'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | AI features (SPEC §14, M4)
+    |--------------------------------------------------------------------------
+    |
+    | BYO key: the entire AI surface is gated on a configured ANTHROPIC_API_KEY.
+    | No key -> `enabled` is false, /config reports `ai.enabled: false`, the web
+    | hides every AI affordance, and the AI routes 404 (the established
+    | feature-flag middleware pattern). A self-hosted instance without a key is
+    | complete, not crippled — there are no broken buttons to click.
+    |
+    | AI_ENABLED is a KILL SWITCH ONLY, the Nightwatch idiom: it can force the
+    | surface off, and can never force it on. A credential is the only thing that
+    | turns AI on, so no env typo can surface a button backed by no key. Test
+    | suites enable the surface through config() directly, never through env.
+    |
+    | The provider is the v1 pin (SPEC §14: laravel/ai -> Claude), deliberately
+    | NOT env-driven — a knob that could point elsewhere while the gate still
+    | reads ANTHROPIC_API_KEY would let the surface enable itself against an
+    | unconfigured provider. Models ARE env-overridable per SPEC §14:
+    | `claude-sonnet-5` by default, with the cheap high-volume model reserved for
+    | thread summaries (M4, later ticket). `pricing` is the USD-per-million-token
+    | table cost accounting reads; an unpriced model records a null cost rather
+    | than a wrong number.
+    |
+    */
+
+    'ai' => [
+        'enabled' => (static function (): bool {
+            $override = env('AI_ENABLED');
+
+            if ($override !== null && ! filter_var($override, FILTER_VALIDATE_BOOL)) {
+                return false;
+            }
+
+            return filled(env('ANTHROPIC_API_KEY'));
+        })(),
+
+        'provider' => 'anthropic',
+        'model' => (string) env('AI_MODEL', 'claude-sonnet-5'),
+        'summary_model' => (string) env('AI_SUMMARY_MODEL', 'claude-haiku-4-5'),
+
+        // TEST-ONLY seam (M4 #137), the GITHUB_API_HOST idiom applied to
+        // inference: every agent answers from a scripted, deterministic fake
+        // instead of the provider, so the Playwright journeys can drive the AI
+        // surface end to end with no live model call and no real key.
+        //
+        // DOUBLE-GATED, and deliberately so — a fake that silently replaced the
+        // model on a real deployment would hand users invented review output
+        // dressed as analysis. The env flag alone is not enough: it is honored
+        // ONLY under APP_ENV=e2e (web/e2e/serve-api.sh's throwaway env) or
+        // testing. Anywhere else it reads false however it is set, so the flag
+        // leaking into a production .env changes nothing.
+        'fake' => (static function (): bool {
+            if (! filter_var(env('AI_FAKE_RESPONSES', false), FILTER_VALIDATE_BOOL)) {
+                return false;
+            }
+
+            return in_array((string) env('APP_ENV', 'production'), ['e2e', 'testing'], true);
+        })(),
+
+        // USD per 1M tokens, per model: [input, output].
+        'pricing' => [
+            'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
+            'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+        ],
+
+        // Context budget (SPEC §14). `context_tokens` is the assembled-input
+        // ceiling for ONE model call — deliberately far below the model's real
+        // window so the response and the instructions always fit. Over budget,
+        // the builder chunks by section and merges; `max_chunks` bounds how many
+        // calls one run may make, and whatever doesn't fit is reported as
+        // coverage ("covers N of M threads"), never silently dropped.
+        'context_tokens' => (int) env('AI_CONTEXT_TOKENS', 24000),
+        'max_chunks' => (int) env('AI_MAX_CHUNKS', 4),
+
+        // Hard ceiling on how many threads one assembly HYDRATES. The context
+        // budget bounds what reaches the model; this bounds what reaches worker
+        // memory, so a pathological review can't OOM the shared queue. Coverage
+        // still counts against the document's REAL thread total, so exceeding
+        // this is reported honestly rather than hidden.
+        'max_threads' => (int) env('AI_MAX_THREADS', 500),
+
+        // Ceiling on how many split proposals one comment-split run may offer
+        // (M4 #134). Nothing is written until a human approves each one, so this
+        // bounds the REVIEW LIST, not a write: a model that answers a two-issue
+        // comment with forty proposals produces a list nobody can triage, and
+        // the surplus is dropped with the coverage line saying so.
+        'max_splits' => (int) env('AI_MAX_SPLITS', 6),
+
+        // The `throttle:ai` limiter (SPEC §13), per authenticated user. Tighter
+        // than the other write limiters because each request can queue a model
+        // call against the workspace's key: this bounds spend, not just abuse.
+        'rate_per_minute' => (int) env('AI_RATE_PER_MINUTE', 10),
+
+        // Job-level ceiling, in seconds, sized for a chunked run (SPEC §14, eng
+        // review §6). A run that blows through it lands `failed` via the terminal
+        // handler — a stuck `running` row is impossible from the server side, and
+        // the web poller's own ceiling covers even a hard-killed worker.
+        'job_timeout' => (int) env('AI_JOB_TIMEOUT', 300),
+
+        // How long an in-flight run may go WITHOUT SIGN OF LIFE before a fresh
+        // request treats it as ABANDONED — fails it and mints a replacement (the
+        // M3.6 stale-scan-takeover idiom). This is the last line against a run
+        // that no worker will ever finish: a hard-killed worker never runs the
+        // terminal handler, and without this every later request would join the
+        // dead row forever.
+        //
+        // Measured from the run's last write, not its creation, so a run that sat
+        // in a backed-up queue and is now genuinely working keeps renewing its
+        // own lease. Still sized well past the worst legitimate quiet period
+        // (one model call under job_timeout, plus backoff).
+        'stale_after' => (int) env('AI_STALE_AFTER', 1800),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | MCP server (SPEC §15, M4 #135)
+    |--------------------------------------------------------------------------
+    |
+    | Agents are first-class reviewers, and the MCP endpoint is how they get
+    | there. It is gated INDEPENDENTLY of the AI features above (m4-ai-agents:
+    | "MCP is gated independently"): the server is an API surface, not an
+    | inference feature, so an instance with no Anthropic key still hosts agent
+    | reviewers. Default ON — unlike the BYO-key AI gate, MCP needs no
+    | credential of ours to be useful, and an operator who does not want it
+    | switches it off explicitly.
+    |
+    | Off means ABSENT, the established feature-flag shape: the endpoint 404s
+    | and `/config` reports `mcp.enabled: false`, so the web hides the
+    | agent-token settings panel rather than minting credentials for a surface
+    | that isn't listening.
+    |
+    | Two limiters, because one POST endpoint carries both reads and writes
+    | (SPEC §13, user story 21). `rate_per_minute` is the route-level ceiling on
+    | ALL MCP traffic, keyed per token; `write_rate_per_minute` is the tighter
+    | budget the two write tools spend from, matching the human `throttle:comments`
+    | allowance so an agent can't flood a review faster than a person could.
+    |
+    */
+
+    'mcp' => [
+        'enabled' => filter_var(env('MCP_ENABLED', true), FILTER_VALIDATE_BOOL),
+
+        'rate_per_minute' => (int) env('MCP_RATE_PER_MINUTE', 120),
+        'write_rate_per_minute' => (int) env('MCP_WRITE_RATE_PER_MINUTE', 30),
+    ],
+
 ];

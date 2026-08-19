@@ -1,0 +1,26 @@
+{
+  "trigger": "KI-Zusammenfassung",
+  "dialogLabel": "Zusammenfassung der Review",
+  "heading": "Zusammenfassung der Review",
+  "description": "Themen, Streitpunkte, Konsens und Aufgaben aus den Review-Threads dieses Dokuments. Ein Entwurf zum Lesen — es wird nichts veröffentlicht.",
+  "idle": "Für dieses Dokument gibt es noch keine Zusammenfassung.",
+  "generate": "Zusammenfassung erstellen",
+  "generating": "Wird erstellt…",
+  "retry": "Erneut versuchen",
+  "takingTooLong": "Das dauert länger als erwartet. Versuchen Sie es erneut oder schauen Sie gleich wieder vorbei.",
+  "failed": "Die Erstellung ist fehlgeschlagen. Bitte erneut versuchen.",
+  "copy": "Als Markdown kopieren",
+  "copied": "Kopiert",
+  "copyFailed": "Konnte nicht in die Zwischenablage kopiert werden.",
+  "empty": "Keine.",
+  "close": "Schließen",
+  "markdownTitle": "Zusammenfassung der Review — {document}",
+  "draftNotice": "Ein Entwurf zum Lesen. Es wurde nichts veröffentlicht.",
+  "draftNoticeWithModel": "Ein Entwurf zum Lesen, erstellt von {model}. Es wurde nichts veröffentlicht.",
+  "sections": {
+    "themes": "Themen",
+    "contentionPoints": "Streitpunkte",
+    "consensus": "Konsens",
+    "actionItems": "Aufgaben"
+  }
+}

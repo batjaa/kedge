@@ -12,13 +12,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Laravel\Sanctum\PersonalAccessToken;
 
 #[Fillable(['name', 'email', 'avatar_url', 'github_id', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The workspaces the user is a member of.
@@ -49,6 +51,18 @@ class User extends Authenticatable
     public function shareParticipations(): HasMany
     {
         return $this->hasMany(ShareParticipant::class);
+    }
+
+    /**
+     * True when this request authenticated with a real agent token rather than
+     * the first-party session cookie (which carries a TransientToken).
+     *
+     * The one place that distinction is named — every caller that needs to know
+     * "is the actor an agent?" asks here rather than re-deriving it.
+     */
+    public function usingAgentToken(): bool
+    {
+        return $this->currentAccessToken() instanceof PersonalAccessToken;
     }
 
     public function isPureReviewer(): bool

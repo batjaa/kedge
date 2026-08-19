@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getDocument, getDocumentVersion, getDocumentVersions } from '@/lib/documents';
+import { getCapabilities } from '@/lib/capabilities';
 import { getProjects } from '@/lib/projects';
+import { AiCapabilityProvider } from '@/lib/ai-capability';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { DocumentClaim } from '@/components/app/document-claim';
@@ -73,12 +75,18 @@ export default async function DocumentPage({
   let viewedVersion: DocumentVersion | null = document.current_version ?? null;
   let versions: DocumentVersion[] = viewedVersion ? [viewedVersion] : [];
   let projects: Project[] = [];
+  // BYO key (SPEC §14, M4): the AI surface exists only when the API reports a
+  // configured Anthropic key. The read fails closed, so an unreachable /config
+  // hides the digest button rather than offering one that 404s.
+  let aiEnabled = false;
 
   if (document.status === 'ready' && document.current_version) {
-    const [versionsResult, projectsResult] = await Promise.all([
+    const [versionsResult, projectsResult, capabilities] = await Promise.all([
       getDocumentVersions(id),
       getProjects(),
+      getCapabilities(),
     ]);
+    aiEnabled = capabilities.ai;
     if (versionsResult.status === 403 || versionsResult.status === 404) notFound();
     if (versionsResult.status === 200) versions = versionsResult.versions;
     // The assignment selector's options; a refused/unreachable read just leaves
@@ -134,6 +142,13 @@ export default async function DocumentPage({
               </div>
             </PageContainer>
           ) : null}
+          {/* One declaration of "does this instance have AI" for the whole
+              review tree (#133). The thread panel's AI affordances sit several
+              components deep — inside a card, inside its composer — and the
+              context keeps that boolean off five unrelated prop signatures.
+              Default false, so any surface that does NOT provide it (the share
+              surface) shows no AI at all. */}
+          <AiCapabilityProvider enabled={aiEnabled}>
           <DocumentReviewSurface
             documentId={document.id}
             title={document.title}
@@ -163,6 +178,8 @@ export default async function DocumentPage({
             canUpdateContent={
               document.source_type === 'upload' && (document.capabilities?.update_content ?? false)
             }
+            canRunAi={aiEnabled}
+            canProposeCommentSplits={aiEnabled}
             lastSyncStatus={document.last_sync_status}
             syncError={document.sync_error}
           >
@@ -172,6 +189,7 @@ export default async function DocumentPage({
               content={viewedVersion.content}
             />
           </DocumentReviewSurface>
+          </AiCapabilityProvider>
         </>
       ) : null}
 

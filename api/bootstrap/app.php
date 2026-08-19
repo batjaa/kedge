@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsureAiEnabled;
 use App\Http\Middleware\EnsureDemoModeEnabled;
+use App\Http\Middleware\EnsureMcpEnabled;
 use App\Http\Middleware\EnsureResyncEnabled;
+use App\Http\Middleware\RejectAgentTokenAuth;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -44,10 +47,38 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Instant demo mode is SaaS-only (SPEC §10.3, #25): this alias 404s the
         // demo + claim routes on a self-hosted instance, per request.
+        // The BYO-key AI gate (SPEC §14, M4): with no Anthropic key configured,
+        // every AI route 404s and the web hides the whole surface.
+        // The MCP gate (SPEC §15, M4 #135) is deliberately its own flag, checked
+        // by its own middleware: the agent surface is an API, not an inference
+        // feature, so it stays up on an instance with no Anthropic key.
         $middleware->alias([
+            'ai.enabled' => EnsureAiEnabled::class,
             'demo.enabled' => EnsureDemoModeEnabled::class,
+            'mcp.enabled' => EnsureMcpEnabled::class,
             'resync.enabled' => EnsureResyncEnabled::class,
         ]);
+
+        // "Agent tokens are MCP-only, by construction" (SPEC §15, #131).
+        //
+        // Bearer credentials are refused APP-WIDE — both route groups, so every
+        // present and future route is covered rather than one URI prefix. The MCP
+        // endpoint (#135) is the single opt-in: its route group opts out with
+        // ->withoutMiddleware(RejectAgentTokenAuth::class), making token
+        // acceptance a positive, reviewable capability of exactly one surface.
+        //
+        // Position is load-bearing, not tidiness. First in both groups, it runs
+        // before Sanctum's EnsureFrontendRequestsAreStateful (which starts the
+        // session and CSRF stack), before the rate limiters, and before
+        // SubstituteBindings — so a token-bearing request touches no session, no
+        // limiter, and no database row, and cannot use the 401/404 split as an
+        // existence oracle.
+        //
+        // The matching priority-list entry is hoisted in AppServiceProvider::boot,
+        // NOT here: Sanctum's own provider prepends its stateful wrapper to the
+        // priority list at boot, which would otherwise sort it back in front.
+        $middleware->prependToGroup('api', RejectAgentTokenAuth::class);
+        $middleware->prependToGroup('web', RejectAgentTokenAuth::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // The API is a headless JSON backend: versioned routes and the

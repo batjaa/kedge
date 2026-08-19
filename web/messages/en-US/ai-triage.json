@@ -1,0 +1,34 @@
+{
+  "stance": {
+    "accept": "Accept",
+    "push_back": "Push back",
+    "clarify": "Clarify"
+  },
+  "replyDraft": {
+    "label": "Draft reply",
+    "generating": "Drafting…",
+    "takingTooLong": "This is taking longer than expected. Try again, or check back shortly.",
+    "failed": "Couldn't draft a reply. Try again.",
+    "empty": "This thread was too long to read, so there's nothing to draft from.",
+    "confirmTitle": "Replace what you've written?",
+    "confirmBody": "Your reply already has text. Choose which one to keep.",
+    "replace": "Use the draft",
+    "keep": "Keep mine",
+    "draftNotice": "A draft to edit. Nothing is posted until you press Reply.",
+    "draftNoticeWithModel": "A draft to edit, written by {model}. Nothing is posted until you press Reply."
+  },
+  "summary": {
+    "heading": "Thread summary",
+    "idle": "Long thread — get where it stands and what's still open.",
+    "trigger": "Summarize",
+    "regenerate": "Summarize again",
+    "generating": "Summarizing…",
+    "takingTooLong": "This is taking longer than expected. Try again, or check back shortly.",
+    "failed": "Couldn't summarize this thread. Try again.",
+    "empty": "This thread was too long to read in full.",
+    "currentState": "Where it stands",
+    "openQuestion": "Open question",
+    "draftNotice": "A summary to read. Nothing in this thread changed.",
+    "draftNoticeWithModel": "A summary to read, written by {model}. Nothing in this thread changed."
+  }
+}

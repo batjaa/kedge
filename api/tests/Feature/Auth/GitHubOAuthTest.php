@@ -218,10 +218,18 @@ class GitHubOAuthTest extends TestCase
     public function test_capability_endpoint_reports_github_disabled_by_default(): void
     {
         // The surface is booleans only, no secrets. `self_hosted` was added with
-        // demo mode (#25) — the web reads it to pick the anonymous home surface.
+        // demo mode (#25) — the web reads it to pick the anonymous home surface;
+        // `ai.enabled` with the BYO-key AI gate (M4, #130); `mcp.enabled` with the
+        // MCP server (M4, #135), reported separately because the two M4 gates are
+        // independent — MCP is on by default and stays on with no Anthropic key.
         $this->getJson('/api/v1/config')
             ->assertOk()
-            ->assertExactJson(['auth' => ['github' => false], 'self_hosted' => false]);
+            ->assertExactJson([
+                'auth' => ['github' => false],
+                'self_hosted' => false,
+                'ai' => ['enabled' => false],
+                'mcp' => ['enabled' => true],
+            ]);
     }
 
     public function test_capability_endpoint_reports_github_enabled_when_configured(): void

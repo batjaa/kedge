@@ -3,8 +3,10 @@
 import { useRef, useState } from 'react';
 import { MessageSquare, Pencil, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { AiReplyDraftAction } from './ai-reply-draft';
 import { ModeButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
 import { MentionTextarea } from './mention-textarea';
+import { useAiEnabled } from '@/lib/ai-capability';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
 import { postReplyComposerDraft } from '@/lib/comment-composer-actions';
 import { commentDraftContextKey, useCommentDraft } from '@/lib/comment-draft';
@@ -21,6 +23,7 @@ export function ReplyComposer({
   onMessage: (message: string | null) => void;
 }) {
   const t = useTranslations('threads');
+  const aiEnabled = useAiEnabled();
   const [replying, setReplying] = useState(false);
   const replyingRef = useRef(false);
   const canSuggest = thread.type === 'inline' && thread.anchor !== null;
@@ -154,6 +157,21 @@ export function ReplyComposer({
           disabled={replying}
         />
       )}
+      {/* The AI triage footer (#133). Absent entirely on an instance with no
+          Anthropic key — the affordance never renders, rather than 404ing. It
+          writes into this composer's draft and nothing else: posting stays the
+          Reply button below. */}
+      {aiEnabled ? (
+        <AiReplyDraftAction
+          threadId={thread.id}
+          composerBody={replyBody}
+          disabled={replying}
+          onInsert={(body) => {
+            if (!replyingRef.current) draft.setBody(body);
+          }}
+        />
+      ) : null}
+
       <div className="mt-2 flex justify-end gap-2">
         <button
           type="button"

@@ -1,0 +1,28 @@
+{
+  "trigger": "Prompt de mejora",
+  "dialogLabel": "Prompt para mejorar el documento",
+  "heading": "Prompt para mejorar el documento",
+  "description": "Un prompt para pegar en un agente de código: comentarios sin resolver por sección, ediciones sugeridas aceptadas al pie de la letra y el texto anclado de cada hilo.",
+  "idle": "Todavía no hay prompt de mejora para este documento.",
+  "generate": "Generar prompt",
+  "generating": "Generando…",
+  "retry": "Reintentar",
+  "takingTooLong": "Está tardando más de lo esperado. Reintenta o vuelve en un momento.",
+  "failed": "La generación falló. Reintenta.",
+  "copy": "Copiar prompt",
+  "copied": "Copiado",
+  "copyFailed": "No se pudo copiar al portapapeles.",
+  "close": "Cerrar",
+  "nothingToAsk": "Esta revisión no tiene nada sin resolver que pedir, así que no hay prompt para copiar.",
+  "stats": "{threads, plural, one {# hilo sin resolver} other {# hilos sin resolver}} · {edits, plural, =0 {sin ediciones obligatorias} one {# edición obligatoria} other {# ediciones obligatorias}}",
+  "artifactLabel": "El prompt",
+  "draftNotice": "Un borrador para que lo leas y lo pegues. No se publicó nada.",
+  "draftNoticeWithModel": "Un borrador para que lo leas y lo pegues, generado por {model}. No se publicó nada.",
+  "errors": {
+    "unavailable": "Las funciones de IA no están habilitadas en esta instancia.",
+    "forbidden": "No tienes acceso para generar un prompt aquí.",
+    "conflict": "Este documento todavía no tiene una versión importada.",
+    "rateLimited": "Demasiadas solicitudes. Espera un minuto y vuelve a intentarlo.",
+    "error": "Algo salió mal al iniciar el prompt. Inténtalo de nuevo."
+  }
+}

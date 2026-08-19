@@ -44,8 +44,6 @@ class IntegrationPolicy
      */
     public function delete(User $user, Integration $integration): bool
     {
-        return $user->workspaces()
-            ->whereKey($integration->workspace_id)
-            ->exists();
+        return $this->memberOfWorkspace($user, $integration->workspace_id);
     }
 }

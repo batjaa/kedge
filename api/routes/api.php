@@ -1,9 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\AgentTokenController;
+use App\Http\Controllers\Api\V1\AiRunController;
+use App\Http\Controllers\Api\V1\AiThreadRunController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
+use App\Http\Controllers\Api\V1\CommentSplitController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
@@ -21,8 +25,13 @@ use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
+use App\Http\Middleware\RejectAgentTokenAuth;
+use App\Http\Middleware\RequireAgentTokenAuth;
+use App\Http\Middleware\ThrottleMcpIngress;
 use App\Http\Middleware\VerifyDiagramSecret;
+use App\Mcp\Servers\KedgeServer;
 use Illuminate\Support\Facades\Route;
+use Laravel\Mcp\Facades\Mcp;
 
 /*
 |--------------------------------------------------------------------------
@@ -51,6 +60,12 @@ Route::post('/internal/diagrams', DiagramController::class)
 | Changes are additive-only: the web app and the API deploy independently,
 | so /v1 is a contract, never a moving target. Resource routes gain
 | Policies as they appear (SPEC 13); /me is identity, not a resource.
+|
+| This is the HUMAN API. RejectAgentTokenAuth is prepended to BOTH route groups
+| in bootstrap/app.php (SPEC §15, #131), so every action here — present and
+| future — refuses a bearer credential before routing; only the MCP endpoint
+| (#135) opts back in. The SPA cookie path is unaffected, and mint/revoke living
+| on this surface is what makes "an agent can never mint a token" structural.
 |
 */
 
@@ -95,6 +110,46 @@ Route::prefix('v1')->group(function () {
         Route::post('/demo/documents', [DemoDocumentController::class, 'store'])
             ->name('api.v1.demo.documents.store');
     });
+
+    // ---- MCP server (SPEC §15, M4 #135) -----------------------------------
+    //
+    // The ONE surface in the application that accepts an Agent Token. Everything
+    // else — this whole file, /logout, every route a later ticket adds — refuses
+    // a bearer credential via RejectAgentTokenAuth, prepended to both route
+    // groups in bootstrap/app.php. Opting back out here is what makes token
+    // acceptance a positive, reviewable capability of exactly one endpoint
+    // instead of a default nobody remembers to revoke; the IDOR sweep asserts
+    // this group is the only exemption in the app.
+    //
+    // The opt-out is on the GROUP so all three registered methods share it: the
+    // MCP protocol expects GET and DELETE on the endpoint to answer 405 (no SSE
+    // stream here), and a 401 in their place would read to a client as a
+    // credential problem rather than an unsupported transport.
+    //
+    // RequireAgentTokenAuth is the mirror image and just as load-bearing:
+    // `auth:sanctum` also accepts the first-party session cookie, so without it a
+    // signed-in human's browser could drive these tools and every comment it
+    // wrote would be badged as an agent. The endpoint takes agent tokens and
+    // nothing else.
+    //
+    // `mcp.enabled` gates the surface independently of the AI flag: a keyless
+    // self-host still hosts agent reviewers. It and ThrottleMcpIngress are
+    // hoisted ahead of the guard in the middleware priority list
+    // (AppServiceProvider), because Laravel resolves `auth:sanctum` in front of
+    // anything not in that list — a switched-off surface would otherwise 401 an
+    // anonymous call and 404 only a valid one, and the per-token limiter would
+    // never fire for traffic that fails to authenticate at all.
+    //
+    // Three limits, on three different things: ThrottleMcpIngress bounds
+    // unauthenticated ingress per IP, `throttle:mcp` bounds an authenticated
+    // agent per token, and the writer service spends a tighter per-token budget
+    // on writes — the only layer that can tell a write from a read, since one
+    // POST endpoint carries both.
+    Route::middleware(['mcp.enabled', ThrottleMcpIngress::class, 'auth:sanctum', RequireAgentTokenAuth::class, 'throttle:mcp'])
+        ->withoutMiddleware(RejectAgentTokenAuth::class)
+        ->group(function () {
+            Mcp::web('/mcp', KedgeServer::class)->name('api.v1.mcp');
+        });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');
@@ -256,6 +311,81 @@ Route::prefix('v1')->group(function () {
             Route::post('/comments/{comment}/reactions', [CommentReactionController::class, 'store'])
                 ->withTrashed()
                 ->name('api.v1.comments.reactions.store');
+        });
+
+        // AI runs (SPEC §14, §17, M4), all behind AiRunPolicy and the BYO-key
+        // gate: with no Anthropic key configured every route here 404s, so a
+        // keyless self-host has no AI surface at all rather than broken buttons.
+        //
+        // The generation POST carries `throttle:ai` — each request can queue a
+        // model call against the workspace's key, so the limiter bounds spend as
+        // well as abuse. The two reads are the poll target and the panel's
+        // re-attach-on-mount, so they stay free like every other status poll.
+        Route::middleware('ai.enabled')->group(function () {
+            Route::post('/documents/{document}/ai/digest', [AiRunController::class, 'digest'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.documents.ai.digest');
+
+            Route::get('/documents/{document}/ai/digest', [AiRunController::class, 'latestDigest'])
+                ->name('api.v1.documents.ai.digest.latest');
+
+            Route::post('/documents/{document}/ai/improve-prompt', [AiRunController::class, 'improvePrompt'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.documents.ai.improve-prompt');
+
+            Route::get('/documents/{document}/ai/improve-prompt', [AiRunController::class, 'latestImprovePrompt'])
+                ->name('api.v1.documents.ai.improve-prompt.latest');
+
+            // The thread-panel triage pair (#133). Same ledger contract as the
+            // digest, targeted at one thread: a reply draft in the author's
+            // chosen stance, and a summary of a thread too long to read. The GET
+            // is the summary panel's re-attach, so re-opening a thread someone
+            // already summarized costs nothing.
+            Route::post('/threads/{thread}/ai/reply-draft', [AiThreadRunController::class, 'replyDraft'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.threads.ai.reply-draft');
+
+            Route::post('/threads/{thread}/ai/summary', [AiThreadRunController::class, 'summary'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.threads.ai.summary');
+
+            Route::get('/threads/{thread}/ai/summary', [AiThreadRunController::class, 'latestSummary'])
+                ->name('api.v1.threads.ai.summary.latest');
+
+            // Comment splits (#134). Proposals only: approving one is an ordinary
+            // POST to /comments/{comment}/fork, so no route here ever writes
+            // review data from model output (hard rule 5).
+            //
+            // `withTrashed()` matches the fork route's binding so a deleted
+            // comment reaches the controller and is refused with a reason,
+            // rather than 404ing as if it had never existed.
+            Route::post('/comments/{comment}/ai/split', [CommentSplitController::class, 'store'])
+                ->middleware('throttle:ai')
+                ->withTrashed()
+                ->name('api.v1.comments.ai.split');
+
+            Route::get('/comments/{comment}/ai/split', [CommentSplitController::class, 'show'])
+                ->withTrashed()
+                ->name('api.v1.comments.ai.split.latest');
+
+            Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
+                ->name('api.v1.ai-runs.show');
+        });
+
+        // Agent tokens (SPEC §15, #131), all behind AgentTokenPolicy — full
+        // workspace membership to mint/list/revoke, plus ownership to revoke.
+        // Listing is a free read; mint and revoke share a per-user limiter
+        // (credential mutations are rare and worth bounding). These live INSIDE
+        // the v1 group on purpose: the group refuses token authentication, so an
+        // agent can never mint or revoke a token — its own or anyone else's.
+        Route::get('/agent-tokens', [AgentTokenController::class, 'index'])
+            ->name('api.v1.agent-tokens.index');
+
+        Route::middleware('throttle:agent-tokens')->group(function () {
+            Route::post('/agent-tokens', [AgentTokenController::class, 'store'])
+                ->name('api.v1.agent-tokens.store');
+            Route::delete('/agent-tokens/{agentToken}', [AgentTokenController::class, 'destroy'])
+                ->name('api.v1.agent-tokens.destroy');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.

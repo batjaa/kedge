@@ -33,6 +33,24 @@ class ConfigController extends Controller
             // self-hosted. Env lives only on the API, so this is the single source
             // of truth — the web never carries its own SELF_HOSTED var.
             'self_hosted' => (bool) config('kedge.self_hosted'),
+            // BYO key (SPEC §14, M4). False on an instance with no configured
+            // ANTHROPIC_API_KEY — the web then renders no AI affordance at all,
+            // and the AI routes 404 to match. The web treats a MISSING `ai`
+            // capability as false too, so a new web against an old api shows
+            // nothing broken.
+            'ai' => [
+                'enabled' => (bool) config('kedge.ai.enabled'),
+            ],
+            // The MCP surface (SPEC §15, M4). Reported SEPARATELY from `ai` on
+            // purpose: the two gates are independent, so a keyless self-host
+            // still hosts agent reviewers and still shows the agent-token
+            // settings panel. The web reads this to decide whether minting a
+            // credential means anything on this instance — a missing `mcp` block
+            // (a new web against an api from before #135) reads as false, and
+            // correctly so: that api has no MCP endpoint to point an agent at.
+            'mcp' => [
+                'enabled' => (bool) config('kedge.mcp.enabled'),
+            ],
         ]);
     }
 }

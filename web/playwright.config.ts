@@ -7,7 +7,9 @@ import { FIXTURE_PORT } from './e2e/fixture-doc';
 // (paste → render with a live diagram → share → claim, seam 3 of the
 // import-render spec). The pack now also covers auth edges, URL/paste/HTML
 // import + failures + warnings, MDX safety in the browser, the share lifecycle,
-// diagram rendering, and PAT settings. Each journey boots the deployables
+// diagram rendering, PAT settings, and — from M4 (#137) — the agent/AI surfaces:
+// a real MCP client hop under a token minted in the UI, AI triage in the thread
+// panel, and AI-proposed comment splits. Each journey boots the deployables
 // against a throwaway database and drives a real browser; every spec registers
 // its OWN unique user and creates its OWN documents (e2e/helpers.ts), so no spec
 // depends on another's state. They must be deterministic and non-flaky — hence
@@ -67,11 +69,13 @@ export default defineConfig({
   // reused; CI always boots fresh against a scratch database.
   //
   // NOTE: the API *must* come up via serve-api.sh — its generated E2E env
-  // carries the FETCH_ALLOW_HOSTS fixture exemption, the sync queue, and the
-  // array cache store that keeps rate limiters from coupling the pack's many
-  // users. A dev API already running on :8000 against api/.env will be reused
-  // instead and the import journeys will fail (SSRF-blocked fixture URL): stop
-  // that server before running the journeys locally.
+  // carries the FETCH_ALLOW_HOSTS fixture exemption, the sync queue, the array
+  // cache store that keeps rate limiters from coupling the pack's many users,
+  // and the fake-key + scripted-AI pair the M4 journeys assert content against
+  // (no live model call, ever). A dev API already running on :8000 against
+  // api/.env will be reused instead and the import journeys will fail
+  // (SSRF-blocked fixture URL): stop that server before running the journeys
+  // locally.
   webServer: [
     {
       name: 'api',
