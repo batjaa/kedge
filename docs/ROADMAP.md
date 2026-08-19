@@ -23,7 +23,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Activity & landing | M | Design refresh | done (2026-07-24) | [specs/m3.8-activity-landing.md](specs/m3.8-activity-landing.md) · [#107](https://github.com/batjaa/kedge/issues/107) |
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
-| AI & agents | M | Comments & suggestions · Versions, diff & approvals | specced (2026-07-20) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) |
+| AI & agents | M | Comments & suggestions · Versions, diff & approvals | ticketed (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
 | Self-host distribution | M | everything above | deciding | — |
