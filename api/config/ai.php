@@ -12,18 +12,19 @@
 |
 | Two consequences worth knowing before editing this file:
 |
-|  1. `config/kedge.php` READS this table to decide whether AI is enabled at
-|     all: the selected provider must have a credential here, or the whole AI
-|     surface stays hidden. Adding a provider entry with a filled key is
-|     therefore a way to turn AI on — and the only way.
+|  1. `config/kedge.php` READS the `providers` table below to decide whether AI
+|     is enabled at all: the selected provider must have a credential here, or
+|     the whole AI surface stays hidden. Adding a provider entry with a filled
+|     key is therefore a way to turn AI on — and the only way.
 |  2. This is a PUBLISHED copy, so it wins over the package's defaults wholesale
 |     (`mergeConfigFrom` merges shallowly). A provider the SDK adds in a future
 |     release will not appear until this file is re-published — deliberate: the
 |     credential gate should never read a table the operator has not seen.
 |
 | Everything below is the SDK's file as shipped, with one Kedge change: the
-| default provider follows `AI_PROVIDER` so the SDK and Kedge cannot disagree
-| about which provider is selected.
+| default provider follows `AI_PROVIDER`, the same variable Kedge's own selection
+| reads, so an SDK call that names no provider cannot reach a different one than
+| the gate checked. Keep that line if you ever re-publish this file.
 |
 */
 

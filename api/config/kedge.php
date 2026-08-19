@@ -9,10 +9,15 @@
 | they must agree: the provider the agents call and the provider the enable-gate
 | checks a credential for can never be two different providers.
 |
-| Both come from the SDK's own provider table (config/ai.php) rather than from a
-| second list of provider names kept here — the operator selects a provider with
-| `AI_PROVIDER`, that table says which credentials the provider takes, and Kedge
-| names no provider anywhere else (config is the only permitted place, SPEC §14).
+| The operator selects a provider with `AI_PROVIDER`; the SDK's own provider
+| table (config/ai.php) says which credentials that provider takes. Kedge keeps
+| no second list of provider names and names no provider anywhere else (config is
+| the only permitted place, SPEC §14).
+|
+| The selection is read from the environment HERE rather than from the SDK
+| table's `default`, so that re-publishing config/ai.php after an SDK upgrade —
+| which resets `default` to the package's own choice — can never silently
+| re-point the gate. The published table's job is the credentials.
 |
 | A missing config/ai.php (never published, or deleted) yields no providers and
 | therefore no credential: the AI surface stays off. Every unknown in this file
@@ -21,7 +26,15 @@
 |
 */
 
-$aiConfig = (static function (): array {
+/**
+ * The selected provider, normalized once for everyone that reads it. Blank
+ * (unset, or an operator who cleared it) means the default, and case is
+ * forgiving because the SDK's table is lowercase while `AI_PROVIDER=OpenAI` is
+ * the natural thing to type.
+ */
+$aiProvider = strtolower(trim((string) env('AI_PROVIDER', 'anthropic'))) ?: 'anthropic';
+
+$aiProviderTable = (static function (): array {
     $path = __DIR__.'/ai.php';
 
     // `require`, never `require_once`: the AI gate's tests re-evaluate this file
@@ -29,15 +42,8 @@ $aiConfig = (static function (): array {
     // hand every later case the first case's credentials.
     $config = is_file($path) ? require $path : [];
 
-    return is_array($config) ? $config : [];
+    return is_array($config['providers'] ?? null) ? $config['providers'] : [];
 })();
-
-/**
- * The selected provider, normalized. Blank (unset, or an operator who cleared
- * it) means the default, and case is forgiving because the SDK's table is
- * lowercase while `AI_PROVIDER=OpenAI` is the natural thing to type.
- */
-$aiProvider = strtolower(trim((string) ($aiConfig['default'] ?? ''))) ?: 'anthropic';
 
 /**
  * Whether the SELECTED provider has a credential configured.
@@ -63,7 +69,7 @@ $aiCredentialConfigured = (static function (array $providers, string $provider):
     }
 
     return false;
-})(is_array($aiConfig['providers'] ?? null) ? $aiConfig['providers'] : [], $aiProvider);
+})($aiProviderTable, $aiProvider);
 
 return [
 
