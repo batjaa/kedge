@@ -934,10 +934,10 @@ export function DocumentReviewSurface({
   // the author approve anchors into passages they cannot see. The notice, not
   // the server-rendered ids, is the test: it also catches a version that landed
   // while this page was open.
-  const splitApproval = canProposeCommentSplits
+  const splitCapability = canProposeCommentSplits
     && viewedVersionId === currentVersionId
     && newerVersionNotice === null
-    ? approveSplit
+    ? { documentVersionId: currentVersionId, approve: approveSplit }
     : undefined;
 
   // The primary AI-digest affordance (DESIGN.md header anatomy, #130). Owns its
@@ -1081,7 +1081,7 @@ export function DocumentReviewSurface({
                 onDeleteComment={remove}
                 onSetSuggestionStatus={setSuggestionStatus}
                 onToggleReaction={toggleReaction}
-                onApproveSplit={splitApproval}
+                splitCapability={splitCapability}
                 pendingReattachThreadId={pendingReattachThreadId}
                 reattachingThreadId={reattachingThreadId}
                 reattachStatus={reattachStatus}
@@ -1145,7 +1145,7 @@ export function DocumentReviewSurface({
         onDeleteComment={remove}
         onSetSuggestionStatus={setSuggestionStatus}
         onToggleReaction={toggleReaction}
-        onApproveSplit={splitApproval}
+        splitCapability={splitCapability}
       />
 
       <DocumentCommentComposer

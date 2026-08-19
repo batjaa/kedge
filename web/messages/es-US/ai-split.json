@@ -4,6 +4,8 @@
   "heading": "Dividir este comentario",
   "description": "Cuando este comentario plantea varios temas, cada uno puede convertirse en su propio hilo. No se crea nada hasta que lo apruebes.",
   "idle": "Aún no hay una división propuesta para este comentario.",
+  "checking": "Comprobando si ya hay una propuesta…",
+  "checkFailed": "No se pudo comprobar si ya existe una propuesta; generar podría crear una segunda.",
   "generate": "Proponer una división",
   "generating": "Proponiendo…",
   "retry": "Proponer de nuevo",

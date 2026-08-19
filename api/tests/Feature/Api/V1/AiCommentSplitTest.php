@@ -613,6 +613,34 @@ class AiCommentSplitTest extends TestCase
         $this->assertDatabaseCount('ai_runs', 0);
     }
 
+    /**
+     * The reader tells the server which version their page is showing. A split
+     * is generated against, and approved into, whatever the CURRENT version is —
+     * so a stale page must be refused rather than handed anchors into passages
+     * it is not displaying. The server is the authority, not a UI race.
+     */
+    public function test_a_split_requested_from_a_stale_page_is_refused(): void
+    {
+        Queue::fake();
+        [$author, $document, $reply] = $this->splittableThread();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", [
+                'document_version_id' => $document->current_version_id + 1,
+            ])
+            ->assertStatus(409);
+
+        $this->assertDatabaseCount('ai_runs', 0);
+        Queue::assertNotPushed(GenerateAiRunJob::class);
+
+        // The same request naming the live version is accepted.
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", [
+                'document_version_id' => $document->current_version_id,
+            ])
+            ->assertStatus(202);
+    }
+
     public function test_a_document_without_a_ready_version_cannot_be_split(): void
     {
         Queue::fake();

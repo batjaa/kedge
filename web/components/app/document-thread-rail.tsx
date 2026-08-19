@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Link } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import type { ApproveSplitFn } from './ai-split-action';
+import type { SplitCapability } from './ai-split-action';
 import { ThreadCard } from './document-thread-card';
 import { cn } from '@/lib/cn';
 import { placeThreadCards, type ThreadPlacement } from '@/lib/review-surface-layout';
@@ -41,7 +41,7 @@ export function DocumentThreadRail({
   onDeleteComment,
   onSetSuggestionStatus,
   onToggleReaction,
-  onApproveSplit,
+  splitCapability,
   pendingReattachThreadId,
   reattachingThreadId,
   reattachStatus,
@@ -67,7 +67,7 @@ export function DocumentThreadRail({
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
-  onApproveSplit?: ApproveSplitFn;
+  splitCapability?: SplitCapability;
   pendingReattachThreadId: number | null;
   reattachingThreadId: number | null;
   reattachStatus: ReattachStatus | null;
@@ -138,7 +138,7 @@ export function DocumentThreadRail({
                 onDeleteComment={onDeleteComment}
                 onSetSuggestionStatus={onSetSuggestionStatus}
                 onToggleReaction={onToggleReaction}
-                onApproveSplit={onApproveSplit}
+                splitCapability={splitCapability}
               />
             </MeasuredThreadCard>
           );
@@ -180,7 +180,7 @@ export function DocumentThreadRail({
             onDeleteComment={onDeleteComment}
             onSetSuggestionStatus={onSetSuggestionStatus}
             onToggleReaction={onToggleReaction}
-            onApproveSplit={onApproveSplit}
+            splitCapability={splitCapability}
             pendingReattachThreadId={pendingReattachThreadId}
             reattachingThreadId={reattachingThreadId}
             reattachStatus={reattachStatus}
@@ -312,7 +312,7 @@ function OrphanedTray({
   onDeleteComment,
   onSetSuggestionStatus,
   onToggleReaction,
-  onApproveSplit,
+  splitCapability,
   pendingReattachThreadId,
   reattachingThreadId,
   reattachStatus,
@@ -332,7 +332,7 @@ function OrphanedTray({
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
-  onApproveSplit?: ApproveSplitFn;
+  splitCapability?: SplitCapability;
   pendingReattachThreadId: number | null;
   reattachingThreadId: number | null;
   reattachStatus: ReattachStatus | null;
@@ -415,7 +415,7 @@ function OrphanedTray({
                   onDeleteComment={onDeleteComment}
                   onSetSuggestionStatus={onSetSuggestionStatus}
                   onToggleReaction={onToggleReaction}
-                  onApproveSplit={onApproveSplit}
+                  splitCapability={splitCapability}
                 />
               </div>
             );

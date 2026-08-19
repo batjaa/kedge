@@ -67,9 +67,18 @@ export async function startDigest(documentId: number): Promise<StartDigestOutcom
  * Nothing is written by this call or by the run it starts. Each proposal becomes
  * a thread only when the author approves it and the client forks (hard rule 5).
  */
-export async function startCommentSplit(commentId: number): Promise<StartSplitOutcome> {
+export async function startCommentSplit(
+  commentId: number,
+  documentVersionId: number,
+): Promise<StartSplitOutcome> {
   try {
-    const res = await csrfSend(`/api/v1/comments/${commentId}/ai/split`, { method: 'POST' });
+    // The version the reader's page is showing. The server refuses the request
+    // when it is no longer current, so a stale page can never be handed anchors
+    // into passages it is not displaying.
+    const res = await csrfSend(`/api/v1/comments/${commentId}/ai/split`, {
+      method: 'POST',
+      body: { document_version_id: documentVersionId },
+    });
 
     if (res.ok) {
       return { ok: true, run: (await res.json()) as AiSplitRun };

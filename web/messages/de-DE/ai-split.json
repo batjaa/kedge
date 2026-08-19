@@ -4,6 +4,8 @@
   "heading": "Diesen Kommentar aufteilen",
   "description": "Wenn dieser Kommentar mehrere Themen anspricht, kann jedes zu einem eigenen Thread werden. Es wird nichts angelegt, bevor Sie es freigeben.",
   "idle": "Für diesen Kommentar gibt es noch keinen Aufteilungsvorschlag.",
+  "checking": "Wird auf einen vorhandenen Vorschlag geprüft…",
+  "checkFailed": "Es konnte nicht geprüft werden, ob bereits ein Vorschlag existiert — das Erstellen könnte einen zweiten anlegen.",
   "generate": "Aufteilung vorschlagen",
   "generating": "Wird vorgeschlagen…",
   "retry": "Erneut vorschlagen",

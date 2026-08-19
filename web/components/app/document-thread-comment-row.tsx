@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Check, GitFork, Pencil, RotateCcw, ThumbsUp, Trash2, X } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
-import { AiSplitAction, type ApproveSplitFn } from './ai-split-action';
+import { AiSplitAction, type SplitCapability } from './ai-split-action';
 import { AgentBadge, SuggestionStatusBadge } from './document-thread-badges';
 import { IconButton, TEXTAREA_CLASS_NAME } from './document-thread-ui';
 import { cn } from '@/lib/cn';
@@ -65,7 +65,7 @@ export function CommentRow({
   onDelete,
   onSetSuggestionStatus,
   onToggleReaction,
-  onApproveSplit,
+  splitCapability,
 }: {
   comment: ThreadComment;
   isReply: boolean;
@@ -85,7 +85,7 @@ export function CommentRow({
   onSetSuggestionStatus: (status: SuggestionStatus) => void;
   onToggleReaction: () => void;
   /** Absent when the instance has no Anthropic key: no split affordance exists. */
-  onApproveSplit?: ApproveSplitFn;
+  splitCapability?: SplitCapability;
 }) {
   const t = useTranslations('threads');
   const locale = useLocale();
@@ -181,8 +181,8 @@ export function CommentRow({
               approving a proposal posts the same endpoint with the proposal's
               anchor. Shown only where a fork could actually land — and absent
               entirely on an instance with no Anthropic key. */}
-          {controls.fork && onApproveSplit ? (
-            <AiSplitAction commentId={comment.id} onApproveSplit={onApproveSplit} />
+          {controls.fork && splitCapability ? (
+            <AiSplitAction commentId={comment.id} capability={splitCapability} />
           ) : null}
         </div>
       ) : null}

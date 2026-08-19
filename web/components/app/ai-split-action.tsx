@@ -47,12 +47,29 @@ export type ApproveSplitFn = (
   anchor: ThreadAnchorPayload | null,
 ) => Promise<string | null>;
 
+/**
+ * The capability the review surface hands down: the version the page is
+ * showing, and the approval write. Passing it AT ALL is the BYO-key gate — an
+ * instance with no Anthropic key, and the share surface, pass nothing and the
+ * affordance does not render.
+ *
+ * The version travels with the callback rather than as its own prop so the two
+ * halves cannot drift apart on the way down through the rail.
+ */
+export interface SplitCapability {
+  documentVersionId: number;
+  approve: ApproveSplitFn;
+}
+
+/** Whether the panel has established what run (if any) already exists. */
+type AttachState = 'checking' | 'settled' | 'unavailable';
+
 export function AiSplitAction({
   commentId,
-  onApproveSplit,
+  capability,
 }: {
   commentId: number;
-  onApproveSplit: ApproveSplitFn;
+  capability: SplitCapability;
 }) {
   const t = useTranslations('ai-split');
   const [open, setOpen] = useState(false);
@@ -61,6 +78,7 @@ export function AiSplitAction({
   const [now, setNow] = useState(() => Date.now());
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attach, setAttach] = useState<AttachState>('checking');
   const requestingRef = useRef(false);
   const approvingRef = useRef(false);
   const attachedRef = useRef(false);
@@ -80,11 +98,19 @@ export function AiSplitAction({
     if (!open || attachedRef.current) return;
 
     let cancelled = false;
+    setAttach('checking');
 
     readLatestCommentSplit(commentId).then((outcome) => {
-      if (cancelled || outcome.kind === 'unavailable') return;
+      if (cancelled) return;
+
+      if (outcome.kind === 'unavailable') {
+        setAttach('unavailable');
+
+        return;
+      }
 
       attachedRef.current = true;
+      setAttach('settled');
 
       if (outcome.kind === 'none') return;
 
@@ -146,7 +172,7 @@ export function AiSplitAction({
     setPending(true);
     setError(null);
 
-    const outcome = await startCommentSplit(commentId);
+    const outcome = await startCommentSplit(commentId, capability.documentVersionId);
 
     requestingRef.current = false;
     setPending(false);
@@ -181,7 +207,7 @@ export function AiSplitAction({
     let message: string | null;
 
     try {
-      message = await onApproveSplit(
+      message = await capability.approve(
         commentId,
         splitIdempotencyKey(currentRunId, index),
         resolution.kind === 'anchor' ? resolution.anchor : null,
@@ -273,7 +299,18 @@ export function AiSplitAction({
 
             <div className="mt-4">
               {phase === 'idle' ? (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('idle')}</p>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  {attach === 'checking' ? t('checking') : t('idle')}
+                </p>
+              ) : null}
+
+              {/* The read that would have found an existing run failed. Say so:
+                  the generate button below still works, but the author deserves
+                  to know it might be paying for an answer that already exists. */}
+              {attach === 'unavailable' ? (
+                <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  {t('checkFailed')}
+                </p>
               ) : null}
 
               {phase === 'running' ? (
@@ -311,7 +348,11 @@ export function AiSplitAction({
                 <button
                   type="button"
                   onClick={request}
-                  disabled={pending || busy}
+                  // Disabled until the panel knows what already exists: the
+                  // server only dedupes runs still IN FLIGHT, so clicking
+                  // through a pending re-attach read would bill a second run
+                  // for a completed answer sitting one response away.
+                  disabled={pending || busy || attach === 'checking'}
                   className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-1 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15"
                 >
                   {pending ? t('generating') : phase === 'idle' ? t('generate') : t('retry')}

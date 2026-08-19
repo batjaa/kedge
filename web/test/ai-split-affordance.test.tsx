@@ -4,7 +4,7 @@ import type { ThreadComment } from '@/lib/thread-types';
 import { renderToStaticMarkup } from './render-intl';
 
 // The BYO-key gate at the component seam (#134, AC "affordance absent when AI is
-// disabled"). `onApproveSplit` is the capability: the review surface passes it
+// disabled"). `splitCapability` is the capability: the review surface passes it
 // only when the api reported a configured Anthropic key AND the reader is on the
 // current version, and the share surface never passes it at all. Without it the
 // split button must not exist — not disabled, absent.
@@ -58,7 +58,9 @@ function render(options: {
       onDelete={() => {}}
       onSetSuggestionStatus={() => {}}
       onToggleReaction={() => {}}
-      onApproveSplit={options.withSplit === false ? undefined : async () => null}
+      splitCapability={options.withSplit === false
+        ? undefined
+        : { documentVersionId: 9, approve: async () => null }}
     />,
   );
 }

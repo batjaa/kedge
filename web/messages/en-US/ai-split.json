@@ -4,6 +4,8 @@
   "heading": "Split this comment",
   "description": "Where this comment raises several issues, each one can become its own thread. Nothing is created until you approve it.",
   "idle": "No split proposed for this comment yet.",
+  "checking": "Checking for an existing proposal…",
+  "checkFailed": "Couldn't check whether a proposal already exists — generating may create a second one.",
   "generate": "Propose a split",
   "generating": "Proposing…",
   "retry": "Propose again",
