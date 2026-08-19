@@ -23,9 +23,9 @@ use Throwable;
  * the web polls to a terminal status — a slow model never blocks the page.
  *
  * Every action authorizes through {@see AiRunPolicy}, and the whole surface sits
- * behind the `ai.enabled` gate: with no Anthropic key configured these routes
- * 404, exactly as if they were never registered, so a keyless self-host has no
- * AI affordance to click.
+ * behind the `ai.enabled` gate: with no credential configured for the selected
+ * provider these routes 404, exactly as if they were never registered, so a
+ * keyless self-host has no AI affordance to click.
  *
  * Nothing here writes review data. A digest and an improve-the-doc prompt are
  * displayed, copyable artifacts — the AI drafts, the human decides (hard rule 5).

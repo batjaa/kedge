@@ -306,10 +306,27 @@
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
-## Decision log (M4 amendments at ticketing, 2026-08-19)
+## Decision log (AI provider gate #140, 2026-08-19)
 
-- ✅ **AI layer is provider-agnostic by construction** — revising the "laravel/ai → Claude is the v1 pin". The pin was wording, not architecture: `laravel/ai` already abstracts Anthropic, OpenAI, Gemini, Groq, Mistral, Ollama and more, with provider + default models chosen in config/env. Kedge's rule is structural: no provider-specific call site outside the AI config; `ai.enabled` gates on the configured default provider having credentials (not on `ANTHROPIC_API_KEY` specifically). Claude stays the default and the only *certified* path (`claude-sonnet-5` / `claude-haiku-4-5` for summaries); other providers best-effort — CI runs on the SDK fake either way. Self-host upside named in SPEC §14: a fully local Ollama keeps specs off every vendor. Ticket #130 amended.
-- ✅ **Ask-about-the-doc added to M4** (user request at ticketing, #138) — select a passage or ask doc-wide, free-form question, ephemeral copyable answer; never persisted as a comment/thread (draft-only trivially — no write path exists). Run type `ask` in the ledger for cost; reuses the selection→anchor capture and the shared fenced prompt foundation; **dedupe-exempt** (asks are question-specific — every ask mints a run; `throttle:ai` is the abuse guard). Single-turn in v1; no MCP ask tool (agents bring their own models). SPEC §14/§16 amended.
+- ✅ **The AI gate follows the selected provider's credential** — `AI_PROVIDER` (default `anthropic`); enabled iff that provider's `key` in the SDK's published table (`api/config/ai.php`) is a non-blank string. Kedge keeps no second list of provider names and application code names no provider at all (tokenized scan test over app/, routes/, bootstrap/, database/). `AI_ENABLED` still only forces off.
+- ✅ **The credential is the provider's own `key`, never an ambient one** — Bedrock requires `AWS_BEARER_TOKEN_BEDROCK`; an `AWS_ACCESS_KEY_ID` set for S3 must not unlock model billing (found at the codex gate, with three more fail-open env coercions: `OLLAMA_API_KEY=false` via `filled()`, `AI_PROVIDER=false|true|null|0` falling back to the default).
+- ✅ **Pricing is keyed by provider** — the same model id resold elsewhere is a different price; unpriced records `cost = null` (SPEC §14 amended).
+- ✅ **Keyless providers acknowledge themselves** — Ollama takes no key; `OLLAMA_API_KEY=local` is the operator's deliberate opt-in, the only way the gate can tell a local setup from an unconfigured one.
+
+## Known debt (#140 branch gate, 2026-08-19)
+
+- **The kill switch reaches queue workers only on recycle** — `queue:work` holds boot-time config; queued runs stop within `--max-time` (1h) or at deploy. Live gating needs shared state read per job — a spec-level decision. Pre-existing property of #130, now documented. (M)
+- **Text capability isn't checked at config time** — selecting an embeddings/audio provider shows the surface; runs fail with `provider_unsupported` naming `AI_PROVIDER`. (S)
+- **Published `config/ai.php` freezes the provider table** — a provider added by a future SDK release needs a re-publish. (S)
+
+## Decision log (version switcher #141, 2026-08-19)
+
+- ✅ **Version strip capped at the last 3 pills** (`VISIBLE_VERSION_LIMIT`); collapse starts at N+2 so a click never hides exactly one version. The viewed version and the current version are always pinned onto the strip — `aria-current="page"` and the `latest` tag can never hide in the overflow menu (which shows a `(viewing)` marker instead, keeping exactly one `aria-current` on the page). The menu is a native `<details>` disclosure (the import-warnings idiom): server-rendered, keyboard-accessible, real `?version=` links, no client JS, no Fumadocs fork.
+
+## Known debt (#141, 2026-08-19)
+
+- **Version menu rows date off `synced_at`** — `DocumentVersionResource` exposes no `created_at`; `synced_at` is set on every create so it is correct today, but semantically it is "last synced". Fold into the OpenAPI/TS-codegen contract item. (S)
+- **Pre-existing: the authenticated app-shell top nav forces a ~461px minimum page width** — every authenticated page (`/`, `/settings`, documents) scrolls horizontally below ~460px viewport, independent of the version switcher. Found during #141 verification. (S)
 
 ## Decision log (M4 journey pack #137 + module close, 2026-08-18)
 
@@ -324,7 +341,7 @@
 
 ## USER ACTIONS (M4 deployment carry-overs, from #128, 2026-08-18)
 
-- [ ] **USER ACTION** Provision `ANTHROPIC_API_KEY` in the preview/SaaS env for dogfooding.
+- [x] **USER ACTION** Provision `ANTHROPIC_API_KEY` in the preview/SaaS env for dogfooding. — Done 2026-08-19: key set as a Coolify platform env, `${ANTHROPIC_API_KEY:-}` passthrough added to `deploy/preview/compose.yml` (`x-api-env`, so api/worker/scheduler all receive it); post-deploy `/api/v1/config` reports `ai.enabled: true`.
 - [ ] **USER ACTION** Post-deploy verification: one real digest on a real doc + one MCP smoke call with a freshly minted token.
 - [ ] **USER ACTION** Manual dogfood before module close-out review: digest this module's own review comments with the feature they specced.
 - [ ] **USER ACTION** Decide the #134 fragment-vs-anchor question raised on PR #138 (splits fork the whole comment, differentiated by anchor only).
@@ -417,4 +434,8 @@
 - ✅ **Fixed on the second pass**: the revoke id oracle is fully closed — the id resolves through the caller's own tokens and the Policy denies a foreign token as not-found, so "not yours", "never existed", and "you are a reviewer" are one byte-identical 404 (the first pass still leaked through differing 404 bodies and a 403-for-existing split); the settings list is generation-guarded so a slow GET can no longer delete a just-minted token or resurrect a just-revoked one; a new mint attempt retires the previous token's plaintext before it starts (two credentials on screen is how the wrong one gets copied); the per-member cap check moved inside the mint transaction on locked rows; the cap's 422 surfaces the API's own message instead of the name-length hint; and `aria-invalid` on the name field is driven by mint failures only, not by copy/revoke/network errors.
 - **Note for #135**: the agent-token revoke route deliberately resolves its id through `$user->tokens()` rather than implicit model binding. That is binding, not authorization — `AgentTokenPolicy` still decides — and it exists so the 404 bodies match. Keep the pair together if the route is ever refactored.
 - **Accepted: the per-member cap is best-effort on SQLite**, which has no row locks, so two concurrent mints at the ceiling could both land. It is a sanity ceiling on an owner-scoped list, not a billing boundary; MySQL/Postgres deployments get the real lock. (S)
-||||||| parent of 9f5fd3c (docs(spec): provider-agnostic AI layer + ask-about-the-doc (M4 amendments))
+
+## Decision log (M4 post-close amendments, 2026-08-19)
+
+- ✅ **AI provider becomes selectable; the gate follows the selected provider's credential** (ticketed #140) — revising the shipped v1 pin ("the provider is a hardcoded v1 pin so the gate can never disagree with the provider it guards"). The pin was correct exactly because of that gate coupling; #140 dissolves the coupling the safe way: the operator selects a provider, `ai.enabled` derives from **that** provider's credential, and the shipped invariants survive — a credential is the only thing that can turn AI on, `AI_ENABLED` stays a kill switch that can only force off. The seams are already clean (every agent reads the single `kedge.ai.provider` knob; zero provider-specific call sites; unpriced models record `cost = null`). Claude stays the default and the only certified path; others best-effort (CI runs on the SDK fake regardless); a local Ollama keeps a self-hoster's specs off every vendor. SPEC §14 amended.
+- ✅ **Ask-about-the-doc added to M4 scope** (user request, ticketed #139) — select a passage or ask doc-wide, free-form question, ephemeral copyable answer; never persisted as a comment/thread (draft-only trivially — no write path exists). Run type `ask` in the ledger for cost; reuses the selection→anchor capture and the shared fenced prompt foundation; **dedupe-exempt** (asks are question-specific — every ask mints a run; `throttle:ai` is the abuse guard). Single-turn in v1; no MCP ask tool (agents bring their own models). SPEC §14/§16 amended. Both tickets hang off the closed #128 as trailing M4 work.

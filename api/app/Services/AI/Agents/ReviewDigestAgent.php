@@ -38,7 +38,7 @@ class ReviewDigestAgent implements Agent, HasStructuredOutput
 
     public function provider(): string
     {
-        return (string) config('kedge.ai.provider', 'anthropic');
+        return (string) config('kedge.ai.provider');
     }
 
     public function model(): string
