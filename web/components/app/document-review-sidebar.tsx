@@ -32,79 +32,85 @@ export function DocumentReviewSidebar({
   const t = useTranslations('review');
 
   return (
-    <aside>
-      <div className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10">
-        <div className="mb-4 flex min-w-0 items-center gap-2 text-xs font-mono">
-          {versionLabel ? <MetaChip>{versionLabel}</MetaChip> : null}
-          {lifecycleStatus ? <LifecycleChip status={lifecycleStatus} /> : null}
-          {onCollapse ? (
-            <button
-              type="button"
-              onClick={onCollapse}
-              aria-label={t('sidebar.hide')}
-              title={t('sidebar.hide')}
-              className="ml-auto rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/5 dark:hover:text-zinc-200"
-            >
-              <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-
-        <h2 className="text-xs font-semibold text-zinc-900 dark:text-white">{t('sidebar.document')}</h2>
-        <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label={t('sidebar.tocLabel')}>
-          {tocEntries.length > 0 ? (
-            tocEntries.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => onJumpToHeading(entry.id)}
-                className={cn(
-                  'block w-full -ml-px border-l-2 py-1 text-left hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:text-white',
-                  entry.level > 2 ? 'pl-7 text-xs' : 'pl-4',
-                  activeHeadingId === entry.id
-                    ? 'border-emerald-500 text-zinc-900 dark:text-white'
-                    : 'border-transparent text-zinc-600 hover:border-zinc-300 dark:text-zinc-400 dark:hover:border-zinc-600',
-                )}
-              >
-                {entry.title}
-              </button>
-            ))
-          ) : (
-            <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">{t('sidebar.noHeadings')}</p>
-          )}
-        </nav>
-
-        <h2 className="mt-8 text-xs font-semibold text-zinc-900 dark:text-white">{t('sidebar.threads')}</h2>
-        <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label={t('sidebar.threads')}>
-          {threads.length > 0 ? (
-            threads.map((thread) => (
-              <button
-                key={thread.id}
-                type="button"
-                onClick={() => onFocusThread(thread)}
-                className={cn(
-                  'flex w-full -ml-px items-center gap-2 rounded-r border-l-2 py-1 pl-4 text-left hover:bg-zinc-50 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/[.03] dark:hover:text-white',
-                  activeThreadId === thread.id
-                    ? 'border-emerald-500 text-zinc-900 dark:text-white'
-                    : 'border-transparent text-zinc-600 dark:text-zinc-400',
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{threadNavLabel(thread, t)}</span>
-                <ThreadStatusLabel thread={thread} />
-              </button>
-            ))
-          ) : (
-            <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">{t('sidebar.noThreads')}</p>
-          )}
-        </nav>
-
-        <a
-          href="#orphaned-threads"
-          className="mt-8 inline-flex text-xs font-medium text-rose-700 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-rose-300 dark:hover:text-rose-200"
-        >
-          {t('sidebar.orphanedThreads')}
-        </a>
+    // The sticky box IS the root, deliberately (#146). A sticky element can only
+    // travel inside its containing block, so wrapping it in an auto-height
+    // <aside> gave it exactly its own height of slack — zero — and it scrolled
+    // away with the document. As the root it sits directly in the stretched
+    // `w-72` flex column of DocumentReviewSurface, whose height is the whole
+    // review row, so it pins under the header (top-32 clears the app shell's
+    // h-14 bar plus the document header) for the length of the document. The
+    // collapsed-state toggle in that same column already worked this way.
+    <aside className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10">
+      <div className="mb-4 flex min-w-0 items-center gap-2 text-xs font-mono">
+        {versionLabel ? <MetaChip>{versionLabel}</MetaChip> : null}
+        {lifecycleStatus ? <LifecycleChip status={lifecycleStatus} /> : null}
+        {onCollapse ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label={t('sidebar.hide')}
+            title={t('sidebar.hide')}
+            className="ml-auto rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/5 dark:hover:text-zinc-200"
+          >
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
+
+      <h2 className="text-xs font-semibold text-zinc-900 dark:text-white">{t('sidebar.document')}</h2>
+      <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label={t('sidebar.tocLabel')}>
+        {tocEntries.length > 0 ? (
+          tocEntries.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => onJumpToHeading(entry.id)}
+              className={cn(
+                'block w-full -ml-px border-l-2 py-1 text-left hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:text-white',
+                entry.level > 2 ? 'pl-7 text-xs' : 'pl-4',
+                activeHeadingId === entry.id
+                  ? 'border-emerald-500 text-zinc-900 dark:text-white'
+                  : 'border-transparent text-zinc-600 hover:border-zinc-300 dark:text-zinc-400 dark:hover:border-zinc-600',
+              )}
+            >
+              {entry.title}
+            </button>
+          ))
+        ) : (
+          <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">{t('sidebar.noHeadings')}</p>
+        )}
+      </nav>
+
+      <h2 className="mt-8 text-xs font-semibold text-zinc-900 dark:text-white">{t('sidebar.threads')}</h2>
+      <nav className="mt-3 border-l border-zinc-900/10 text-sm dark:border-white/10" aria-label={t('sidebar.threads')}>
+        {threads.length > 0 ? (
+          threads.map((thread) => (
+            <button
+              key={thread.id}
+              type="button"
+              onClick={() => onFocusThread(thread)}
+              className={cn(
+                'flex w-full -ml-px items-center gap-2 rounded-r border-l-2 py-1 pl-4 text-left hover:bg-zinc-50 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/[.03] dark:hover:text-white',
+                activeThreadId === thread.id
+                  ? 'border-emerald-500 text-zinc-900 dark:text-white'
+                  : 'border-transparent text-zinc-600 dark:text-zinc-400',
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{threadNavLabel(thread, t)}</span>
+              <ThreadStatusLabel thread={thread} />
+            </button>
+          ))
+        ) : (
+          <p className="pl-4 text-xs leading-5 text-zinc-500 dark:text-zinc-500">{t('sidebar.noThreads')}</p>
+        )}
+      </nav>
+
+      <a
+        href="#orphaned-threads"
+        className="mt-8 inline-flex text-xs font-medium text-rose-700 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-rose-300 dark:hover:text-rose-200"
+      >
+        {t('sidebar.orphanedThreads')}
+      </a>
     </aside>
   );
 }
