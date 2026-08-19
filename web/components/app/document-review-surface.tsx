@@ -73,7 +73,7 @@ import { approveDocument, revokeApproval } from '@/lib/approvals-client';
 import type { Approval, Document, DocumentVersion, LifecycleStatus, Project, SyncStatus } from '@/lib/document-types';
 import { versionLabel as displayVersionLabel } from '@/lib/version-label';
 import type { AnchorSelector } from '@/lib/anchor-capture-core';
-import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
+import type { ReviewThread, SuggestionStatus, ThreadAnchorPayload, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 const SCROLL_SPY_OFFSET = 136;
 const MOBILE_BREAKPOINT = 1280;
@@ -103,6 +103,7 @@ export function DocumentReviewSurface({
   canResync = false,
   canUpdateContent = false,
   canRunAiDigest = false,
+  canProposeCommentSplits = false,
   lastSyncStatus = null,
   syncError = null,
   children,
@@ -144,6 +145,12 @@ export function DocumentReviewSurface({
    * no AI affordance at all rather than a button that 404s.
    */
   canRunAiDigest?: boolean;
+  /**
+   * The per-comment AI split affordance (#134). Gated on the same BYO key as the
+   * digest, and passed separately because it is a separate surface: an instance
+   * with no key, and the share surface, both leave it false and get no button.
+   */
+  canProposeCommentSplits?: boolean;
   lastSyncStatus?: SyncStatus | null;
   syncError?: string | null;
   children: ReactNode;
@@ -649,6 +656,29 @@ export function DocumentReviewSurface({
     return null;
   }
 
+  /**
+   * Approve one AI split proposal (#134). This is the ONLY place a proposal
+   * becomes review data, and it does so by calling the ordinary fork endpoint —
+   * same Policy, same server-side anchor validation, same idempotency as the
+   * fork button beside it. The AI proposed; this click is the write.
+   *
+   * A rejected anchor comes back as the endpoint's own message and is reported
+   * against its proposal; the panel keeps the remaining proposals approvable.
+   */
+  async function approveSplit(
+    commentId: number,
+    idempotencyKey: string,
+    anchor: ThreadAnchorPayload | null,
+  ): Promise<string | null> {
+    const outcome = await forkComment(commentId, idempotencyKey, anchor);
+    if (!outcome.ok) return outcome.message;
+
+    await refreshLoadedThreads();
+    setActiveThreadId(outcome.thread.id);
+
+    return null;
+  }
+
   function syncForkingCommentIds() {
     setForkingCommentIds(forkGuardRef.current?.forkingCommentIds() ?? new Set());
   }
@@ -902,6 +932,13 @@ export function DocumentReviewSurface({
   // Hidden while reading a historical version: a digest is always taken over the
   // CURRENT version and its threads, so offering it here would silently answer a
   // different question than the one the page appears to be asking.
+  // Split proposals anchor into the CURRENT version and are approved by forking
+  // against it, so the affordance is absent while reading history — offering it
+  // there would propose anchors the fork endpoint would immediately reject.
+  const splitApproval = canProposeCommentSplits && viewedVersionId === currentVersionId
+    ? approveSplit
+    : undefined;
+
   const aiDigestControl = canRunAiDigest && viewedVersionId === currentVersionId ? (
     <AiDigestAction documentId={documentId} documentTitle={title} />
   ) : null;
@@ -1036,6 +1073,7 @@ export function DocumentReviewSurface({
                 onDeleteComment={remove}
                 onSetSuggestionStatus={setSuggestionStatus}
                 onToggleReaction={toggleReaction}
+                onApproveSplit={splitApproval}
                 pendingReattachThreadId={pendingReattachThreadId}
                 reattachingThreadId={reattachingThreadId}
                 reattachStatus={reattachStatus}
@@ -1099,6 +1137,7 @@ export function DocumentReviewSurface({
         onDeleteComment={remove}
         onSetSuggestionStatus={setSuggestionStatus}
         onToggleReaction={toggleReaction}
+        onApproveSplit={splitApproval}
       />
 
       <DocumentCommentComposer

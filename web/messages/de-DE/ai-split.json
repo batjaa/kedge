@@ -1,0 +1,22 @@
+{
+  "trigger": "Aufteilung vorschlagen",
+  "dialogLabel": "Diesen Kommentar aufteilen",
+  "heading": "Diesen Kommentar aufteilen",
+  "description": "Wenn dieser Kommentar mehrere Themen anspricht, kann jedes zu einem eigenen Thread werden. Es wird nichts angelegt, bevor Sie es freigeben.",
+  "idle": "Für diesen Kommentar gibt es noch keinen Aufteilungsvorschlag.",
+  "generate": "Aufteilung vorschlagen",
+  "generating": "Wird vorgeschlagen…",
+  "retry": "Erneut vorschlagen",
+  "takingTooLong": "Das dauert länger als erwartet. Versuchen Sie es erneut oder schauen Sie gleich wieder vorbei.",
+  "failed": "Der Vorschlag ist fehlgeschlagen. Bitte erneut versuchen.",
+  "noSplit": "Dieser Kommentar spricht nur ein Thema an — nichts aufzuteilen.",
+  "approve": "Freigeben",
+  "approving": "Wird freigegeben…",
+  "approved": "Freigegeben",
+  "approveAll": "Alle freigeben ({count})",
+  "approvedCount": "{approved} von {total} freigegeben",
+  "inheritsAnchor": "Behält die Auswahl des ursprünglichen Threads.",
+  "close": "Schließen",
+  "draftNotice": "Ein Vorschlag zur Freigabe. Es wurde noch nichts angelegt.",
+  "draftNoticeWithModel": "Ein Vorschlag zur Freigabe, erstellt von {model}. Es wurde noch nichts angelegt."
+}

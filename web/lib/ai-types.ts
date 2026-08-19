@@ -41,7 +41,45 @@ export interface DigestOutput {
   coverage: AiRunCoverage;
 }
 
-export interface AiRun {
+/**
+ * One anchor a split proposal carries (M4 #134). Shaped exactly like a
+ * browser-captured selection — the api computes the offsets from the model's
+ * verbatim quote — so it is posted straight to the fork endpoint, which
+ * re-validates it against the live projection before persisting anything.
+ */
+export interface SplitProposalAnchor {
+  exact: string;
+  prefix: string;
+  suffix: string;
+  start: number;
+  end: number;
+  heading_path: string[];
+  projection_version: string;
+}
+
+/**
+ * One proposed thread. `anchor` is null when the model's quote could not be
+ * matched to the document (or the source thread is document-level): approving
+ * such a proposal forks exactly like a manual fork, inheriting the source
+ * thread's anchors.
+ */
+export interface SplitProposal {
+  title: string;
+  fragment: string;
+  anchor: SplitProposalAnchor | null;
+}
+
+export interface SplitOutput {
+  proposals: SplitProposal[];
+  coverage: AiRunCoverage;
+}
+
+/**
+ * Generic over its output so each surface names the shape it renders. The
+ * default keeps the digest's call sites reading `AiRun`; helpers that only touch
+ * lifecycle fields take `AiRun<unknown>` and accept every run type.
+ */
+export interface AiRun<TOutput = DigestOutput> {
   id: number;
   document_id: number;
   type: AiRunType;
@@ -51,8 +89,11 @@ export interface AiRun {
   tokens: number | null;
   /** USD spent so far, or null when the model has no published price. */
   cost: number | null;
-  output: DigestOutput | null;
+  output: TOutput | null;
   error: AiRunError | null;
   created_at: string;
   updated_at: string;
 }
+
+/** A run whose output is a comment-split proposal list. */
+export type AiSplitRun = AiRun<SplitOutput>;

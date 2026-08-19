@@ -171,6 +171,7 @@ export default async function DocumentPage({
               document.source_type === 'upload' && (document.capabilities?.update_content ?? false)
             }
             canRunAiDigest={aiEnabled}
+            canProposeCommentSplits={aiEnabled}
             lastSyncStatus={document.last_sync_status}
             syncError={document.sync_error}
           >

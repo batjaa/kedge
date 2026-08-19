@@ -26,7 +26,7 @@ export function isAiRunInFlight(status: AiRunStatus): boolean {
  * The poll predicate: `null` keeps the loop alive (still in flight, or a dropped
  * read), a run settles it.
  */
-export function aiRunSettled(run: AiRun | null): AiRun | null {
+export function aiRunSettled<T>(run: AiRun<T> | null): AiRun<T> | null {
   if (run === null) return null;
 
   return isAiRunInFlight(run.status) ? null : run;
@@ -39,7 +39,7 @@ export type DigestPhase = 'idle' | 'running' | 'taking-too-long' | 'completed' |
  * `created_at`, so re-attaching to a run abandoned yesterday reports
  * taking-too-long immediately instead of pretending it just started.
  */
-export function digestPhase(run: AiRun | null, nowMs: number): DigestPhase {
+export function digestPhase(run: AiRun<unknown> | null, nowMs: number): DigestPhase {
   if (run === null) return 'idle';
   if (run.status === 'completed') return 'completed';
   if (run.status === 'failed') return 'failed';
