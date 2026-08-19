@@ -925,6 +925,17 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
+  // The per-comment split affordance's capability (#134): passing the approval
+  // callback IS the gate, so a keyless instance renders no button at all.
+  //
+  // Absent while reading a historical version, for the same reason the digest
+  // is: proposals anchor into the CURRENT version and are approved by forking
+  // against it, so offering them here would propose anchors the fork endpoint
+  // would immediately reject.
+  const splitApproval = canProposeCommentSplits && viewedVersionId === currentVersionId
+    ? approveSplit
+    : undefined;
+
   // The primary AI-digest affordance (DESIGN.md header anatomy, #130). Owns its
   // own panel, run request, and poll loop; it writes no review data, so it needs
   // nothing from this surface but the document it summarizes.
@@ -932,13 +943,6 @@ export function DocumentReviewSurface({
   // Hidden while reading a historical version: a digest is always taken over the
   // CURRENT version and its threads, so offering it here would silently answer a
   // different question than the one the page appears to be asking.
-  // Split proposals anchor into the CURRENT version and are approved by forking
-  // against it, so the affordance is absent while reading history — offering it
-  // there would propose anchors the fork endpoint would immediately reject.
-  const splitApproval = canProposeCommentSplits && viewedVersionId === currentVersionId
-    ? approveSplit
-    : undefined;
-
   const aiDigestControl = canRunAiDigest && viewedVersionId === currentVersionId ? (
     <AiDigestAction documentId={documentId} documentTitle={title} />
   ) : null;
