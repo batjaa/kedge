@@ -248,12 +248,31 @@ class CommentThreadService
     {
         $thread->loadMissing('document');
         $version = $this->commentableVersion($thread->document, includePlainText: true);
-        $validated = $this->validatedAnchor($thread->document, $version, $anchor);
 
-        $thread->anchors()->create(AnchorAttributes::fromCapture($validated, $version));
+        $thread->anchors()->create($this->capturedAnchorAttributes($thread->document, $anchor, $version));
         $thread->refresh();
 
         return $this->loadThreadForResource($thread, $actor, $version);
+    }
+
+    /**
+     * Validate a client-supplied anchor against the document's current version
+     * projection and return the persistable anchor attributes. This is the one
+     * trust boundary for client-captured selectors — re-attach and anchored
+     * forks both cross it, so an anchor that fails here throws before anything
+     * is written.
+     *
+     * @param  array<string, mixed>  $anchor
+     * @return array<string, mixed>
+     */
+    public function capturedAnchorAttributes(Document $document, array $anchor, ?DocumentVersion $version = null): array
+    {
+        $version ??= $this->commentableVersion($document, includePlainText: true);
+
+        return AnchorAttributes::fromCapture(
+            $this->validatedAnchor($document, $version, $anchor),
+            $version,
+        );
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Enums\AuditEvent;
 use App\Enums\CommentType;
 use App\Enums\SuggestionStatus;
 use App\Enums\ThreadStatus;
+use App\Enums\ThreadType;
 use App\Models\Comment;
 use App\Models\Thread;
 use App\Models\User;
@@ -58,8 +59,13 @@ class CommentModerationService
             return [$this->threads->loadThreadForResource($existing->thread, $actor), 200];
         }
 
+        // Resolved before the transaction opens: an anchor that fails the
+        // capture trust boundary must reject the whole fork with nothing
+        // persisted. Null keeps M2's copy-the-source-anchors behavior.
+        $anchorAttributes = $this->suppliedAnchorAttributes($sourceThread, $data);
+
         try {
-            $thread = DB::transaction(function () use ($comment, $actor, $sourceThread, $idempotencyKey) {
+            $thread = DB::transaction(function () use ($comment, $actor, $sourceThread, $idempotencyKey, $anchorAttributes) {
                 $thread = Thread::create([
                     'document_id' => $sourceThread->document_id,
                     'type' => $sourceThread->type,
@@ -89,8 +95,12 @@ class CommentModerationService
                     $this->mentions->copyMentionLinks($comment, $openingComment);
                 }
 
-                foreach ($sourceThread->anchors as $anchor) {
-                    $thread->anchors()->create(AnchorAttributes::fromAnchor($anchor));
+                if ($anchorAttributes !== null) {
+                    $thread->anchors()->create($anchorAttributes);
+                } else {
+                    foreach ($sourceThread->anchors as $anchor) {
+                        $thread->anchors()->create(AnchorAttributes::fromAnchor($anchor));
+                    }
                 }
 
                 return $thread;
@@ -120,6 +130,36 @@ class CommentModerationService
         );
 
         return [$this->threads->loadThreadForResource($thread, $actor), 201];
+    }
+
+    /**
+     * A fork may carry its own anchor — the AI split flow lands each approved
+     * fragment on its own selector instead of inheriting the source thread's.
+     * It crosses the same trust boundary as re-attach, and only an inline
+     * thread can hold one: document-level threads have no anchors at all.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function suppliedAnchorAttributes(Thread $sourceThread, array $data): ?array
+    {
+        $anchor = $data['anchor'] ?? null;
+
+        if (! is_array($anchor) || $anchor === []) {
+            return null;
+        }
+
+        if ($sourceThread->type !== ThreadType::Inline) {
+            $this->reject(
+                'thread_not_inline',
+                'Only inline threads can be forked with their own anchor.',
+                'anchor',
+            );
+        }
+
+        $sourceThread->loadMissing('document');
+
+        return $this->threads->capturedAnchorAttributes($sourceThread->document, $anchor);
     }
 
     public function updateComment(Comment $comment, User $actor, string $body, ?string $ip): Comment
