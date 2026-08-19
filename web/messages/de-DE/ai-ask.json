@@ -2,8 +2,8 @@
   "trigger": "KI fragen",
   "dialogLabel": "Zu diesem Dokument fragen",
   "heading": "Zu diesem Dokument fragen",
-  "description": "Stelle eine Frage und lies die Antwort. In der Review wird nichts veröffentlicht, und dieses Panel ist der einzige Ort, an dem die Antwort erscheint.",
-  "descriptionPassage": "Frage zur ausgewählten Passage. In der Review wird nichts veröffentlicht, und dieses Panel ist der einzige Ort, an dem die Antwort erscheint.",
+  "description": "Stelle eine Frage und lies die Antwort hier. In der Review wird nichts veröffentlicht, und dieses Panel ist der einzige Ort, an dem die Antwort angezeigt wird — Schließen löscht sie aus der Ansicht.",
+  "descriptionPassage": "Frage zur ausgewählten Passage. In der Review wird nichts veröffentlicht, und dieses Panel ist der einzige Ort, an dem die Antwort angezeigt wird — Schließen löscht sie aus der Ansicht.",
   "selectedPassage": "Ausgewählte Passage",
   "questionLabel": "Deine Frage",
   "placeholder": "Was sagt dieser Abschnitt über die Neuverankerung?",
@@ -16,6 +16,6 @@
   "copied": "Kopiert",
   "copyFailed": "Kopieren in die Zwischenablage nicht möglich.",
   "close": "Schließen",
-  "ephemeralNotice": "Eine Antwort zum Lesen. In der Review wurde nichts veröffentlicht, und mit dem Schließen dieses Panels ist sie weg — kopiere, was du behalten willst.",
-  "ephemeralNoticeWithModel": "Eine Antwort zum Lesen, erstellt von {model}. In der Review wurde nichts veröffentlicht, und mit dem Schließen dieses Panels ist sie weg — kopiere, was du behalten willst."
+  "ephemeralNotice": "Eine Antwort zum Lesen. In der Review wurde nichts veröffentlicht, und dieses Panel ist der einzige Ort, an dem sie angezeigt wird — kopiere, was du behalten willst.",
+  "ephemeralNoticeWithModel": "Eine Antwort zum Lesen, erstellt von {model}. In der Review wurde nichts veröffentlicht, und dieses Panel ist der einzige Ort, an dem sie angezeigt wird — kopiere, was du behalten willst."
 }

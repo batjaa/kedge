@@ -38,16 +38,17 @@ describe('AskAnswer', () => {
     expect(partial).toContain('the rest was too large to read in this pass');
   });
 
-  it('says nothing was posted and the panel is the end of it, naming the model when there is one', () => {
-    // The claim has to be one we can keep: the run lands in the cost ledger like
-    // every other, so the copy promises what is actually true of the SURFACE —
-    // nothing reaches the review, and closing the panel loses the answer.
+  it('says nothing was posted and this is the only place it is shown, naming the model when there is one', () => {
+    // The claim has to be one we can keep. The run lands in the cost ledger like
+    // every other, so the copy promises what is true of the SURFACE — nothing
+    // reaches the review, and no other screen shows the answer — and never
+    // implies the row was deleted.
     const withModel = renderToStaticMarkup(<AskAnswer output={output()} model="claude-sonnet-5" />);
     const withoutModel = renderToStaticMarkup(<AskAnswer output={output()} model={null} />);
 
     expect(withModel).toContain('claude-sonnet-5');
     expect(withModel).toContain('Nothing was posted to the review');
-    expect(withModel).toContain('closing this panel is the end of it');
+    expect(withModel).toContain('the only place it is shown');
     expect(withModel).not.toContain('not saved');
     expect(withoutModel).toContain('Nothing was posted to the review');
     expect(withoutModel).not.toContain('claude-sonnet-5');

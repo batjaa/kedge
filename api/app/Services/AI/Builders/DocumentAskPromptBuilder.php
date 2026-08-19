@@ -2,6 +2,7 @@
 
 namespace App\Services\AI\Builders;
 
+use App\Http\Requests\StoreDocumentAskRequest;
 use App\Models\Document;
 use App\Services\AI\Prompt\AssembledPrompt;
 use App\Services\AI\Prompt\ContextBudget;
@@ -45,6 +46,18 @@ class DocumentAskPromptBuilder
 {
     /** Longest quoted passage carried into the prompt, before an explicit cut mark. */
     private const MAX_QUOTE_CHARS = 2000;
+
+    /**
+     * Longest question carried into the prompt.
+     *
+     * The endpoint already refuses a longer one
+     * ({@see StoreDocumentAskRequest::MAX_QUESTION_CHARS}),
+     * and this is the same rule enforced where it actually matters: the run's
+     * request is read back from a row, so the builder — not the validator — is
+     * the last thing standing between stored text and the provider. Sized above
+     * the endpoint's limit so a normal ask is never cut, and marked when it is.
+     */
+    private const MAX_QUESTION_CHARS = 2000;
 
     /**
      * Longest rendered heading path. The endpoint bounds the path's depth
@@ -199,7 +212,10 @@ class DocumentAskPromptBuilder
             $parts[] = $fence->wrap('selected passage', implode("\n", $lines));
         }
 
-        $parts[] = $fence->wrap('reader question', $question);
+        $parts[] = $fence->wrap(
+            'reader question',
+            Str::limit($question, self::MAX_QUESTION_CHARS, '… [question shortened]'),
+        );
 
         return implode("\n\n", $parts);
     }

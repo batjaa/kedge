@@ -364,17 +364,19 @@ class AiDocumentAskTest extends TestCase
 
     /**
      * And the builder holds the line regardless of where a run's request came
-     * from — a hand-written row cannot crowd the document out of its own prompt.
+     * from. The endpoint's ceilings guard the front door; a run is executed off
+     * a ROW, so the builder is the last thing between stored text and the
+     * provider — and it must be able to say no on its own.
      */
-    public function test_a_long_heading_path_is_shortened_in_the_prompt(): void
+    public function test_an_oversized_stored_request_is_shortened_before_it_reaches_the_model(): void
     {
         DocumentAskAgent::fake([['answer' => 'Answered.']]);
         [$author, $document] = $this->readyDocument();
 
         [$run] = app(AiRunLedger::class)->startOrJoin($document, $author, AiRunType::Ask, request: [
-            'question' => 'What does this mean?',
+            'question' => str_repeat('why ', 20000),
             'quote' => [
-                'exact' => 'Re-anchoring',
+                'exact' => str_repeat('quoted ', 20000),
                 'heading_path' => array_fill(0, 40, str_repeat('S', 200)),
             ],
         ]);
@@ -382,8 +384,10 @@ class AiDocumentAskTest extends TestCase
         $this->runJob($run);
 
         DocumentAskAgent::assertPrompted(function ($prompt): bool {
+            $this->assertStringContainsString('[question shortened]', $prompt->prompt);
+            $this->assertStringContainsString('[passage shortened]', $prompt->prompt);
             $this->assertStringContainsString('[path shortened]', $prompt->prompt);
-            $this->assertLessThan(4000, mb_strlen($prompt->prompt));
+            $this->assertLessThan(8000, mb_strlen($prompt->prompt));
 
             return true;
         });
