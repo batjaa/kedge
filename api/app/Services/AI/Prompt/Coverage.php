@@ -20,6 +20,11 @@ final class Coverage
      * @param  list<string>  $notes  Extra omissions a builder must own up to —
      *                               anything left out that the covered/total
      *                               count alone would not confess.
+     * @param  string  $purpose  What the run was going to DO with these units,
+     *                           so the nothing-to-read sentence names the real
+     *                           feature ("nothing to digest" / "nothing to turn
+     *                           into an improve-the-doc prompt") instead of
+     *                           telling an improve-prompt user about a digest.
      */
     public function __construct(
         public readonly int $covered,
@@ -27,6 +32,7 @@ final class Coverage
         public readonly bool $chunked,
         public readonly string $unit = 'threads',
         public readonly array $notes = [],
+        public readonly string $purpose = 'digest',
     ) {}
 
     /**
@@ -36,7 +42,14 @@ final class Coverage
      */
     public function withNote(string $note): self
     {
-        return new self($this->covered, $this->total, $this->chunked, $this->unit, [...$this->notes, $note]);
+        return new self(
+            $this->covered,
+            $this->total,
+            $this->chunked,
+            $this->unit,
+            [...$this->notes, $note],
+            $this->purpose,
+        );
     }
 
     public function isPartial(): bool
@@ -55,7 +68,7 @@ final class Coverage
     private function headline(): string
     {
         if ($this->total === 0) {
-            return sprintf('No review %s yet — nothing to digest.', $this->noun(0));
+            return sprintf('No review %s yet — nothing to %s.', $this->noun(0), $this->purpose);
         }
 
         if ($this->isPartial()) {

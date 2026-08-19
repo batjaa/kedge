@@ -71,6 +71,8 @@ final class PromptAssembler
      *                                metadata); costs budget in each chunk and is never
      *                                counted as coverage.
      * @param  int|null  $totalUnits  What coverage counts against; defaults to the section count.
+     * @param  string  $purpose  What this run does with those units, so an empty
+     *                           review's coverage sentence names this feature.
      */
     public function assemble(
         string $task,
@@ -78,6 +80,7 @@ final class PromptAssembler
         ?string $context = null,
         ?int $totalUnits = null,
         string $unit = 'threads',
+        string $purpose = 'digest',
     ): AssembledPrompt {
         $total = $totalUnits ?? count($sections);
         $rule = $this->fence->rule();
@@ -137,6 +140,7 @@ final class PromptAssembler
                 total: $total,
                 chunked: count($groups) > 1,
                 unit: $unit,
+                purpose: $purpose,
             ),
             meta: [
                 'sections' => count($sections),

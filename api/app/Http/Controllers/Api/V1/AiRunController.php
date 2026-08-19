@@ -27,31 +27,88 @@ use Throwable;
  * 404, exactly as if they were never registered, so a keyless self-host has no
  * AI affordance to click.
  *
- * Nothing here writes review data. A digest is a displayed, copyable artifact —
- * the AI drafts, the human decides (hard rule 5).
+ * Nothing here writes review data. A digest and an improve-the-doc prompt are
+ * displayed, copyable artifacts — the AI drafts, the human decides (hard rule 5).
+ *
+ * Every document-scoped artifact rides the same two verbs: POST requests one,
+ * GET re-attaches to the latest. Only the run TYPE differs, and dedupe is per
+ * (document, type) — so a digest in flight never swallows an improve-prompt
+ * request, and vice versa.
  */
 class AiRunController extends Controller
 {
     /**
      * POST /api/v1/documents/{document}/ai/digest — request a review digest.
-     *
-     * 202 with a pending run when one is minted; 200 with the EXISTING run when
-     * a digest for this document is already pending or running (eng review §8),
-     * so a double-click or a second tab joins the run in flight instead of
-     * billing the key twice. A retry after a failure is a fresh POST and mints a
-     * new run — the failed one is never revived.
      */
     public function digest(Request $request, Document $document, AiRunLedger $ledger): JsonResponse
     {
+        return $this->start($request, $document, $ledger, AiRunType::Digest);
+    }
+
+    /**
+     * GET /api/v1/documents/{document}/ai/digest — the latest digest run for this
+     * document, whatever its status, or 204 when none was ever requested.
+     */
+    public function latestDigest(Document $document, AiRunLedger $ledger): AiRunResource|Response
+    {
+        return $this->latest($document, $ledger, AiRunType::Digest);
+    }
+
+    /**
+     * POST /api/v1/documents/{document}/ai/improve-prompt — request the
+     * improve-the-doc prompt (SPEC §14, user story 4): one copyable artifact
+     * carrying the unresolved feedback by section, the accepted suggested edits
+     * verbatim, and each thread's quoted anchor.
+     */
+    public function improvePrompt(Request $request, Document $document, AiRunLedger $ledger): JsonResponse
+    {
+        return $this->start($request, $document, $ledger, AiRunType::ImprovePrompt);
+    }
+
+    /**
+     * GET /api/v1/documents/{document}/ai/improve-prompt — the panel's
+     * re-attach on mount, or 204 when none was ever requested.
+     */
+    public function latestImprovePrompt(Document $document, AiRunLedger $ledger): AiRunResource|Response
+    {
+        return $this->latest($document, $ledger, AiRunType::ImprovePrompt);
+    }
+
+    /**
+     * GET /api/v1/ai-runs/{aiRun} — the polling target. Workspace-scoped; a
+     * foreign id is denied 403, never confirmed to exist.
+     */
+    public function show(AiRun $aiRun): AiRunResource
+    {
+        $this->authorize('view', $aiRun);
+
+        return AiRunResource::make($aiRun);
+    }
+
+    /**
+     * Mint a run of this type, or join the one already in flight.
+     *
+     * 202 with a pending run when one is minted; 200 with the EXISTING run when a
+     * run of the same type for this document is already pending or running (eng
+     * review §8), so a double-click or a second tab joins the run in flight
+     * instead of billing the key twice. A retry after a failure is a fresh POST
+     * and mints a new run — the failed one is never revived.
+     */
+    private function start(
+        Request $request,
+        Document $document,
+        AiRunLedger $ledger,
+        AiRunType $type,
+    ): JsonResponse {
         $this->authorize('create', [AiRun::class, $document]);
 
         abort_unless(
             $document->status === DocumentStatus::Ready && $document->current_version_id !== null,
             409,
-            'Only a ready document can be digested.',
+            'Only a ready document has content to generate from.',
         );
 
-        [$run, $created] = $ledger->startOrJoin($document, $request->user(), AiRunType::Digest);
+        [$run, $created] = $ledger->startOrJoin($document, $request->user(), $type);
 
         if ($created) {
             try {
@@ -79,32 +136,18 @@ class AiRunController extends Controller
     }
 
     /**
-     * GET /api/v1/documents/{document}/ai/digest — the latest digest run for this
-     * document, whatever its status, or 204 when none was ever requested.
-     *
-     * This is the panel's re-attach on mount (eng review §8): a run started
-     * before a reload, or finished while the tab was closed, is picked back up
-     * instead of being forgotten and re-billed.
+     * The panel's re-attach on mount (eng review §8): a run started before a
+     * reload, or finished while the tab was closed, is picked back up instead of
+     * being forgotten and re-billed.
      */
-    public function latestDigest(Document $document, AiRunLedger $ledger): AiRunResource|Response
+    private function latest(Document $document, AiRunLedger $ledger, AiRunType $type): AiRunResource|Response
     {
         $this->authorize('viewAny', [AiRun::class, $document]);
 
-        $run = $ledger->latestFor($document, AiRunType::Digest);
+        $run = $ledger->latestFor($document, $type);
 
         return $run === null
             ? response()->noContent()
             : AiRunResource::make($run);
-    }
-
-    /**
-     * GET /api/v1/ai-runs/{aiRun} — the polling target. Workspace-scoped; a
-     * foreign id is denied 403, never confirmed to exist.
-     */
-    public function show(AiRun $aiRun): AiRunResource
-    {
-        $this->authorize('view', $aiRun);
-
-        return AiRunResource::make($aiRun);
     }
 }
