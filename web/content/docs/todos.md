@@ -309,6 +309,15 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (version switcher #141, 2026-08-19)
+
+- ✅ **Version strip capped at the last 3 pills** (`VISIBLE_VERSION_LIMIT`); collapse starts at N+2 so a click never hides exactly one version. The viewed version and the current version are always pinned onto the strip — `aria-current="page"` and the `latest` tag can never hide in the overflow menu (which shows a `(viewing)` marker instead, keeping exactly one `aria-current` on the page). The menu is a native `<details>` disclosure (the import-warnings idiom): server-rendered, keyboard-accessible, real `?version=` links, no client JS, no Fumadocs fork.
+
+## Known debt (#141, 2026-08-19)
+
+- **Version menu rows date off `synced_at`** — `DocumentVersionResource` exposes no `created_at`; `synced_at` is set on every create so it is correct today, but semantically it is "last synced". Fold into the OpenAPI/TS-codegen contract item. (S)
+- **Pre-existing: the authenticated app-shell top nav forces a ~461px minimum page width** — every authenticated page (`/`, `/settings`, documents) scrolls horizontally below ~460px viewport, independent of the version switcher. Found during #141 verification. (S)
+
 ## Decision log (M4 journey pack #137 + module close, 2026-08-18)
 
 - ✅ **E2E AI seam: the served api scripts every agent at boot** via `FakeAiServiceProvider`, double-gated on `AI_FAKE_RESPONSES` AND `APP_ENV=e2e|testing` (`FakeAiGateTest` re-evaluates the real config expression across environments, so the production-safety half is asserted, not assumed). The in-process `Agent::fake()` has no test process against a served app. Journeys assert AI *content* (scripted constants + coverage sentences computed from the real review), never affordance presence. `web/e2e` gains its first Node dependency: `@modelcontextprotocol/sdk` (devDependency) for the real MCP client hop.
