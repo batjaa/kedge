@@ -306,6 +306,24 @@
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (M4 journey pack #137 + module close, 2026-08-18)
+
+- ✅ **E2E AI seam: the served api scripts every agent at boot** via `FakeAiServiceProvider`, double-gated on `AI_FAKE_RESPONSES` AND `APP_ENV=e2e|testing` (`FakeAiGateTest` re-evaluates the real config expression across environments, so the production-safety half is asserted, not assumed). The in-process `Agent::fake()` has no test process against a served app. Journeys assert AI *content* (scripted constants + coverage sentences computed from the real review), never affordance presence. `web/e2e` gains its first Node dependency: `@modelcontextprotocol/sdk` (devDependency) for the real MCP client hop.
+- ✅ **M4 module complete** — all nine tickets (#129–#137) shipped on PR #138; demo criterion automated end-to-end in the `mcp-agent` journey.
+
+## Known debt (M4 #137 branch gate, 2026-08-18)
+
+- **Split panel closes under the author** — approving a proposal focuses the new thread and collapses the source card, so "2 of 2 approved" is never observable after approve-all; the journey asserts the rail instead. Consider keeping the panel mounted until dismissed. (S)
+- **Hydration probe reads React internals** — `e2e/helpers.ts` waits on `__reactProps$`/`__reactFiber$`, degrading to a no-op; a stable readiness signal would be better. (S)
+- **Local diagram journeys depend on hosted kroki.io** — intermittently unreachable from a long-lived served PHP process locally (CI uses a Kroki container); a loopback Kroki fixture would make the pack hermetic. (S)
+
+## USER ACTIONS (M4 deployment carry-overs, from #128, 2026-08-18)
+
+- [ ] **USER ACTION** Provision `ANTHROPIC_API_KEY` in the preview/SaaS env for dogfooding.
+- [ ] **USER ACTION** Post-deploy verification: one real digest on a real doc + one MCP smoke call with a freshly minted token.
+- [ ] **USER ACTION** Manual dogfood before module close-out review: digest this module's own review comments with the feature they specced.
+- [ ] **USER ACTION** Decide the #134 fragment-vs-anchor question raised on PR #138 (splits fork the whole comment, differentiated by anchor only).
+
 ## Decision log (M4 MCP AI artifacts #136, 2026-08-18)
 
 - ✅ **MCP AI artifacts are reads of the latest *completed* run** — no tool starts a generation; a pending/failed run is reported via `latest_run_status` but never served. `generate`/`regenerate` joined the human-only verb list the closed-surface test refuses to see in any tool name.
