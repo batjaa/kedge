@@ -317,7 +317,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - **`document-diff-view.tsx:137` carries the same `xl:top-32` under-header defect** — its DiffHeader also renders an ApprovalRoster; lift the measured-offset mechanism into a shared hook. (S)
 - **`SCROLL_SPY_OFFSET = 136` is a constant while real clearance is dynamic** — the TOC highlight can lead the visible heading under a tall header; pre-existing. (S)
-- **Tailwind v4 scans code comments** — a utility-class literal inside a comment (e.g. `top-[var(...)]` in prose) is emitted into the build and can 500 the dev server until `.next`/`.source` are cleared. Keep class-shaped strings out of comments. (XS)
+- **Tailwind v4 scans comments and docs content** — any class-shaped string (an arbitrary-value utility spelled with square brackets, even in prose or a code comment, even in `web/content/docs/`) is emitted into the build; an invalid one breaks global.css and 500s the server until `.next`/`.source` are cleared. This very entry originally triggered it. Keep bracketed utility literals out of prose. (XS)
 
 ## Decision log (AI provider gate #140, 2026-08-19)
 
