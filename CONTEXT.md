@@ -90,6 +90,19 @@ pair. Every reviewer action resolves through a participant row on an active
 (non-revoked, non-expired) share — distinct from Workspace membership.
 _Avoid_: member, collaborator
 
+**Agent**:
+A non-human reviewer acting over MCP under a member's Agent Token. Reads and
+comments through the same Policies as a human, is always badged as an agent,
+and never approves or changes lifecycle — no tool for those exists.
+_Avoid_: bot, AI reviewer (the AI drafting features are not an Agent)
+
+**Agent Token**:
+The named, revocable, workspace-scoped credential a member mints for one Agent.
+Shown exactly once at creation, listed with its last-used time, revoked
+instantly. Usable only on the MCP surface — every REST v1 action rejects it, so
+an Agent can never reach a human-only action or mint another token.
+_Avoid_: API key, PAT (a PAT is the GitHub credential inside an Integration)
+
 **Demo Document**:
 An anonymously imported document living in the reserved system workspace with
 an expiry, viewable through its share, claimable into a real workspace

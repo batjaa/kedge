@@ -452,7 +452,7 @@ documents ||--o{ ai_runs
 @enduml
 ```
 
-Indexes: every FK; `shares.token` unique; `(document_id, content_hash)` unique; `(thread_id, document_version_id)`; `(document_id, status)` on threads; notifications read-state. `notifications` = standard Laravel table.
+Indexes: every FK; `shares.token` unique; `(document_id, content_hash)` unique; `(thread_id, document_version_id)`; `(document_id, status)` on threads; notifications read-state. `notifications` = standard Laravel table. `personal_access_tokens` = standard Sanctum table — the **Agent Token** (§15): named per agent, workspace scope carried as a `workspace:{id}` ability, revoked by deleting the row.
 
 ## 17. API sketch (`/api/v1`)
 
