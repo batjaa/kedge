@@ -146,9 +146,33 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # The Chromium download is ~2.5 minutes of the job when fetched fresh, so
+      # the browser bundle is cached keyed on the exact Playwright version (a
+      # lockfile hash would churn the cache on every unrelated dep bump). On a
+      # hit only the apt-installed system libraries are (re)applied — those live
+      # outside the cached directory.
+      - name: Resolve Playwright version
+        id: playwright-version
+        working-directory: web
+        run: |
+          echo "version=$(node -e "console.log(require('./package-lock.json').packages['node_modules/@playwright/test'].version)")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
       - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: web
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: web
+        run: npx playwright install-deps chromium
 
       # Boots api (scratch SQLite, migrated fresh) + web + the loopback fixture
       # host via playwright.config.ts, drives the journey pack (#39) across every
