@@ -9,6 +9,7 @@ use App\Services\AI\Agents\ReplyDraftAgent;
 use App\Services\AI\Agents\ReviewDigestAgent;
 use App\Services\AI\Agents\ThreadSummaryAgent;
 use Laravel\Ai\Ai;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -49,6 +50,86 @@ class FakeAiGateTest extends TestCase
                 Ai::hasFakeGatewayFor($agent),
                 $agent.' must reach the real provider unless the E2E seam is switched on.',
             );
+        }
+    }
+
+    /**
+     * The half of the gate that protects real deployments: the flag is honored
+     * in `e2e` and `testing` and NOWHERE else.
+     *
+     * Asserted by re-evaluating the real config file under a substituted
+     * environment, rather than by overriding the resolved value — the whole
+     * point is the expression in config/kedge.php, so a test that skipped it
+     * would leave the production-safety claim untested.
+     *
+     * @return list<array{string, string|null, bool}>
+     */
+    public static function environmentMatrix(): array
+    {
+        return [
+            'production ignores the flag' => ['production', 'true', false],
+            'local ignores the flag' => ['local', '1', false],
+            'staging ignores the flag' => ['staging', 'true', false],
+            'e2e honors it' => ['e2e', 'true', true],
+            'testing honors it' => ['testing', 'true', true],
+            'e2e without the flag stays real' => ['e2e', null, false],
+            'e2e with the flag off stays real' => ['e2e', 'false', false],
+        ];
+    }
+
+    #[DataProvider('environmentMatrix')]
+    public function test_the_flag_is_only_honored_in_the_throwaway_environments(
+        string $environment,
+        ?string $flag,
+        bool $expected,
+    ): void {
+        $this->assertSame(
+            $expected,
+            $this->fakeGateUnder($environment, $flag),
+            "AI_FAKE_RESPONSES={$flag} under APP_ENV={$environment} must resolve to "
+                .($expected ? 'a scripted' : 'the real').' provider.',
+        );
+    }
+
+    /**
+     * Evaluate config/kedge.php's `ai.fake` expression against a substituted
+     * environment, then put the process's own environment back exactly as it
+     * was — the rest of the suite reads it too.
+     */
+    private function fakeGateUnder(string $environment, ?string $flag): bool
+    {
+        $saved = [
+            'APP_ENV' => [$_ENV['APP_ENV'] ?? null, $_SERVER['APP_ENV'] ?? null],
+            'AI_FAKE_RESPONSES' => [$_ENV['AI_FAKE_RESPONSES'] ?? null, $_SERVER['AI_FAKE_RESPONSES'] ?? null],
+        ];
+
+        try {
+            $_ENV['APP_ENV'] = $_SERVER['APP_ENV'] = $environment;
+
+            if ($flag === null) {
+                unset($_ENV['AI_FAKE_RESPONSES'], $_SERVER['AI_FAKE_RESPONSES']);
+            } else {
+                $_ENV['AI_FAKE_RESPONSES'] = $_SERVER['AI_FAKE_RESPONSES'] = $flag;
+            }
+
+            /** @var array<string, mixed> $config */
+            $config = require base_path('config/kedge.php');
+
+            return (bool) $config['ai']['fake'];
+        } finally {
+            foreach ($saved as $key => [$env, $server]) {
+                if ($env === null) {
+                    unset($_ENV[$key]);
+                } else {
+                    $_ENV[$key] = $env;
+                }
+
+                if ($server === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $server;
+                }
+            }
         }
     }
 
