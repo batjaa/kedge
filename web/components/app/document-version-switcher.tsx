@@ -156,7 +156,7 @@ export function DocumentVersionSwitcher({
  * `collapsed` still holds every out-of-window version — the trigger's count and
  * the menu's item count are the same number by construction.
  */
-export function splitVersions(
+function splitVersions(
   versions: DocumentVersion[],
   viewedVersionId: number,
   currentVersionId: number,
