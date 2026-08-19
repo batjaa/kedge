@@ -1338,6 +1338,9 @@ class ThreadCommentTest extends TestCase
         $threads = Thread::query()->count();
         $comments = Comment::withTrashed()->count();
         $anchors = Anchor::query()->count();
+        $versions = DocumentVersion::query()->count();
+        $currentVersionId = $document->current_version_id;
+        $contentHash = $document->currentVersion->content_hash;
 
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/comments/{$reply->json('id')}/fork", [
@@ -1352,6 +1355,15 @@ class ThreadCommentTest extends TestCase
         $this->assertSame($anchors, Anchor::query()->count());
         $this->assertDatabaseMissing('comments', ['idempotency_key' => 'invalid-anchor-fork']);
         $this->assertDatabaseMissing('audit_logs', ['action' => 'thread.forked']);
+
+        // The shared trust boundary may still refresh the version's cached text
+        // projection while validating — that is M3's deliberate self-heal, and
+        // reusing it verbatim is the point of this endpoint. What a rejected
+        // fork must never do is move the document itself.
+        $document->refresh();
+        $this->assertSame($versions, DocumentVersion::query()->count());
+        $this->assertSame($currentVersionId, $document->current_version_id);
+        $this->assertSame($contentHash, $document->currentVersion->content_hash);
     }
 
     public function test_fork_with_an_explicit_null_anchor_keeps_the_copy_behavior(): void
