@@ -55,6 +55,13 @@ class AiFailureClassifierTest extends TestCase
             'out of credit' => [
                 InsufficientCreditsException::forProvider('anthropic'), AiFailureKind::Deterministic, 'insufficient_credits',
             ],
+            // A provider selected in AI_PROVIDER that cannot generate text: the
+            // SDK refuses to build it, and no retry will change its mind.
+            'provider cannot generate text' => [
+                new \LogicException('Provider [Cohere] does not support text generation.'),
+                AiFailureKind::Deterministic,
+                'provider_unsupported',
+            ],
             'unknown fault' => [
                 new RuntimeException('what'), AiFailureKind::Deterministic, 'unknown',
             ],

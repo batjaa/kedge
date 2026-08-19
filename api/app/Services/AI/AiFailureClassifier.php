@@ -12,6 +12,7 @@ use Illuminate\Queue\TimeoutExceededException;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use LogicException;
 use Throwable;
 
 /**
@@ -26,6 +27,12 @@ use Throwable;
  * cost-safe default: an unknown fault is far more likely to be our bug than a
  * blip, and retrying it three times only bills the key three times for the same
  * answer.
+ *
+ * Both the classification and the sentences it hands the reader are
+ * PROVIDER-NEUTRAL (#140): the SDK's exception types and HTTP statuses mean the
+ * same thing whichever provider is selected, and an operator running a local
+ * model should not be told Claude is overloaded. The stable `code` — what the
+ * ledger stores and the tests assert — never mentions a provider either.
  */
 class AiFailureClassifier
 {
@@ -53,17 +60,17 @@ class AiFailureClassifier
             $e instanceof ProviderOverloadedException => new AiFailure(
                 AiFailureKind::Transient,
                 'provider_overloaded',
-                'Claude is overloaded right now. Retry.',
+                'The AI provider is overloaded right now. Retry.',
             ),
             $e instanceof RateLimitedException => new AiFailure(
                 AiFailureKind::Transient,
                 'rate_limited',
-                'Claude is rate-limiting this key. Retry in a moment.',
+                'The AI provider is rate-limiting this key. Retry in a moment.',
             ),
             $e instanceof ConnectionException => new AiFailure(
                 AiFailureKind::Transient,
                 'provider_unreachable',
-                'Could not reach Claude. Retry.',
+                'Could not reach the AI provider. Retry.',
             ),
 
             // Quota is gone, not busy — a retry inside the backoff window buys
@@ -71,10 +78,22 @@ class AiFailureClassifier
             $e instanceof InsufficientCreditsException => new AiFailure(
                 AiFailureKind::Deterministic,
                 'insufficient_credits',
-                'The configured Anthropic key is out of credit.',
+                'The configured AI provider key is out of credit.',
             ),
 
             $e instanceof RequestException => $this->fromStatus($e),
+
+            // A misconfigured selection, not a fault: the SDK refuses to build a
+            // text provider for one that cannot generate text (an embeddings- or
+            // audio-only provider named in AI_PROVIDER). The gate can only see
+            // that a credential exists, so this is where the operator finds out
+            // — with the variable to fix named, rather than "retry" advice for
+            // something no retry can change.
+            $e instanceof LogicException => new AiFailure(
+                AiFailureKind::Deterministic,
+                'provider_unsupported',
+                'The configured AI provider cannot generate text. Ask an operator to check AI_PROVIDER.',
+            ),
 
             default => new AiFailure(
                 AiFailureKind::Deterministic,
@@ -93,7 +112,7 @@ class AiFailureClassifier
             return new AiFailure(
                 AiFailureKind::Deterministic,
                 'invalid_key',
-                'The configured Anthropic key was rejected. Ask an operator to check it.',
+                'The configured AI provider key was rejected. Ask an operator to check it.',
             );
         }
 
@@ -101,7 +120,7 @@ class AiFailureClassifier
             return new AiFailure(
                 AiFailureKind::Transient,
                 'rate_limited',
-                'Claude is rate-limiting this key. Retry in a moment.',
+                'The AI provider is rate-limiting this key. Retry in a moment.',
             );
         }
 
@@ -109,7 +128,7 @@ class AiFailureClassifier
             return new AiFailure(
                 AiFailureKind::Transient,
                 'provider_unavailable',
-                'Claude is unavailable right now. Retry.',
+                'The AI provider is unavailable right now. Retry.',
             );
         }
 
@@ -122,7 +141,7 @@ class AiFailureClassifier
         return new AiFailure(
             AiFailureKind::Deterministic,
             'provider_rejected',
-            'Claude rejected the request. Retry.',
+            'The AI provider rejected the request. Retry.',
         );
     }
 

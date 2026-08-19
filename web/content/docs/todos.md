@@ -309,6 +309,19 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (AI provider gate #140, 2026-08-19)
+
+- ✅ **The AI gate follows the selected provider's credential** — `AI_PROVIDER` (default `anthropic`); enabled iff that provider's `key` in the SDK's published table (`api/config/ai.php`) is a non-blank string. Kedge keeps no second list of provider names and application code names no provider at all (tokenized scan test over app/, routes/, bootstrap/, database/). `AI_ENABLED` still only forces off.
+- ✅ **The credential is the provider's own `key`, never an ambient one** — Bedrock requires `AWS_BEARER_TOKEN_BEDROCK`; an `AWS_ACCESS_KEY_ID` set for S3 must not unlock model billing (found at the codex gate, with three more fail-open env coercions: `OLLAMA_API_KEY=false` via `filled()`, `AI_PROVIDER=false|true|null|0` falling back to the default).
+- ✅ **Pricing is keyed by provider** — the same model id resold elsewhere is a different price; unpriced records `cost = null` (SPEC §14 amended).
+- ✅ **Keyless providers acknowledge themselves** — Ollama takes no key; `OLLAMA_API_KEY=local` is the operator's deliberate opt-in, the only way the gate can tell a local setup from an unconfigured one.
+
+## Known debt (#140 branch gate, 2026-08-19)
+
+- **The kill switch reaches queue workers only on recycle** — `queue:work` holds boot-time config; queued runs stop within `--max-time` (1h) or at deploy. Live gating needs shared state read per job — a spec-level decision. Pre-existing property of #130, now documented. (M)
+- **Text capability isn't checked at config time** — selecting an embeddings/audio provider shows the surface; runs fail with `provider_unsupported` naming `AI_PROVIDER`. (S)
+- **Published `config/ai.php` freezes the provider table** — a provider added by a future SDK release needs a re-publish. (S)
+
 ## Decision log (version switcher #141, 2026-08-19)
 
 - ✅ **Version strip capped at the last 3 pills** (`VISIBLE_VERSION_LIMIT`); collapse starts at N+2 so a click never hides exactly one version. The viewed version and the current version are always pinned onto the strip — `aria-current="page"` and the `latest` tag can never hide in the overflow menu (which shows a `(viewing)` marker instead, keeping exactly one `aria-current` on the page). The menu is a native `<details>` disclosure (the import-warnings idiom): server-rendered, keyboard-accessible, real `?version=` links, no client JS, no Fumadocs fork.

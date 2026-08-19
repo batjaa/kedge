@@ -7,14 +7,15 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The BYO-key gate (SPEC §14). With no Anthropic key configured, the entire AI
- * surface is ABSENT, not broken: every route behind this middleware 404s as if
- * it were never registered, and `/config` reports `ai.enabled: false` so the web
- * renders no AI affordance at all.
+ * The BYO-key gate (SPEC §14). With no credential configured for the SELECTED
+ * provider (#140), the entire AI surface is ABSENT, not broken: every route
+ * behind this middleware 404s as if it were never registered, and `/config`
+ * reports `ai.enabled: false` so the web renders no AI affordance at all.
  *
- * Fail-closed by default — `config('kedge.ai.enabled')` is false unless a key is
- * present — and checked per request, like the demo and re-sync gates, so a test
- * (or an operator rotating a key) flips the feature without rebuilding routes.
+ * Fail-closed by default — `config('kedge.ai.enabled')` is false unless the
+ * selected provider has a key — and checked per request, like the demo and
+ * re-sync gates, so a test (or an operator rotating a key, or switching
+ * providers) flips the feature without rebuilding routes.
  */
 class EnsureAiEnabled
 {

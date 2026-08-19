@@ -143,3 +143,10 @@ fragment, and its own anchor per split — inert until the author approves each
 one. Approval is the client calling the ordinary fork endpoint with the
 proposal's anchor; there is deliberately no server-side materialize endpoint.
 _Avoid_: auto-split, comment split (the act; this is the proposal artifact)
+
+**AI Provider**:
+The operator-selected model vendor (`AI_PROVIDER`, default anthropic) whose own
+credential alone opens the AI surface — never an ambient credential, never a
+different provider's key. Claude is the default and the only certified path;
+everything else is best-effort.
+_Avoid_: model vendor, LLM provider (in code the id lives only in config)
