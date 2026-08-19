@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
  * One queued AI generation with its cost ledger (SPEC §14, §16 — CONTEXT.md
@@ -21,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read AiRunType $type
  * @property-read AiRunStatus $status
  */
-#[Fillable(['workspace_id', 'document_id', 'created_by', 'type', 'status', 'input', 'model', 'tokens', 'cost'])]
+#[Fillable(['workspace_id', 'document_id', 'created_by', 'target_type', 'target_id', 'type', 'status', 'input', 'model', 'tokens', 'cost'])]
 class AiRun extends Model
 {
     /** @use HasFactory<AiRunFactory> */
@@ -44,6 +45,15 @@ class AiRun extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * What this run was asked about, when that is narrower than the document —
+     * the comment a split was proposed for. Null for the document-wide runs.
+     */
+    public function target(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     /**

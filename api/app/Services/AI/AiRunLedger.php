@@ -8,6 +8,8 @@ use App\Enums\AiRunType;
 use App\Models\AiRun;
 use App\Models\Document;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -22,28 +24,33 @@ use Illuminate\Support\Facades\Log;
  *     retry is a fresh POST that mints a NEW row, which is what keeps AI
  *     cost/day (SPEC §19) truthful across retries.
  *  2. **Server-side dedupe** (m4 eng review §8). A second request while a run of
- *     the same (document, type) is pending or running joins that run instead of
- *     minting one, so a double-click or a returning user can't double-bill. The
+ *     the same (document, type, target) is pending or running joins that run
+ *     instead of minting one, so a double-click or a returning user can't
+ *     double-bill — and a per-comment run never joins another comment's. The
  *     probe runs under a lock on the document row, so two simultaneous requests
  *     serialize rather than racing into two rows.
  */
 class AiRunLedger
 {
     /**
-     * Mint a run, or return the in-flight one for this (document, type).
+     * Mint a run, or return the in-flight one for this (document, type, target).
+     *
+     * `$target` narrows the run below the document — the comment a split was
+     * proposed for. It is part of the dedupe key, so two sprawling comments on
+     * one document hold two independent split runs instead of one requester
+     * silently receiving the other's proposals. Null is its own bucket, not a
+     * wildcard: a document-wide run never joins a targeted one.
      *
      * @return array{AiRun, bool} the run, and whether it was newly created
      */
-    public function startOrJoin(Document $document, User $actor, AiRunType $type): array
+    public function startOrJoin(Document $document, User $actor, AiRunType $type, ?Model $target = null): array
     {
-        [$run, $created] = DB::transaction(function () use ($document, $actor, $type): array {
+        [$run, $created] = DB::transaction(function () use ($document, $actor, $type, $target): array {
             // Serialize concurrent requests for this document. Without it the
             // probe below is a check-then-act race and a double-click bills twice.
             Document::query()->whereKey($document->id)->lockForUpdate()->first();
 
-            $existing = AiRun::query()
-                ->where('document_id', $document->id)
-                ->where('type', $type->value)
+            $existing = $this->scopedTo($document, $type, $target)
                 ->inFlight()
                 ->latest('id')
                 ->first();
@@ -72,6 +79,8 @@ class AiRunLedger
                 'workspace_id' => $document->workspace_id,
                 'document_id' => $document->id,
                 'created_by' => $actor->id,
+                'target_type' => $target?->getMorphClass(),
+                'target_id' => $target?->getKey(),
                 'type' => $type,
                 'status' => AiRunStatus::Pending,
                 'model' => (string) config('kedge.ai.model'),
@@ -96,17 +105,36 @@ class AiRunLedger
     }
 
     /**
-     * The newest run of this type for the document, whatever its status — what
-     * the panel re-attaches to on mount so an in-flight or finished run is never
-     * forgotten (eng review §8).
+     * The newest run of this type for the document (and target), whatever its
+     * status — what the panel re-attaches to on mount so an in-flight or
+     * finished run is never forgotten (eng review §8).
      */
-    public function latestFor(Document $document, AiRunType $type): ?AiRun
+    public function latestFor(Document $document, AiRunType $type, ?Model $target = null): ?AiRun
+    {
+        return $this->scopedTo($document, $type, $target)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * The one spelling of "this document's runs of this type for this target",
+     * shared by the dedupe probe and the re-attach read so the two can never
+     * drift into answering different questions.
+     *
+     * @return Builder<AiRun>
+     */
+    private function scopedTo(Document $document, AiRunType $type, ?Model $target): Builder
     {
         return AiRun::query()
             ->where('document_id', $document->id)
             ->where('type', $type->value)
-            ->latest('id')
-            ->first();
+            ->when(
+                $target === null,
+                fn (Builder $query) => $query->whereNull('target_id'),
+                fn (Builder $query) => $query
+                    ->where('target_type', $target?->getMorphClass())
+                    ->where('target_id', $target?->getKey()),
+            );
     }
 
     /**
