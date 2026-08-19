@@ -12,7 +12,7 @@ import type { Capabilities } from './auth-types';
 // feature therefore hides rather than rendering a button that 404s (the BYO-key
 // pattern, SPEC §14); and the public demo surface never shows on an instance we
 // can't confirm is the SaaS (#25).
-const FAIL_CLOSED: Capabilities = { github: false, selfHosted: true };
+const FAIL_CLOSED: Capabilities = { github: false, selfHosted: true, ai: false };
 
 export const getCapabilities = cache(async (): Promise<Capabilities> => {
   try {
@@ -28,6 +28,7 @@ export const getCapabilities = cache(async (): Promise<Capabilities> => {
     const data = (await res.json()) as {
       auth?: { github?: unknown };
       self_hosted?: unknown;
+      ai?: { enabled?: unknown };
     };
 
     // The edition MUST arrive as an explicit boolean. A 200 with a missing or
@@ -42,6 +43,9 @@ export const getCapabilities = cache(async (): Promise<Capabilities> => {
     return {
       github: data.auth?.github === true,
       selfHosted: data.self_hosted,
+      // `=== true`, never truthiness: a missing `ai` block (a new web against an
+      // older api) reads as OFF, which is the BYO-key rule (SPEC §14).
+      ai: data.ai?.enabled === true,
     };
   } catch {
     return FAIL_CLOSED;

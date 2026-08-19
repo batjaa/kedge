@@ -43,4 +43,11 @@ export interface Capabilities {
    * shows on an instance we can't confirm is the SaaS.
    */
   selfHosted: boolean;
+  /**
+   * AI features (SPEC §14, M4). True only when the API has an Anthropic key
+   * configured. Fails closed — including when the payload carries no `ai` block
+   * at all (a new web against an older api) — so an unconfigured instance shows
+   * no AI affordance rather than a button that 404s.
+   */
+  ai: boolean;
 }
