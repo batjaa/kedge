@@ -79,6 +79,8 @@ export function DocumentCommentComposer({
     // the composer panel.
     return (
       <div
+        role="group"
+        aria-label={t('composer.selectionActions')}
         className="fixed z-50 flex items-center gap-1"
         style={{ left: composer.x, top: composer.y, transform: 'translateX(-50%)' }}
       >
