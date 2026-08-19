@@ -232,6 +232,47 @@ class AiCommentSplitTest extends TestCase
         );
     }
 
+    /**
+     * The fork endpoint validates that the selected text sits at the offsets it
+     * is given — which the WRONG copy of a repeated phrase satisfies perfectly.
+     * Its validation cannot catch that, so the locator refuses to create it.
+     */
+    public function test_a_quote_repeated_inside_the_passage_yields_no_anchor(): void
+    {
+        CommentSplitAgent::fake([[
+            // "needs" appears in both sentences of the passage: no single place.
+            'splits' => [['title' => 'Ambiguous', 'fragment' => 'Fragment.', 'quote' => 'need']],
+        ]]);
+        [$author, , $reply] = $this->splittableThread();
+
+        $run = $this->requestSplit($reply, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertNull($run->output['proposals'][0]['anchor']);
+        $this->assertStringContainsString(
+            'could not be matched to the document text',
+            $run->output['coverage']['statement'],
+        );
+    }
+
+    public function test_an_orphaned_source_anchor_proposes_no_anchors(): void
+    {
+        CommentSplitAgent::fake([$this->splitPayload()]);
+        [$author, , $reply] = $this->splittableThread();
+
+        // The system already concluded it does not know where this thread sits.
+        // A split must not quietly re-decide that from the same stale selector.
+        Anchor::query()->where('thread_id', $reply->thread_id)->update(['state' => 'orphaned']);
+
+        $run = $this->requestSplit($reply, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertNull($run->output['proposals'][0]['anchor']);
+        $this->assertNull($run->output['proposals'][1]['anchor']);
+    }
+
     public function test_a_document_level_thread_proposes_no_anchors(): void
     {
         CommentSplitAgent::fake([$this->splitPayload()]);

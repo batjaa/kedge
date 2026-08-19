@@ -14,7 +14,7 @@ import {
   markSplitApproved,
   markSplitApproving,
   markSplitFailed,
-  splitAnchorPayload,
+  resolveSplitAnchor,
   splitIdempotencyKey,
   type SplitApprovals,
 } from '@/lib/ai-split';
@@ -152,23 +152,39 @@ export function AiSplitAction({
   }
 
   /**
-   * Approve one proposal. Returns whether it landed, so approve-all can count
-   * without re-reading state it has not observed yet.
+   * Approve one proposal, and never throw. Anything that goes wrong — a
+   * rejected anchor, a dropped connection, a malformed payload — is recorded
+   * against THIS proposal and nothing else, which is what lets approve-all walk
+   * past a failure instead of dying on it.
    */
-  async function approve(index: number, currentRunId: number, proposal: SplitProposal): Promise<boolean> {
+  async function approve(index: number, currentRunId: number, proposal: SplitProposal) {
+    const resolution = resolveSplitAnchor(proposal);
+
+    // A malformed anchor is never posted: dropping it would fork against the
+    // source thread's selection and look like a success.
+    if (resolution.kind === 'invalid') {
+      setApprovals((current) => markSplitFailed(current, index, t('invalidAnchor')));
+
+      return;
+    }
+
     setApprovals((current) => markSplitApproving(current, index));
 
-    const message = await onApproveSplit(
-      commentId,
-      splitIdempotencyKey(currentRunId, index),
-      splitAnchorPayload(proposal),
-    );
+    let message: string | null;
+
+    try {
+      message = await onApproveSplit(
+        commentId,
+        splitIdempotencyKey(currentRunId, index),
+        resolution.kind === 'anchor' ? resolution.anchor : null,
+      );
+    } catch {
+      message = t('approveFailed');
+    }
 
     setApprovals((current) => (message === null
       ? markSplitApproved(current, index)
-      : markSplitFailed(current, index, message)));
-
-    return message === null;
+      : markSplitFailed(current, index, message as string)));
   }
 
   async function approveOne(index: number) {
@@ -178,8 +194,14 @@ export function AiSplitAction({
 
     approvingRef.current = true;
     setError(null);
-    await approve(index, runId, proposal);
-    approvingRef.current = false;
+
+    try {
+      await approve(index, runId, proposal);
+    } finally {
+      // The guard is released even on an unforeseen throw: leaving it latched
+      // would disable every remaining approval until the page is remounted.
+      approvingRef.current = false;
+    }
   }
 
   /**
@@ -192,13 +214,15 @@ export function AiSplitAction({
     approvingRef.current = true;
     setError(null);
 
-    for (const index of approvableSplitIndexes(approvals)) {
-      const proposal = proposals[index];
-      if (!proposal) continue;
-      await approve(index, runId, proposal);
+    try {
+      for (const index of approvableSplitIndexes(approvals)) {
+        const proposal = proposals[index];
+        if (!proposal) continue;
+        await approve(index, runId, proposal);
+      }
+    } finally {
+      approvingRef.current = false;
     }
-
-    approvingRef.current = false;
   }
 
   return (

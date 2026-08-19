@@ -64,6 +64,20 @@ describe('AiSplitProposals', () => {
     expect(render()).toContain("Keeps the original thread&#x27;s selection.");
   });
 
+  /**
+   * The fork mechanism copies the whole comment into each new thread; the title
+   * and fragment explain WHY a thread exists, they are not its body. The panel
+   * must not imply otherwise — an affordance that lies about its own effect is
+   * worse than no affordance.
+   */
+  it('says plainly what approving actually does', () => {
+    const html = render();
+
+    expect(html).toContain('the comment is carried over whole');
+    expect(html).toContain('Raised in');
+    expect(html).toContain('Anchors to');
+  });
+
   it('offers approve per split and approve-all over what is left', () => {
     const html = render();
 

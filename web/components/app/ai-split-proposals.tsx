@@ -65,6 +65,13 @@ export function AiSplitProposals({
             ) : null}
           </div>
 
+          {/* Say plainly what approving does. The fork mechanism copies the
+              whole comment into each new thread and differentiates them by
+              anchor — the title and fragment below explain WHY each thread
+              exists, they are not its body. Letting the panel imply otherwise
+              would be an affordance that lies about its own effect. */}
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('approvalEffect')}</p>
+
           <ul className="mt-3 space-y-3">
             {proposals.map((proposal, index) => {
               const approval = approvals[index] ?? { status: 'idle' as const, message: null };
@@ -99,15 +106,21 @@ export function AiSplitProposals({
                     )}
                   </div>
 
-                  <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{proposal.fragment}</p>
+                  <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                    {t('raisedIn')}
+                  </p>
+                  <p className="mt-0.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{proposal.fragment}</p>
 
+                  <p className="mt-2.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                    {t('anchorsTo')}
+                  </p>
                   {proposal.anchor ? (
-                    <p className="mt-2 flex items-start gap-1.5 border-l-2 border-emerald-500/40 pl-2.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                    <p className="mt-0.5 flex items-start gap-1.5 border-l-2 border-emerald-500/40 pl-2.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
                       <Quote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
                       <span>{proposal.anchor.exact}</span>
                     </p>
                   ) : (
-                    <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">{t('inheritsAnchor')}</p>
+                    <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{t('inheritsAnchor')}</p>
                   )}
 
                   {approval.message ? (

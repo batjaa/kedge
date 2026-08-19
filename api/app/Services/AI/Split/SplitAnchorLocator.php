@@ -2,6 +2,7 @@
 
 namespace App\Services\AI\Split;
 
+use App\Enums\AnchorState;
 use App\Models\Anchor;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
@@ -15,7 +16,7 @@ use App\Models\Thread;
  * sentence. Here the quote is located in the live projection or it yields no
  * anchor at all.
  *
- * Two rules bound what a proposal may point at:
+ * Three rules bound what a proposal may point at:
  *
  *  1. Offsets are UTF-16 code units, the unit the capture path and
  *     `CommentThreadService::validatedAnchor()` agree on. A payload built here
@@ -24,6 +25,12 @@ use App\Models\Thread;
  *  2. The search is BOUNDED to the source thread's anchored span. A split of a
  *     thread stays inside the passage that thread is about — the model cannot
  *     move the conversation to a different part of the document by quoting it.
+ *  3. AMBIGUITY YIELDS NOTHING. The fork endpoint validates that the selected
+ *     text exists at the offsets it is given — which a wrong-but-identical copy
+ *     of a repeated phrase satisfies perfectly. Its validation cannot catch that
+ *     class of error, so this class refuses to create it: a passage or a quote
+ *     with more than one candidate position produces no anchor, and the proposal
+ *     forks the way a manual fork does.
  */
 final class SplitAnchorLocator
 {
@@ -63,11 +70,13 @@ final class SplitAnchorLocator
             return null;
         }
 
-        $anchor = $thread->anchors
-            ->firstWhere('document_version_id', $version?->id)
-            ?? $thread->anchors->last();
+        // The CURRENT version's anchor, and only that one. An older version's
+        // selector is not evidence about where this thread sits today, and an
+        // orphaned one is the system having already concluded it does not know —
+        // both mean "propose no anchor" rather than "guess from stale data".
+        $anchor = $thread->anchors->firstWhere('document_version_id', $version?->id);
 
-        if (! $anchor instanceof Anchor) {
+        if (! $anchor instanceof Anchor || $anchor->state === AnchorState::Orphaned) {
             return null;
         }
 
@@ -97,16 +106,18 @@ final class SplitAnchorLocator
      *
      * Located by TEXT, not by the stored offsets: a relocated anchor's persisted
      * start/end belong to the version it was captured against. But when a
-     * document repeats a passage verbatim, "the first occurrence" is a coin
-     * flip — so among the occurrences we prefer the one whose UTF-16 start still
-     * matches what the anchor recorded, and only fall back to the first when
-     * none does.
+     * document repeats a passage verbatim, "the first occurrence" is a coin flip
+     * — and a coin flip that the fork endpoint would happily accept, because the
+     * text really does sit at the offsets we computed. It would just be the
+     * wrong copy. So the answer is the occurrence whose UTF-16 start still
+     * matches what the anchor recorded; failing that, a SINGLE occurrence is
+     * unambiguous and wins; anything else is ambiguous and yields no anchor at
+     * all.
      *
      * The scan is capped: a thread may legitimately be anchored to three
      * characters, and re-measuring every occurrence of "the" in a long document
-     * is quadratic work for a tie-break that stopped mattering after the first
-     * handful. Past the cap the first occurrence wins, which is where this
-     * started.
+     * is quadratic work. Exhausting the cap is itself ambiguity, so it lands in
+     * the same "no anchor" answer.
      */
     private static function spanStart(string $plainText, string $exact, int $storedStart): ?int
     {
@@ -117,8 +128,9 @@ final class SplitAnchorLocator
         }
 
         $first = $offset;
+        $scanned = 0;
 
-        for ($scanned = 0; $offset !== false && $scanned < self::MAX_OCCURRENCES_SCANNED; $scanned++) {
+        while ($offset !== false && $scanned < self::MAX_OCCURRENCES_SCANNED) {
             $utf16Start = intdiv(
                 strlen((string) mb_convert_encoding(mb_substr($plainText, 0, $offset, 'UTF-8'), 'UTF-16LE', 'UTF-8')),
                 2,
@@ -129,9 +141,12 @@ final class SplitAnchorLocator
             }
 
             $offset = mb_strpos($plainText, $exact, $offset + 1, 'UTF-8');
+            $scanned++;
         }
 
-        return $first;
+        // Exactly one occurrence and it did not match the stored offset: the
+        // passage moved, but there is only one place it can mean.
+        return $scanned === 1 && $offset === false ? $first : null;
     }
 
     /**
@@ -153,6 +168,14 @@ final class SplitAnchorLocator
         $offset = mb_strpos($span, $quote, 0, 'UTF-8');
 
         if ($offset === false) {
+            return null;
+        }
+
+        // A quote that appears twice inside the passage names no single place.
+        // Anchoring to the first copy would produce a selector the fork endpoint
+        // accepts and a reader finds pointing at the wrong sentence, so the
+        // proposal ships unanchored instead — and the coverage line says so.
+        if (mb_strpos($span, $quote, $offset + 1, 'UTF-8') !== false) {
             return null;
         }
 

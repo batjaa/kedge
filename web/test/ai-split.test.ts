@@ -9,7 +9,7 @@ import {
   markSplitApproving,
   markSplitFailed,
   setSplitApproval,
-  splitAnchorPayload,
+  resolveSplitAnchor,
   splitIdempotencyKey,
 } from '@/lib/ai-split';
 import type { SplitProposal, SplitProposalAnchor } from '@/lib/ai-types';
@@ -100,35 +100,59 @@ describe('split approval state', () => {
   });
 });
 
-describe('splitAnchorPayload', () => {
+describe('resolveSplitAnchor', () => {
   it('passes a well-formed proposed anchor through to the fork payload', () => {
-    expect(splitAnchorPayload(proposal())).toEqual({
-      exact: 'The budget section needs a number.',
-      prefix: 'Intro prose. ',
-      suffix: ' The anchoring rules',
-      start: 13,
-      end: 47,
-      heading_path: ['Doc'],
-      projection_version: '2',
+    expect(resolveSplitAnchor(proposal())).toEqual({
+      kind: 'anchor',
+      anchor: {
+        exact: 'The budget section needs a number.',
+        prefix: 'Intro prose. ',
+        suffix: ' The anchoring rules',
+        start: 13,
+        end: 47,
+        heading_path: ['Doc'],
+        projection_version: '2',
+      },
     });
   });
 
-  it('forks without an anchor when the proposal carries none', () => {
-    expect(splitAnchorPayload(proposal({ anchor: null }))).toBeNull();
+  it('reads a deliberately absent anchor as an inherit-the-source fork', () => {
+    expect(resolveSplitAnchor(proposal({ anchor: null }))).toEqual({ kind: 'none' });
   });
 
   /**
-   * A half-anchor would be a 422 from the fork endpoint. Degrading to an
-   * anchor-less fork keeps the proposal usable instead of unapprovable.
+   * The distinction this type exists for. Collapsing a malformed anchor into
+   * "no anchor" would post an anchor-less fork — which SUCCEEDS, silently
+   * attaching the new thread to the source thread's selection. The endpoint
+   * would have rejected the malformed payload; dropping it on the way there
+   * turns that rejection into a quiet wrong answer.
    */
-  it('degrades to an anchor-less fork rather than posting a malformed selector', () => {
-    expect(splitAnchorPayload(proposal({ anchor: anchor({ exact: '' }) }))).toBeNull();
-    expect(splitAnchorPayload(proposal({ anchor: anchor({ end: 13 }) }))).toBeNull();
-    expect(
-      splitAnchorPayload(proposal({
-        anchor: anchor({ projection_version: undefined as unknown as string }),
-      })),
-    ).toBeNull();
+  it('marks a malformed anchor invalid rather than quietly inheriting', () => {
+    for (const broken of [
+      anchor({ exact: '' }),
+      anchor({ end: 13 }),
+      anchor({ start: -1 }),
+      anchor({ start: 1.5 }),
+      anchor({ projection_version: '' }),
+      anchor({ projection_version: undefined as unknown as string }),
+      anchor({ start: undefined as unknown as number }),
+    ]) {
+      expect(resolveSplitAnchor(proposal({ anchor: broken })).kind).toBe('invalid');
+    }
+  });
+
+  it('repairs only the fields a missing value cannot corrupt', () => {
+    const resolved = resolveSplitAnchor(proposal({
+      anchor: anchor({
+        prefix: undefined as unknown as string,
+        heading_path: [1, 'Doc'] as unknown as string[],
+      }),
+    }));
+
+    expect(resolved).toEqual({
+      kind: 'anchor',
+      anchor: expect.objectContaining({ prefix: '', heading_path: ['Doc'] }),
+    });
   });
 });
 

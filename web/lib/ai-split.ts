@@ -86,37 +86,56 @@ export function isApprovingAnySplit(approvals: SplitApprovals): boolean {
 }
 
 /**
- * The proposal's anchor as the fork endpoint's payload, or null when the
- * proposal carries none — in which case the fork inherits the source thread's
- * anchors, exactly as a manual fork does.
+ * What a proposal's anchor resolves to before anything is posted.
  *
- * The api already shaped this; the conversion exists so a malformed run (an old
- * schema, a truncated payload) degrades to an anchor-less fork instead of
- * posting a half-anchor the endpoint would reject.
+ * The three cases are deliberately NOT collapsed into "anchor or null". A
+ * proposal that carries no anchor is a legitimate inherit-the-source fork; a
+ * proposal whose anchor is MALFORMED — an old schema, a truncated payload, a
+ * half-written selector — is a different animal, and treating it as the former
+ * would silently fork against the wrong text instead of failing. The endpoint
+ * would have rejected that payload; dropping the anchor on the way there turns
+ * its rejection into a quiet success. So a malformed anchor fails its own
+ * proposal, unposted.
  */
-export function splitAnchorPayload(proposal: SplitProposal): ThreadAnchorPayload | null {
+export type SplitAnchorResolution =
+  | { kind: 'anchor'; anchor: ThreadAnchorPayload }
+  | { kind: 'none' }
+  | { kind: 'invalid' };
+
+export function resolveSplitAnchor(proposal: SplitProposal): SplitAnchorResolution {
   const anchor: SplitProposalAnchor | null = proposal.anchor ?? null;
 
+  if (anchor === null) return { kind: 'none' };
+
   if (
-    anchor === null
+    typeof anchor !== 'object'
     || typeof anchor.exact !== 'string'
     || anchor.exact === ''
     || typeof anchor.start !== 'number'
     || typeof anchor.end !== 'number'
+    || !Number.isInteger(anchor.start)
+    || !Number.isInteger(anchor.end)
+    || anchor.start < 0
     || anchor.end <= anchor.start
     || typeof anchor.projection_version !== 'string'
+    || anchor.projection_version === ''
   ) {
-    return null;
+    return { kind: 'invalid' };
   }
 
   return {
-    exact: anchor.exact,
-    prefix: anchor.prefix ?? '',
-    suffix: anchor.suffix ?? '',
-    start: anchor.start,
-    end: anchor.end,
-    heading_path: Array.isArray(anchor.heading_path) ? anchor.heading_path : [],
-    projection_version: anchor.projection_version,
+    kind: 'anchor',
+    anchor: {
+      exact: anchor.exact,
+      prefix: typeof anchor.prefix === 'string' ? anchor.prefix : '',
+      suffix: typeof anchor.suffix === 'string' ? anchor.suffix : '',
+      start: anchor.start,
+      end: anchor.end,
+      heading_path: Array.isArray(anchor.heading_path)
+        ? anchor.heading_path.filter((entry): entry is string => typeof entry === 'string')
+        : [],
+      projection_version: anchor.projection_version,
+    },
   };
 }
 
