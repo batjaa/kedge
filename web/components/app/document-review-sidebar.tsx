@@ -40,7 +40,10 @@ export function DocumentReviewSidebar({
     // review row, so it pins under the header (top-32 clears the app shell's
     // h-14 bar plus the document header) for the length of the document. The
     // collapsed-state toggle in that same column already worked this way.
-    <aside className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10">
+    <aside
+      data-review-sidebar
+      className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10"
+    >
       <div className="mb-4 flex min-w-0 items-center gap-2 text-xs font-mono">
         {versionLabel ? <MetaChip>{versionLabel}</MetaChip> : null}
         {lifecycleStatus ? <LifecycleChip status={lifecycleStatus} /> : null}

@@ -38,10 +38,19 @@ function render(): string {
   );
 }
 
-function rootClassList(html: string): string[] {
-  const match = /^<aside class="([^"]*)"/.exec(html);
+/** The attributes of the opening tag of the rendered root — anything nested is out of reach. */
+function rootAttributes(html: string): string {
+  const match = /^<aside\b([^>]*)>/.exec(html);
   if (!match) {
-    throw new Error(`expected the sidebar root to be a classed <aside>, got: ${html.slice(0, 120)}`);
+    throw new Error(`expected the sidebar root to be an <aside>, got: ${html.slice(0, 120)}`);
+  }
+  return match[1];
+}
+
+function rootClassList(html: string): string[] {
+  const match = /\bclass="([^"]*)"/.exec(rootAttributes(html));
+  if (!match) {
+    throw new Error(`expected the sidebar root to carry classes, got: ${html.slice(0, 120)}`);
   }
   return match[1].split(' ');
 }
@@ -67,6 +76,13 @@ describe('DocumentReviewSidebar', () => {
     const classes = rootClassList(render());
 
     expect(classes.some((cls) => /^(w|min-w|max-w)-/.test(cls))).toBe(false);
+  });
+
+  it('marks that root with the data hook the sticky journey selects on', () => {
+    // e2e/sticky-sidebar.spec.ts reads the pinned offset off this element. A
+    // locale-dependent selector (the nav's aria-label) would break under M3.9's
+    // negotiated locales, and `aside` alone also matches the thread rail.
+    expect(rootAttributes(render())).toContain('data-review-sidebar');
   });
 
   it('still renders both nav groups and the collapse control', () => {
