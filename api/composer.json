@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.3",
         "enshrined/svg-sanitize": "^0.22.0",
+        "laravel/ai": "^0.10",
         "laravel/framework": "^13.8",
         "laravel/nightwatch": "^1.28",
         "laravel/sanctum": "^4.3",

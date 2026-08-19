@@ -278,4 +278,61 @@ return [
         'secret' => env('DIAGRAM_SHARED_SECRET'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | AI features (SPEC §14, M4)
+    |--------------------------------------------------------------------------
+    |
+    | BYO key: the entire AI surface is gated on a configured ANTHROPIC_API_KEY.
+    | No key -> `enabled` is false, /config reports `ai.enabled: false`, the web
+    | hides every AI affordance, and the AI routes 404 (the established
+    | feature-flag middleware pattern). A self-hosted instance without a key is
+    | complete, not crippled — there are no broken buttons to click.
+    |
+    | AI_ENABLED can force the flag either way; it exists for the test suites and
+    | the e2e environment (where the SDK is faked and no key is present). It must
+    | never be set to true in a real deployment without a key: the gate is
+    | fail-closed by default precisely so a missing key can't surface a button.
+    |
+    | Models are env-overridable per SPEC §14: `claude-sonnet-5` by default, with
+    | the cheap high-volume model reserved for thread summaries (M4, later
+    | ticket). `pricing` is the USD-per-million-token table cost accounting reads;
+    | an unpriced model records a null cost rather than a wrong number.
+    |
+    */
+
+    'ai' => [
+        'enabled' => (bool) env('AI_ENABLED', filled(env('ANTHROPIC_API_KEY'))),
+
+        'provider' => (string) env('AI_PROVIDER', 'anthropic'),
+        'model' => (string) env('AI_MODEL', 'claude-sonnet-5'),
+        'summary_model' => (string) env('AI_SUMMARY_MODEL', 'claude-haiku-4-5'),
+
+        // USD per 1M tokens, per model: [input, output].
+        'pricing' => [
+            'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
+            'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+        ],
+
+        // Context budget (SPEC §14). `context_tokens` is the assembled-input
+        // ceiling for ONE model call — deliberately far below the model's real
+        // window so the response and the instructions always fit. Over budget,
+        // the builder chunks by section and merges; `max_chunks` bounds how many
+        // calls one run may make, and whatever doesn't fit is reported as
+        // coverage ("covers N of M threads"), never silently dropped.
+        'context_tokens' => (int) env('AI_CONTEXT_TOKENS', 24000),
+        'max_chunks' => (int) env('AI_MAX_CHUNKS', 4),
+
+        // The `throttle:ai` limiter (SPEC §13), per authenticated user. Tighter
+        // than the other write limiters because each request can queue a model
+        // call against the workspace's key: this bounds spend, not just abuse.
+        'rate_per_minute' => (int) env('AI_RATE_PER_MINUTE', 10),
+
+        // Job-level ceiling, in seconds, sized for a chunked run (SPEC §14, eng
+        // review §6). A run that blows through it lands `failed` via the terminal
+        // handler — a stuck `running` row is impossible from the server side, and
+        // the web poller's own ceiling covers even a hard-killed worker.
+        'job_timeout' => (int) env('AI_JOB_TIMEOUT', 300),
+    ],
+
 ];
