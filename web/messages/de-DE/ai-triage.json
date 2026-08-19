@@ -1,0 +1,34 @@
+{
+  "stance": {
+    "accept": "Zustimmen",
+    "push_back": "Widersprechen",
+    "clarify": "Nachfragen"
+  },
+  "replyDraft": {
+    "label": "Antwortentwurf",
+    "generating": "Entwurf wird geschrieben…",
+    "takingTooLong": "Das dauert länger als erwartet. Versuche es erneut oder schau gleich noch mal vorbei.",
+    "failed": "Es konnte keine Antwort entworfen werden. Bitte erneut versuchen.",
+    "empty": "Dieser Thread war zu lang zum Lesen, daher gibt es keine Grundlage für einen Entwurf.",
+    "confirmTitle": "Deinen Text ersetzen?",
+    "confirmBody": "In deiner Antwort steht bereits Text. Wähle, was bleiben soll.",
+    "replace": "Entwurf übernehmen",
+    "keep": "Meinen Text behalten",
+    "draftNotice": "Ein Entwurf zum Bearbeiten. Es wird nichts veröffentlicht, bis du auf Antworten klickst.",
+    "draftNoticeWithModel": "Ein Entwurf zum Bearbeiten, geschrieben von {model}. Es wird nichts veröffentlicht, bis du auf Antworten klickst."
+  },
+  "summary": {
+    "heading": "Thread-Zusammenfassung",
+    "idle": "Langer Thread — sieh dir den Stand und die offene Frage an.",
+    "trigger": "Zusammenfassen",
+    "regenerate": "Erneut zusammenfassen",
+    "generating": "Wird zusammengefasst…",
+    "takingTooLong": "Das dauert länger als erwartet. Versuche es erneut oder schau gleich noch mal vorbei.",
+    "failed": "Dieser Thread konnte nicht zusammengefasst werden. Bitte erneut versuchen.",
+    "empty": "Dieser Thread war zu lang, um ihn vollständig zu lesen.",
+    "currentState": "Aktueller Stand",
+    "openQuestion": "Offene Frage",
+    "draftNotice": "Eine Zusammenfassung zum Lesen. In diesem Thread hat sich nichts geändert.",
+    "draftNoticeWithModel": "Eine Zusammenfassung zum Lesen, geschrieben von {model}. In diesem Thread hat sich nichts geändert."
+  }
+}

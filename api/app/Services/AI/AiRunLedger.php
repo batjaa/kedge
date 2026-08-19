@@ -8,6 +8,8 @@ use App\Enums\AiRunType;
 use App\Models\AiRun;
 use App\Models\Document;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -22,28 +24,49 @@ use Illuminate\Support\Facades\Log;
  *     retry is a fresh POST that mints a NEW row, which is what keeps AI
  *     cost/day (SPEC §19) truthful across retries.
  *  2. **Server-side dedupe** (m4 eng review §8). A second request while a run of
- *     the same (document, type) is pending or running joins that run instead of
- *     minting one, so a double-click or a returning user can't double-bill. The
+ *     the same (document, type, target, variant) is pending or running joins that
+ *     run instead of minting one, so a double-click or a returning user can't
+ *     double-bill — while a reply draft in a DIFFERENT stance, being a different
+ *     question, still mints its own run rather than being handed the other
+ *     stance's answer. The
  *     probe runs under a lock on the document row, so two simultaneous requests
  *     serialize rather than racing into two rows.
  */
 class AiRunLedger
 {
     /**
-     * Mint a run, or return the in-flight one for this (document, type).
+     * Mint a run, or return the in-flight one for this (document, type, target,
+     * variant).
+     *
+     * `$target` narrows a run to one part of the document (a thread for a reply
+     * draft or a summary); `$variant` distinguishes two requests that differ in
+     * what was ASKED for rather than what was read — the reply-draft stance. Both
+     * are null for the document-wide types, which dedupe exactly as they always
+     * did.
      *
      * @return array{AiRun, bool} the run, and whether it was newly created
      */
-    public function startOrJoin(Document $document, User $actor, AiRunType $type): array
-    {
-        [$run, $created] = DB::transaction(function () use ($document, $actor, $type): array {
+    public function startOrJoin(
+        Document $document,
+        User $actor,
+        AiRunType $type,
+        ?Model $target = null,
+        ?string $variant = null,
+    ): array {
+        [$run, $created] = DB::transaction(function () use ($document, $actor, $type, $target, $variant): array {
             // Serialize concurrent requests for this document. Without it the
             // probe below is a check-then-act race and a double-click bills twice.
             Document::query()->whereKey($document->id)->lockForUpdate()->first();
 
-            $existing = AiRun::query()
-                ->where('document_id', $document->id)
-                ->where('type', $type->value)
+            $existing = $this->scopedTo(
+                AiRun::query()->where('document_id', $document->id)->where('type', $type->value),
+                $target,
+                $variant,
+            )
+                // A per-actor run is never joined across people: a reply draft is
+                // written in the requester's voice, for a position they picked
+                // and have not said out loud yet.
+                ->when($type->isPerActor(), fn (Builder $q): Builder => $q->where('created_by', $actor->id))
                 ->inFlight()
                 ->latest('id')
                 ->first();
@@ -80,18 +103,30 @@ class AiRunLedger
                 return [$existing, false];
             }
 
-            return [AiRun::create([
+            $run = new AiRun([
                 'workspace_id' => $document->workspace_id,
                 'document_id' => $document->id,
                 'created_by' => $actor->id,
                 'type' => $type,
+                'variant' => $variant,
                 'status' => AiRunStatus::Pending,
-                'model' => (string) config('kedge.ai.model'),
+                // One rule for which model a type bills against, shared with the
+                // agent that will make the call — so the row and the request can
+                // never name different models (SPEC §14).
+                'model' => $type->model(),
                 // Nothing spent yet — 0, not null. A null cost means "we made a
                 // call whose price we don't know", which is a different thing.
                 'tokens' => 0,
                 'cost' => 0,
-            ]), true];
+            ]);
+
+            if ($target !== null) {
+                $run->target()->associate($target);
+            }
+
+            $run->save();
+
+            return [$run, true];
         });
 
         if ($created) {
@@ -112,13 +147,48 @@ class AiRunLedger
      * the panel re-attaches to on mount so an in-flight or finished run is never
      * forgotten (eng review §8).
      */
-    public function latestFor(Document $document, AiRunType $type): ?AiRun
-    {
-        return AiRun::query()
-            ->where('document_id', $document->id)
-            ->where('type', $type->value)
+    public function latestFor(
+        Document $document,
+        AiRunType $type,
+        ?Model $target = null,
+        ?string $variant = null,
+    ): ?AiRun {
+        return $this->scopedTo(
+            AiRun::query()->where('document_id', $document->id)->where('type', $type->value),
+            $target,
+            $variant,
+        )
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * Narrow a run query to one target and variant — the single spelling of
+     * "the same request", shared by the dedupe probe and the re-attach read so
+     * the two can never drift apart and strand a run.
+     *
+     * A null target or variant means IS NULL, not "any": a document-wide digest
+     * must never join a thread's summary just because both belong to the
+     * document.
+     *
+     * @param  Builder<AiRun>  $query
+     * @return Builder<AiRun>
+     */
+    private function scopedTo(Builder $query, ?Model $target, ?string $variant): Builder
+    {
+        return $query
+            ->when(
+                $target === null,
+                fn (Builder $q): Builder => $q->whereNull('target_type')->whereNull('target_id'),
+                fn (Builder $q): Builder => $q
+                    ->where('target_type', $target->getMorphClass())
+                    ->where('target_id', $target->getKey()),
+            )
+            ->when(
+                $variant === null,
+                fn (Builder $q): Builder => $q->whereNull('variant'),
+                fn (Builder $q): Builder => $q->where('variant', $variant),
+            );
     }
 
     /**

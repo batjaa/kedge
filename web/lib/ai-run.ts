@@ -26,7 +26,7 @@ export function isAiRunInFlight(status: AiRunStatus): boolean {
  * The poll predicate: `null` keeps the loop alive (still in flight, or a dropped
  * read), a run settles it.
  */
-export function aiRunSettled(run: AiRun | null): AiRun | null {
+export function aiRunSettled<TOutput>(run: AiRun<TOutput> | null): AiRun<TOutput> | null {
   if (run === null) return null;
 
   return isAiRunInFlight(run.status) ? null : run;
@@ -35,11 +35,18 @@ export function aiRunSettled(run: AiRun | null): AiRun | null {
 export type DigestPhase = 'idle' | 'running' | 'taking-too-long' | 'completed' | 'failed';
 
 /**
+ * The same five states under a type-neutral name. The phase machine below was
+ * written for the digest but is about a RUN, not about digests — every M4 panel
+ * (reply draft, thread summary, split proposals) drives off it unchanged.
+ */
+export type AiRunPhase = DigestPhase;
+
+/**
  * What the panel renders. Elapsed time is measured from the run's own
  * `created_at`, so re-attaching to a run abandoned yesterday reports
  * taking-too-long immediately instead of pretending it just started.
  */
-export function digestPhase(run: AiRun | null, nowMs: number): DigestPhase {
+export function digestPhase(run: AiRun<unknown> | null, nowMs: number): DigestPhase {
   if (run === null) return 'idle';
   if (run.status === 'completed') return 'completed';
   if (run.status === 'failed') return 'failed';
@@ -69,3 +76,9 @@ export function canRequestDigest(phase: DigestPhase): boolean {
 export type AiArtifactPhase = DigestPhase;
 export const aiArtifactPhase = digestPhase;
 export const canRequestAiArtifact = canRequestDigest;
+
+/** {@link digestPhase} under its type-neutral name — see {@link AiRunPhase}. */
+export const aiRunPhase = digestPhase;
+
+/** {@link canRequestDigest} under its type-neutral name. */
+export const canRequestAiRun = canRequestDigest;

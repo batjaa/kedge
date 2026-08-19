@@ -3,10 +3,13 @@
 import { useState } from 'react';
 import { Check, Flag, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { AiThreadSummary } from './ai-thread-summary';
 import { StatusBadge } from './document-thread-badges';
 import { CommentRow, useCommentEditState } from './document-thread-comment-row';
 import { ReplyComposer } from './document-thread-reply-composer';
 import { IconButton } from './document-thread-ui';
+import { useAiEnabled } from '@/lib/ai-capability';
+import { isLongThread } from '@/lib/ai-triage';
 import { cn } from '@/lib/cn';
 import { threadControlsFor } from '@/lib/review-surface-layout';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
@@ -48,6 +51,7 @@ export function ThreadCard({
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
 }) {
   const t = useTranslations('threads');
+  const aiEnabled = useAiEnabled();
   const comments = thread.comments && thread.comments.length > 0
     ? thread.comments
     : thread.first_comment
@@ -200,6 +204,13 @@ export function ThreadCard({
           <p className="mt-3 text-[11px] text-zinc-500 dark:text-zinc-500">
             {t('card.forkedInto', { count: thread.forked_into_count })}
           </p>
+        ) : null}
+        {/* A long thread offers a summary (#133) — current state plus the open
+            question — so joining it doesn't mean archaeology. Only on an
+            expanded card, so opening the rail doesn't fire a read per thread,
+            and only where AI exists on this instance. */}
+        {expanded && aiEnabled && isLongThread(thread.comment_count) ? (
+          <AiThreadSummary threadId={thread.id} />
         ) : null}
         {expanded ? (
           <ReplyComposer

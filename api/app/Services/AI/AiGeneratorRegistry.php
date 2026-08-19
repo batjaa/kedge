@@ -6,7 +6,9 @@ use App\Enums\AiRunType;
 use App\Models\AiRun;
 use App\Services\AI\Exceptions\UnsupportedAiRunTypeException;
 use App\Services\AI\Generators\ImprovePromptGenerator;
+use App\Services\AI\Generators\ReplyDraftGenerator;
 use App\Services\AI\Generators\ReviewDigestGenerator;
+use App\Services\AI\Generators\ThreadSummaryGenerator;
 use Illuminate\Contracts\Container\Container;
 
 /**
@@ -22,6 +24,8 @@ class AiGeneratorRegistry
     private const GENERATORS = [
         AiRunType::Digest->value => ReviewDigestGenerator::class,
         AiRunType::ImprovePrompt->value => ImprovePromptGenerator::class,
+        AiRunType::ReplyDraft->value => ReplyDraftGenerator::class,
+        AiRunType::Summary->value => ThreadSummaryGenerator::class,
     ];
 
     public function __construct(

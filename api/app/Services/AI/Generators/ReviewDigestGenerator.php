@@ -67,7 +67,10 @@ class ReviewDigestGenerator implements GeneratesAiRun
 
         foreach ($assembled->chunks as $chunk) {
             try {
-                $response = ReviewDigestAgent::make()->prompt($chunk);
+                // The model the LEDGER already committed to, not whatever config
+                // says now: an AI_MODEL retune while this job sat in the queue must
+                // not bill a model the pending row and `ai_run.started` never named.
+                $response = ReviewDigestAgent::make()->prompt($chunk, model: $run->model);
             } catch (Throwable $e) {
                 // The request was issued; the provider may have accepted and
                 // billed it before this died. We cannot say what it cost, so the

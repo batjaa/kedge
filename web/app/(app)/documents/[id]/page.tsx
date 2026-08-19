@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getDocument, getDocumentVersion, getDocumentVersions } from '@/lib/documents';
 import { getCapabilities } from '@/lib/capabilities';
 import { getProjects } from '@/lib/projects';
+import { AiCapabilityProvider } from '@/lib/ai-capability';
 import { DocumentBody } from '@/components/app/document-body';
 import { DocumentPoller } from '@/components/app/document-poller';
 import { DocumentClaim } from '@/components/app/document-claim';
@@ -141,6 +142,13 @@ export default async function DocumentPage({
               </div>
             </PageContainer>
           ) : null}
+          {/* One declaration of "does this instance have AI" for the whole
+              review tree (#133). The thread panel's AI affordances sit several
+              components deep — inside a card, inside its composer — and the
+              context keeps that boolean off five unrelated prop signatures.
+              Default false, so any surface that does NOT provide it (the share
+              surface) shows no AI at all. */}
+          <AiCapabilityProvider enabled={aiEnabled}>
           <DocumentReviewSurface
             documentId={document.id}
             title={document.title}
@@ -180,6 +188,7 @@ export default async function DocumentPage({
               content={viewedVersion.content}
             />
           </DocumentReviewSurface>
+          </AiCapabilityProvider>
         </>
       ) : null}
 
