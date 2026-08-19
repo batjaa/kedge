@@ -4,11 +4,11 @@ namespace App\Services\AI\Builders;
 
 use App\Enums\CommentType;
 use App\Enums\ThreadType;
-use App\Models\Anchor;
 use App\Models\Comment;
 use App\Services\AI\Prompt\AssembledPrompt;
 use App\Services\AI\Prompt\PromptAssembler;
 use App\Services\AI\Prompt\PromptSection;
+use App\Services\AI\Split\SplitAnchorLocator;
 use Illuminate\Support\Str;
 
 /**
@@ -101,8 +101,12 @@ class CommentSplitPromptBuilder
     }
 
     /**
-     * The passage a proposed anchor may point into: the source thread's anchored
-     * text on the current version. Null when there is none to point into.
+     * The passage a proposed anchor may point into. Null when there is none.
+     *
+     * Resolved through {@see SplitAnchorLocator} — the same object the generator
+     * matches quotes against — so the prompt can never advertise a passage the
+     * locator would refuse to anchor into. Showing the model text it cannot
+     * usefully quote produces proposals that all arrive unanchored.
      */
     private function passage(Comment $comment): ?string
     {
@@ -110,23 +114,18 @@ class CommentSplitPromptBuilder
             return null;
         }
 
-        $anchor = $comment->thread->anchors
-            ->firstWhere('document_version_id', $comment->thread->document->current_version_id)
-            ?? $comment->thread->anchors->last();
-
-        if (! $anchor instanceof Anchor) {
-            return null;
-        }
-
-        $exact = (string) $anchor->exact;
+        $passage = SplitAnchorLocator::forThread(
+            $comment->thread,
+            $comment->thread->document->currentVersion,
+        )?->passage();
 
         // An over-long passage is shortened with the cut MARKED, and the
         // generator only accepts quotes it can still find in the live
         // projection — so a quote from a cut-off tail simply yields no anchor
         // rather than a wrong one.
-        return $exact === ''
+        return $passage === null || $passage === ''
             ? null
-            : Str::limit($exact, self::MAX_PASSAGE_CHARS, '… [passage shortened]');
+            : Str::limit($passage, self::MAX_PASSAGE_CHARS, '… [passage shortened]');
     }
 
     /**

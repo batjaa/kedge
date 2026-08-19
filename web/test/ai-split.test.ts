@@ -127,6 +127,18 @@ describe('resolveSplitAnchor', () => {
    * would have rejected the malformed payload; dropping it on the way there
    * turns that rejection into a quiet wrong answer.
    */
+  /**
+   * The api always writes the key — null when it proposed no anchor — so a
+   * MISSING key is a payload this code did not produce. Reading it as "no
+   * anchor" would fork against the source selection on the strength of a shape
+   * we do not recognize.
+   */
+  it('treats a missing anchor field as malformed, not as a deliberate absence', () => {
+    const truncated = { title: 'Budget', fragment: 'Fragment.' } as unknown as SplitProposal;
+
+    expect(resolveSplitAnchor(truncated).kind).toBe('invalid');
+  });
+
   it('marks a malformed anchor invalid rather than quietly inheriting', () => {
     for (const broken of [
       anchor({ exact: '' }),

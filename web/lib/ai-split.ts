@@ -103,12 +103,17 @@ export type SplitAnchorResolution =
   | { kind: 'invalid' };
 
 export function resolveSplitAnchor(proposal: SplitProposal): SplitAnchorResolution {
-  const anchor: SplitProposalAnchor | null = proposal.anchor ?? null;
+  const anchor: SplitProposalAnchor | null | undefined = proposal.anchor;
 
+  // Literal null only. The api always writes the key — null when it deliberately
+  // proposed no anchor — so a MISSING key is a payload this code did not
+  // produce, and reading it as "no anchor" would fork against the source
+  // selection on the strength of a shape we do not recognize.
   if (anchor === null) return { kind: 'none' };
 
   if (
-    typeof anchor !== 'object'
+    anchor === undefined
+    || typeof anchor !== 'object'
     || typeof anchor.exact !== 'string'
     || anchor.exact === ''
     || typeof anchor.start !== 'number'

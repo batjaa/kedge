@@ -111,11 +111,35 @@ export async function readAiSplitRun(id: number): Promise<AiSplitRun | null> {
 }
 
 /**
- * GET /api/v1/comments/{id}/ai/split — the split panel's re-attach on mount.
- * 204 means no split was ever requested for this comment.
+ * The re-attach read's three answers. "No run" and "could not read" must not be
+ * the same value here: the panel treats "no run" as licence to start a NEW one,
+ * and a dropped read reported as "no run" bills the key for a second run whose
+ * answer already existed.
  */
-export async function readLatestCommentSplit(commentId: number): Promise<AiSplitRun | null> {
-  return readRun<SplitOutput>(`/api/v1/comments/${commentId}/ai/split`);
+export type LatestSplitOutcome =
+  | { kind: 'run'; run: AiSplitRun }
+  | { kind: 'none' }
+  | { kind: 'unavailable' };
+
+/**
+ * GET /api/v1/comments/{id}/ai/split — the split panel's re-attach when it
+ * opens. 204 means no split was ever requested for this comment.
+ */
+export async function readLatestCommentSplit(commentId: number): Promise<LatestSplitOutcome> {
+  try {
+    const res = await fetch(`${publicApiBaseUrl}/api/v1/comments/${commentId}/ai/split`, {
+      credentials: 'include',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (res.status === 204) return { kind: 'none' };
+    if (!res.ok) return { kind: 'unavailable' };
+
+    return { kind: 'run', run: (await res.json()) as AiSplitRun };
+  } catch {
+    return { kind: 'unavailable' };
+  }
 }
 
 /**

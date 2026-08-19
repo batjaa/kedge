@@ -70,13 +70,12 @@ final class SplitAnchorLocator
             return null;
         }
 
-        // The CURRENT version's anchor, and only that one. An older version's
-        // selector is not evidence about where this thread sits today, and an
-        // orphaned one is the system having already concluded it does not know —
-        // both mean "propose no anchor" rather than "guess from stale data".
-        $anchor = $thread->anchors->firstWhere('document_version_id', $version?->id);
+        $anchor = self::anchorFor($thread, $version);
 
-        if (! $anchor instanceof Anchor || $anchor->state === AnchorState::Orphaned) {
+        // An orphaned selector is the system having already concluded it does
+        // not know where this thread sits. A split must not quietly re-decide
+        // that from the same evidence.
+        if ($anchor === null || $anchor->state === AnchorState::Orphaned) {
             return null;
         }
 
@@ -99,6 +98,44 @@ final class SplitAnchorLocator
             headingPath: array_values(array_filter((array) ($anchor->heading_path ?? []), 'is_string')),
             projectionVersion: $projectionVersion,
         );
+    }
+
+    /**
+     * The thread's live selector: the NEWEST anchor row for the current version,
+     * and only the current version.
+     *
+     * Newest matters. Re-attaching appends a row rather than editing one, so a
+     * thread that went orphaned and was re-attached holds two rows for the same
+     * version — and the older one is the orphan. Reading the first would make a
+     * healed thread look broken, or worse, point proposals at the selector the
+     * author already replaced. This is the same "max id per version" rule the
+     * rail read uses, so the split sees the anchor the reader sees.
+     *
+     * Only the current version: an older version's selector says where this
+     * thread WAS, which is not evidence about where it is.
+     */
+    public static function anchorFor(Thread $thread, ?DocumentVersion $version): ?Anchor
+    {
+        if ($version === null) {
+            return null;
+        }
+
+        return $thread->anchors
+            ->where('document_version_id', $version->id)
+            ->sortByDesc('id')
+            ->first();
+    }
+
+    /**
+     * The document text a proposal from this thread may point into, whole.
+     *
+     * The prompt builder shows the model exactly this, so the passage the model
+     * is asked to quote from and the span a quote is matched against can never
+     * be two different things.
+     */
+    public function passage(): string
+    {
+        return mb_substr($this->plainText, $this->spanStart, $this->spanEnd - $this->spanStart, 'UTF-8');
     }
 
     /**

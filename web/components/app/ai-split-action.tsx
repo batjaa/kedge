@@ -66,23 +66,31 @@ export function AiSplitAction({
   const attachedRef = useRef(false);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  // Re-attach when the panel is first OPENED, not on mount: a run started
-  // before a reload, or finished while the panel was closed, is picked back up
-  // rather than forgotten and re-billed. Deferring it to the open is the whole
+  // Re-attach when the panel is OPENED, not on mount: a run started before a
+  // reload, or finished while the panel was closed, is picked back up rather
+  // than forgotten and re-billed. Deferring it to the open is the whole
   // difference between one request and one per comment in the rail — this
   // affordance renders on every forkable reply on the page.
+  //
+  // The latch is set only on a CONCLUSIVE answer. A dropped read that latched
+  // would leave the panel believing no run exists, and the next click would bill
+  // the key for a second run whose answer already existed; leaving it unlatched
+  // means closing and reopening simply tries again.
   useEffect(() => {
     if (!open || attachedRef.current) return;
-    attachedRef.current = true;
 
     let cancelled = false;
 
-    readLatestCommentSplit(commentId).then((latest) => {
-      if (cancelled || latest === null) return;
+    readLatestCommentSplit(commentId).then((outcome) => {
+      if (cancelled || outcome.kind === 'unavailable') return;
+
+      attachedRef.current = true;
+
+      if (outcome.kind === 'none') return;
 
       // Monotonic: a slow read must never displace a run the user started while
       // it was in flight — that would strand the new run's poller.
-      setRun((current) => (current === null || current.id < latest.id ? latest : current));
+      setRun((current) => (current === null || current.id < outcome.run.id ? outcome.run : current));
     });
 
     return () => {

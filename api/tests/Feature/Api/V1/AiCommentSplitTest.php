@@ -256,6 +256,41 @@ class AiCommentSplitTest extends TestCase
         );
     }
 
+    /**
+     * Re-attaching appends an anchor row rather than editing one, so a thread
+     * that went orphaned and was healed holds TWO rows for the same version.
+     * Reading the older one would make a healed thread look broken — and would
+     * point proposals at the selector the author already replaced.
+     */
+    public function test_a_re_attached_thread_uses_its_newest_anchor_not_its_orphaned_one(): void
+    {
+        CommentSplitAgent::fake([$this->splitPayload()]);
+        [$author, $document, $reply] = $this->splittableThread();
+
+        // The original row goes orphaned; the re-attach appends a live one.
+        Anchor::query()->where('thread_id', $reply->thread_id)->update(['state' => 'orphaned']);
+        $reply->thread->anchors()->create([
+            'document_version_id' => $document->current_version_id,
+            'exact' => self::PASSAGE,
+            'prefix' => '',
+            'suffix' => '',
+            'start' => strpos(self::BODY, self::PASSAGE),
+            'end' => strpos(self::BODY, self::PASSAGE) + strlen(self::PASSAGE),
+            'heading_path' => ['Doc'],
+            'projection_version' => '2',
+            'state' => 'anchored',
+        ]);
+
+        $run = $this->requestSplit($reply, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(
+            'The budget section needs a number.',
+            $run->output['proposals'][0]['anchor']['exact'],
+        );
+    }
+
     public function test_an_orphaned_source_anchor_proposes_no_anchors(): void
     {
         CommentSplitAgent::fake([$this->splitPayload()]);

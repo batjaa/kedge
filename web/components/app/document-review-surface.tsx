@@ -928,11 +928,15 @@ export function DocumentReviewSurface({
   // The per-comment split affordance's capability (#134): passing the approval
   // callback IS the gate, so a keyless instance renders no button at all.
   //
-  // Absent while reading a historical version, for the same reason the digest
-  // is: proposals anchor into the CURRENT version and are approved by forking
-  // against it, so offering them here would propose anchors the fork endpoint
-  // would immediately reject.
-  const splitApproval = canProposeCommentSplits && viewedVersionId === currentVersionId
+  // Absent while reading anything but the live current version. Proposals are
+  // generated against, and approved into, whatever the CURRENT version is at
+  // that moment — so offering them beside a page showing older text would let
+  // the author approve anchors into passages they cannot see. The notice, not
+  // the server-rendered ids, is the test: it also catches a version that landed
+  // while this page was open.
+  const splitApproval = canProposeCommentSplits
+    && viewedVersionId === currentVersionId
+    && newerVersionNotice === null
     ? approveSplit
     : undefined;
 
