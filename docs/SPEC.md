@@ -391,7 +391,7 @@ All via `laravel/ai`, as queued jobs writing `ai_runs`; results are **drafts the
 5. **Thread summary**: long thread → current state + open question.
 6. **Ask about the doc** (added 2026-08-19): select a passage — or ask doc-wide — and pose a free-form question; the answer is ephemeral and copyable, never persisted as a comment or thread. Single-turn in v1.
 
-Failure modes: provider overloaded/rate-limited → `ai_runs.status=failed` + visible retry; every run logs model, tokens, cost.
+Failure modes: provider overloaded/rate-limited → `ai_runs.status=failed` + visible retry; every run logs model, tokens, cost. Spend is priced from a **per-provider** table (added 2026-08-19 with provider selection): a model id says nothing about what it costs, so a model with no entry for the selected provider records a **null cost** rather than a wrong number.
 
 ## 15. MCP server
 
