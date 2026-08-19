@@ -31,12 +31,23 @@ return new class extends Migration
             // reply-draft stance. Short and opaque on purpose: it is a dedupe
             // key, not a payload.
             $table->string('variant', 32)->nullable();
+
+            // The dedupe probe and the re-attach read both resolve the full
+            // narrowed key — this document's runs of this type, for this target
+            // and variant, newest first. The pre-existing (document_id, type, …)
+            // indexes stop being selective the moment a document carries a run
+            // per thread, which is exactly what the triage pair produces.
+            $table->index(
+                ['document_id', 'type', 'target_type', 'target_id', 'variant', 'id'],
+                'ai_runs_scoped_lookup_index',
+            );
         });
     }
 
     public function down(): void
     {
         Schema::table('ai_runs', function (Blueprint $table) {
+            $table->dropIndex('ai_runs_scoped_lookup_index');
             $table->dropMorphs('target');
             $table->dropColumn('variant');
         });

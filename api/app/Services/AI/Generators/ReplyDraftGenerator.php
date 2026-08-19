@@ -67,9 +67,13 @@ class ReplyDraftGenerator implements GeneratesAiRun
             return new AiGeneration($base + ['body' => '']);
         }
 
+        // The model the LEDGER already committed to, not whatever config says
+        // now: a key rotated or a model retuned while this job sat in the queue
+        // must not silently bill a different model than the pending row and the
+        // `ai_run.started` event both named.
         $structured = $this->call->invoke(
             $run,
-            fn () => ReplyDraftAgent::make()->prompt($assembled->chunks[0]),
+            fn () => ReplyDraftAgent::make()->prompt($assembled->chunks[0], model: $run->model),
         );
 
         return new AiGeneration($base + ['body' => $this->call->requiredText($structured, 'body')]);

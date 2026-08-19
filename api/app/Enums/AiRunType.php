@@ -37,4 +37,23 @@ enum AiRunType: string
             ? (string) config('kedge.ai.summary_model', 'claude-haiku-4-5')
             : (string) config('kedge.ai.model', 'claude-sonnet-5');
     }
+
+    /**
+     * Whether a run belongs to the ONE PERSON who asked for it, rather than to
+     * the document.
+     *
+     * A digest, an improve-prompt, a thread summary: all describe shared material,
+     * so sharing them is the point — a second member joins the run instead of
+     * re-billing the key. A reply draft is the opposite. It is written in the
+     * requester's voice, for a position they chose and have not yet decided to
+     * say out loud; handing it to another member would both answer the wrong
+     * question and expose one person's unposted words to someone else.
+     *
+     * The single predicate behind two rules: the ledger's dedupe key includes the
+     * requester, and the Policy lets only the requester read the result.
+     */
+    public function isPerActor(): bool
+    {
+        return $this === self::ReplyDraft;
+    }
 }

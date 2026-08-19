@@ -63,6 +63,10 @@ class AiRunLedger
                 $target,
                 $variant,
             )
+                // A per-actor run is never joined across people: a reply draft is
+                // written in the requester's voice, for a position they picked
+                // and have not said out loud yet.
+                ->when($type->isPerActor(), fn (Builder $q): Builder => $q->where('created_by', $actor->id))
                 ->inFlight()
                 ->latest('id')
                 ->first();

@@ -50,8 +50,7 @@ class AiThreadRunController extends Controller
      */
     public function replyDraft(StoreReplyDraftRequest $request, Thread $thread): JsonResponse
     {
-        $document = $this->readyDocument($thread);
-        $this->authorize('create', [AiRun::class, $document]);
+        $document = $this->authorizedDocument($thread);
 
         [$run, $created] = $this->runs->start(
             $document,
@@ -69,8 +68,7 @@ class AiThreadRunController extends Controller
      */
     public function summary(Request $request, Thread $thread): JsonResponse
     {
-        $document = $this->readyDocument($thread);
-        $this->authorize('create', [AiRun::class, $document]);
+        $document = $this->authorizedDocument($thread);
 
         [$run, $created] = $this->runs->start(
             $document,
@@ -106,18 +104,26 @@ class AiThreadRunController extends Controller
     }
 
     /**
-     * The thread's document, or a 409/404 explaining why it cannot be read.
+     * The thread's document, authorized and ready — in that order.
      *
-     * A thread can only exist on a document, and a generation is always taken
-     * over the CURRENT version's material — so a document still importing, or one
-     * whose import failed, has nothing to summarize and nothing to reply against.
+     * The ORDER is the security property. Authorization runs before the readiness
+     * check so a stranger walking thread ids always gets the same 403, whatever
+     * state the document is in; checking readiness first would turn 409-vs-403
+     * into an oracle telling an outsider which foreign documents finished
+     * importing.
+     *
+     * Readiness itself is real: a generation is taken over the CURRENT version's
+     * material, so a document still importing (or one whose import failed) has
+     * nothing to summarize and nothing to reply against.
      */
-    private function readyDocument(Thread $thread): Document
+    private function authorizedDocument(Thread $thread): Document
     {
         $document = $thread->document;
 
         // A thread with no document is a broken row, not a permission question.
         abort_if($document === null, 404);
+
+        $this->authorize('create', [AiRun::class, $document]);
 
         abort_unless(
             $document->status === DocumentStatus::Ready && $document->current_version_id !== null,

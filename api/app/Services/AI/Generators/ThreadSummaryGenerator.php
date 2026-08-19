@@ -42,9 +42,11 @@ class ThreadSummaryGenerator implements GeneratesAiRun
             return new AiGeneration($coverage + ['current_state' => '', 'open_question' => '']);
         }
 
+        // The model the LEDGER already committed to, not whatever config says
+        // now — see ReplyDraftGenerator for why a queued job must not drift.
         $structured = $this->call->invoke(
             $run,
-            fn () => ThreadSummaryAgent::make()->prompt($assembled->chunks[0]),
+            fn () => ThreadSummaryAgent::make()->prompt($assembled->chunks[0], model: $run->model),
         );
 
         return new AiGeneration($coverage + [

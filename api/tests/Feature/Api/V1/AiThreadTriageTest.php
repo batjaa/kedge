@@ -266,6 +266,103 @@ class AiThreadTriageTest extends TestCase
     }
 
     /**
+     * A reply draft belongs to the person who asked for it. Two members asking
+     * for the same stance on the same thread get their OWN runs — one is written
+     * in Alice's voice for a position Alice chose, and handing it to Bob would
+     * both answer the wrong question and expose words Alice never posted.
+     */
+    public function test_two_members_never_share_a_reply_draft_run(): void
+    {
+        Queue::fake();
+        [$author, $document, $thread] = $this->reviewedThread();
+        $member = User::factory()->create(['name' => 'Second Member', 'email' => 'second@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+        $ledger = app(AiRunLedger::class);
+
+        [$mine, $mineCreated] = $ledger->startOrJoin($document, $author, AiRunType::ReplyDraft, $thread, 'accept');
+        [$theirs, $theirsCreated] = $ledger->startOrJoin($document, $member, AiRunType::ReplyDraft, $thread, 'accept');
+
+        $this->assertTrue($mineCreated);
+        $this->assertTrue($theirsCreated);
+        $this->assertNotSame($mine->id, $theirs->id);
+        $this->assertSame(2, AiRun::query()->count());
+    }
+
+    /**
+     * A summary IS shared — that is what makes re-opening a summarized thread
+     * free rather than a second bill.
+     */
+    public function test_two_members_do_share_a_summary_run(): void
+    {
+        Queue::fake();
+        [$author, $document, $thread] = $this->reviewedThread();
+        $member = User::factory()->create(['name' => 'Second Member', 'email' => 'second@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $ledger = app(AiRunLedger::class);
+
+        [$first, $firstCreated] = $ledger->startOrJoin($document, $author, AiRunType::Summary, $thread);
+        [$second, $secondCreated] = $ledger->startOrJoin($document, $member, AiRunType::Summary, $thread);
+
+        $this->assertTrue($firstCreated);
+        $this->assertFalse($secondCreated);
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, AiRun::query()->count());
+    }
+
+    /**
+     * Run ids are sequential, so workspace membership alone cannot be the gate on
+     * a private draft: a colleague must not be able to walk the ledger and read
+     * what someone was considering saying.
+     */
+    public function test_a_workspace_member_cannot_read_another_members_reply_draft(): void
+    {
+        Queue::fake();
+        [$author, $document, $thread] = $this->reviewedThread();
+        $member = User::factory()->create(['name' => 'Second Member', 'email' => 'second@example.com']);
+        $member->workspaces()->attach($document->workspace_id, ['role' => WorkspaceRole::Member->value]);
+
+        $draft = AiRun::factory()->for($document)->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $author->id,
+            'type' => AiRunType::ReplyDraft,
+            'variant' => 'accept',
+            'target_type' => Thread::class,
+            'target_id' => $thread->id,
+        ]);
+        $summary = AiRun::factory()->for($document)->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $author->id,
+            'type' => AiRunType::Summary,
+            'target_type' => Thread::class,
+            'target_id' => $thread->id,
+        ]);
+
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/ai-runs/{$draft->id}")
+            ->assertForbidden();
+
+        // The shared artifacts stay shared.
+        $this->actingAs($member)->fromWebApp()
+            ->getJson("/api/v1/ai-runs/{$summary->id}")
+            ->assertOk();
+    }
+
+    public function test_the_requester_can_still_read_their_own_reply_draft(): void
+    {
+        ReplyDraftAgent::fake([['body' => 'Draft.']]);
+        [$author, , $thread] = $this->reviewedThread();
+
+        $run = $this->requestReplyDraft($thread, $author, 'accept');
+        $this->runJob($run);
+
+        $this->actingAs($author)->fromWebApp()
+            ->getJson("/api/v1/ai-runs/{$run->id}")
+            ->assertOk()
+            ->assertJsonPath('output.body', 'Draft.');
+    }
+
+    /**
      * Two threads on the same document are two conversations: a summary of one
      * must never be handed back as the summary of the other.
      */
@@ -398,6 +495,26 @@ class AiThreadTriageTest extends TestCase
         // And the model the request actually resolved is the same one.
         $this->assertSame('claude-haiku-4-5', $run->refresh()->model);
         $this->assertSame('claude-sonnet-5', AiRunType::ReplyDraft->model());
+    }
+
+    /**
+     * A model retuned while a job sits in the queue must not change what that
+     * job bills: the run already committed to a model, and the ledger row and the
+     * `ai_run.started` event both named it.
+     */
+    public function test_a_queued_run_bills_the_model_it_was_minted_with(): void
+    {
+        ThreadSummaryAgent::fake([$this->summaryPayload()]);
+        [$author, , $thread] = $this->reviewedThread();
+
+        $run = $this->requestSummary($thread, $author);
+        $this->assertSame('claude-haiku-4-5', $run->model);
+
+        // The operator retunes the cheap model while the job waits.
+        config(['kedge.ai.summary_model' => 'claude-haiku-next']);
+        $this->runJob($run);
+
+        $this->assertSame('claude-haiku-4-5', $run->refresh()->model);
     }
 
     public function test_both_models_are_env_overridable(): void
@@ -587,6 +704,35 @@ class AiThreadTriageTest extends TestCase
 
         $this->actingAs($stranger)->fromWebApp()
             ->getJson("/api/v1/threads/{$thread->id}/ai/summary")
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('ai_runs', 0);
+    }
+
+    /**
+     * Authorization runs before the readiness check, so a stranger walking thread
+     * ids gets the same 403 whatever state the document is in. The alternative —
+     * 409 here, 403 there — is an oracle telling an outsider which foreign
+     * documents finished importing.
+     */
+    public function test_a_stranger_cannot_tell_a_foreign_document_apart_by_its_status(): void
+    {
+        Queue::fake();
+        $author = $this->author();
+        $failed = Document::factory()
+            ->for($author->personalWorkspace(), 'workspace')
+            ->failed()
+            ->create(['created_by' => $author->id]);
+        $thread = $this->threadOn($failed, $author, 'Orphaned conversation.');
+
+        $stranger = app(RegistrationService::class)->register(
+            name: 'Stranger',
+            email: 'stranger@example.com',
+            password: 'correct-horse-battery',
+        );
+
+        $this->actingAs($stranger)->fromWebApp()
+            ->postJson("/api/v1/threads/{$thread->id}/ai/summary")
             ->assertForbidden();
 
         $this->assertDatabaseCount('ai_runs', 0);
