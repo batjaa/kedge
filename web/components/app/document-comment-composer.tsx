@@ -3,6 +3,7 @@
 import { type ReactNode } from 'react';
 import { MessageCircleQuestion, MessageSquare, Pencil, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { AI_TONE_CLASS } from './ai-tone';
 import { MentionTextarea } from './mention-textarea';
 import type { AnchorCaptureFailure, AnchorSelector } from '@/lib/anchor-capture-core';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
@@ -97,7 +98,10 @@ export function DocumentCommentComposer({
           <button
             type="button"
             onClick={onAsk}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15"
+            // Violet next to Comment's zinc/emerald: side by side on the same
+            // selection, the colour is what says one of these two opens a model
+            // and the other opens a composer (#143).
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${AI_TONE_CLASS}`}
           >
             <MessageCircleQuestion className="h-3.5 w-3.5" aria-hidden="true" />
             {t('composer.ask')}

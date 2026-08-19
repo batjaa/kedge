@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SplitSquareHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { AI_BUTTON_CLASS } from './ai-artifact-dialog';
 import { AiSplitProposals } from './ai-split-proposals';
 import { IconButton } from './document-thread-ui';
 import { readAiSplitRun, readLatestCommentSplit, startCommentSplit } from '@/lib/ai-client';
@@ -262,7 +263,10 @@ export function AiSplitAction({
 
   return (
     <>
-      <IconButton title={t('trigger')} onClick={() => setOpen(true)}>
+      {/* The agent tone, because this square sits one gap from Fork in a row of
+          human icon buttons and opens a panel whose only button starts a run
+          (#143). Everything it opens onto is violet; the way in should be too. */}
+      <IconButton tone="agent" title={t('trigger')} onClick={() => setOpen(true)}>
         <SplitSquareHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
       </IconButton>
 
@@ -366,7 +370,7 @@ export function AiSplitAction({
                   // that failed — bills a second run for an answer that may be
                   // one response away.
                   disabled={pending || busy || attach !== 'settled'}
-                  className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-1 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15"
+                  className={AI_BUTTON_CLASS}
                 >
                   {pending ? t('generating') : phase === 'idle' ? t('generate') : t('retry')}
                 </button>

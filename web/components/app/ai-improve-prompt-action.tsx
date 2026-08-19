@@ -5,7 +5,7 @@ import { Wand2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { AiImprovePromptReport } from './ai-improve-prompt-report';
 import { AiRunPoller } from './ai-run-poller';
-import { AI_BUTTON_CLASS, AI_SECONDARY_BUTTON_CLASS, AiArtifactDialog } from './ai-artifact-dialog';
+import { AI_BUTTON_CLASS, AI_NEUTRAL_BUTTON_CLASS, AiArtifactDialog } from './ai-artifact-dialog';
 import { readLatestImprovePrompt, startImprovePrompt } from '@/lib/ai-client';
 import { canRequestAiArtifact } from '@/lib/ai-run';
 import { isImprovePromptOutput, type ImprovePromptOutput } from '@/lib/ai-types';
@@ -68,7 +68,12 @@ export function AiImprovePromptAction({ documentId }: { documentId: number }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={AI_SECONDARY_BUTTON_CLASS}>
+      {/* The agent register, like its two siblings in the header: this trigger
+          opens a panel whose only button starts a run, so it is an AI CTA even
+          though the click itself calls no model. It read as a zinc secondary
+          until #143, which put it in the same neutral register as the human
+          controls one gap to its left. */}
+      <button type="button" onClick={() => setOpen(true)} className={AI_BUTTON_CLASS}>
         <Wand2 className="h-4 w-4" aria-hidden="true" />
         {t('trigger')}
       </button>
@@ -86,7 +91,7 @@ export function AiImprovePromptAction({ documentId }: { documentId: number }) {
               <button
                 type="button"
                 onClick={() => copy((output as ImprovePromptOutput).prompt)}
-                className={AI_SECONDARY_BUTTON_CLASS}
+                className={AI_NEUTRAL_BUTTON_CLASS}
               >
                 {copied ? t('copied') : t('copy')}
               </button>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { AI_TONE_CLASS, AI_TONE_QUIET_CLASS } from './ai-tone';
 import { readAiRun } from '@/lib/ai-client';
 import { aiRunPhase, aiRunSettled, isAiRunInFlight } from '@/lib/ai-run';
 import { REPLY_STANCES, type AiRun, type ReplyDraftOutput, type ReplyStance } from '@/lib/ai-types';
@@ -155,7 +156,11 @@ export function ReplyDraftConfirm({ body, onReplace, onKeep }: {
         <button
           type="button"
           onClick={onReplace}
-          className="rounded-full bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-violet-400/15 dark:text-violet-200 dark:ring-1 dark:ring-inset dark:ring-violet-400/25"
+          // Violet, not the zinc of the human primary beside it: this is the
+          // last step of the AI affordance — the button that puts model output
+          // into the composer. It still posts nothing (the author's own Reply
+          // does that), which is exactly why it must not look like a submit.
+          className={`rounded-full px-2.5 py-1 text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${AI_TONE_CLASS}`}
         >
           {t('replyDraft.replace')}
         </button>
@@ -178,11 +183,14 @@ function StanceButton({ stance, active, disabled, onClick }: {
       onClick={onClick}
       disabled={disabled}
       // The agent register is violet per DESIGN.md — an AI affordance never wears
-      // the emerald of a human review action.
-      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+      // the emerald of a human review action, and since #143 never wears the
+      // neutral zinc of one either. A stance pill AT REST is what a reader sees
+      // first, so the ring carries the register and the fill is left free to say
+      // "this is the stance you picked".
+      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 ${
         active
-          ? 'bg-violet-500/10 text-violet-700 ring-violet-500/30 dark:text-violet-200 dark:ring-violet-400/30'
-          : 'bg-white text-zinc-600 ring-zinc-900/10 hover:bg-zinc-50 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10 dark:hover:bg-white/10'
+          ? 'bg-violet-500/10 text-violet-800 ring-1 ring-inset ring-violet-500/40 hover:bg-violet-500/15 dark:bg-violet-400/15 dark:text-violet-200 dark:ring-violet-400/40 dark:hover:bg-violet-400/20'
+          : AI_TONE_QUIET_CLASS
       }`}
     >
       {t(`stance.${stance}` as 'stance.accept')}
