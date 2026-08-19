@@ -441,6 +441,24 @@ class AiDigestTest extends TestCase
         $this->assertNull($run->error);
     }
 
+    public function test_a_terminal_run_accepts_no_further_spend_or_scope(): void
+    {
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+        $ledger = app(AiRunLedger::class);
+
+        (new GenerateAiRunJob($run->id))->failed(new TimeoutExceededException('timed out'));
+
+        $ledger->recordSpend($run, 'claude-sonnet-5', 999, 9.99);
+        $ledger->recordScope($run, ['chunks' => 42]);
+        $run->refresh();
+
+        // A landed run is history: its ledger line and its scope are final.
+        $this->assertSame(0, $run->tokens);
+        $this->assertSame('0.000000', $run->cost);
+        $this->assertNull($run->input);
+    }
+
     // ---- Prompt-injection fencing (G9 composition check) --------------------
 
     public function test_review_content_reaches_the_model_only_inside_a_labeled_fence(): void
