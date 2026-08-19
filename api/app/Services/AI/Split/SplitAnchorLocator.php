@@ -74,11 +74,9 @@ final class SplitAnchorLocator
             return null;
         }
 
-        // Located by TEXT, not by the stored offsets: a relocated anchor's
-        // persisted start/end belong to the version it was captured against.
-        $spanStart = mb_strpos($plainText, $exact, 0, 'UTF-8');
+        $spanStart = self::spanStart($plainText, $exact, (int) $anchor->start);
 
-        if ($spanStart === false) {
+        if ($spanStart === null) {
             return null;
         }
 
@@ -89,6 +87,42 @@ final class SplitAnchorLocator
             headingPath: array_values(array_filter((array) ($anchor->heading_path ?? []), 'is_string')),
             projectionVersion: $projectionVersion,
         );
+    }
+
+    /**
+     * Where the thread's passage sits in the live projection, in codepoints.
+     *
+     * Located by TEXT, not by the stored offsets: a relocated anchor's persisted
+     * start/end belong to the version it was captured against. But when a
+     * document repeats a passage verbatim, "the first occurrence" is a coin
+     * flip — so among the occurrences we prefer the one whose UTF-16 start still
+     * matches what the anchor recorded, and only fall back to the first when
+     * none does.
+     */
+    private static function spanStart(string $plainText, string $exact, int $storedStart): ?int
+    {
+        $offset = mb_strpos($plainText, $exact, 0, 'UTF-8');
+
+        if ($offset === false) {
+            return null;
+        }
+
+        $first = $offset;
+
+        while ($offset !== false) {
+            $utf16Start = intdiv(
+                strlen((string) mb_convert_encoding(mb_substr($plainText, 0, $offset, 'UTF-8'), 'UTF-16LE', 'UTF-8')),
+                2,
+            );
+
+            if ($utf16Start === $storedStart) {
+                return $offset;
+            }
+
+            $offset = mb_strpos($plainText, $exact, $offset + 1, 'UTF-8');
+        }
+
+        return $first;
     }
 
     /**

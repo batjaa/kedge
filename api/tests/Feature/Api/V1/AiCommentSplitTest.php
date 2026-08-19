@@ -200,6 +200,38 @@ class AiCommentSplitTest extends TestCase
         $this->assertNull($run->refresh()->output['proposals'][0]['anchor']);
     }
 
+    /**
+     * A document that repeats a passage verbatim must not make "the first
+     * occurrence" the answer: the proposal has to land inside the span the
+     * thread is actually anchored to.
+     */
+    public function test_a_repeated_passage_anchors_to_the_occurrence_the_thread_sits_on(): void
+    {
+        CommentSplitAgent::fake([[
+            'splits' => [[
+                'title' => 'Budget number',
+                'fragment' => 'Fragment.',
+                'quote' => 'The budget section needs a number.',
+            ]],
+        ]]);
+        [$author, $document, $reply] = $this->splittableThread(repeatPassage: true);
+
+        $run = $this->requestSplit($reply, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $anchor = $run->output['proposals'][0]['anchor'];
+        $plainText = (string) $document->currentVersion->plain_text;
+
+        // The passage appears twice; the thread is anchored to the second.
+        $this->assertSame(2, substr_count($plainText, self::PASSAGE));
+        $this->assertGreaterThan(strpos($plainText, self::PASSAGE), $anchor['start']);
+        $this->assertSame(
+            $anchor['exact'],
+            substr($plainText, $anchor['start'], $anchor['end'] - $anchor['start']),
+        );
+    }
+
     public function test_a_document_level_thread_proposes_no_anchors(): void
     {
         CommentSplitAgent::fake([$this->splitPayload()]);
@@ -692,7 +724,11 @@ class AiCommentSplitTest extends TestCase
         bool $inline = true,
         ?string $commentBody = null,
         int $commentPadding = 0,
+        bool $repeatPassage = false,
     ): array {
+        // When asked, the body carries the passage TWICE and the thread is
+        // anchored to the second copy — the duplicate-text case.
+        $body = $repeatPassage ? self::PASSAGE.' '.self::BODY : self::BODY;
         $author = app(RegistrationService::class)->register(
             name: 'Author User',
             email: 'author@example.com',
@@ -704,12 +740,12 @@ class AiCommentSplitTest extends TestCase
             ->ready()
             ->create(['created_by' => $author->id, 'title' => 'Anchoring RFC']);
 
-        $content = "# Anchoring RFC\n\n".self::BODY;
+        $content = "# Anchoring RFC\n\n".$body;
         $version = DocumentVersion::factory()->for($document)->create([
             'content_raw' => $content,
             'content_normalized' => $content,
             'content_hash' => hash('sha256', $content),
-            'plain_text' => self::BODY,
+            'plain_text' => $body,
             'projection_version' => '2',
         ]);
 
@@ -723,12 +759,12 @@ class AiCommentSplitTest extends TestCase
         ]);
 
         if ($inline) {
-            $start = strpos(self::BODY, self::PASSAGE);
+            $start = strrpos($body, self::PASSAGE);
             $thread->anchors()->create([
                 'document_version_id' => $version->id,
                 'exact' => self::PASSAGE,
-                'prefix' => substr(self::BODY, 0, $start),
-                'suffix' => substr(self::BODY, $start + strlen(self::PASSAGE)),
+                'prefix' => substr($body, 0, $start),
+                'suffix' => substr($body, $start + strlen(self::PASSAGE)),
                 'start' => $start,
                 'end' => $start + strlen(self::PASSAGE),
                 'heading_path' => ['Doc'],
