@@ -198,6 +198,7 @@ export function DocumentReviewSurface({
   const submittingRef = useRef(false);
   const forkGuardRef = useRef<CommentForkGuard | null>(null);
   const loadedPageRef = useRef(1);
+  const reloadSeqRef = useRef(0);
   if (forkGuardRef.current === null) {
     forkGuardRef.current = createCommentForkGuard(newCommentDraftIdempotencyKey);
   }
@@ -241,6 +242,11 @@ export function DocumentReviewSurface({
     ?? (currentVersionId === viewedVersionId ? versionLabel ?? null : null);
 
   const reloadThreads = useCallback(async (targetPage = 1) => {
+    // Concurrent reloads resolve in any order (the mount-time load can straggle
+    // past a post-comment refresh on a slow connection); only the latest-issued
+    // reload may commit, or a stale response clobbers a fresher thread list —
+    // seen as a just-posted comment vanishing from the rail.
+    const seq = ++reloadSeqRef.current;
     const firstPage = await listThreads(documentId, 1, viewedVersionId);
     const last = firstPage.meta?.last_page ?? 1;
     const finalPage = Math.min(Math.max(1, targetPage), last);
@@ -248,6 +254,7 @@ export function DocumentReviewSurface({
       ? await Promise.all(Array.from({ length: finalPage - 1 }, (_, index) => listThreads(documentId, index + 2, viewedVersionId)))
       : [];
     const pages = [firstPage, ...remainingPages];
+    if (seq !== reloadSeqRef.current) return;
 
     loadedPageRef.current = finalPage;
     setThreads(pages.flatMap((threadPage) => threadPage.data));
