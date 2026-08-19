@@ -32,6 +32,10 @@ class McpToolSurfaceTest extends McpTestCase
         'share',
         'delete', 'revoke',
         'token',
+        // Requesting an AI generation spends the workspace's model budget, so it
+        // is a human act too (#136): the artifact tools READ a completed run.
+        // A future `generate_digest` fails here first.
+        'generate', 'regenerate',
     ];
 
     /**
@@ -49,15 +53,17 @@ class McpToolSurfaceTest extends McpTestCase
     {
         $names = array_map(fn (Tool $tool): string => $tool->name(), $this->registeredTools());
 
-        // Read, then write — SPEC §15's table, in order. #136 appends exactly two
-        // read-only AI-artifact tools (`get_digest`, `get_improve_prompt`) and
-        // will extend this list; anything else appearing here is a bug, and a
+        // Read, then write — SPEC §15's table, in order, and now COMPLETE: #136
+        // added the two read-only AI-artifact tools the table names, and there is
+        // no ninth tool in the spec. Anything else appearing here is a bug, and a
         // deliberate change has to be argued for in a diff that touches this line.
         $this->assertSame([
             'list_documents',
             'get_document',
             'list_threads',
             'get_thread',
+            'get_digest',
+            'get_improve_prompt',
             'post_comment',
             'reply',
         ], $names);
@@ -147,9 +153,35 @@ class McpToolSurfaceTest extends McpTestCase
     {
         $instructions = strtolower((new KedgeServer(new FakeTransporter))->createContext()->instructions);
 
-        foreach (['approve', 'lifecycle', 'resolve', 'suggested edit', 'share'] as $humanOnly) {
+        foreach (['approve', 'lifecycle', 'resolve', 'suggested edit', 'share', 'ai generation'] as $humanOnly) {
             $this->assertStringContainsString($humanOnly, $instructions);
         }
+    }
+
+    public function test_the_server_warns_that_ai_artifacts_are_untrusted_too(): void
+    {
+        // #136 / user story 19: a digest is model output derived from untrusted
+        // comments, so it is the same injection channel one summary removed — an
+        // agent told only that DOCUMENTS are untrusted would read the digest as
+        // if Kedge itself had written it.
+        $instructions = strtolower((new KedgeServer(new FakeTransporter))->createContext()->instructions);
+
+        $this->assertStringContainsString('model output derived from that same', $instructions);
+        $this->assertStringContainsString('not come from your operator', $instructions);
+    }
+
+    public function test_the_operator_documentation_warns_about_the_injection_channel(): void
+    {
+        // SPEC §15: "reviewed docs are untrusted content for the *consuming
+        // agent* — documented prominently". The env file is what an operator
+        // reads while wiring MCP up, so the warning has to survive there and not
+        // only in the instructions their agent sees.
+        $env = (string) file_get_contents(base_path('.env.example'));
+        $section = strtolower((string) strstr($env, '# --- MCP server'));
+
+        $this->assertNotSame('', $section, 'The MCP section of .env.example has moved or been renamed.');
+        $this->assertStringContainsString('injection', $section);
+        $this->assertStringContainsString('untrusted', $section);
     }
 
     public function test_the_mcp_gate_is_independent_of_the_ai_gate(): void

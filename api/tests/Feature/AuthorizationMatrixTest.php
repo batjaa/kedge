@@ -8,7 +8,9 @@ use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Jobs\GenerateAiRunJob;
 use App\Jobs\ResyncDocumentJob;
 use App\Mcp\Servers\KedgeServer;
+use App\Mcp\Tools\GetDigestTool;
 use App\Mcp\Tools\GetDocumentTool;
+use App\Mcp\Tools\GetImprovePromptTool;
 use App\Mcp\Tools\GetThreadTool;
 use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\PostCommentTool;
@@ -839,6 +841,32 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     #[DataProvider('mcpTokenRoleMatrix')]
+    public function test_mcp_artifact_tools_obey_the_token_scope(string $role, bool $allowed): void
+    {
+        // #136. The AI artifacts resolve AiRunPolicy::viewAny rather than the
+        // document policy, so they are a second Gate that has to be pinned to the
+        // same three rows — a workspace-membership rule that drifted here would
+        // otherwise hand another tenant's digest to a token that names neither.
+        config(['kedge.ai.enabled' => true]);
+        [$agent, $document] = $this->mcpPrincipal($role);
+
+        $digest = KedgeServer::actingAs($agent)
+            ->tool(GetDigestTool::class, ['document_id' => $document->id]);
+        $prompt = KedgeServer::actingAs($agent)
+            ->tool(GetImprovePromptTool::class, ['document_id' => $document->id]);
+
+        if ($allowed) {
+            $digest->assertOk();
+            $prompt->assertOk();
+
+            return;
+        }
+
+        $digest->assertHasErrors(['No document is available']);
+        $prompt->assertHasErrors(['No document is available']);
+    }
+
+    #[DataProvider('mcpTokenRoleMatrix')]
     public function test_mcp_write_tools_obey_the_token_scope(string $role, bool $allowed): void
     {
         [$agent, $document] = $this->mcpPrincipal($role);
@@ -907,6 +935,10 @@ class AuthorizationMatrixTest extends TestCase
             'get_document',
             'list_threads',
             'get_thread',
+            // Reads of a completed run (#136). Requesting a generation spends the
+            // workspace's model budget, so it is human-only too and has no tool.
+            'get_digest',
+            'get_improve_prompt',
             'post_comment',
             'reply',
         ], $names);

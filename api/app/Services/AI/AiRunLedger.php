@@ -165,6 +165,32 @@ class AiRunLedger
     }
 
     /**
+     * The newest COMPLETED run of this type for the document, or null.
+     *
+     * The read behind the MCP artifact tools (#136): an agent is handed marching
+     * orders or nothing at all — never a pending run it would have to poll, and
+     * never a failed one whose absence of output it would have to interpret. A
+     * newer run in flight or failed does not hide the last good answer, which is
+     * the difference between this and {@see latestFor()}: the panel re-attaches
+     * to whatever is happening now, an agent asks what the review currently says.
+     */
+    public function latestCompletedFor(
+        Document $document,
+        AiRunType $type,
+        ?Model $target = null,
+        ?string $variant = null,
+    ): ?AiRun {
+        return $this->scopedTo(
+            AiRun::query()->where('document_id', $document->id)->where('type', $type->value),
+            $target,
+            $variant,
+        )
+            ->where('status', AiRunStatus::Completed->value)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
      * Narrow a run query to one target and variant — the single spelling of
      * "the same request", shared by the dedupe probe and the re-attach read so
      * the two can never drift apart and strand a run.

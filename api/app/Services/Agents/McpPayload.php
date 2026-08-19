@@ -2,11 +2,13 @@
 
 namespace App\Services\Agents;
 
+use App\Models\AiRun;
 use App\Models\Anchor;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Thread;
+use App\Services\AI\Artifacts\StalenessReport;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
@@ -171,6 +173,40 @@ class McpPayload
             'projection_version' => $anchor->projection_version,
             'document_version_id' => (int) $anchor->document_version_id,
             'state' => $anchor->state->value,
+        ];
+    }
+
+    /**
+     * A completed AI artifact as an agent reads it (#136): the marching orders,
+     * how much of the review they were drawn from, and how much the review has
+     * moved since.
+     *
+     * `output` is the artifact itself with `coverage` LIFTED OUT rather than
+     * copied: the coverage statement is a first-class field here because it is
+     * the artifact's own confession of what it could not read, and a value that
+     * appeared in two places could drift into disagreeing with itself.
+     *
+     * @return array<string, mixed>
+     */
+    public function artifact(AiRun $run, StalenessReport $staleness): array
+    {
+        $output = $run->output ?? [];
+        unset($output['coverage']);
+
+        return [
+            'ai_run_id' => (int) $run->id,
+            'type' => $run->type->value,
+            // When the run LANDED, not when it was asked for: the ledger refuses
+            // to move a terminal row, so a completed run's `updated_at` is the
+            // moment its output became true and never shifts afterwards.
+            'generated_at' => $run->updated_at?->toJSON(),
+            'requested_at' => $run->created_at?->toJSON(),
+            'model' => $run->model,
+            'output' => $output,
+            // Rendered verbatim wherever it is shown (SPEC §14): truncation is
+            // never silent, to a person or to an agent.
+            'coverage' => $run->coverage(),
+            ...$staleness->toArray(),
         ];
     }
 
