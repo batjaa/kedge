@@ -110,6 +110,56 @@ SQLite is used in dev and test; queue, session, and cache all run on the
 `SELF_HOSTED` flag (`config/kedge.php`) distinguishes self-hosted from managed
 deployments; every other external value is env-driven via `.env.example`.
 
+## AI provider (bring your own key)
+
+The AI features — review digest, improve-the-doc prompt, reply drafts, comment
+splits, thread summaries — are **off until you configure a provider**, and an
+instance without one is complete rather than crippled: the capability endpoint
+reports `ai.enabled: false`, the web renders no AI affordance, and the AI routes
+404. There are no broken buttons to click.
+
+```dotenv
+AI_PROVIDER=anthropic       # the provider Kedge calls (default)
+ANTHROPIC_API_KEY=sk-...    # the SELECTED provider's credential
+```
+
+Two rules hold no matter how the file is edited: **a credential for the selected
+provider is the only thing that switches AI on**, and `AI_ENABLED=false` is a
+kill switch that can only force it *off*. Pointing `AI_PROVIDER` at a provider
+whose key is absent leaves the surface hidden — it never enables itself off a
+different provider's key.
+
+**Any provider the SDK supports.** Kedge calls models through
+[`laravel/ai`](https://github.com/laravel/ai) and names no provider anywhere
+outside config, so `AI_PROVIDER` can be `openai`, `gemini`, `groq`, `mistral`,
+`bedrock`, `openrouter`, an OpenAI-compatible endpoint, or a local `ollama`.
+`api/config/ai.php` is the full table, including which env var each provider
+reads its key from. Set `AI_MODEL` and `AI_SUMMARY_MODEL` when you switch — model
+ids are provider-specific, and the defaults are Claude's.
+
+**Claude is the default and the only certified path.** It is what Kedge dogfoods,
+prices, and verifies before shipping; every other provider is *best-effort* —
+provider-agnostic code, but prompts nobody has tuned against those models. Spend
+is priced from a per-provider table in `api/config/kedge.php`; a model with no
+entry records a null cost rather than a wrong one.
+
+**Keeping specs in-house.** `AI_PROVIDER=ollama` runs generation on your own
+hardware, so document and review content never leaves your network. Ollama takes
+no API key, so set `OLLAMA_API_KEY` to any non-empty value — that is how you tell
+the gate the provider is deliberately configured:
+
+```dotenv
+AI_PROVIDER=ollama
+OLLAMA_API_KEY=local
+OLLAMA_URL=http://localhost:11434
+AI_MODEL=llama3.1
+AI_SUMMARY_MODEL=llama3.1
+```
+
+The MCP server is gated separately (`MCP_ENABLED`, default on): it is an API
+surface, not an inference feature, so an instance with no AI provider still hosts
+agent reviewers — they bring their own models.
+
 ## web/ — reading surface
 
 ```bash
