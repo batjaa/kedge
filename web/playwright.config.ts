@@ -37,12 +37,15 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: './e2e',
-  // The pack is worker-safe (unique users/docs per spec), but the run stays
-  // serial by choice: one worker keeps CI resource use flat and the output
-  // deterministic. fullyParallel/workers can be raised together later without
-  // touching a spec — proven green at --workers=4.
+  // The pack is worker-safe (unique users/docs per spec), so CI spreads spec
+  // FILES across 4 workers — the runner's vCPU count — which roughly halves the
+  // serial pack. fullyParallel stays off: tests within one file keep their
+  // order (some specs build state test-to-test), which is also exactly the
+  // shape the pack was proven green at (`--workers=4` parallelizes files, not
+  // in-file tests). Locally the default stays serial for deterministic output;
+  // pass --workers=N to opt in.
   fullyParallel: false,
-  workers: 1,
+  workers: isCI ? 4 : 1,
   // A flaky seam is worse than none: fail loudly instead of masking with retries.
   retries: 0,
   forbidOnly: isCI,
