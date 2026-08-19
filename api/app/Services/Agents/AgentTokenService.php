@@ -68,9 +68,14 @@ class AgentTokenService
 
     /**
      * How many tokens the member already holds — the cap check at mint.
+     *
+     * Locks the owner's rows, so it is only meaningful inside a transaction: two
+     * mints racing at the cap must not both read room. SQLite has no row locks
+     * and ignores the clause; the cap is a sanity ceiling, not a boundary
+     * anything depends on being exact.
      */
-    public function countFor(User $owner): int
+    public function countForUpdate(User $owner): int
     {
-        return $owner->tokens()->count();
+        return $owner->tokens()->lockForUpdate()->count();
     }
 }

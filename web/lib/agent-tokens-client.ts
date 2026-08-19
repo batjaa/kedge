@@ -109,7 +109,13 @@ export async function mintAgentToken(name: string): Promise<MintOutcome> {
   }
 
   if (res.status === 422) {
-    return { ok: false, message: 'Give the token a name of 80 characters or fewer.' };
+    // 422 covers both a bad name and the per-member cap, and the two need
+    // different remedies — so prefer the API's own message over guessing.
+    return {
+      ok: false,
+      message:
+        (await validationMessage(res)) ?? 'Give the token a name of 80 characters or fewer.',
+    };
   }
 
   if (res.status === 429) {
@@ -117,6 +123,16 @@ export async function mintAgentToken(name: string): Promise<MintOutcome> {
   }
 
   return { ok: false, message: 'Could not create the token. Please try again.' };
+}
+
+/** The API's first validation message for `name`, when it sent one. */
+async function validationMessage(res: Response): Promise<string | null> {
+  const body = (await res.json().catch(() => null)) as
+    | { errors?: Record<string, string[]> }
+    | null;
+  const first = body?.errors?.name?.[0];
+
+  return typeof first === 'string' && first !== '' ? first : null;
 }
 
 /** DELETE (revoke) a token. The agent's next call fails immediately. */

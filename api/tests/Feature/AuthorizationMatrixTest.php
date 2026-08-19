@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\WorkspaceRole;
 use App\Jobs\ResyncDocumentJob;
+use App\Models\AgentToken;
 use App\Models\Approval;
 use App\Models\Comment;
 use App\Models\Document;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Services\RegistrationService;
 use App\Services\SystemWorkspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -636,18 +638,54 @@ class AuthorizationMatrixTest extends TestCase
             ->assertStatus($expected);
     }
 
-    #[DataProvider('agentTokenRoleMatrix')]
+    /**
+     * Revoke is the one agent-token action addressed by id, so its denials are
+     * 404, not 403: an id must not distinguish "not yours" from "never existed"
+     * (see {@see AgentTokenPolicy::delete()}). The G6 membership denial itself is
+     * proven by the list and mint rows above — and, for this action, by the Gate
+     * assertion in test_the_policy_denies_a_reviewer_the_revoke_ability.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function agentTokenRevokeRoleMatrix(): array
+    {
+        return [
+            'a full workspace member can revoke their own token' => ['author', 204],
+            'reviewer via active share gets nothing back' => ['reviewer', 404],
+            'a demo-document reviewer gets nothing back' => ['demo_reviewer', 404],
+            'guest cannot revoke' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('agentTokenRevokeRoleMatrix')]
     public function test_agent_token_revoke_authorization(string $role, int $expectedStatus): void
     {
         [$owner, $document] = $this->ownedDocument();
         $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
         $this->actAsAgentTokenRole($role, $owner, $document);
 
-        $expected = $expectedStatus === 200 ? 204 : $expectedStatus;
-
         $this->fromWebApp()
             ->deleteJson('/api/v1/agent-tokens/'.$token->accessToken->id)
-            ->assertStatus($expected);
+            ->assertStatus($expectedStatus);
+
+        if ($expectedStatus !== 204) {
+            $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->accessToken->id]);
+        }
+    }
+
+    /**
+     * G6, at the Policy itself: the not-found answer a reviewer receives is a
+     * denial, not an accident of resolution order.
+     */
+    public function test_the_policy_denies_a_reviewer_the_revoke_ability(): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
+        $reviewer = $this->verifiedReviewerFor($document, 'reviewer@example.com');
+
+        $this->assertTrue(Gate::forUser($reviewer)->denies('delete', $token->accessToken));
+        $this->assertTrue(Gate::forUser($reviewer)->denies('viewAny', AgentToken::class));
+        $this->assertTrue(Gate::forUser($reviewer)->denies('create', AgentToken::class));
     }
 
     /**

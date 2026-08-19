@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { AgentToken, MintedAgentToken } from '@/lib/agent-token-types';
 import { lastUsedDescriptor, withMintedToken, withoutToken } from '@/lib/agent-tokens';
@@ -29,37 +29,42 @@ export function AgentTokensPanel() {
   const [minted, setMinted] = useState<MintedAgentToken | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameInvalid, setNameInvalid] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+
+  // Every write to the list carries a generation. A GET that started before a
+  // mint or a revoke must never land after it — otherwise a slow initial load
+  // deletes the token just created, or resurrects the one just revoked.
+  const generation = useRef(0);
 
   // "No tokens" and "the list did not load" must never look the same on a
   // revocation surface — an operator cutting an agent off has to know they are
   // looking at the real list.
-  function load(): Promise<void> {
-    return listAgentTokens().then((outcome) => {
-      if (outcome.ok) {
-        setTokens(outcome.tokens);
-        setLoadFailed(false);
-      } else {
-        setLoadFailed(true);
-      }
-    });
+  async function load(): Promise<void> {
+    const mine = ++generation.current;
+    const outcome = await listAgentTokens();
+
+    if (mine !== generation.current) return; // a mutation happened meanwhile
+
+    if (outcome.ok) {
+      setTokens(outcome.tokens);
+      setLoadFailed(false);
+    } else {
+      setLoadFailed(true);
+    }
   }
 
   useEffect(() => {
     let active = true;
-    listAgentTokens()
-      .then((outcome) => {
-        if (!active) return;
-        if (outcome.ok) setTokens(outcome.tokens);
-        else setLoadFailed(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    load().finally(() => {
+      if (active) setLoading(false);
+    });
     return () => {
       active = false;
     };
+    // Mount-only: the list is re-read explicitly after an ambiguous mutation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onMint() {
@@ -67,16 +72,23 @@ export function AgentTokensPanel() {
     if (minting || trimmed === '') return;
     setMinting(true);
     setError(null);
+    setNameInvalid(false);
     setCopied(false);
+    // Retire the previous token's value before this attempt: two credentials on
+    // screen at once is how the wrong one gets copied.
+    setMinted(null);
 
     try {
       const outcome = await mintAgentToken(trimmed);
+      generation.current++;
+
       if (outcome.ok) {
         setMinted(outcome.token);
         setTokens((prev) => withMintedToken(prev, outcome.token));
         setName('');
       } else {
         setError(outcome.message);
+        setNameInvalid(true);
         // The mint may have landed even though we cannot show its value, so
         // re-read the authoritative list rather than guess.
         await load();
@@ -104,6 +116,7 @@ export function AgentTokensPanel() {
     try {
       const outcome = await revokeAgentToken(id);
       if (outcome.ok) {
+        generation.current++;
         setTokens((prev) => withoutToken(prev, id));
         // If the just-revoked token is the one on display, retire its copy box.
         setMinted((current) => (current && current.id === id ? null : current));
@@ -153,11 +166,14 @@ export function AgentTokensPanel() {
           onChange={(e) => {
             setName(e.target.value);
             if (error) setError(null);
+            setNameInvalid(false);
           }}
           aria-label={t('nameAria')}
-          aria-invalid={Boolean(error)}
+          // Only a failed mint marks the NAME as the problem — a copy, revoke,
+          // or network failure is not this field's fault.
+          aria-invalid={nameInvalid}
           className={`w-full min-w-0 flex-1 rounded-xl bg-white px-3.5 py-2 text-sm text-zinc-900 ring-1 ring-inset placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 dark:bg-white/[.03] dark:text-white ${
-            error
+            nameInvalid
               ? 'ring-rose-500/50 focus-visible:ring-rose-500'
               : 'ring-zinc-900/10 focus-visible:ring-emerald-500 dark:ring-white/10'
           }`}

@@ -66,14 +66,17 @@ class AgentTokenController extends Controller
         $user = $request->user();
         $workspace = $user->personalWorkspace();
 
-        if ($this->tokens->countFor($user) >= AgentTokenService::PER_MEMBER_CAP) {
-            throw ValidationException::withMessages([
-                'name' => 'You already have '.AgentTokenService::PER_MEMBER_CAP
-                    .' agent tokens. Revoke one before creating another.',
-            ]);
-        }
-
         $issued = DB::transaction(function () use ($request, $user, $workspace) {
+            // Inside the transaction, on locked rows: two mints racing at the cap
+            // must not both see room. (SQLite has no row locks, so there the cap
+            // is best-effort — it is a sanity ceiling, not a billing boundary.)
+            if ($this->tokens->countForUpdate($user) >= AgentTokenService::PER_MEMBER_CAP) {
+                throw ValidationException::withMessages([
+                    'name' => 'You already have '.AgentTokenService::PER_MEMBER_CAP
+                        .' agent tokens. Revoke one before creating another.',
+                ]);
+            }
+
             $issued = $this->tokens->issue($user, $workspace, $request->tokenName());
 
             // Name and id only — the value never reaches the trail, the logs, or
@@ -104,9 +107,14 @@ class AgentTokenController extends Controller
      * DELETE /api/v1/agent-tokens/{agentToken} — revoke a token.
      *
      * Instant by construction: the row is the credential, so the agent's next
-     * call fails. A token that is not the caller's answers 404, exactly like one
-     * that never existed — the Policy denies it as not-found, so the id space
-     * discloses nothing.
+     * call fails.
+     *
+     * The id is resolved through the caller's OWN tokens, so a foreign id and one
+     * that never existed produce a byte-identical 404 — token ids are globally
+     * sequential, and a 403/404 split (or two differently-worded 404 bodies)
+     * would turn the id space into a "whose credential is live?" oracle. That is
+     * binding, not authorization: {@see AgentTokenPolicy} still runs, and remains
+     * the only thing that decides.
      *
      * Revocation is security-first: it is committed before the trail is written,
      * and a failing audit write is logged rather than thrown, because an
@@ -114,19 +122,24 @@ class AgentTokenController extends Controller
      * already been told is gone. The audit event fires only for the request that
      * actually removed the row, so two concurrent revokes leave one event.
      */
-    public function destroy(Request $request, AgentToken $agentToken): JsonResponse
+    public function destroy(Request $request, string $agentToken): JsonResponse
     {
-        $this->authorize('delete', $agentToken);
-
         $user = $request->user();
 
-        if ($this->tokens->revoke($agentToken)) {
+        /** @var AgentToken|null $token */
+        $token = $user->tokens()->whereKey($agentToken)->first();
+
+        abort_if($token === null, 404);
+
+        $this->authorize('delete', $token);
+
+        if ($this->tokens->revoke($token)) {
             $this->audit->recordSafely(
                 $user->personalWorkspace(),
                 $user,
                 AuditEvent::AgentTokenRevoked,
-                $agentToken,
-                ['name' => $agentToken->name],
+                $token,
+                ['name' => $token->name],
                 $request->ip(),
             );
         }

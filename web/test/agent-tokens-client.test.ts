@@ -42,6 +42,41 @@ describe('listAgentTokens', () => {
 describe('mintAgentToken', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('surfaces the API validation message rather than guessing at 422', async () => {
+    vi.stubGlobal('document', { cookie: '' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          errors: { name: ['You already have 50 agent tokens. Revoke one before creating another.'] },
+        }),
+      } as unknown as Response),
+    );
+
+    const outcome = await mintAgentToken('Claude Code');
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok === false && outcome.message).toContain('already have 50');
+  });
+
+  it('falls back to the name hint when the API sends no message', async () => {
+    vi.stubGlobal('document', { cookie: '' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({}),
+      } as unknown as Response),
+    );
+
+    const outcome = await mintAgentToken('Claude Code');
+
+    expect(outcome.ok === false && outcome.message).toContain('80 characters');
+  });
+
   it('tells the operator to revoke when the token landed but its value did not', async () => {
     vi.stubGlobal('document', { cookie: '' });
     vi.stubGlobal(
