@@ -5,6 +5,7 @@ namespace App\Services\AI;
 use App\Enums\AiRunType;
 use App\Models\AiRun;
 use App\Services\AI\Exceptions\UnsupportedAiRunTypeException;
+use App\Services\AI\Generators\CommentSplitGenerator;
 use App\Services\AI\Generators\ReviewDigestGenerator;
 use Illuminate\Contracts\Container\Container;
 
@@ -20,6 +21,7 @@ class AiGeneratorRegistry
     /** @var array<string, class-string<GeneratesAiRun>> */
     private const GENERATORS = [
         AiRunType::Digest->value => ReviewDigestGenerator::class,
+        AiRunType::Split->value => CommentSplitGenerator::class,
     ];
 
     public function __construct(

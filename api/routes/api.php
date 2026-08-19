@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AiRunController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
+use App\Http\Controllers\Api\V1\CommentSplitController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\DemoDocumentController;
 use App\Http\Controllers\Api\V1\DocumentController;
@@ -274,6 +275,22 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/documents/{document}/ai/digest', [AiRunController::class, 'latestDigest'])
                 ->name('api.v1.documents.ai.digest.latest');
+
+            // Comment splits (#134). Proposals only: approving one is an ordinary
+            // POST to /comments/{comment}/fork, so no route here ever writes
+            // review data from model output (hard rule 5).
+            //
+            // `withTrashed()` matches the fork route's binding so a deleted
+            // comment reaches the controller and is refused with a reason,
+            // rather than 404ing as if it had never existed.
+            Route::post('/comments/{comment}/ai/split', [CommentSplitController::class, 'store'])
+                ->middleware('throttle:ai')
+                ->withTrashed()
+                ->name('api.v1.comments.ai.split');
+
+            Route::get('/comments/{comment}/ai/split', [CommentSplitController::class, 'show'])
+                ->withTrashed()
+                ->name('api.v1.comments.ai.split.latest');
 
             Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
                 ->name('api.v1.ai-runs.show');
