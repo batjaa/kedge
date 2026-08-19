@@ -6,6 +6,7 @@ use App\Enums\CommentClient;
 use App\Http\Middleware\EnsureMcpEnabled;
 use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Http\Middleware\RequireAgentTokenAuth;
+use App\Http\Middleware\ThrottleMcpIngress;
 use App\Models\Comment;
 use App\Models\Document;
 use App\Models\DocumentVersion;
@@ -15,8 +16,12 @@ use App\Services\Agents\AgentTokenService;
 use App\Services\RegistrationService;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Testing\TestResponse;
+use Laravel\Mcp\Server\Middleware\AddWwwAuthenticateHeader;
+use Laravel\Mcp\Server\Middleware\ReorderJsonAccept;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Tests\TestCase;
 
 /**
@@ -197,6 +202,63 @@ class McpEndpointTest extends TestCase
         $this->rpc($this->mintToken(), 'tools/list')->assertNotFound();
     }
 
+    public function test_a_switched_off_surface_is_absent_to_every_caller_alike(): void
+    {
+        // "Off means absent" has to mean absent to ANYONE. If the gate resolved
+        // after the guard, an anonymous call would 401 and only a valid
+        // credential would 404 — turning the feature flag into an oracle that
+        // says "that token is real". Hoisting the gate ahead of authentication
+        // is what makes all three answers identical.
+        config(['kedge.mcp.enabled' => false]);
+        $body = ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list', 'params' => []];
+
+        $this->postJson(self::ENDPOINT, $body)->assertNotFound();
+        $this->withToken('not-a-real-token')->postJson(self::ENDPOINT, $body)->assertNotFound();
+        $this->withToken($this->mintToken())->postJson(self::ENDPOINT, $body)->assertNotFound();
+    }
+
+    public function test_a_switched_off_surface_touches_no_credential(): void
+    {
+        // ...and it does no auth work either: a request that never reaches the
+        // guard leaves last_used_at alone, so a disabled endpoint cannot even be
+        // used to probe whether a token is live.
+        config(['kedge.mcp.enabled' => false]);
+        $issued = $this->operator->createToken('Claude Code', ['workspace:'.$this->operator->personalWorkspace()->id]);
+
+        $this->withToken($issued->plainTextToken)
+            ->postJson(self::ENDPOINT, ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list', 'params' => []])
+            ->assertNotFound();
+
+        $this->assertNull($issued->accessToken->fresh()->last_used_at);
+    }
+
+    public function test_unauthenticated_ingress_is_rate_limited_before_the_guard(): void
+    {
+        // The per-token limiter cannot bound traffic that never authenticates —
+        // Laravel resolves auth:sanctum in front of ThrottleRequests, so a
+        // garbage bearer 401s before the named limiter is ever reached. Without a
+        // pre-auth ceiling, probing the endpoint costs a Sanctum lookup each time
+        // and nothing counts it.
+        config(['kedge.mcp.rate_per_minute' => 2]);
+        $body = ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list', 'params' => []];
+
+        $this->withToken('garbage-one')->postJson(self::ENDPOINT, $body)->assertUnauthorized();
+        $this->withToken('garbage-two')->postJson(self::ENDPOINT, $body)->assertUnauthorized();
+
+        $throttled = $this->withToken('garbage-three')->postJson(self::ENDPOINT, $body);
+        $throttled->assertStatus(429);
+        $this->assertNotEmpty($throttled->headers->get('Retry-After'));
+    }
+
+    public function test_anonymous_ingress_is_rate_limited_too(): void
+    {
+        config(['kedge.mcp.rate_per_minute' => 1]);
+        $body = ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list', 'params' => []];
+
+        $this->postJson(self::ENDPOINT, $body)->assertUnauthorized();
+        $this->postJson(self::ENDPOINT, $body)->assertStatus(429);
+    }
+
     public function test_the_mcp_gate_does_not_depend_on_the_ai_gate(): void
     {
         // A self-hosted instance with no Anthropic key still hosts agent
@@ -254,10 +316,21 @@ class McpEndpointTest extends TestCase
 
         $middleware = app('router')->gatherRouteMiddleware($route);
 
-        $this->assertContains(RequireAgentTokenAuth::class, $middleware);
-        $this->assertContains(EnsureMcpEnabled::class, $middleware);
-        $this->assertContains(Authenticate::class.':sanctum', $middleware);
-        $this->assertContains(ThrottleRequests::class.':mcp', $middleware);
+        // The ORDER is the security property, not just the membership: the gate
+        // and the ingress limiter must resolve ahead of the guard, and the
+        // agent-token requirement behind it (it needs a principal to inspect).
+        $this->assertSame([
+            EnsureMcpEnabled::class,
+            ThrottleMcpIngress::class,
+            EnsureFrontendRequestsAreStateful::class,
+            Authenticate::class.':sanctum',
+            ThrottleRequests::class.':mcp',
+            SubstituteBindings::class,
+            RequireAgentTokenAuth::class,
+            ReorderJsonAccept::class,
+            AddWwwAuthenticateHeader::class,
+        ], $middleware);
+
         $this->assertNotContains(RejectAgentTokenAuth::class, $middleware);
     }
 

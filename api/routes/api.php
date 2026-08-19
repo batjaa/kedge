@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
 use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Http\Middleware\RequireAgentTokenAuth;
+use App\Http\Middleware\ThrottleMcpIngress;
 use App\Http\Middleware\VerifyDiagramSecret;
 use App\Mcp\Servers\KedgeServer;
 use Illuminate\Support\Facades\Route;
@@ -130,10 +131,19 @@ Route::prefix('v1')->group(function () {
     // nothing else.
     //
     // `mcp.enabled` gates the surface independently of the AI flag: a keyless
-    // self-host still hosts agent reviewers. `throttle:mcp` bounds all MCP
-    // traffic per token; writes additionally spend a tighter budget inside the
-    // writer service, which is the only layer that can tell a write from a read.
-    Route::middleware(['mcp.enabled', 'auth:sanctum', RequireAgentTokenAuth::class, 'throttle:mcp'])
+    // self-host still hosts agent reviewers. It and ThrottleMcpIngress are
+    // hoisted ahead of the guard in the middleware priority list
+    // (AppServiceProvider), because Laravel resolves `auth:sanctum` in front of
+    // anything not in that list — a switched-off surface would otherwise 401 an
+    // anonymous call and 404 only a valid one, and the per-token limiter would
+    // never fire for traffic that fails to authenticate at all.
+    //
+    // Three limits, on three different things: ThrottleMcpIngress bounds
+    // unauthenticated ingress per IP, `throttle:mcp` bounds an authenticated
+    // agent per token, and the writer service spends a tighter per-token budget
+    // on writes — the only layer that can tell a write from a read, since one
+    // POST endpoint carries both.
+    Route::middleware(['mcp.enabled', ThrottleMcpIngress::class, 'auth:sanctum', RequireAgentTokenAuth::class, 'throttle:mcp'])
         ->withoutMiddleware(RejectAgentTokenAuth::class)
         ->group(function () {
             Mcp::web('/mcp', KedgeServer::class)->name('api.v1.mcp');
