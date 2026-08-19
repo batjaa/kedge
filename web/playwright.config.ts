@@ -107,12 +107,17 @@ export default defineConfig({
     },
     {
       name: 'web',
-      // `next dev`, not a production build. The `next build` /_global-error
-      // prerender failure is fixed (#14), so a built app is now possible, but
-      // the swap is deferred: NEXT_PUBLIC_* below are build-time inlined, so a
-      // production run would need them baked at build, and rebuilding on every
-      // e2e run costs more than it proves for this single handshake journey.
-      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
+      // CI serves the PRODUCTION build (ci.yml builds it in the step before the
+      // pack); local runs keep `next dev`. The old deferral note ("rebuilding
+      // on every e2e run costs more than it proves for this single handshake
+      // journey") predates the 47-test pack: on a 4-vCPU runner, dev-mode
+      // compile-on-demand starved 4 parallel browsers so badly the parallel
+      // pack ran no faster than serial. One build serves BOTH web instances —
+      // NEXT_PUBLIC_API_URL's baked default is already the :8000 the primary
+      // needs, and the self-hosted instance's client never calls the API.
+      command: isCI
+        ? `npm run start -- --hostname 127.0.0.1 --port ${WEB_PORT}`
+        : `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
       url: `http://127.0.0.1:${WEB_PORT}/docs`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
@@ -135,7 +140,9 @@ export default defineConfig({
       // it to prove the marketing surface never leaks to a self-hosted instance.
       // Readiness is /docs (static fumadocs, no API needed). NEXT_PUBLIC_API_URL
       // rides along for parity though this branch never makes a client API call.
-      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`,
+      command: isCI
+        ? `npm run start -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`
+        : `npm run dev -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`,
       url: `http://127.0.0.1:${WEB_SELFHOSTED_PORT}/docs`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
@@ -144,9 +151,11 @@ export default defineConfig({
       env: {
         API_URL: `http://127.0.0.1:${FIXTURE_PORT}`,
         NEXT_PUBLIC_API_URL: `http://localhost:${FIXTURE_PORT}`,
-        // Own compile dir so this second dev server never races the primary
-        // web instance over `.next` (next.config.mjs reads NEXT_DIST_DIR).
-        NEXT_DIST_DIR: '.next-selfhosted',
+        // Own compile dir so this second DEV server never races the primary
+        // web instance over `.next` (next.config.mjs reads NEXT_DIST_DIR). In
+        // CI both instances `next start` from the one read-only production
+        // build, so the dir split is dev-only.
+        ...(isCI ? {} : { NEXT_DIST_DIR: '.next-selfhosted' }),
       },
     },
   ],

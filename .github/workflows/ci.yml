@@ -174,6 +174,19 @@ jobs:
         working-directory: web
         run: npx playwright install-deps chromium
 
+      # The pack runs against the PRODUCTION web build: on this 4-vCPU runner,
+      # dev-mode compile-on-demand starved the 4 parallel browser workers so
+      # badly the parallel pack ran no faster than serial. One build serves
+      # both web instances (playwright.config.ts explains why that is sound).
+      # NEXT_PUBLIC_API_URL is baked here at build time; its default is already
+      # the :8000 API the journeys use — pinned explicitly so a default change
+      # can never silently retarget the pack.
+      - name: Build web (production)
+        working-directory: web
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+
       # Boots api (scratch SQLite, migrated fresh) + web + the loopback fixture
       # host via playwright.config.ts, drives the journey pack (#39) across every
       # shipped surface — the M0 handshake and M1 paste→render→share→claim plus
