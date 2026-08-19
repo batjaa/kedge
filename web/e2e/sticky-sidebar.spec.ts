@@ -43,22 +43,49 @@ const LONG_DOCUMENT = [
   ]).flat(),
 ].join('\n');
 
-// `top-32`: the pinned offset that clears the app shell's h-14 bar plus the
-// sticky document header.
-const PINNED_TOP = 128;
-
 // The collapse controls carry their label as aria-label (ColumnToggleButton and
 // the sidebar's own hide button).
 const HIDE_SIDEBAR_LABEL = 'Hide contents and threads';
 const SHOW_SIDEBAR_LABEL = 'Show contents and threads';
+const APPROVE_LABEL = 'Approve';
 
-/** Viewport-relative top of the sidebar, read from the browser's own layout. */
-function sidebarTop(page: Page): Promise<number> {
+// Sub-pixel rounding between the header's bottom edge and the sidebar's pinned
+// top. Anything larger is a gap or an overlap, not a rounding artefact.
+const EDGE_TOLERANCE = 1;
+
+interface Geometry {
+  sidebarTop: number;
+  headerBottom: number;
+  scrollY: number;
+}
+
+// Read against the header's LIVE bottom edge rather than a hard-coded offset.
+// The header's height is content-dependent — an approvals roster or wrapped
+// action buttons grow it well past the 128px the sidebar used to assume — so a
+// constant here would either re-bless the sidebar hiding underneath it or have
+// to be retuned every time the header gains a row.
+function geometry(page: Page): Promise<Geometry> {
   return page.evaluate(() => {
-    const el = document.querySelector('aside[data-review-sidebar]');
-    if (el === null) throw new Error('review sidebar not in the DOM');
-    return Math.round(el.getBoundingClientRect().top);
+    const aside = document.querySelector('aside[data-review-sidebar]');
+    if (aside === null) throw new Error('review sidebar not in the DOM');
+    const header = document.querySelector('header[data-review-header]');
+    if (header === null) throw new Error('document header not in the DOM');
+
+    return {
+      sidebarTop: Math.round(aside.getBoundingClientRect().top),
+      headerBottom: Math.round(header.getBoundingClientRect().bottom),
+      scrollY: Math.round(window.scrollY),
+    };
   });
+}
+
+/** The sidebar is pinned exactly at the header's lower edge — visible, not under it. */
+function expectPinnedUnderHeader({ sidebarTop, headerBottom }: Geometry): void {
+  expect(Math.abs(sidebarTop - headerBottom)).toBeLessThanOrEqual(EDGE_TOLERANCE);
+}
+
+function sidebarTop(page: Page): Promise<number> {
+  return geometry(page).then((g) => g.sidebarTop);
 }
 
 // The collapsed sidebar column pins a bare toggle instead of the <aside>. Its
@@ -122,21 +149,24 @@ test('the review sidebar pins below the header while a long document scrolls', a
   await openLongDocument(page);
 
   await scrollTo(page, 0);
-  // Unpinned at rest: the sidebar starts below its pinned offset, in flow.
-  expect(await sidebarTop(page)).toBeGreaterThan(PINNED_TOP);
+  // At rest the review row starts flush under the header, so the sidebar's flow
+  // position and its pinned position coincide. That makes this a baseline, not
+  // a proof — the assertions at depth below are what distinguish a sidebar that
+  // pins from one that merely happens to start in the right place.
+  expectPinnedUnderHeader(await geometry(page));
 
-  // The regression: before #146 this read as a large negative number — the
-  // sidebar had scrolled clean off the top of the viewport with the prose.
+  // The regression: before #146 sidebarTop read as a large negative number here
+  // — the sidebar had scrolled clean off the top of the viewport with the prose.
   await scrollTo(page, 3000);
-  expect(await sidebarTop(page)).toBe(PINNED_TOP);
+  expectPinnedUnderHeader(await geometry(page));
 
   await scrollTo(page, 9000);
-  expect(await sidebarTop(page)).toBe(PINNED_TOP);
+  expectPinnedUnderHeader(await geometry(page));
 
   // Narrower, still at/above the `lg` breakpoint where the column renders.
   await page.setViewportSize({ width: 1024, height: 720 });
   await scrollTo(page, 6000);
-  expect(await sidebarTop(page)).toBe(PINNED_TOP);
+  expectPinnedUnderHeader(await geometry(page));
 
   // Pinning must not cost horizontal room at either width.
   for (const width of [1024, 1280]) {
@@ -156,7 +186,7 @@ test('a sidebar taller than the viewport scrolls inside itself', async ({ page }
   // sidebar's max-height, so the internal scroll has real work to do.
   await page.setViewportSize({ width: 1280, height: 500 });
   await scrollTo(page, 3000);
-  expect(await sidebarTop(page)).toBe(PINNED_TOP);
+  expectPinnedUnderHeader(await geometry(page));
 
   // Precondition: the content really does exceed the box. `overflow-y` is read
   // rather than inferred, because an `overflow: hidden` element is still
@@ -198,12 +228,49 @@ test('the collapsed sidebar toggle keeps sticking', async ({ page }) => {
   await expect(page.locator('aside[data-review-sidebar]')).toBeHidden();
 
   await scrollTo(page, 3000);
-  expect(await collapsedToggleTop(page)).toBe(PINNED_TOP);
+  const collapsedTop = await collapsedToggleTop(page);
+  const headerBottom = await page.evaluate(() =>
+    Math.round(document.querySelector('header[data-review-header]')!.getBoundingClientRect().bottom),
+  );
+  expect(Math.abs(collapsedTop - headerBottom)).toBeLessThanOrEqual(EDGE_TOLERANCE);
 
   // And re-expanding restores a sidebar that is still pinned, not one that has
   // been left behind at the top of the document.
   await page.getByRole('button', { name: SHOW_SIDEBAR_LABEL, exact: true }).click();
   await expect(page.locator('aside[data-review-sidebar]')).toBeVisible();
   await scrollTo(page, 5000);
-  expect(await sidebarTop(page)).toBe(PINNED_TOP);
+  expectPinnedUnderHeader(await geometry(page));
+});
+
+test('an approval grows the header and the sidebar still clears it', async ({ page }) => {
+  // The state that exposed the offset bug: the approvals roster adds a row, so
+  // a header that was ~107px tall becomes ~139px (and ~164px at 1024, where the
+  // action buttons wrap). Against the old hard-coded 128px pin, the sidebar's
+  // version chips and its own collapse button disappeared behind the header —
+  // pinned, but unusable.
+  await openLongDocument(page);
+
+  await scrollTo(page, 0);
+  const before = await geometry(page);
+  await page.getByRole('button', { name: APPROVE_LABEL, exact: true }).click();
+
+  // The roster row lands asynchronously; wait for the header to actually grow.
+  await expect
+    .poll(async () => (await geometry(page)).headerBottom, { timeout: 30_000 })
+    .toBeGreaterThan(before.headerBottom);
+
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await scrollTo(page, 4000);
+    const pinned = await geometry(page);
+    expectPinnedUnderHeader(pinned);
+
+    // And the sidebar's own controls are reachable, not tucked under the header.
+    const firstControlTop = await page.evaluate(() => {
+      const control = document.querySelector('aside[data-review-sidebar] button, aside[data-review-sidebar] a');
+      if (control === null) throw new Error('sidebar has no controls');
+      return Math.round(control.getBoundingClientRect().top);
+    });
+    expect(firstControlTop).toBeGreaterThan(pinned.headerBottom);
+  }
 });

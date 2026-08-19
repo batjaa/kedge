@@ -37,12 +37,15 @@ export function DocumentReviewSidebar({
     // <aside> gave it exactly its own height of slack — zero — and it scrolled
     // away with the document. As the root it sits directly in the stretched
     // `w-72` flex column of DocumentReviewSurface, whose height is the whole
-    // review row, so it pins under the header (top-32 clears the app shell's
-    // h-14 bar plus the document header) for the length of the document. The
-    // collapsed-state toggle in that same column already worked this way.
+    // review row, so it pins for the length of the document.
+    //
+    // `--kedge-pin-top` is where it pins: the measured bottom edge of the
+    // document header, published by the surface on the review row (a constant
+    // cannot track a header that grows an approvals roster). The 8rem fallback
+    // covers the server render, before the measurement exists.
     <aside
       data-review-sidebar
-      className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10"
+      className="sticky top-[var(--kedge-pin-top,8rem)] max-h-[calc(100vh-var(--kedge-pin-top,8rem)-1rem)] overflow-y-auto border-r border-zinc-900/10 py-8 pl-6 pr-6 dark:border-white/10"
     >
       <div className="mb-4 flex min-w-0 items-center gap-2 text-xs font-mono">
         {versionLabel ? <MetaChip>{versionLabel}</MetaChip> : null}

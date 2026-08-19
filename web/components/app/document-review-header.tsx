@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { MetaChip } from './meta-chip';
 import { StatusChip } from './status-chip';
@@ -22,6 +22,7 @@ export function DocumentReviewHeader({
   backLabel,
   syncError,
   actions,
+  ref,
 }: {
   title: string;
   surfaceLabel: string;
@@ -36,12 +37,16 @@ export function DocumentReviewHeader({
   backLabel?: string | null;
   syncError?: string | null;
   actions?: ReactNode;
+  // The surface measures this header to derive the offset its sticky columns
+  // pin at (#146) — the header's height is content-dependent (back link, source
+  // row, approvals roster, wrapped actions), so no constant can stand in for it.
+  ref?: Ref<HTMLElement>;
 }) {
   const t = useTranslations('review');
   const locale = useLocale();
 
   return (
-    <header className="sticky top-14 z-30 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
+    <header ref={ref} data-review-header className="sticky top-14 z-30 border-b border-zinc-900/10 bg-white/90 px-6 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <div className="min-w-0 flex-1">
           {backHref && backLabel ? (

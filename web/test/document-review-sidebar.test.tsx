@@ -60,14 +60,19 @@ describe('DocumentReviewSidebar', () => {
     const classes = rootClassList(render());
 
     expect(classes).toContain('sticky');
-    expect(classes).toContain('top-32');
+    // Pinned at the surface's measured header offset, not a constant: a
+    // hard-coded `top-32` (128px) parked the sidebar UNDER a header that grows
+    // past it whenever the document carries approvals.
+    expect(classes).toContain('top-[var(--kedge-pin-top,8rem)]');
   });
 
   it('keeps the internal scroll on that same root, so a tall sidebar scrolls itself', () => {
     const classes = rootClassList(render());
 
     expect(classes).toContain('overflow-y-auto');
-    expect(classes.some((cls) => cls.startsWith('max-h-'))).toBe(true);
+    // The cap has to follow the same offset, or a lower pin would push the
+    // sidebar's bottom off the viewport instead of shortening it.
+    expect(classes).toContain('max-h-[calc(100vh-var(--kedge-pin-top,8rem)-1rem)]');
   });
 
   it('leaves the w-72 column measure to the surface — the sidebar sets no width', () => {
