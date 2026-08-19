@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AiRunType;
 use App\Enums\WorkspaceRole;
 use App\Jobs\GenerateAiRunJob;
 use App\Jobs\ResyncDocumentJob;
@@ -536,6 +537,48 @@ class AuthorizationMatrixTest extends TestCase
             Queue::assertNotPushed(GenerateAiRunJob::class);
             $this->assertDatabaseCount('ai_runs', 0);
         }
+    }
+
+    /**
+     * The improve-the-doc prompt rides the same column (#132): it spends the same
+     * key over the same document, so it grants access to exactly the same roles —
+     * a second artifact must never be a second, looser door.
+     */
+    #[DataProvider('aiRunRoleMatrix')]
+    public function test_ai_improve_prompt_create_authorization(string $role, int $expectedStatus): void
+    {
+        Queue::fake();
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/improve-prompt")
+            ->assertStatus($expectedStatus);
+
+        if ($expectedStatus === 202) {
+            Queue::assertPushed(GenerateAiRunJob::class);
+        } else {
+            Queue::assertNotPushed(GenerateAiRunJob::class);
+            $this->assertDatabaseCount('ai_runs', 0);
+        }
+    }
+
+    #[DataProvider('aiRunReadRoleMatrix')]
+    public function test_ai_latest_improve_prompt_read_authorization(string $role, int $expectedStatus): void
+    {
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        AiRun::factory()->for($document)->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $owner->id,
+            'type' => AiRunType::ImprovePrompt,
+        ]);
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/ai/improve-prompt")
+            ->assertStatus($expectedStatus);
     }
 
     /**

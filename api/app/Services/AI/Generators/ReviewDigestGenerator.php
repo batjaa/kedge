@@ -15,6 +15,7 @@ use App\Services\AI\Prompt\AssembledPrompt;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Throwable;
 
 /**
  * Runs the review digest (SPEC §14.1, user stories 1–3): assemble → one
@@ -65,7 +66,16 @@ class ReviewDigestGenerator implements GeneratesAiRun
         $merged = $this->emptyOutput();
 
         foreach ($assembled->chunks as $chunk) {
-            $response = ReviewDigestAgent::make()->prompt($chunk);
+            try {
+                $response = ReviewDigestAgent::make()->prompt($chunk);
+            } catch (Throwable $e) {
+                // The request was issued; the provider may have accepted and
+                // billed it before this died. We cannot say what it cost, so the
+                // run's cost becomes unknown rather than a confident understatement.
+                $this->ledger->markSpendUnknown($run);
+
+                throw $e;
+            }
 
             // Spend is recorded before the response is judged: a refusal or an
             // unusable shape was still billed.

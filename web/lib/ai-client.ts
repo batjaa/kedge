@@ -52,6 +52,42 @@ export async function startDigest(documentId: number): Promise<StartDigestOutcom
   }
 }
 
+/**
+ * POST /api/v1/documents/{id}/ai/improve-prompt — the second artifact off the
+ * same ledger (#132). Same contract as the digest: 202 with a new run, or 200
+ * with the run already in flight; both are success, and the caller polls
+ * whichever run it got.
+ */
+export async function startImprovePrompt(documentId: number): Promise<StartDigestOutcome> {
+  try {
+    const res = await csrfSend(`/api/v1/documents/${documentId}/ai/improve-prompt`, { method: 'POST' });
+
+    if (res.ok) {
+      return { ok: true, run: (await res.json()) as AiRun };
+    }
+
+    if (res.status === 404) {
+      return { ok: false, kind: 'unavailable', message: 'AI features are not enabled on this instance.' };
+    }
+
+    if (res.status === 403) {
+      return { ok: false, kind: 'forbidden', message: 'You do not have access to generate a prompt here.' };
+    }
+
+    if (res.status === 409) {
+      return { ok: false, kind: 'conflict', message: 'This document has no imported version to work from yet.' };
+    }
+
+    if (res.status === 429) {
+      return { ok: false, kind: 'rate-limited', message: 'Too many requests. Wait a minute, then try again.' };
+    }
+
+    return { ok: false, kind: 'error', message: 'Something went wrong starting the prompt. Please try again.' };
+  } catch {
+    return { ok: false, kind: 'error', message: 'Something went wrong starting the prompt. Please try again.' };
+  }
+}
+
 /** GET /api/v1/ai-runs/{id} — the poll target. */
 export async function readAiRun(id: number): Promise<AiRun | null> {
   return readRun(`/api/v1/ai-runs/${id}`);
@@ -65,6 +101,14 @@ export async function readAiRun(id: number): Promise<AiRun | null> {
  */
 export async function readLatestDigest(documentId: number): Promise<AiRun | null> {
   return readRun(`/api/v1/documents/${documentId}/ai/digest`);
+}
+
+/**
+ * GET /api/v1/documents/{id}/ai/improve-prompt — the improve-prompt panel's
+ * re-attach on mount. 204 means none was ever requested.
+ */
+export async function readLatestImprovePrompt(documentId: number): Promise<AiRun | null> {
+  return readRun(`/api/v1/documents/${documentId}/ai/improve-prompt`);
 }
 
 async function readRun(path: string): Promise<AiRun | null> {

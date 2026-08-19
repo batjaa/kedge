@@ -59,3 +59,13 @@ export function digestPhase(run: AiRun | null, nowMs: number): DigestPhase {
 export function canRequestDigest(phase: DigestPhase): boolean {
   return phase !== 'running';
 }
+
+/**
+ * The phase machine is artifact-agnostic — the improve-prompt panel (#132) runs
+ * exactly the same one over exactly the same run shape. Aliased rather than
+ * renamed so the digest's callers stay untouched, and so a panel for a second
+ * artifact reads as what it is instead of borrowing the digest's name.
+ */
+export type AiArtifactPhase = DigestPhase;
+export const aiArtifactPhase = digestPhase;
+export const canRequestAiArtifact = canRequestDigest;

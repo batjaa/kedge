@@ -282,6 +282,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/documents/{document}/ai/digest', [AiRunController::class, 'latestDigest'])
                 ->name('api.v1.documents.ai.digest.latest');
 
+            Route::post('/documents/{document}/ai/improve-prompt', [AiRunController::class, 'improvePrompt'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.documents.ai.improve-prompt');
+
+            Route::get('/documents/{document}/ai/improve-prompt', [AiRunController::class, 'latestImprovePrompt'])
+                ->name('api.v1.documents.ai.improve-prompt.latest');
+
             Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
                 ->name('api.v1.ai-runs.show');
         });

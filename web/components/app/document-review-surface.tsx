@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
 import { AiDigestAction } from './ai-digest-action';
+import { AiImprovePromptAction } from './ai-improve-prompt-action';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import {
   DocumentNewVersionBanner,
@@ -102,7 +103,7 @@ export function DocumentReviewSurface({
   projectionVersion,
   canResync = false,
   canUpdateContent = false,
-  canRunAiDigest = false,
+  canRunAi = false,
   lastSyncStatus = null,
   syncError = null,
   children,
@@ -141,9 +142,10 @@ export function DocumentReviewSurface({
    * The BYO-key AI surface (SPEC §14, M4). True only when the API reports an
    * Anthropic key configured — the capability read fails closed, and the share
    * surface never passes it, so a keyless instance and a share reviewer both see
-   * no AI affordance at all rather than a button that 404s.
+   * no AI affordance at all rather than a button that 404s. Gates every artifact
+   * in the header (digest, improve-the-doc prompt) as one switch.
    */
-  canRunAiDigest?: boolean;
+  canRunAi?: boolean;
   lastSyncStatus?: SyncStatus | null;
   syncError?: string | null;
   children: ReactNode;
@@ -895,15 +897,19 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
-  // The primary AI-digest affordance (DESIGN.md header anatomy, #130). Owns its
-  // own panel, run request, and poll loop; it writes no review data, so it needs
-  // nothing from this surface but the document it summarizes.
+  // The header's AI artifacts (DESIGN.md header anatomy): the digest (#130) and
+  // the improve-the-doc prompt (#132). Each owns its own panel, run request, and
+  // poll loop; neither writes review data, so they need nothing from this
+  // surface but the document they read.
   //
-  // Hidden while reading a historical version: a digest is always taken over the
-  // CURRENT version and its threads, so offering it here would silently answer a
+  // Hidden while reading a historical version: both are taken over the CURRENT
+  // version and its threads, so offering them here would silently answer a
   // different question than the one the page appears to be asking.
-  const aiDigestControl = canRunAiDigest && viewedVersionId === currentVersionId ? (
-    <AiDigestAction documentId={documentId} documentTitle={title} />
+  const aiArtifactControls = canRunAi && viewedVersionId === currentVersionId ? (
+    <>
+      <AiDigestAction documentId={documentId} documentTitle={title} />
+      <AiImprovePromptAction documentId={documentId} />
+    </>
   ) : null;
 
   const versionSwitcher = versions.length > 0 ? (
@@ -915,7 +921,7 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
-  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl || updateContentControl || aiDigestControl ? (
+  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl || updateContentControl || aiArtifactControls ? (
     <>
       {versionSwitcher}
       {projectControl}
@@ -923,7 +929,7 @@ export function DocumentReviewSurface({
       {approvalControl}
       {resyncControl}
       {updateContentControl}
-      {aiDigestControl}
+      {aiArtifactControls}
     </>
   ) : null;
 
