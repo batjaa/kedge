@@ -37,11 +37,36 @@ export function uniqueIdentity(prefix: string): Identity {
  * same cross-app cookie handshake the M0 journey proves, reused as a precondition
  * here. Leaves the page on `/` (the review queue).
  */
+/**
+ * Wait until React owns the auth form, not just until it is on screen.
+ *
+ * Before hydration a submit button is only a submit button: the click runs the
+ * browser's native submission, the form's `onSubmit` never fires, and the page
+ * simply reloads with the fields as query parameters — no request to the API,
+ * no session, and a baffling "expected /, got /signup?email=…" a few lines
+ * later. The race is invisible on an idle machine and surfaces once the pack is
+ * busy, so every credential submit waits for this first. React stamps its
+ * internal props onto each DOM node it hydrates, which is the only signal that
+ * says the handler is actually attached.
+ */
+async function formIsHydrated(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const form = document.querySelector('form');
+
+      return form !== null && Object.keys(form).some((key) => key.startsWith('__reactProps$'));
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
+}
+
 export async function register(page: Page, identity: Identity): Promise<void> {
   await page.goto('/signup');
   // Structural selectors, not copy: the auth chrome renders in the browser's
   // negotiated locale (M3.9), so English strings are not a stable contract here.
   await expect(page.locator('input[name="name"]')).toBeVisible();
+  await formIsHydrated(page);
 
   await page.locator('input[name="name"]').fill(identity.name);
   await page.locator('input[name="email"]').fill(identity.email);
@@ -67,6 +92,7 @@ export async function signIn(
   expectUrl: string | RegExp = '/',
 ): Promise<void> {
   await expect(page.locator('input[name="email"]')).toBeVisible();
+  await formIsHydrated(page);
 
   await page.locator('input[name="email"]').fill(identity.email);
   await page.locator('input[name="password"]').fill(identity.password);
