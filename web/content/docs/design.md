@@ -44,7 +44,9 @@ description: "Approved brand, tokens, components, and rules (dogfood copy)"
 
 **Status hues** (chips, rings, marks only): open/success `emerald` · suggestion/pending `amber` · agent `violet` · orphan/danger `rose` · neutral/resolved `zinc`.
 
-**Agent action register** (amended 2026-08-19, #143) — the one place a status hue is allowed onto a control instead of a mark. A CTA whose click leads to a model run wears violet in **both** themes:
+**Agent action register** (amended 2026-08-19, #143) — the one place a status hue is allowed onto a control instead of a mark. A CTA whose click leads to a model run wears violet in **both** themes.
+
+*Filled* — the default, for any pill-shaped AI CTA:
 
 | | Light | Dark |
 |---|---|---|
@@ -52,6 +54,13 @@ description: "Approved brand, tokens, components, and rules (dogfood copy)"
 | Text | `text-violet-700` | `text-violet-300` |
 | Ring | `ring-1 ring-inset ring-violet-600/20` | `ring-violet-400/20` |
 | Hover | `hover:bg-violet-100 hover:text-violet-800` | `hover:bg-violet-400/15 hover:text-violet-200` |
+
+Two variants keep the text and the ring but change the resting fill, each for a stated reason:
+
+- **Quiet** (`bg-white` / `dark:bg-white/5`, hover `bg-violet-50` / `dark:bg-white/10`) — for an AI control inside a **pick-one group**, where the fill already means "selected" and so cannot also mean "agent". Used by the reply-draft stance pills; the selected pill takes `bg-violet-500/10` with a stronger ring.
+- **Icon square** (no resting fill; `text-violet-600` / `dark:text-violet-300`, hover `bg-violet-50` / `dark:bg-violet-400/10`) — for an AI affordance sitting in a row of neutral icon buttons. Those siblings have no fill either, so a filled square there would read as "selected" rather than "agent". Used by the comment-split trigger.
+
+The register is **colour only**: every control keeps its own geometry. A header pill stays `rounded-full`, the selection-popover Ask stays the `rounded-lg` shape of the Comment pill beside it, and the split trigger stays an `h-7 w-7` square. Hue is the signal; shape belongs to the surface.
 
 *Why the rule widened.* Light mode had every AI button fall back to the human primary (`bg-zinc-900`, white text), so a Sparkles icon was the only thing separating "this invokes a model" from "this posts as you" — a distinction the product's whole AI posture (hard rule 5: AI output is always a human-confirmed draft) depends on a reader making before they click. Dark mode had carried the violet since M4. The treatment stays inside the register's spirit — a tint and a hairline ring, never a solid violet fill — so violet still never competes with emerald as an accent.
 
@@ -97,14 +106,14 @@ Both side columns are **collapsible** (added 2026-07-21): the sidebar collapses 
 - **Thread panel** — header (type + `§ section` mono ref + status chip) / body (avatar `h-5 w-5` initials, name, relative time; replies indented with `border-l-2`) / footer (Reply · Resolve · Fork + right-aligned AI "Draft reply →").
 - **Suggestion panel** — same anatomy; body holds a dark `rounded-xl` diff (`- ` line `rose-400/90`, `+ ` line `emerald-400`, `select-none` markers); footer = primary Accept / secondary Decline.
 - **Agent thread** — same anatomy with violet ring (`ring-violet-500/20`) + `AGENT · MCP` chip. Agents are visually peers, tinted—not boxed away.
-- **AI control** — any CTA that starts a model run, or opens the panel that does: the agent action register (Tokens → Color) on a `rounded-full` pill, or on the `h-7 w-7` icon square where it sits in a row of thread icon buttons. Sparkles/wand/question icon, never a solid fill, never emerald. A pick-one group (the stance pills) keeps the ring and lets the fill mean "selected".
+- **AI control** — any CTA that starts a model run, or opens the panel that does: the agent action register (Tokens → Color) laid over whatever shape the surface already uses — the `rounded-full` header and panel pills, the `rounded-lg` Ask in the selection popover, the `h-7 w-7` split square in a row of thread icon buttons. Sparkles/wand/question icon, never a solid fill, never emerald. A pick-one group (the stance pills) takes the quiet variant and lets the fill mean "selected".
 - **Collapsed rows** — resolved threads and the orphan tray as full-width `rounded-2xl` ghost buttons; orphan row uses rose ring/tint + "Re-attach →".
 - **Section-approve control** — "Is this section ready to approve?" + segmented Yes/No pill (the Protocol feedback-widget idiom, repurposed).
 - **Mobile** — sidebar and rail hidden below `lg`/`xl`; floating bottom pill ("3 open threads") opens the thread sheet.
 
 ## Interaction rules
 
-- Hover: text-color shifts and `bg-*/5` tints only — no scale/translate effects. Respect `prefers-reduced-motion` for anything animated.
+- Hover: text-color shifts and `bg-*/5` tints only — no scale/translate effects. Respect `prefers-reduced-motion` for anything animated. **Exception** (2026-08-19): a control that already carries a resting tint deepens it instead of stacking another translucent layer on top — the agent action register's `hover:bg-violet-100` / `dark:hover:bg-violet-400/15`, and the emerald human primaries' `dark:hover:bg-emerald-400/15`. The rule is about hover staying a tint, not about the exact step.
 - Focus: visible `focus-visible:ring-2 ring-emerald-500` on all interactive elements (mockup omits this; implementation must not).
 - Highlight contrast in dark mode must keep body text readable through the tint — validated per hue before adding new mark colors.
 
