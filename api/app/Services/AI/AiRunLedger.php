@@ -30,7 +30,9 @@ use Illuminate\Support\Facades\Log;
  *     question, still mints its own run rather than being handed the other
  *     stance's answer. The
  *     probe runs under a lock on the document row, so two simultaneous requests
- *     serialize rather than racing into two rows.
+ *     serialize rather than racing into two rows. A type that declares itself
+ *     dedupe-EXEMPT ({@see AiRunType::isDedupeExempt()}) opts out of all of it
+ *     and always mints — see {@see joinable()}.
  */
 class AiRunLedger
 {
@@ -44,6 +46,12 @@ class AiRunLedger
      * are null for the document-wide types, which dedupe exactly as they always
      * did.
      *
+     * `$request` is free-form request content the queued job will need — today
+     * only the ask's question and quoted passage (#139). It is stamped on a run
+     * this call MINTS and never on one it joins, which costs nothing: the only
+     * type carrying one is dedupe-exempt and so always mints.
+     *
+     * @param  array<string, mixed>|null  $request
      * @return array{AiRun, bool} the run, and whether it was newly created
      */
     public function startOrJoin(
@@ -52,24 +60,10 @@ class AiRunLedger
         AiRunType $type,
         ?Model $target = null,
         ?string $variant = null,
+        ?array $request = null,
     ): array {
-        [$run, $created] = DB::transaction(function () use ($document, $actor, $type, $target, $variant): array {
-            // Serialize concurrent requests for this document. Without it the
-            // probe below is a check-then-act race and a double-click bills twice.
-            Document::query()->whereKey($document->id)->lockForUpdate()->first();
-
-            $existing = $this->scopedTo(
-                AiRun::query()->where('document_id', $document->id)->where('type', $type->value),
-                $target,
-                $variant,
-            )
-                // A per-actor run is never joined across people: a reply draft is
-                // written in the requester's voice, for a position they picked
-                // and have not said out loud yet.
-                ->when($type->isPerActor(), fn (Builder $q): Builder => $q->where('created_by', $actor->id))
-                ->inFlight()
-                ->latest('id')
-                ->first();
+        [$run, $created] = DB::transaction(function () use ($document, $actor, $type, $target, $variant, $request): array {
+            $existing = $this->joinable($document, $actor, $type, $target, $variant);
 
             // Stale-run takeover (the M3.6 scan idiom). A worker killed hard
             // enough never runs its terminal handler, so without this the dead
@@ -111,6 +105,7 @@ class AiRunLedger
                 'target_id' => $target?->getKey(),
                 'type' => $type,
                 'variant' => $variant,
+                'request' => $request,
                 'status' => AiRunStatus::Pending,
                 // One rule for which model a type bills against, shared with the
                 // agent that will make the call — so the row and the request can
@@ -142,6 +137,49 @@ class AiRunLedger
         }
 
         return [$run, $created];
+    }
+
+    /**
+     * The in-flight run this request should JOIN instead of minting, or null when
+     * it must mint one of its own.
+     *
+     * Null comes back two ways, and the difference matters. A dedupe-EXEMPT type
+     * ({@see AiRunType::isDedupeExempt()}) never joins anything: an ask carries a
+     * free-form question, so the run in flight is answering a different one, and
+     * handing it over would be worse than paying for a second call. It returns
+     * before the row lock, too — there is nothing to serialize when the answer is
+     * always "mint", and locking the document for every ask would make one
+     * person's questions queue behind another's for no benefit.
+     *
+     * Otherwise null simply means nothing of this shape is running.
+     */
+    private function joinable(
+        Document $document,
+        User $actor,
+        AiRunType $type,
+        ?Model $target,
+        ?string $variant,
+    ): ?AiRun {
+        if ($type->isDedupeExempt()) {
+            return null;
+        }
+
+        // Serialize concurrent requests for this document. Without it the probe
+        // below is a check-then-act race and a double-click bills twice.
+        Document::query()->whereKey($document->id)->lockForUpdate()->first();
+
+        return $this->scopedTo(
+            AiRun::query()->where('document_id', $document->id)->where('type', $type->value),
+            $target,
+            $variant,
+        )
+            // A per-actor run is never joined across people: a reply draft is
+            // written in the requester's voice, for a position they picked and
+            // have not said out loud yet.
+            ->when($type->isPerActor(), fn (Builder $q): Builder => $q->where('created_by', $actor->id))
+            ->inFlight()
+            ->latest('id')
+            ->first();
     }
 
     /**

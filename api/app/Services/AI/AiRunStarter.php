@@ -32,6 +32,9 @@ class AiRunStarter
     ) {}
 
     /**
+     * @param  array<string, mixed>|null  $request  Free-form request content the
+     *                                              job will need (the ask's
+     *                                              question and quoted passage).
      * @return array{AiRun, bool} the run, and whether this request minted it
      */
     public function start(
@@ -40,8 +43,9 @@ class AiRunStarter
         AiRunType $type,
         ?Model $target = null,
         ?string $variant = null,
+        ?array $request = null,
     ): array {
-        [$run, $created] = $this->ledger->startOrJoin($document, $actor, $type, $target, $variant);
+        [$run, $created] = $this->ledger->startOrJoin($document, $actor, $type, $target, $variant, $request);
 
         if (! $created) {
             return [$run, false];

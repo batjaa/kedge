@@ -18,6 +18,7 @@ enum AiRunType: string
     case ReplyDraft = 'reply_draft';
     case Split = 'split';
     case Summary = 'summary';
+    case Ask = 'ask';
 
     /**
      * The model this run type is billed against (SPEC §14, spec "Packages and
@@ -49,11 +50,46 @@ enum AiRunType: string
      * say out loud; handing it to another member would both answer the wrong
      * question and expose one person's unposted words to someone else.
      *
+     * An ask joins it for the same reason one step earlier: the run carries a
+     * question ONE PERSON typed, and run ids are sequential, so a workspace-wide
+     * read would let any member walk the ledger and see what a colleague was
+     * confused about. The panel that shows the answer is ephemeral; the row
+     * behind it should be no more public than the panel was.
+     *
      * The single predicate behind two rules: the ledger's dedupe key includes the
      * requester, and the Policy lets only the requester read the result.
      */
     public function isPerActor(): bool
     {
-        return $this === self::ReplyDraft;
+        return match ($this) {
+            self::ReplyDraft, self::Ask => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Whether a request of this type ALWAYS mints its own run, bypassing the
+     * ledger's in-flight dedupe.
+     *
+     * Dedupe exists because two people asking for "the digest of this document"
+     * are asking the identical question, and billing the key twice for one
+     * answer is waste. An ask breaks that premise: the request carries a
+     * free-form question, so two asks against the same document are almost never
+     * the same request, and joining them would hand the second asker an answer
+     * to someone else's question — confidently, and about a passage they never
+     * selected. Wrong beats expensive here.
+     *
+     * Declared as a property of the TYPE rather than a branch in the ledger for
+     * the same reason {@see isPerActor()} is: the rule is about what the type
+     * means, and a sixth type's author must answer the question deliberately
+     * instead of inheriting whichever behaviour the control flow happened to
+     * give them.
+     *
+     * The abuse guard this gives up is not lost — it moves to `throttle:ai`,
+     * which bounds spend per actor per minute regardless of what is being asked.
+     */
+    public function isDedupeExempt(): bool
+    {
+        return $this === self::Ask;
     }
 }
