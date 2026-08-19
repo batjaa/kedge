@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\AgentTokenController;
 use App\Http\Controllers\Api\V1\AiRunController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
@@ -52,6 +53,12 @@ Route::post('/internal/diagrams', DiagramController::class)
 | Changes are additive-only: the web app and the API deploy independently,
 | so /v1 is a contract, never a moving target. Resource routes gain
 | Policies as they appear (SPEC 13); /me is identity, not a resource.
+|
+| This is the HUMAN API. RejectAgentTokenAuth is prepended to BOTH route groups
+| in bootstrap/app.php (SPEC §15, #131), so every action here — present and
+| future — refuses a bearer credential before routing; only the MCP endpoint
+| (#135) opts back in. The SPA cookie path is unaffected, and mint/revoke living
+| on this surface is what makes "an agent can never mint a token" structural.
 |
 */
 
@@ -277,6 +284,22 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
                 ->name('api.v1.ai-runs.show');
+        });
+
+        // Agent tokens (SPEC §15, #131), all behind AgentTokenPolicy — full
+        // workspace membership to mint/list/revoke, plus ownership to revoke.
+        // Listing is a free read; mint and revoke share a per-user limiter
+        // (credential mutations are rare and worth bounding). These live INSIDE
+        // the v1 group on purpose: the group refuses token authentication, so an
+        // agent can never mint or revoke a token — its own or anyone else's.
+        Route::get('/agent-tokens', [AgentTokenController::class, 'index'])
+            ->name('api.v1.agent-tokens.index');
+
+        Route::middleware('throttle:agent-tokens')->group(function () {
+            Route::post('/agent-tokens', [AgentTokenController::class, 'store'])
+                ->name('api.v1.agent-tokens.store');
+            Route::delete('/agent-tokens/{agentToken}', [AgentTokenController::class, 'destroy'])
+                ->name('api.v1.agent-tokens.destroy');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.

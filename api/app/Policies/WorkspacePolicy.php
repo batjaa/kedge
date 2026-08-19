@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Enums\WorkspaceRole;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Policies\Concerns\AuthorizesWorkspaceMembership;
@@ -31,10 +30,7 @@ class WorkspacePolicy
      */
     public function update(User $user, Workspace $workspace): bool
     {
-        return $user->workspaces()
-            ->whereKey($workspace->id)
-            ->wherePivot('role', WorkspaceRole::Owner->value)
-            ->exists();
+        return $this->ownerOfWorkspace($user, $workspace->id);
     }
 
     /**

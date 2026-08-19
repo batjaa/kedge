@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/session';
+import { AgentTokensPanel } from '@/components/app/agent-tokens-panel';
 import { IntegrationsPanel } from '@/components/app/integrations-panel';
 import { WorkspaceGeneralCard } from '@/components/app/workspace-general-card';
 import { MetaChip } from '@/components/app/meta-chip';
@@ -54,6 +55,7 @@ export default async function SettingsPage() {
       <div className="space-y-6">
         <WorkspaceGeneralCard workspace={workspace} />
         <IntegrationsPanel />
+        <AgentTokensPanel />
       </div>
     </PageContainer>
   );

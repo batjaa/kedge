@@ -45,8 +45,6 @@ class ProjectPolicy
      */
     public function update(User $user, Project $project): bool
     {
-        return $user->workspaces()
-            ->whereKey($project->workspace_id)
-            ->exists();
+        return $this->memberOfWorkspace($user, $project->workspace_id);
     }
 }

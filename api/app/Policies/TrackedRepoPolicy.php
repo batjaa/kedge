@@ -42,7 +42,7 @@ class TrackedRepoPolicy
      */
     public function view(User $user, TrackedRepo $trackedRepo): bool
     {
-        return $this->memberOfWorkspace($user, $trackedRepo);
+        return $this->memberOfWorkspace($user, $trackedRepo->workspace_id);
     }
 
     /**
@@ -51,7 +51,7 @@ class TrackedRepoPolicy
      */
     public function scan(User $user, TrackedRepo $trackedRepo): bool
     {
-        return $this->memberOfWorkspace($user, $trackedRepo);
+        return $this->memberOfWorkspace($user, $trackedRepo->workspace_id);
     }
 
     /**
@@ -60,13 +60,6 @@ class TrackedRepoPolicy
      */
     public function delete(User $user, TrackedRepo $trackedRepo): bool
     {
-        return $this->memberOfWorkspace($user, $trackedRepo);
-    }
-
-    private function memberOfWorkspace(User $user, TrackedRepo $trackedRepo): bool
-    {
-        return $user->workspaces()
-            ->whereKey($trackedRepo->workspace_id)
-            ->exists();
+        return $this->memberOfWorkspace($user, $trackedRepo->workspace_id);
     }
 }

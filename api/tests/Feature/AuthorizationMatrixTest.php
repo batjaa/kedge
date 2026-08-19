@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\WorkspaceRole;
 use App\Jobs\GenerateAiRunJob;
 use App\Jobs\ResyncDocumentJob;
+use App\Models\AgentToken;
 use App\Models\AiRun;
 use App\Models\Approval;
 use App\Models\Comment;
@@ -16,7 +17,9 @@ use App\Models\ShareParticipant;
 use App\Models\Thread;
 use App\Models\User;
 use App\Services\RegistrationService;
+use App\Services\SystemWorkspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -34,6 +37,14 @@ use Tests\TestCase;
 class AuthorizationMatrixTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Framework-registered routes that belong to no middleware group and resolve
+     * no principal: the health probe and the local-disk file server. They are the
+     * only routes the agent-token sweep below skips, and the sweep proves they
+     * carry no authentication before skipping them.
+     */
+    private const GROUPLESS_INFRASTRUCTURE_ROUTES = ['up', 'storage/{path}'];
 
     /**
      * @return array<string, array{string, string, string, int}>
@@ -599,6 +610,207 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     /**
+     * G1 — the MCP-token role row, applied to EVERY action at once (SPEC §18.4;
+     * m4-ai-agents eng review §1).
+     *
+     * Agent tokens are MCP-only by construction, so the matrix's token row is not
+     * a hand-maintained list of endpoints — it is EVERY route the application
+     * registers, enumerated from the router. Not a URI prefix: prefixes were how
+     * `POST /logout` (a root-level `auth:sanctum` route outside `/api/v1`) stayed
+     * open to agent bearers through the first cut of this rule. A route added by
+     * any future ticket is covered the moment it is registered, and the MCP
+     * endpoint (#135) will have to declare itself here as the one exception.
+     */
+    public function test_every_route_in_the_application_rejects_an_agent_token_principal(): void
+    {
+        $owner = app(RegistrationService::class)->register(
+            name: 'Agent Operator',
+            email: 'operator@example.com',
+            password: 'correct-horse-battery',
+        );
+        $plainTextToken = $owner
+            ->createToken('Sweep agent', ['workspace:'.$owner->personalWorkspace()->id])
+            ->plainTextToken;
+
+        $routes = collect(app('router')->getRoutes()->getRoutes())
+            ->reject(fn ($route): bool => in_array($route->uri(), self::GROUPLESS_INFRASTRUCTURE_ROUTES, true));
+
+        // The exemption list cannot be used to smuggle a real surface past this
+        // sweep: an exempt route must resolve no principal at all.
+        foreach (self::GROUPLESS_INFRASTRUCTURE_ROUTES as $uri) {
+            foreach (app('router')->getRoutes()->getRoutes() as $route) {
+                if ($route->uri() !== $uri) {
+                    continue;
+                }
+
+                $this->assertEmpty(
+                    array_filter(
+                        app('router')->gatherRouteMiddleware($route),
+                        fn ($middleware): bool => is_string($middleware) && str_contains($middleware, 'auth'),
+                    ),
+                    "Exempt route {$uri} authenticates a principal and must not be exempt",
+                );
+            }
+        }
+
+        $uris = $routes->flatMap(fn ($route): array => collect($route->methods())
+            ->reject(fn (string $method): bool => $method === 'HEAD')
+            // Route parameters are irrelevant here: authentication is refused
+            // before routing resolves a model, so any id stands in.
+            ->map(fn (string $method): string => $method.' /'.preg_replace('/\{[^}]+\}/', '1', $route->uri()))
+            ->all());
+
+        $this->assertGreaterThan(
+            40,
+            $uris->count(),
+            'The route sweep found suspiciously few actions — check the enumeration.',
+        );
+
+        $accepted = [];
+
+        foreach ($uris as $action) {
+            [$method, $uri] = explode(' ', $action, 2);
+
+            // Each iteration is its own principal resolution, as a real request is.
+            $this->app['auth']->forgetGuards();
+
+            $status = $this->withToken($plainTextToken)->json($method, $uri)->getStatusCode();
+
+            if ($status !== 401) {
+                $accepted[] = "{$action} → {$status}";
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $accepted,
+            'These actions did not refuse an agent-token principal: '.implode(', ', $accepted),
+        );
+    }
+
+    /**
+     * G6 — minting, listing, and revoking agent tokens require FULL workspace
+     * membership (m4-ai-agents eng review §7). A reviewer-via-share is a real
+     * authenticated User row, so without this the shadow identity M2 created for
+     * one shared document would escalate into an MCP credential.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function agentTokenRoleMatrix(): array
+    {
+        return [
+            'a full workspace member can manage agent tokens' => ['author', 200],
+            'reviewer via active share cannot manage agent tokens' => ['reviewer', 403],
+            'a demo-document reviewer cannot manage agent tokens' => ['demo_reviewer', 403],
+            'guest cannot manage agent tokens' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('agentTokenRoleMatrix')]
+    public function test_agent_token_list_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsAgentTokenRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->getJson('/api/v1/agent-tokens')
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('agentTokenRoleMatrix')]
+    public function test_agent_token_mint_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsAgentTokenRole($role, $owner, $document);
+
+        $expected = $expectedStatus === 200 ? 201 : $expectedStatus;
+
+        $this->fromWebApp()
+            ->postJson('/api/v1/agent-tokens', ['name' => 'Claude Code'])
+            ->assertStatus($expected);
+    }
+
+    /**
+     * Revoke is the one agent-token action addressed by id, so its denials are
+     * 404, not 403: an id must not distinguish "not yours" from "never existed"
+     * (see {@see AgentTokenPolicy::delete()}). The G6 membership denial itself is
+     * proven by the list and mint rows above — and, for this action, by the Gate
+     * assertion in test_the_policy_denies_a_reviewer_the_revoke_ability.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function agentTokenRevokeRoleMatrix(): array
+    {
+        return [
+            'a full workspace member can revoke their own token' => ['author', 204],
+            'reviewer via active share gets nothing back' => ['reviewer', 404],
+            'a demo-document reviewer gets nothing back' => ['demo_reviewer', 404],
+            'guest cannot revoke' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('agentTokenRevokeRoleMatrix')]
+    public function test_agent_token_revoke_authorization(string $role, int $expectedStatus): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
+        $this->actAsAgentTokenRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->deleteJson('/api/v1/agent-tokens/'.$token->accessToken->id)
+            ->assertStatus($expectedStatus);
+
+        if ($expectedStatus !== 204) {
+            $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->accessToken->id]);
+        }
+    }
+
+    /**
+     * G6, at the Policy itself: the not-found answer a reviewer receives is a
+     * denial, not an accident of resolution order.
+     */
+    public function test_the_policy_denies_a_reviewer_the_revoke_ability(): void
+    {
+        [$owner, $document] = $this->ownedDocument();
+        $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
+        $reviewer = $this->verifiedReviewerFor($document, 'reviewer@example.com');
+
+        $this->assertTrue(Gate::forUser($reviewer)->denies('delete', $token->accessToken));
+        $this->assertTrue(Gate::forUser($reviewer)->denies('viewAny', AgentToken::class));
+        $this->assertTrue(Gate::forUser($reviewer)->denies('create', AgentToken::class));
+    }
+
+    /**
+     * Another member's token id is never an access path — and never even an
+     * existence oracle. Token ids are globally sequential, so the Policy denies a
+     * foreign token as NOT FOUND: "not yours" and "never existed" are one answer,
+     * and probing the id space discloses nothing.
+     */
+    public function test_a_member_cannot_revoke_another_members_agent_token(): void
+    {
+        [$owner] = $this->ownedDocument();
+        $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
+        $this->actAsDocumentRole('other', $owner);
+
+        $this->fromWebApp()
+            ->deleteJson('/api/v1/agent-tokens/'.$token->accessToken->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->accessToken->id]);
+    }
+
+    public function test_a_foreign_token_id_is_indistinguishable_from_a_missing_one(): void
+    {
+        [$owner] = $this->ownedDocument();
+        $token = $owner->createToken('Claude Code', ['workspace:'.$owner->personalWorkspace()->id]);
+        $this->actAsDocumentRole('other', $owner);
+
+        $this->fromWebApp()
+            ->deleteJson('/api/v1/agent-tokens/'.($token->accessToken->id + 9999))
+            ->assertNotFound();
+    }
+
+    /**
      * Put the request in the given role. Extend per new role.
      */
     private function actAs(string $role): void
@@ -690,6 +902,33 @@ class AuthorizationMatrixTest extends TestCase
                 name: 'Non Member',
                 email: 'non-member@example.com',
                 password: 'correct-horse-battery',
+            ),
+        };
+
+        if ($user instanceof User) {
+            $this->actingAs($user);
+        }
+    }
+
+    /**
+     * The agent-token roles: a full member, the two non-member identities that
+     * nonetheless hold a real `users` row (a share reviewer, and a reviewer on an
+     * anonymous demo document living in the reserved system workspace), and a
+     * guest. Neither reviewer flavour owns a workspace, which is exactly why the
+     * Policy — not a controller check — is what stops them.
+     */
+    private function actAsAgentTokenRole(string $role, User $owner, Document $document): void
+    {
+        $user = match ($role) {
+            'guest' => null,
+            'author' => $owner,
+            'reviewer' => $this->verifiedReviewerFor($document, 'reviewer@example.com'),
+            'demo_reviewer' => $this->verifiedReviewerFor(
+                Document::factory()
+                    ->for(app(SystemWorkspace::class)->resolve(), 'workspace')
+                    ->ready()
+                    ->create(['created_by' => null]),
+                'demo-visitor@example.com',
             ),
         };
 
