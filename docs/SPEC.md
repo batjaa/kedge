@@ -42,7 +42,7 @@ Commenting is table stakes Kedge must match (Confluence, Google Docs, Notion all
 - **Approvals lite:** document lifecycle status + version-pinned reviewer sign-offs.
 - **Review queue:** a home dashboard of docs needing your attention.
 - Notifications (in-app inbox + email via Postmark): replies, mentions, resolutions, approvals, new versions.
-- AI (Claude): comment digest, improve-the-doc prompt generation, reply drafts, splitting a comment into threads, thread summaries; **one-click digest post-back** to the source (PR/Confluence comment).
+- AI (provider-agnostic via `laravel/ai`; Claude default): comment digest, improve-the-doc prompt generation, reply drafts, splitting a comment into threads, thread summaries, ask-about-the-doc Q&A; **one-click digest post-back** to the source (PR/Confluence comment).
 - **MCP server:** agents read docs + threads, post comments, and fetch the improve-prompt through the same API humans use.
 
 **Non-goals (v1):**
@@ -112,7 +112,7 @@ package "api (Laravel 13)" {
   [Queue workers\n(import, re-anchor, notify, AI)] as Q
   [Connectors\nGitHub App / PAT / Confluence / URL] as CONN
   [Notifications\nPostmark + database] as NOTIF
-  [AI service (laravel/ai → Claude)] as AI
+  [AI service (laravel/ai, any provider)] as AI
 }
 
 database "Postgres\n(SQLite in dev)" as DB
@@ -158,7 +158,7 @@ MCP --> API : same policies, same data
 - SQLite dev / Postgres prod. `QUEUE_CONNECTION=database`, `SESSION_DRIVER=database`, `CACHE_STORE=database`.
 - Auth: **Sanctum** (SPA cookies for web; tokens for MCP/agents) + **Socialite** (GitHub login). **Every resource route is guarded by a Policy** — no inline ownership checks. Sessions are persistent: every sign-in path (password, registration, GitHub, reviewer magic link) sets Laravel's long-lived remember-me cookie, so the short server session (`SESSION_LIFETIME`, 120 min) is silently re-established after idle — a review tool must not demand daily sign-in (decided 2026-08-10).
 - Backed enums for all fixed-value columns: `DocumentStatus`, `SyncStatus`, `LifecycleStatus`, `ThreadStatus`, `AnchorState`, `CommentType`, `SuggestionStatus`, `AiRunType`, `AiRunStatus`.
-- `laravel/nova`, `laravel/nightwatch`, `laravel/boost` (dev), `symfony/postmark-mailer`, `league/flysystem-aws-s3-v3` → R2 via `MEDIA_DISK`, `laravel/ai` (Claude), `laravel/mcp` for the MCP server, `league/html-to-markdown`.
+- `laravel/nova`, `laravel/nightwatch`, `laravel/boost` (dev), `symfony/postmark-mailer`, `league/flysystem-aws-s3-v3` → R2 via `MEDIA_DISK`, `laravel/ai` (provider-agnostic; Claude default), `laravel/mcp` for the MCP server, `league/html-to-markdown`.
 - 4-way `composer dev` script (serve + queue:listen + pail + npm).
 
 **web/ — Next.js (App Router)**:
@@ -382,15 +382,16 @@ Per-user prefs: immediate / daily digest / off, per channel. Defaults: authors i
 
 ## 14. AI features
 
-All via `laravel/ai` → Claude, as queued jobs writing `ai_runs`; results are **drafts the human confirms, never auto-posted**. Default `claude-sonnet-5`; high-volume cheap ops (thread summaries) `claude-haiku-4-5`. **BYO key**: AI features are flag-gated on a configured `ANTHROPIC_API_KEY` — an instance without one (typical self-host default) simply hides the entire AI surface, no broken buttons. If doc+threads exceed the context budget, the run chunks by section and the output states its coverage ("digest covers N of M threads") — never silent truncation.
+All via `laravel/ai`, as queued jobs writing `ai_runs`; results are **drafts the human confirms, never auto-posted**. **Provider-agnostic by construction** (decided 2026-08-19): the SDK abstracts Anthropic, OpenAI, Gemini, Groq, Mistral, Ollama and more — provider and models are config/env choices only, and no provider-specific call site exists outside the AI config, so a self-hoster can point Kedge at any supported provider, including a fully local Ollama. Claude is the default and the only *certified* path: `claude-sonnet-5`; high-volume cheap ops (thread summaries) `claude-haiku-4-5`; other providers are best-effort (CI runs on the SDK fake regardless). **BYO key**: AI features are flag-gated on the configured default provider having credentials — an instance without any (typical self-host default) simply hides the entire AI surface, no broken buttons. If doc+threads exceed the context budget, the run chunks by section and the output states its coverage ("digest covers N of M threads") — never silent truncation.
 
 1. **Review digest** (author): threads → themes, contention points, consensus, action items. In-app + copy-as-markdown + **one-click post-back** to the source as a PR/Confluence comment (M6, via `Connector::postComment`).
 2. **Improve-the-doc prompt** (author): ready-to-paste prompt for a coding agent — doc context, unresolved feedback by section, **accepted suggestions included verbatim as required edits**, quoted anchors. (Also fetchable by agents over MCP.)
 3. **Reply drafts**: per-thread, honoring the author's chosen stance (accept / push back / clarify).
 4. **Split comment into threads**: AI proposes N splits (title + fragment + anchor); user approves → forked threads via §8.1.
 5. **Thread summary**: long thread → current state + open question.
+6. **Ask about the doc** (added 2026-08-19): select a passage — or ask doc-wide — and pose a free-form question; the answer is ephemeral and copyable, never persisted as a comment or thread. Single-turn in v1.
 
-Failure modes: Claude overloaded/rate-limited → `ai_runs.status=failed` + visible retry; every run logs model, tokens, cost.
+Failure modes: provider overloaded/rate-limited → `ai_runs.status=failed` + visible retry; every run logs model, tokens, cost.
 
 ## 15. MCP server
 
@@ -427,7 +428,7 @@ entity threads { id \n document_id \n type: inline|document \n status: open|reso
 entity anchors { id \n thread_id, document_version_id \n exact, prefix, suffix, start, end \n heading_path, projection_version \n state: anchored|relocated|orphaned }
 entity comments { id \n thread_id, author_id? \n type: comment|suggestion \n body_md, proposed_text? \n suggestion_status? : pending|accepted|declined \n client: web|mcp \n created_at, edited_at }
 entity approvals { id \n document_id, document_version_id \n user_id \n created_at, revoked_at }
-entity ai_runs { id \n workspace_id, document_id \n type: digest|improve_prompt|reply_draft|split|summary \n input, output, model, tokens, cost, status \n created_by }
+entity ai_runs { id \n workspace_id, document_id \n type: digest|improve_prompt|reply_draft|split|summary|ask \n input, output, model, tokens, cost, status \n created_by }
 entity audit_logs { id \n workspace_id, user_id? \n action, subject_type, subject_id \n meta, ip }
 
 workspaces ||--o{ workspace_members
@@ -593,7 +594,7 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 - **M3.8 — Activity & landing** (wedge, added 2026-07-23): audit-log **activity feed** (review-action instrumentation M5's inbox will reuse; one aggregate event per re-sync; display snapshots in meta; allowlisted projection — ip/raw meta never serialized; composite index); **SaaS marketing landing** on the anonymous home (demo import in the hero; self-host branch unchanged). ✅ a stranger lands on the landing and pastes a doc; a member's dashboard narrates yesterday's review activity with working links.
 - **M3.9 — Web i18n** (wedge, added 2026-07-23): **en-US source · es-US · mn-MN · de-DE** via next-intl without locale routing (strict-allowlist cookie + Accept-Language negotiation, en-US merge fallback, CI key-parity); mn-MN display falls back to the system stack (Space Grotesk has no Cyrillic); chip strings as a constrained glossary; switcher on app, landing, and shared surfaces; **document content never translated**. Runs **after M3.10** so the glossary snapshots stable strings. ✅ a Mongolian-browser guest opens a share link and reviews in Mongolian chrome.
 - **M3.10 — Source provenance** (wedge, added 2026-07-24): read-only **provenance chips** on every document row (repo-relative path · `owner/repo` + path · source host · pasted) derived server-side in one place from stored columns (no migration); **project pages group repo-sourced docs under their tracked repo, path-ordered** with directory dividers (flattened tree, never folders — §2 non-goal intact); `GET /documents` gains a workspace-scoped `tracked_repo` filter + `order=path`. Group-by-source home toggle deferred. ✅ Kedge's own tracked `docs/` renders on its project page in repo order with path chips; a pasted doc is visibly "pasted".
-- **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
+- **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, ask-about-the-doc, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
 - **M5 — Notifications & queue**: in-app inbox, Postmark notifications, mentions, digest scheduling, per-user prefs, approval events, **review-queue dashboard**. ✅ reviewer replies → author gets the email; dashboard shows "needs your attention".
 - **M6 — Private sources & post-back**: **GitHub App** (install → pick repo → private import → push-webhook auto re-sync) for the SaaS; **PAT remains a supported connector** (self-host primary) — plus the guided register-your-own-App docs for self-hosters; Confluence via API token (storage-format conversion); **digest post-back** to PR/Confluence. ✅ private repo doc auto-resyncs on push; digest lands on the PR.
 - **M7 — Self-host distribution**: `deploy/` compose + Caddy single-origin mode, tagged Docker images, migrate-on-boot, telemetry ping + opt-out, backup/upgrade docs, self-hosting guide, public-repo hygiene (CONTRIBUTING, SECURITY.md, issue templates). ✅ fresh VM: `docker compose up` → working instance importing a private doc via PAT, nothing leaving the network.
