@@ -121,3 +121,12 @@ cost — over exactly one document. Append-only history: a retry mints a new run
 so a failed run keeps its error and spend forever and AI cost/day survives
 retries. Output is always a draft a human confirms, never an action.
 _Avoid_: job (a job executes a run), generation, request
+
+**Improve-the-doc Prompt**:
+The copyable AI artifact an author pastes into a coding agent to get the
+revision the review asked for — unresolved feedback grouped by section,
+accepted suggested edits included verbatim as required edits, quoted anchors.
+Rendered server-side from the database; the model contributes only one
+instruction per thread.
+_Avoid_: improve prompt run (it is the artifact of an AI Run, type
+improve_prompt), doc prompt

@@ -311,6 +311,10 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 ## Decision log (M4 AI substrate + digest tracer, 2026-08-18)
 
+- ✅ **Resolved threads are excluded from the improve-prompt wholesale** (#132) — an accepted suggestion sitting on a resolved thread never reaches the artifact. Matches the AC as written ("resolved threads and declined suggestions are excluded"); revisit only if authors report losing approved edits they expected to ship.
+- [ ] **Extract the shared chunk-prompt loop from the AI generators** once #133/#134 land — refusal check, structured-output check, per-call spend, `markSpendUnknown` will exist in three copies by end of M4. (S)
+- [ ] **In-app artifact staleness**: a completed digest/improve-prompt re-attached after a re-sync or triage change still renders as current. #136 adds the stale flag for MCP; the web panels should read it too. (S)
+
 - ✅ **A client anchor on a fork of a document-level thread is a 422 `thread_not_inline`, not a silent no-op** (#129) — document threads never carry anchors, so persisting one would break the rail invariant and silently dropping it would hide a client bug in the #134 split UI. New error code `thread_not_inline` on the fork endpoint; the split client should only ever anchor forks from inline threads.
 - ✅ **`GET /documents/{id}/ai/digest` added to the API surface** (SPEC §17 amended) — the eng review's "panel re-attaches to the latest run on mount" (§8) needs a read that resolves a run without knowing its id. A singular latest-run read (200 + run, 204 when none) beats a paginated list for a surface that only ever wants the newest.
 - ✅ **Unknown generation faults classify as DETERMINISTIC** — the transient/deterministic table names every fault we can recognize; anything else is far likelier to be our bug than a provider blip, and retrying it three times bills the workspace's key three times for the same answer. Cost-safe default, documented in `AiFailureClassifier`.
