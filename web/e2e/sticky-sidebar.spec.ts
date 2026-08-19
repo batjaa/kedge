@@ -17,6 +17,13 @@ import { register, uniqueIdentity } from './helpers';
 // It registers its own user and pastes its own document, like every spec in the
 // pack, so it depends on no other journey's state.
 
+// Pinned to en-US rather than inherited from the runner: this spec selects the
+// import form and the collapse controls by their English copy, and Chromium
+// otherwise negotiates the HOST's locale, which would translate that copy out
+// from under the selectors on a de-DE/mn-MN machine (M3.9). The locale-varying
+// surfaces are e2e/i18n-review.spec.ts's business, not this one's.
+test.use({ locale: 'en-US' });
+
 const SECTION_COUNT = 40;
 
 // Long enough that the prose column dwarfs the sidebar — the only condition
@@ -41,8 +48,7 @@ const LONG_DOCUMENT = [
 const PINNED_TOP = 128;
 
 // The collapse controls carry their label as aria-label (ColumnToggleButton and
-// the sidebar's own hide button). This spec runs in the default en-US context —
-// the negotiated-locale surfaces are e2e/i18n-review.spec.ts's business.
+// the sidebar's own hide button).
 const HIDE_SIDEBAR_LABEL = 'Hide contents and threads';
 const SHOW_SIDEBAR_LABEL = 'Show contents and threads';
 
@@ -93,7 +99,17 @@ async function openLongDocument(page: Page): Promise<void> {
   await rows.first().click();
   await expect(page).toHaveURL(/\/documents\/\d+$/, { timeout: 30_000 });
 
-  await expect(page.locator('aside[data-review-sidebar]')).toBeVisible();
+  // Wait for the LAST table-of-contents entry, not merely for the sidebar to be
+  // on screen. The TOC is collected from the rendered prose by a client layout
+  // effect, so a server-rendered sidebar is present but EMPTY — waiting on the
+  // element itself would let every assertion below race hydration on a loaded
+  // worker. This one wait proves three preconditions at once: React owns the
+  // sidebar (so the collapse click will land), the effect has run, and the TOC
+  // is long enough to overflow the sidebar's max-height.
+  await expect(
+    page.locator('aside[data-review-sidebar]').getByText(`Section ${SECTION_COUNT}`, { exact: true }),
+  ).toBeAttached({ timeout: 30_000 });
+
   // The document has to actually be taller than the viewport, or the assertions
   // below would pass on a sidebar that simply had nowhere to scroll to.
   const scrollable = await page.evaluate(
@@ -142,21 +158,36 @@ test('a sidebar taller than the viewport scrolls inside itself', async ({ page }
   await scrollTo(page, 3000);
   expect(await sidebarTop(page)).toBe(PINNED_TOP);
 
-  const internal = await page.evaluate(() => {
+  // Precondition: the content really does exceed the box. `overflow-y` is read
+  // rather than inferred, because an `overflow: hidden` element is still
+  // scrollable from script — so assigning scrollTop would "pass" on a sidebar
+  // that clips its overflow and strands the reader.
+  const before = await page.evaluate(() => {
     const el = document.querySelector('aside[data-review-sidebar]');
     if (el === null) throw new Error('review sidebar not in the DOM');
-    el.scrollTop = 300;
     return {
+      overflowY: getComputedStyle(el).overflowY,
       overflows: el.scrollHeight > el.clientHeight,
-      scrolled: el.scrollTop,
-      pageScrollY: Math.round(window.scrollY),
+      scrollTop: el.scrollTop,
     };
   });
+  expect(before.overflowY).toBe('auto');
+  expect(before.overflows).toBe(true);
+  expect(before.scrollTop).toBe(0);
 
-  expect(internal.overflows).toBe(true);
-  expect(internal.scrolled).toBeGreaterThan(0);
-  // Scrolling the sidebar must not have dragged the document with it.
-  expect(internal.pageScrollY).toBe(3000);
+  // Then a real wheel over the sidebar, which is what a reader actually does:
+  // the scroll has to land INSIDE the sidebar and leave the document where it
+  // was — the failure mode being a sidebar that just passes the wheel through
+  // to the page.
+  const box = await page.locator('aside[data-review-sidebar]').boundingBox();
+  if (box === null) throw new Error('review sidebar has no box');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 300);
+
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('aside[data-review-sidebar]')!.scrollTop))
+    .toBeGreaterThan(0);
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(3000);
 });
 
 test('the collapsed sidebar toggle keeps sticking', async ({ page }) => {
