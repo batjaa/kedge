@@ -81,6 +81,32 @@ class AgentTokenService
      * revoke that committed before the write began — and the barrier test is
      * gated to an engine that can prove the rest.)
      *
+     * @throws AuthenticationException
+     */
+    public function revalidateForWrite(User $agent): void
+    {
+        $this->assertTokenRow($agent, lock: true);
+    }
+
+    /**
+     * The unlocked pre-flight: is this credential still live at all?
+     *
+     * Called before a write path does ANYTHING — before the idempotency lookup
+     * that could return an existing comment, and before the anchor validation
+     * that can persist a refreshed projection. Neither of those inserts agent
+     * content, so neither needs the lock; both are side effects a revoked
+     * credential should not be able to cause, and this is the cheapest place to
+     * stop them. {@see revalidateForWrite()} still runs later, under lock, and
+     * remains the thing the linearizability guarantee rests on.
+     *
+     * @throws AuthenticationException
+     */
+    public function assertLive(User $agent): void
+    {
+        $this->assertTokenRow($agent, lock: false);
+    }
+
+    /**
      * Fails CLOSED on anything that is not an agent token: the MCP surface is
      * the only caller, {@see RequireAgentTokenAuth} has
      * already established that a token is what is speaking, and a write path
@@ -89,7 +115,7 @@ class AgentTokenService
      *
      * @throws AuthenticationException
      */
-    public function revalidateForWrite(User $agent): void
+    private function assertTokenRow(User $agent, bool $lock): void
     {
         $token = $agent->currentAccessToken();
 
@@ -97,12 +123,13 @@ class AgentTokenService
             throw new AuthenticationException('This write requires an agent token.');
         }
 
-        $stillLive = AgentToken::query()
-            ->whereKey($token->getKey())
-            ->lockForUpdate()
-            ->exists();
+        $query = AgentToken::query()->whereKey($token->getKey());
 
-        if (! $stillLive) {
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        if (! $query->exists()) {
             throw new AuthenticationException('This agent token has been revoked.');
         }
     }

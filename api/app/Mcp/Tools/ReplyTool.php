@@ -43,10 +43,12 @@ class ReplyTool extends Tool
                 $validated = $request->validate([
                     'body' => ['required', 'string', 'max:20000'],
                     'idempotency_key' => ['sometimes', 'string', 'max:128'],
+                    // Suggested edits are not on the agent surface (see PostCommentTool).
+                    'proposed_text' => ['prohibited'],
                 ]);
 
                 $agent = $this->agent($request);
-                $thread = $this->threadFor($request, $threadId, 'reply');
+                $thread = $this->threadFor($threadId, 'reply');
 
                 return Response::structured([
                     'comment' => $this->writer->reply(
@@ -73,7 +75,8 @@ class ReplyTool extends Tool
             'idempotency_key' => $schema->string()->max(128)
                 ->description(
                     'Optional. Supply a stable key to make a retry of this exact call return the original '.
-                    'comment instead of posting a second one. Without it, a retry posts again.'
+                    'comment instead of posting a second one. Scoped to THIS token, so two agents can use '.
+                    'the same key without colliding. Without it, a retry posts again.'
                 ),
         ];
     }

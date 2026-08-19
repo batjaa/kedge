@@ -4,6 +4,7 @@ namespace App\Mcp\Concerns;
 
 use App\Enums\McpTool;
 use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
 use App\Policies\ThreadPolicy;
@@ -90,7 +91,7 @@ trait ResolvesReviewSubjects
      * unchanged and still the only thing that decides; only the wording of the
      * denial is unified.
      */
-    protected function documentFor(Request $request, mixed $id, string $ability): Document
+    protected function documentFor(mixed $id, string $ability): Document
     {
         $document = Document::query()->whereKey($this->identifier($id, 'document_id'))->first();
 
@@ -105,7 +106,7 @@ trait ResolvesReviewSubjects
      * The same rule for a document reached through a Thread-class ability
      * (`viewAny`, `create`), which Laravel passes as `[Thread::class, $document]`.
      */
-    protected function documentForThreadAbility(Request $request, mixed $id, string $ability): Document
+    protected function documentForThreadAbility(mixed $id, string $ability): Document
     {
         $document = Document::query()->whereKey($this->identifier($id, 'document_id'))->first();
 
@@ -119,7 +120,7 @@ trait ResolvesReviewSubjects
     /**
      * A thread this token may act on, authorized through {@see ThreadPolicy}.
      */
-    protected function threadFor(Request $request, mixed $id, string $ability): Thread
+    protected function threadFor(mixed $id, string $ability): Thread
     {
         $thread = Thread::query()->whereKey($this->identifier($id, 'thread_id'))->first();
 
@@ -138,6 +139,38 @@ trait ResolvesReviewSubjects
         }
 
         return $thread;
+    }
+
+    /**
+     * The `version_id` argument, resolved through the DOCUMENT'S OWN relation so
+     * a version id belonging to another document is simply not there — never an
+     * access path, and never a cross-document read.
+     *
+     * Every tool that can be pinned to a version takes the same argument under
+     * the same name and resolves it here, because the alternative is drift:
+     * `get_document(version_id)` handing an agent v1's projection while
+     * `post_comment` silently anchors the offsets it computed from it to v2 —
+     * which, when both versions happen to contain the same text at the same
+     * place, is a wrong anchor nobody would ever notice.
+     *
+     * Null means "the document's current version", exactly as omitting
+     * `document_version_id` does on REST.
+     */
+    protected function requestedVersion(mixed $value, Document $document): ?DocumentVersion
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $version = $document->versions()
+            ->whereKey($this->identifier($value, 'version_id'))
+            ->first();
+
+        if (! $version instanceof DocumentVersion) {
+            throw new McpToolException("This document has no version with id [{$value}].");
+        }
+
+        return $version;
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Enums\McpTool;
 use App\Enums\ThreadType;
 use App\Models\Comment;
 use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
 use App\Services\Agents\Exceptions\McpToolException;
@@ -61,8 +62,14 @@ class McpReviewWriter
      * @param  array<string, mixed>  $arguments  the tool's validated arguments
      * @return array<string, mixed>
      */
-    public function postComment(Document $document, User $agent, array $arguments, ?string $ip): array
-    {
+    public function postComment(
+        Document $document,
+        User $agent,
+        array $arguments,
+        ?DocumentVersion $version,
+        ?string $ip,
+    ): array {
+        $this->assertStillAuthorized($agent);
         $this->spendWriteBudget($agent);
 
         $anchor = $arguments['anchor'] ?? null;
@@ -76,7 +83,10 @@ class McpReviewWriter
                 'type' => is_array($anchor) ? ThreadType::Inline->value : ThreadType::Document->value,
                 'body' => (string) $arguments['body'],
                 'anchor' => $anchor,
-                'idempotency_key' => $this->idempotencyKey($arguments),
+                // The version the agent read, so the anchor is checked against
+                // the text it actually saw (REST's `document_version_id`).
+                ...($version === null ? [] : ['document_version_id' => (int) $version->id]),
+                'idempotency_key' => $this->idempotencyKey($agent, $arguments),
                 'client' => CommentClient::Mcp,
             ],
             $ip,
@@ -96,6 +106,7 @@ class McpReviewWriter
      */
     public function reply(Thread $thread, User $agent, array $arguments, ?string $ip): array
     {
+        $this->assertStillAuthorized($agent);
         $this->spendWriteBudget($agent);
         $thread->loadMissing('document');
 
@@ -104,7 +115,7 @@ class McpReviewWriter
             $agent,
             [
                 'body' => (string) $arguments['body'],
-                'idempotency_key' => $this->idempotencyKey($arguments),
+                'idempotency_key' => $this->idempotencyKey($agent, $arguments),
                 'client' => CommentClient::Mcp,
             ],
             $ip,
@@ -213,13 +224,47 @@ class McpReviewWriter
      * key per call, so an un-keyed retry duplicates — which is honest, and
      * documented on the tool.
      *
+     * The key is namespaced to the acting CREDENTIAL, not just its owner. The
+     * shared resolver dedupes on (author, scope, key), and an operator's two
+     * agents — or their agent and their own browser — are one author: without
+     * this, a second agent sending the same obvious key (`run-1`) would be handed
+     * the FIRST one's comment, its own body silently discarded, and an
+     * `mcp.write` recorded for a write that never happened. Hashing keeps the
+     * composed value bounded whatever the agent sends, and keeps the agent's own
+     * key out of the column.
+     *
      * @param  array<string, mixed>  $arguments
      */
-    private function idempotencyKey(array $arguments): string
+    private function idempotencyKey(User $agent, array $arguments): string
     {
         $key = trim((string) ($arguments['idempotency_key'] ?? ''));
 
-        return $key !== '' ? $key : (string) Str::uuid();
+        if ($key === '') {
+            return (string) Str::uuid();
+        }
+
+        return 'mcp:'.($agent->currentAccessToken()?->getKey() ?? 'none').':'.hash('sha256', $key);
+    }
+
+    /**
+     * The pre-flight half of revocation (#135).
+     *
+     * The locked check inside the write transaction is what makes the CONTENT
+     * write linearizable, but it runs late by necessity — after the idempotency
+     * lookup and after anchor validation, which can itself persist a refreshed
+     * projection. A revoked credential must not reach either: replaying an
+     * idempotency key would return someone's existing comment and record an
+     * `mcp.write` for it, and a stale anchor would trigger a projection refresh.
+     * So liveness is asserted once up front, before any of that, and again under
+     * lock before the insert.
+     */
+    private function assertStillAuthorized(User $agent): void
+    {
+        try {
+            $this->tokens->assertLive($agent);
+        } catch (AuthenticationException $e) {
+            throw new McpToolException($e->getMessage(), previous: $e);
+        }
     }
 
     private function refusalMessage(HttpResponseException $e): string

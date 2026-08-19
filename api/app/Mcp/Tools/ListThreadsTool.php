@@ -4,10 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Enums\McpTool;
 use App\Mcp\Concerns\ResolvesReviewSubjects;
-use App\Models\Document;
-use App\Models\DocumentVersion;
 use App\Models\Thread;
-use App\Services\Agents\Exceptions\McpToolException;
 use App\Services\Agents\McpPayload;
 use App\Services\Comments\CommentThreadService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -49,7 +46,7 @@ class ListThreadsTool extends Tool
             ['document_id' => $documentId],
             function () use ($request, $documentId): ResponseFactory {
                 $agent = $this->agent($request);
-                $document = $this->documentForThreadAbility($request, $documentId, 'viewAny');
+                $document = $this->documentForThreadAbility($documentId, 'viewAny');
                 [$page, $perPage] = $this->pageArguments($request);
 
                 // The same rail read the web's thread list uses, so anchors
@@ -58,7 +55,7 @@ class ListThreadsTool extends Tool
                     $document,
                     $perPage,
                     $agent,
-                    $this->versionFor($request, $document),
+                    $this->requestedVersion($request->get('version_id'), $document),
                     $page,
                 );
 
@@ -71,30 +68,6 @@ class ListThreadsTool extends Tool
                 ]);
             },
         );
-    }
-
-    private function versionFor(Request $request, Document $document): ?DocumentVersion
-    {
-        $requested = $request->get('version_id');
-
-        if ($requested === null) {
-            return null;
-        }
-
-        $valid = (is_int($requested) && $requested > 0)
-            || (is_string($requested) && ctype_digit($requested) && (int) $requested > 0);
-
-        if (! $valid) {
-            throw new McpToolException('The [version_id] argument must be a positive integer id.');
-        }
-
-        $version = $document->versions()->whereKey((int) $requested)->first();
-
-        if (! $version instanceof DocumentVersion) {
-            throw new McpToolException("This document has no version with id [{$requested}].");
-        }
-
-        return $version;
     }
 
     /**

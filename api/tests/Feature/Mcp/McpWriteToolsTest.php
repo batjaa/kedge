@@ -16,9 +16,10 @@ use App\Models\Comment;
 use App\Models\Thread;
 use App\Models\Workspace;
 use App\Services\Agents\AgentTokenService;
+use App\Services\Comments\CommentThreadService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Mockery;
 
@@ -337,10 +338,10 @@ class McpWriteToolsTest extends McpTestCase
 
     public function test_a_denied_write_does_not_spend_the_budget(): void
     {
-        // The limiter is spent before the Policy runs, so a denial would
-        // otherwise let an unauthorized agent burn a legitimate one's allowance.
-        // It cannot: the budget is per token, and this asserts the authorized
-        // path still has its full allowance after a denial elsewhere.
+        // Authorization runs in the tool, before the writer is reached at all, so
+        // a refused call costs the agent nothing: its full allowance survives.
+        // Otherwise an agent that fat-fingered a document id would be locked out
+        // of the review it does have access to.
         config(['kedge.mcp.write_rate_per_minute' => 2]);
         $stranger = Workspace::create(['name' => 'Stranger', 'slug' => 'stranger']);
         [$foreign] = $this->readyDocument($stranger, 'Not yours');
@@ -350,12 +351,122 @@ class McpWriteToolsTest extends McpTestCase
             ->tool(PostCommentTool::class, ['document_id' => $foreign->id, 'body' => 'Trespassing'])
             ->assertHasErrors(['No document is available']);
 
-        // One budget unit was spent by the refused attempt; one remains.
-        KedgeServer::actingAs($agent)
-            ->tool(PostCommentTool::class, ['document_id' => $this->document->id, 'body' => 'Legitimate'])
+        foreach (['First', 'Second'] as $body) {
+            KedgeServer::actingAs($agent)
+                ->tool(PostCommentTool::class, ['document_id' => $this->document->id, 'body' => $body])
+                ->assertOk();
+        }
+
+        $this->assertSame(2, Comment::query()->count());
+    }
+
+    public function test_an_idempotency_key_is_scoped_to_the_token_that_used_it(): void
+    {
+        // Two agents, one operator. The shared resolver dedupes on (author, scope,
+        // key) and both agents ARE that author, so an un-namespaced key would hand
+        // the second agent the first's comment and silently drop its own words.
+        $first = $this->agentFor();
+        $second = $this->agentFor();
+
+        KedgeServer::actingAs($first)->tool(PostCommentTool::class, [
+            'document_id' => $this->document->id,
+            'body' => 'First agent, run 1',
+            'idempotency_key' => 'run-1',
+        ])->assertOk();
+
+        KedgeServer::actingAs($second)->tool(PostCommentTool::class, [
+            'document_id' => $this->document->id,
+            'body' => 'Second agent, run 1',
+            'idempotency_key' => 'run-1',
+        ])->assertOk()->assertSee('Second agent, run 1');
+
+        $this->assertSame(2, Comment::query()->count());
+        $this->assertSame(
+            ['First agent, run 1', 'Second agent, run 1'],
+            Comment::query()->orderBy('id')->pluck('body_md')->all(),
+        );
+    }
+
+    public function test_an_agent_key_never_collides_with_a_humans(): void
+    {
+        // The same operator's browser and agent, same obvious key, same document.
+        $agent = $this->agentFor();
+
+        [$human] = app(CommentThreadService::class)->create(
+            $this->document,
+            $this->operator,
+            ['type' => 'document', 'body' => 'Typed by hand', 'idempotency_key' => 'run-1'],
+            null,
+        );
+
+        KedgeServer::actingAs($agent)->tool(PostCommentTool::class, [
+            'document_id' => $this->document->id,
+            'body' => 'Posted by the agent',
+            'idempotency_key' => 'run-1',
+        ])->assertOk()->assertSee('Posted by the agent');
+
+        $this->assertSame(2, Thread::query()->count());
+        $this->assertNotSame($human->id, Thread::query()->latest('id')->first()->id);
+    }
+
+    public function test_post_comment_anchors_against_the_version_the_agent_read(): void
+    {
+        // The drift this closes: an agent reads v1, computes offsets from ITS
+        // plain_text, and posts. Without pinning, the capture path validates
+        // against the CURRENT version — either a spurious rejection, or (when both
+        // versions happen to carry the same text at the same place) an anchor
+        // silently attached to the wrong version.
+        $older = $this->document->versions()->create([
+            'kind' => 'mainline',
+            'content_raw' => '# Old',
+            'content_normalized' => '# Old',
+            'content_hash' => hash('sha256', 'older-'.$this->document->id),
+            'plain_text' => self::PLAIN_TEXT,
+            'projection_version' => (string) config('kedge.projection.current_version'),
+        ]);
+
+        KedgeServer::actingAs($this->agentFor())
+            ->tool(PostCommentTool::class, [
+                'document_id' => $this->document->id,
+                'version_id' => $older->id,
+                'body' => 'Raised against the version I read.',
+                'anchor' => $this->anchorPayload(),
+            ])
             ->assertOk();
 
-        $this->assertSame(1, Comment::query()->count());
+        $this->assertSame((int) $older->id, (int) Thread::query()->sole()->anchors()->sole()->document_version_id);
+    }
+
+    public function test_post_comment_refuses_a_version_belonging_to_another_document(): void
+    {
+        [, $foreignVersion] = $this->readyDocument($this->workspace, 'Another document');
+
+        KedgeServer::actingAs($this->agentFor())
+            ->tool(PostCommentTool::class, [
+                'document_id' => $this->document->id,
+                'version_id' => $foreignVersion->id,
+                'body' => 'Cross-document version',
+            ])
+            ->assertHasErrors(['has no version with id']);
+
+        $this->assertSame(0, Thread::query()->count());
+    }
+
+    public function test_a_suggested_edit_is_refused_rather_than_silently_downgraded(): void
+    {
+        // Proposing replacement text is the front half of an accept/decline
+        // decision that has no MCP tool. Saying so beats dropping the field and
+        // letting the agent believe it filed a suggestion.
+        KedgeServer::actingAs($this->agentFor())
+            ->tool(PostCommentTool::class, [
+                'document_id' => $this->document->id,
+                'body' => 'Replace this',
+                'proposed_text' => 'With this',
+                'anchor' => $this->anchorPayload(),
+            ])
+            ->assertHasErrors([]);
+
+        $this->assertSame(0, Comment::query()->count());
     }
 
     /**
@@ -397,13 +508,21 @@ class McpWriteToolsTest extends McpTestCase
         $this->assertSame(1, $thread->comments()->count());
     }
 
-    public function test_the_revocation_check_runs_inside_the_write_transaction(): void
+    public function test_the_revocation_check_runs_locked_inside_the_write_transaction(): void
     {
         // A re-read OUTSIDE the transaction would still lose the race: revoke
         // could land between the check and the insert. This asserts the ordering
-        // the guarantee rests on — the token row is read, under a transaction,
-        // before the thread row is written — on every engine, including the
-        // lock-less SQLite the suite runs on.
+        // the guarantee rests on — the token row is read, under a DEEPER
+        // transaction than the ambient one, before the thread row is written —
+        // on every engine, including the lock-less SQLite the suite runs on.
+        //
+        // The token is minted BEFORE the listener is armed, so its INSERT can
+        // never be mistaken for the revalidation SELECT; and the baseline
+        // transaction level is captured because RefreshDatabase already holds one,
+        // which would make a bare "level > 0" assertion vacuous.
+        $agent = $this->agentFor();
+        $baseline = DB::transactionLevel();
+
         $observed = [];
         DB::listen(function ($query) use (&$observed): void {
             $observed[] = [
@@ -412,30 +531,94 @@ class McpWriteToolsTest extends McpTestCase
             ];
         });
 
-        KedgeServer::actingAs($this->agentFor())
+        KedgeServer::actingAs($agent)
             ->tool(PostCommentTool::class, ['document_id' => $this->document->id, 'body' => 'Ordered'])
             ->assertOk();
 
-        $tokenCheck = null;
+        $selects = [];
         $threadInsert = null;
         foreach ($observed as $index => $query) {
-            if ($tokenCheck === null && str_contains($query['sql'], 'personal_access_tokens')) {
-                $tokenCheck = $index;
-                $this->assertGreaterThan(
-                    0,
-                    $query['transaction_level'],
-                    'The agent-token revalidation must run inside the write transaction.',
-                );
+            $sql = strtolower($query['sql']);
+
+            if (str_starts_with($sql, 'select') && str_contains($sql, 'personal_access_tokens')) {
+                $selects[$index] = $query;
             }
 
-            if ($threadInsert === null && str_starts_with($query['sql'], 'insert into "threads"')) {
+            if ($threadInsert === null && str_starts_with($sql, 'insert into "threads"')) {
                 $threadInsert = $index;
             }
         }
 
-        $this->assertNotNull($tokenCheck, 'No agent-token revalidation query was issued.');
         $this->assertNotNull($threadInsert, 'No thread insert was issued.');
-        $this->assertLessThan($threadInsert, $tokenCheck, 'The revalidation must precede the write.');
+        $this->assertNotEmpty($selects, 'No agent-token revalidation query was issued.');
+
+        // The locked re-read: strictly deeper than the ambient test transaction,
+        // and strictly before the row it is protecting.
+        $guarded = array_filter(
+            $selects,
+            fn (array $query, int $index): bool => $query['transaction_level'] > $baseline && $index < $threadInsert,
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        $this->assertNotEmpty(
+            $guarded,
+            'The agent-token revalidation must run inside the write transaction, before the insert.',
+        );
+    }
+
+    public function test_a_revoked_token_cannot_replay_an_idempotency_key(): void
+    {
+        // The idempotency fast path returns BEFORE the in-transaction guard, so
+        // without the pre-flight check a revoked credential could still be handed
+        // an existing comment — and an mcp.write recorded for a write that never
+        // happened.
+        $issued = $this->issueToken();
+        $agent = $this->operator->fresh()->withAccessToken($issued->accessToken);
+        $arguments = [
+            'document_id' => $this->document->id,
+            'body' => 'Posted once',
+            'idempotency_key' => 'agent-run-42',
+        ];
+
+        KedgeServer::actingAs($agent)->tool(PostCommentTool::class, $arguments)->assertOk();
+        $auditRows = AuditLog::query()->where('action', AuditEvent::McpWrite->value)->count();
+
+        app(AgentTokenService::class)->revoke($issued->accessToken);
+
+        KedgeServer::actingAs($agent)
+            ->tool(PostCommentTool::class, $arguments)
+            ->assertHasErrors(['revoked']);
+
+        $this->assertSame(
+            $auditRows,
+            AuditLog::query()->where('action', AuditEvent::McpWrite->value)->count(),
+            'A revoked replay must not add an mcp.write row.',
+        );
+    }
+
+    public function test_a_revoked_token_cannot_trigger_a_projection_refresh(): void
+    {
+        // Anchor validation re-projects (and PERSISTS the projection) when a
+        // selector fails to match. That is a write, so a revoked credential must
+        // not reach it: the pre-flight check refuses first, and the web's
+        // projection endpoint is never called.
+        Http::fake();
+        $anchor = $this->anchorPayload();
+        $anchor['exact'] = 'text that was never in this document';
+
+        $issued = $this->issueToken();
+        $agent = $this->operator->fresh()->withAccessToken($issued->accessToken);
+        app(AgentTokenService::class)->revoke($issued->accessToken);
+
+        KedgeServer::actingAs($agent)
+            ->tool(PostCommentTool::class, [
+                'document_id' => $this->document->id,
+                'body' => 'Stale anchor from a dead credential',
+                'anchor' => $anchor,
+            ])
+            ->assertHasErrors(['revoked']);
+
+        Http::assertNothingSent();
     }
 
     /**
@@ -443,11 +626,12 @@ class McpWriteToolsTest extends McpTestCase
      * a concurrent revoke must serialize against an in-flight write rather than
      * interleave with it.
      *
-     * That needs real row locks, and the suite runs on an in-memory SQLite whose
-     * second connection is a different database entirely — so this is gated to a
-     * lock-capable engine (`DB_CONNECTION=mysql|pgsql`) rather than faked. The
-     * ordering it would prove is asserted lock-free above; what only this can
-     * show is that revoke BLOCKS behind the write instead of racing it.
+     * That needs real row locks AND two real connections, and the suite runs on
+     * an in-memory SQLite where a second connection is a different database
+     * entirely — so this is gated to a lock-capable engine
+     * (`DB_CONNECTION=mysql|pgsql`) rather than faked. The ordering it would
+     * prove is asserted lock-free above; what only this can show is that revoke
+     * BLOCKS behind the write instead of racing it.
      */
     public function test_a_concurrent_revoke_serializes_behind_an_in_flight_write(): void
     {
@@ -464,23 +648,27 @@ class McpWriteToolsTest extends McpTestCase
         $agent = $this->operator->fresh()->withAccessToken($issued->accessToken);
         $tokenId = $issued->accessToken->id;
 
+        // A genuinely separate connection — its own PDO, not the cached default
+        // one, which would share the transaction and prove nothing.
+        $barrier = DB::connectUsing(
+            'mcp_barrier',
+            config('database.connections.'.config('database.default')),
+        );
+        $barrier->statement($driver === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 1' : "SET lock_timeout = '1s'");
+
         // Connection A: hold the token row inside a transaction, as a write does.
         DB::beginTransaction();
         app(AgentTokenService::class)->revalidateForWrite($agent);
 
-        // Connection B: a revoke arriving mid-write must not delete the row while
-        // A holds it. A short lock wait turns "blocked" into an observable.
-        $second = DB::connection(DB::getDefaultConnection());
-        $second->statement($driver === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 1' : "SET lock_timeout = '1s'");
-
         $blocked = false;
         try {
-            $second->table('personal_access_tokens')->where('id', $tokenId)->delete();
+            $barrier->table('personal_access_tokens')->where('id', $tokenId)->delete();
         } catch (\Throwable) {
             $blocked = true;
         }
 
         DB::rollBack();
+        $barrier->disconnect();
 
         $this->assertTrue($blocked, 'A concurrent revoke must block behind the in-flight write, not interleave.');
         $this->assertNotNull(AgentToken::query()->find($tokenId));
@@ -488,7 +676,6 @@ class McpWriteToolsTest extends McpTestCase
 
     protected function tearDown(): void
     {
-        RateLimiter::clear('mcp-write:1');
         Mockery::close();
 
         parent::tearDown();
