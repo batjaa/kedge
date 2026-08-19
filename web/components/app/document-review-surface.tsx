@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   MessageSquare,
@@ -164,6 +164,11 @@ export function DocumentReviewSurface({
   const tChips = useTranslations('chips');
   const format = useFormatter();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLElement | null>(null);
+  // Where the review row's sticky columns pin (#146). Null until the header has
+  // been measured, which is also the server render — the CSS fallback below
+  // covers that frame.
+  const [pinnedTop, setPinnedTop] = useState<number | null>(null);
   const headingPositionsRef = useRef<HeadingPosition[]>([]);
   const [threads, setThreads] = useState<ReviewThread[]>([]);
   const [page, setPage] = useState(1);
@@ -270,6 +275,51 @@ export function DocumentReviewSurface({
   useEffect(() => {
     void reloadThreads(1);
   }, [reloadThreads]);
+
+  // Measure where the document header ends, and pin the sticky columns there
+  // (#146). A constant cannot do this job: the header carries a back link, an
+  // optional source row, an approvals roster and action buttons that wrap on
+  // narrow viewports, so its height ranges over ~100–165px in practice — the
+  // old hard-coded `top-32` (128px) put the sidebar's chip row and its own
+  // collapse button UNDERNEATH the header (which paints above it at z-30) as
+  // soon as anyone approved the document.
+  //
+  // Both halves are read from the DOM rather than restated here: the header's
+  // own sticky offset comes from its computed `top`, so this follows the header
+  // if that offset is ever retuned.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    let frame = 0;
+    const measure = () => {
+      const stickyTop = Number.parseFloat(getComputedStyle(header).top);
+      const offset = (Number.isFinite(stickyTop) ? stickyTop : 0) + header.offsetHeight;
+      setPinnedTop((current) => (current === offset ? current : offset));
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+
+    schedule();
+    window.addEventListener('resize', schedule);
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(schedule);
+      observer.observe(header);
+
+      return () => {
+        cancelAnimationFrame(frame);
+        window.removeEventListener('resize', schedule);
+        observer.disconnect();
+      };
+    }
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', schedule);
+    };
+  }, []);
 
   // Build the highlight marks only when the thread set or projection changes;
   // hover/active changes restyle the existing marks in place. Rebuilding on
@@ -1011,6 +1061,7 @@ export function DocumentReviewSurface({
   return (
     <div>
       <DocumentReviewHeader
+        ref={headerRef}
         title={title}
         surfaceLabel={surfaceLabel}
         sourceUrl={sourceUrl}
@@ -1040,10 +1091,19 @@ export function DocumentReviewSurface({
           space for chrome that isn't there). The sidebar and thread rail are
           collapsible; the prose column keeps its 52rem measure and centers in
           whatever width remains. */}
-      <div className="flex">
+      <div
+        className="flex"
+        // Inherited by every sticky column below (and by DocumentReviewSidebar).
+        // Each consumer supplies an 8rem fallback for the frames before this
+        // measurement exists, so the server render and the first paint match
+        // what shipped before the offset became dynamic. (Spelling a utility
+        // class out in a comment here would make Tailwind's scanner emit it —
+        // hence the prose.)
+        style={pinnedTop === null ? undefined : ({ '--kedge-pin-top': `${pinnedTop}px` } as CSSProperties)}
+      >
         <div className={cn('hidden shrink-0 lg:block', sidebarCollapsed ? 'w-12' : 'w-72')}>
           {sidebarCollapsed ? (
-            <div className="sticky top-32 flex justify-center py-8">
+            <div className="sticky top-[var(--kedge-pin-top,8rem)] flex justify-center py-8">
               <ColumnToggleButton
                 label={t('sidebar.show')}
                 onClick={() => setSidebarCollapsed(false)}
@@ -1127,7 +1187,7 @@ export function DocumentReviewSurface({
         </div>
 
         <div className="hidden w-12 shrink-0 xl:block">
-          <div className="sticky top-32 flex flex-col items-center gap-2 py-8">
+          <div className="sticky top-[var(--kedge-pin-top,8rem)] flex flex-col items-center gap-2 py-8">
             <ColumnToggleButton
               label={railCollapsed ? t('surface.showRail') : t('surface.hideRail')}
               onClick={() => setRailCollapsed(!railCollapsed)}
