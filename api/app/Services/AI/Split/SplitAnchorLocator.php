@@ -33,6 +33,9 @@ final class SplitAnchorLocator
     /** Matches the fork request's `anchor.exact` ceiling. */
     private const MAX_QUOTE_CHARS = 20000;
 
+    /** How many repeats of the thread's passage are weighed before giving up on the tie-break. */
+    private const MAX_OCCURRENCES_SCANNED = 32;
+
     /**
      * @param  list<string>  $headingPath
      */
@@ -98,6 +101,12 @@ final class SplitAnchorLocator
      * flip — so among the occurrences we prefer the one whose UTF-16 start still
      * matches what the anchor recorded, and only fall back to the first when
      * none does.
+     *
+     * The scan is capped: a thread may legitimately be anchored to three
+     * characters, and re-measuring every occurrence of "the" in a long document
+     * is quadratic work for a tie-break that stopped mattering after the first
+     * handful. Past the cap the first occurrence wins, which is where this
+     * started.
      */
     private static function spanStart(string $plainText, string $exact, int $storedStart): ?int
     {
@@ -109,7 +118,7 @@ final class SplitAnchorLocator
 
         $first = $offset;
 
-        while ($offset !== false) {
+        for ($scanned = 0; $offset !== false && $scanned < self::MAX_OCCURRENCES_SCANNED; $scanned++) {
             $utf16Start = intdiv(
                 strlen((string) mb_convert_encoding(mb_substr($plainText, 0, $offset, 'UTF-8'), 'UTF-16LE', 'UTF-8')),
                 2,
