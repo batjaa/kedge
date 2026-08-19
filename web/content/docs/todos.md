@@ -309,6 +309,18 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (M4 MCP AI artifacts #136, 2026-08-18)
+
+- ✅ **MCP AI artifacts are reads of the latest *completed* run** — no tool starts a generation; a pending/failed run is reported via `latest_run_status` but never served. `generate`/`regenerate` joined the human-only verb list the closed-surface test refuses to see in any tool name.
+- ✅ **AI-disabled withholds artifacts rather than erroring** — MCP stays up (independent gate), but with no key the artifacts go with the rest of the withdrawn AI surface; MCP is not a back door.
+- ✅ **Staleness = three signals, not two** — version moved, thread count moved, or `review_activity_changed` (thread/comment/anchor `updated_at` vs the run's `created_at`; found at the #136 gate: movement inside an existing thread — a just-accepted edit — was invisible to the first two). Module spec amended in the same commit.
+- ✅ **Staleness lives in a shared service** (`App\Services\AI\AiArtifactStaleness` → `StalenessReport`), not in a tool, so the web panels can read the same flag.
+
+## Known debt (M4 #136 branch gate, 2026-08-18)
+
+- **Staleness is second-resolution** — a review change landing in the same wall-clock second the run was requested, after assembly, reads as fresh. Fix: builders freeze a monotonic review watermark (max comment/anchor id) into `ai_runs.input` at assembly and compare ids, not timestamps. (S)
+- **Improve-prompt thread population is mirrored, not shared** — `AiArtifactStaleness::threadsNow()` re-spells `ImprovePromptBuilder`'s carrying-thread predicate; a builder-agreement test catches drift, but one scope object owned by the builder would be better. (S)
+
 ## Decision log (M4 comment splits #134, 2026-08-18)
 
 - ✅ **The model proposes text; the server computes offsets** — `SplitAnchorLocator` finds the model's verbatim quote in the live projection and derives UTF-16 offsets itself, bounded to the source thread's newest current-version anchor. A repeated passage or quote yields NO anchor rather than a plausible wrong one (fork validation cannot tell identical copies apart); the proposal still forks, inheriting the source anchor like a manual fork.
