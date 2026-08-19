@@ -33,6 +33,9 @@ class AiRunResource extends JsonResource
             'id' => $this->id,
             'document_id' => $this->document_id,
             'type' => $this->type->value,
+            // What was asked for WITHIN the type — today the reply-draft stance
+            // (M4 #133). Null for the types that have only one shape of request.
+            'variant' => $this->variant,
             'status' => $this->status->value,
             'model' => $this->model,
             // The visible half of the ledger (SPEC §14, §16): what this run has

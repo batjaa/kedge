@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\AiRunController;
+use App\Http\Controllers\Api\V1\AiThreadRunController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
@@ -274,6 +275,22 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/documents/{document}/ai/digest', [AiRunController::class, 'latestDigest'])
                 ->name('api.v1.documents.ai.digest.latest');
+
+            // The thread-panel triage pair (#133). Same ledger contract as the
+            // digest, targeted at one thread: a reply draft in the author's
+            // chosen stance, and a summary of a thread too long to read. The GET
+            // is the summary panel's re-attach, so re-opening a thread someone
+            // already summarized costs nothing.
+            Route::post('/threads/{thread}/ai/reply-draft', [AiThreadRunController::class, 'replyDraft'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.threads.ai.reply-draft');
+
+            Route::post('/threads/{thread}/ai/summary', [AiThreadRunController::class, 'summary'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.threads.ai.summary');
+
+            Route::get('/threads/{thread}/ai/summary', [AiThreadRunController::class, 'latestSummary'])
+                ->name('api.v1.threads.ai.summary.latest');
 
             Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
                 ->name('api.v1.ai-runs.show');
