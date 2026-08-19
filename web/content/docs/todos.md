@@ -311,6 +311,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 ## Decision log (M4 AI substrate + digest tracer, 2026-08-18)
 
+- ✅ **A client anchor on a fork of a document-level thread is a 422 `thread_not_inline`, not a silent no-op** (#129) — document threads never carry anchors, so persisting one would break the rail invariant and silently dropping it would hide a client bug in the #134 split UI. New error code `thread_not_inline` on the fork endpoint; the split client should only ever anchor forks from inline threads.
 - ✅ **`GET /documents/{id}/ai/digest` added to the API surface** (SPEC §17 amended) — the eng review's "panel re-attaches to the latest run on mount" (§8) needs a read that resolves a run without knowing its id. A singular latest-run read (200 + run, 204 when none) beats a paginated list for a surface that only ever wants the newest.
 - ✅ **Unknown generation faults classify as DETERMINISTIC** — the transient/deterministic table names every fault we can recognize; anything else is far likelier to be our bug than a provider blip, and retrying it three times bills the workspace's key three times for the same answer. Cost-safe default, documented in `AiFailureClassifier`.
 - ✅ **An unpriced model records `cost = null`, never 0** — a missing number is honest; a fabricated one silently corrupts the AI-cost/day metric (SPEC §19). Tokens are still recorded.
