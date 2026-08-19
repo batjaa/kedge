@@ -127,6 +127,13 @@ export default defineConfig({
         // Server-side BFF hop stays on IPv4; browser hop stays on localhost.
         API_URL: `http://127.0.0.1:${API_PORT}`,
         NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}`,
+        // The projection/reanchor endpoints fail CLOSED under
+        // NODE_ENV=production with no configured secret (lib/projection-auth) —
+        // under `next start` every import 401s at the projection hop without
+        // this. Pinned to the dev-fallback value the API also defaults to, so
+        // every local combination (fresh boot, reused dev servers) keeps
+        // matching secrets.
+        PROJECTION_SHARED_SECRET: 'dev-projection-secret',
       },
     },
     {
@@ -151,6 +158,10 @@ export default defineConfig({
       env: {
         API_URL: `http://127.0.0.1:${FIXTURE_PORT}`,
         NEXT_PUBLIC_API_URL: `http://localhost:${FIXTURE_PORT}`,
+        // Parity with the primary instance (see its env comment); this branch
+        // never receives a projection call, but a fail-closed 401 here would be
+        // a confusing needle if that ever changes.
+        PROJECTION_SHARED_SECRET: 'dev-projection-secret',
         // Own compile dir so this second DEV server never races the primary
         // web instance over `.next` (next.config.mjs reads NEXT_DIST_DIR). In
         // CI both instances `next start` from the one read-only production
