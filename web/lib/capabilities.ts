@@ -12,7 +12,40 @@ import type { Capabilities } from './auth-types';
 // feature therefore hides rather than rendering a button that 404s (the BYO-key
 // pattern, SPEC §14); and the public demo surface never shows on an instance we
 // can't confirm is the SaaS (#25).
-const FAIL_CLOSED: Capabilities = { github: false, selfHosted: true };
+export const FAIL_CLOSED: Capabilities = { github: false, selfHosted: true, ai: false };
+
+/**
+ * The payload → capabilities mapping, split out from the fetch so the
+ * fail-closed rules are unit-testable without a server (the web's pure-helper
+ * test seam).
+ */
+export function parseCapabilities(payload: unknown): Capabilities {
+  if (payload === null || typeof payload !== 'object') return FAIL_CLOSED;
+
+  const data = payload as {
+    auth?: { github?: unknown };
+    self_hosted?: unknown;
+    ai?: { enabled?: unknown };
+  };
+
+  // The edition MUST arrive as an explicit boolean. A 200 with a missing or
+  // wrongly-typed `self_hosted` (API/web version skew, a proxy mangling the
+  // body) is an unexpected shape — fail closed to self-hosted, never default
+  // the edition to SaaS. Defaulting to SaaS would leak the public demo landing
+  // onto a private instance; the spec requires this read to fail closed to
+  // self-hosted (SPEC m3.8 — Marketing landing), which is what this docblock
+  // already promises for an unexpected shape.
+  if (typeof data.self_hosted !== 'boolean') return FAIL_CLOSED;
+
+  return {
+    github: data.auth?.github === true,
+    selfHosted: data.self_hosted,
+    // `=== true`, never truthiness — and a MISSING `ai` block (a new web against
+    // an older api) reads as OFF, which is the BYO-key rule (SPEC §14): the AI
+    // surface hides rather than offering a button that 404s.
+    ai: data.ai?.enabled === true,
+  };
+}
 
 export const getCapabilities = cache(async (): Promise<Capabilities> => {
   try {
@@ -25,24 +58,7 @@ export const getCapabilities = cache(async (): Promise<Capabilities> => {
 
     if (!res.ok) return FAIL_CLOSED;
 
-    const data = (await res.json()) as {
-      auth?: { github?: unknown };
-      self_hosted?: unknown;
-    };
-
-    // The edition MUST arrive as an explicit boolean. A 200 with a missing or
-    // wrongly-typed `self_hosted` (API/web version skew, a proxy mangling the
-    // body) is an unexpected shape — fail closed to self-hosted, never default
-    // the edition to SaaS. Defaulting to SaaS would leak the public demo landing
-    // onto a private instance; the spec requires this read to fail closed to
-    // self-hosted (SPEC m3.8 — Marketing landing), which is what this docblock
-    // already promises for an unexpected shape.
-    if (typeof data.self_hosted !== 'boolean') return FAIL_CLOSED;
-
-    return {
-      github: data.auth?.github === true,
-      selfHosted: data.self_hosted,
-    };
+    return parseCapabilities(await res.json());
   } catch {
     return FAIL_CLOSED;
   }

@@ -1,0 +1,26 @@
+{
+  "trigger": "Resumen IA",
+  "dialogLabel": "Resumen de la revisión",
+  "heading": "Resumen de la revisión",
+  "description": "Temas, puntos de desacuerdo, consenso y acciones a partir de los hilos de revisión de este documento. Un borrador para leer — no se publica nada.",
+  "idle": "Todavía no hay resumen para este documento.",
+  "generate": "Generar resumen",
+  "generating": "Generando…",
+  "retry": "Reintentar",
+  "takingTooLong": "Está tardando más de lo esperado. Reintenta o vuelve en un momento.",
+  "failed": "La generación falló. Reintenta.",
+  "copy": "Copiar como markdown",
+  "copied": "Copiado",
+  "copyFailed": "No se pudo copiar al portapapeles.",
+  "empty": "Ninguno.",
+  "close": "Cerrar",
+  "markdownTitle": "Resumen de la revisión — {document}",
+  "draftNotice": "Un borrador para que lo leas. No se publicó nada.",
+  "draftNoticeWithModel": "Un borrador para que lo leas, generado por {model}. No se publicó nada.",
+  "sections": {
+    "themes": "Temas",
+    "contentionPoints": "Puntos de desacuerdo",
+    "consensus": "Consenso",
+    "actionItems": "Acciones"
+  }
+}

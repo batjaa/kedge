@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
+import { AiDigestAction } from './ai-digest-action';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
 import {
   DocumentNewVersionBanner,
@@ -101,6 +102,7 @@ export function DocumentReviewSurface({
   projectionVersion,
   canResync = false,
   canUpdateContent = false,
+  canRunAiDigest = false,
   lastSyncStatus = null,
   syncError = null,
   children,
@@ -135,6 +137,13 @@ export function DocumentReviewSurface({
    * surface (the share surface passes neither).
    */
   canUpdateContent?: boolean;
+  /**
+   * The BYO-key AI surface (SPEC §14, M4). True only when the API reports an
+   * Anthropic key configured — the capability read fails closed, and the share
+   * surface never passes it, so a keyless instance and a share reviewer both see
+   * no AI affordance at all rather than a button that 404s.
+   */
+  canRunAiDigest?: boolean;
   lastSyncStatus?: SyncStatus | null;
   syncError?: string | null;
   children: ReactNode;
@@ -886,6 +895,17 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
+  // The primary AI-digest affordance (DESIGN.md header anatomy, #130). Owns its
+  // own panel, run request, and poll loop; it writes no review data, so it needs
+  // nothing from this surface but the document it summarizes.
+  //
+  // Hidden while reading a historical version: a digest is always taken over the
+  // CURRENT version and its threads, so offering it here would silently answer a
+  // different question than the one the page appears to be asking.
+  const aiDigestControl = canRunAiDigest && viewedVersionId === currentVersionId ? (
+    <AiDigestAction documentId={documentId} documentTitle={title} />
+  ) : null;
+
   const versionSwitcher = versions.length > 0 ? (
     <DocumentVersionSwitcher
       documentId={documentId}
@@ -895,7 +915,7 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
-  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl || updateContentControl ? (
+  const headerActions = versionSwitcher || projectControl || lifecycleControl || approvalControl || resyncControl || updateContentControl || aiDigestControl ? (
     <>
       {versionSwitcher}
       {projectControl}
@@ -903,6 +923,7 @@ export function DocumentReviewSurface({
       {approvalControl}
       {resyncControl}
       {updateContentControl}
+      {aiDigestControl}
     </>
   ) : null;
 

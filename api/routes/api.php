@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\AiRunController;
 use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\ClaimDocumentController;
 use App\Http\Controllers\Api\V1\CommentReactionController;
@@ -256,6 +257,26 @@ Route::prefix('v1')->group(function () {
             Route::post('/comments/{comment}/reactions', [CommentReactionController::class, 'store'])
                 ->withTrashed()
                 ->name('api.v1.comments.reactions.store');
+        });
+
+        // AI runs (SPEC §14, §17, M4), all behind AiRunPolicy and the BYO-key
+        // gate: with no Anthropic key configured every route here 404s, so a
+        // keyless self-host has no AI surface at all rather than broken buttons.
+        //
+        // The generation POST carries `throttle:ai` — each request can queue a
+        // model call against the workspace's key, so the limiter bounds spend as
+        // well as abuse. The two reads are the poll target and the panel's
+        // re-attach-on-mount, so they stay free like every other status poll.
+        Route::middleware('ai.enabled')->group(function () {
+            Route::post('/documents/{document}/ai/digest', [AiRunController::class, 'digest'])
+                ->middleware('throttle:ai')
+                ->name('api.v1.documents.ai.digest');
+
+            Route::get('/documents/{document}/ai/digest', [AiRunController::class, 'latestDigest'])
+                ->name('api.v1.documents.ai.digest.latest');
+
+            Route::get('/ai-runs/{aiRun}', [AiRunController::class, 'show'])
+                ->name('api.v1.ai-runs.show');
         });
 
         // Integration credentials (SPEC §16, §13), all behind IntegrationPolicy.

@@ -99,3 +99,12 @@ _Avoid_: guest doc, trial doc
 **Import Warning**:
 A per-version record of what didn't survive normalization (failed image, dropped
 construct) — always shown to the author, never silent.
+
+### AI
+
+**AI Run**:
+One queued AI generation with its cost ledger — type, status, model, tokens,
+cost — over exactly one document. Append-only history: a retry mints a new run,
+so a failed run keeps its error and spend forever and AI cost/day survives
+retries. Output is always a draft a human confirms, never an action.
+_Avoid_: job (a job executes a run), generation, request

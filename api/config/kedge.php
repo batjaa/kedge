@@ -278,4 +278,90 @@ return [
         'secret' => env('DIAGRAM_SHARED_SECRET'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | AI features (SPEC §14, M4)
+    |--------------------------------------------------------------------------
+    |
+    | BYO key: the entire AI surface is gated on a configured ANTHROPIC_API_KEY.
+    | No key -> `enabled` is false, /config reports `ai.enabled: false`, the web
+    | hides every AI affordance, and the AI routes 404 (the established
+    | feature-flag middleware pattern). A self-hosted instance without a key is
+    | complete, not crippled — there are no broken buttons to click.
+    |
+    | AI_ENABLED is a KILL SWITCH ONLY, the Nightwatch idiom: it can force the
+    | surface off, and can never force it on. A credential is the only thing that
+    | turns AI on, so no env typo can surface a button backed by no key. Test
+    | suites enable the surface through config() directly, never through env.
+    |
+    | The provider is the v1 pin (SPEC §14: laravel/ai -> Claude), deliberately
+    | NOT env-driven — a knob that could point elsewhere while the gate still
+    | reads ANTHROPIC_API_KEY would let the surface enable itself against an
+    | unconfigured provider. Models ARE env-overridable per SPEC §14:
+    | `claude-sonnet-5` by default, with the cheap high-volume model reserved for
+    | thread summaries (M4, later ticket). `pricing` is the USD-per-million-token
+    | table cost accounting reads; an unpriced model records a null cost rather
+    | than a wrong number.
+    |
+    */
+
+    'ai' => [
+        'enabled' => (static function (): bool {
+            $override = env('AI_ENABLED');
+
+            if ($override !== null && ! filter_var($override, FILTER_VALIDATE_BOOL)) {
+                return false;
+            }
+
+            return filled(env('ANTHROPIC_API_KEY'));
+        })(),
+
+        'provider' => 'anthropic',
+        'model' => (string) env('AI_MODEL', 'claude-sonnet-5'),
+        'summary_model' => (string) env('AI_SUMMARY_MODEL', 'claude-haiku-4-5'),
+
+        // USD per 1M tokens, per model: [input, output].
+        'pricing' => [
+            'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
+            'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+        ],
+
+        // Context budget (SPEC §14). `context_tokens` is the assembled-input
+        // ceiling for ONE model call — deliberately far below the model's real
+        // window so the response and the instructions always fit. Over budget,
+        // the builder chunks by section and merges; `max_chunks` bounds how many
+        // calls one run may make, and whatever doesn't fit is reported as
+        // coverage ("covers N of M threads"), never silently dropped.
+        'context_tokens' => (int) env('AI_CONTEXT_TOKENS', 24000),
+        'max_chunks' => (int) env('AI_MAX_CHUNKS', 4),
+
+        // Hard ceiling on how many threads one assembly HYDRATES. The context
+        // budget bounds what reaches the model; this bounds what reaches worker
+        // memory, so a pathological review can't OOM the shared queue. Coverage
+        // still counts against the document's REAL thread total, so exceeding
+        // this is reported honestly rather than hidden.
+        'max_threads' => (int) env('AI_MAX_THREADS', 500),
+
+        // The `throttle:ai` limiter (SPEC §13), per authenticated user. Tighter
+        // than the other write limiters because each request can queue a model
+        // call against the workspace's key: this bounds spend, not just abuse.
+        'rate_per_minute' => (int) env('AI_RATE_PER_MINUTE', 10),
+
+        // Job-level ceiling, in seconds, sized for a chunked run (SPEC §14, eng
+        // review §6). A run that blows through it lands `failed` via the terminal
+        // handler — a stuck `running` row is impossible from the server side, and
+        // the web poller's own ceiling covers even a hard-killed worker.
+        'job_timeout' => (int) env('AI_JOB_TIMEOUT', 300),
+
+        // How long an in-flight run may go without landing before a fresh
+        // request treats it as ABANDONED — fails it and mints a replacement (the
+        // M3.6 stale-scan-takeover idiom). This is the last line against a run
+        // that no worker will ever finish: a hard-killed worker never runs the
+        // terminal handler, and without this every later request would join the
+        // dead row forever. Sized well past the worst legitimate case (tries x
+        // job_timeout plus backoff), so it never kills a run that is still
+        // honestly retrying.
+        'stale_after' => (int) env('AI_STALE_AFTER', 1800),
+    ],
+
 ];
