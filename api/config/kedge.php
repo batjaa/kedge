@@ -320,6 +320,25 @@ return [
         'model' => (string) env('AI_MODEL', 'claude-sonnet-5'),
         'summary_model' => (string) env('AI_SUMMARY_MODEL', 'claude-haiku-4-5'),
 
+        // TEST-ONLY seam (M4 #137), the GITHUB_API_HOST idiom applied to
+        // inference: every agent answers from a scripted, deterministic fake
+        // instead of the provider, so the Playwright journeys can drive the AI
+        // surface end to end with no live model call and no real key.
+        //
+        // DOUBLE-GATED, and deliberately so — a fake that silently replaced the
+        // model on a real deployment would hand users invented review output
+        // dressed as analysis. The env flag alone is not enough: it is honored
+        // ONLY under APP_ENV=e2e (web/e2e/serve-api.sh's throwaway env) or
+        // testing. Anywhere else it reads false however it is set, so the flag
+        // leaking into a production .env changes nothing.
+        'fake' => (static function (): bool {
+            if (! filter_var(env('AI_FAKE_RESPONSES', false), FILTER_VALIDATE_BOOL)) {
+                return false;
+            }
+
+            return in_array((string) env('APP_ENV', 'production'), ['e2e', 'testing'], true);
+        })(),
+
         // USD per 1M tokens, per model: [input, output].
         'pricing' => [
             'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],

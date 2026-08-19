@@ -90,6 +90,33 @@ export const MDX_SMUGGLED_DOC = {
   xssMarker: 'XSSMARKER39',
 } as const;
 
+/**
+ * The M4 AI/agent fixture (#137), imported by the mcp-agent, ai-triage, and
+ * ai-split journeys. Every anchor below sits on ONE source line in the fixture
+ * file: the rendered paragraph keeps the source's line breaks, and the
+ * selection helper matches inside a single text node.
+ */
+export const AI_DOC = {
+  url: fixtureUrl('rfc-300-ai-review.md'),
+  title: 'RFC-300: The AI review loop',
+  /** The passage the MCP agent anchors its comment to, straight from `plain_text`. */
+  mcpAnchor: 'An agent reviewer reads this document over MCP and answers in the same rail as a person.',
+  /** The passage the human author comments on, so the review has two voices in it. */
+  authorAnchor: 'A digest counts every thread on this document and says so in one honest sentence.',
+  /** The passage the ai-triage journey comments on. */
+  triageAnchor: "A stance is the author's decision, and the model writes the reply they already chose.",
+  /**
+   * The passage the ai-split journey anchors its multi-issue comment to. The
+   * scripted split proposals quote two disjoint spans of THIS sentence — see
+   * `SPLIT_QUOTE_ONE`/`SPLIT_QUOTE_TWO` in
+   * api/app/Providers/FakeAiServiceProvider.php, the other half of the contract.
+   * A split's anchor is located inside the source thread's passage or not at
+   * all, so the two must stay in step.
+   */
+  splitAnchor:
+    'Two things matter here: the anchor must survive a re-import, and the digest is only ever a draft the author confirms.',
+} as const;
+
 /** A deterministic upstream 500 — the transient (non-2xx) import-failure source. */
 export const UPSTREAM_500_URL = fixtureUrl('status/500');
 

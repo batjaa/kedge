@@ -33,6 +33,44 @@ export function uniqueIdentity(prefix: string): Identity {
 }
 
 /**
+ * Wait until React owns the auth form, not just until it is on screen.
+ *
+ * Before hydration a submit button is only a submit button: the click runs the
+ * browser's native submission, the form's `onSubmit` never fires, and the page
+ * simply reloads with the fields as query parameters — no request to the API,
+ * no session, and a baffling "expected /, got /signup?email=…" a few lines
+ * later. The race is invisible on an idle machine and surfaced once the pack
+ * grew past forty journeys, so every credential submit waits for this first.
+ *
+ * The signal is React's own bookkeeping: it stamps internal props onto every
+ * DOM node it hydrates, and nothing public says "the handler is attached". That
+ * makes this an implementation detail, so a miss is NON-FATAL — a React release
+ * that renamed those keys would otherwise time out every journey in the pack
+ * for a reason that has nothing to do with the product. Falling through leaves
+ * the pack exactly where it was before this guard existed: correct when the
+ * page is ready, and loud about the URL if it is not.
+ */
+async function formIsHydrated(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => {
+        const form = document.querySelector('form');
+        if (form === null) return false;
+
+        return Object.keys(form).some(
+          (key) => key.startsWith('__reactProps$') || key.startsWith('__reactFiber$'),
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+  } catch {
+    // Hydration could not be observed. Submit anyway rather than failing on a
+    // probe: the assertions after the click are the real contract.
+  }
+}
+
+/**
  * Register through the real browser and land on the authenticated shell — the
  * same cross-app cookie handshake the M0 journey proves, reused as a precondition
  * here. Leaves the page on `/` (the review queue).
@@ -42,6 +80,7 @@ export async function register(page: Page, identity: Identity): Promise<void> {
   // Structural selectors, not copy: the auth chrome renders in the browser's
   // negotiated locale (M3.9), so English strings are not a stable contract here.
   await expect(page.locator('input[name="name"]')).toBeVisible();
+  await formIsHydrated(page);
 
   await page.locator('input[name="name"]').fill(identity.name);
   await page.locator('input[name="email"]').fill(identity.email);
@@ -67,6 +106,7 @@ export async function signIn(
   expectUrl: string | RegExp = '/',
 ): Promise<void> {
   await expect(page.locator('input[name="email"]')).toBeVisible();
+  await formIsHydrated(page);
 
   await page.locator('input[name="email"]').fill(identity.email);
   await page.locator('input[name="password"]').fill(identity.password);
