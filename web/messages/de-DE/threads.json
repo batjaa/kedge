@@ -68,6 +68,7 @@
   "composer": {
     "comment": "Kommentieren",
     "suggest": "Vorschlagen",
+    "ask": "KI fragen",
     "reply": "Antworten",
     "post": "Senden",
     "cancel": "Abbrechen",

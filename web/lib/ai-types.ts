@@ -5,7 +5,7 @@
 
 export type AiRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-export type AiRunType = 'digest' | 'improve_prompt' | 'reply_draft' | 'split' | 'summary';
+export type AiRunType = 'digest' | 'improve_prompt' | 'reply_draft' | 'split' | 'summary' | 'ask';
 
 /** Whether retrying could ever help — the alertable half of a failure. */
 export type AiFailureKind = 'deterministic' | 'transient';
@@ -116,8 +116,30 @@ export interface SplitOutput {
   coverage: AiRunCoverage;
 }
 
+/**
+ * The passage a reader had selected when they asked (M4 #139). A subset of the
+ * M2 capture object on purpose: an ask persists no anchor and re-anchors
+ * nothing, so the offsets and projection version the capture also carries have
+ * nothing to be validated against and are not sent.
+ */
+export interface AskQuote {
+  exact: string;
+  heading_path: string[];
+}
+
+/**
+ * One answer to one question (M4 #139). Rendered in an ephemeral panel and
+ * copyable — never persisted as a comment, a thread, or a suggestion, because
+ * the api has no endpoint that could.
+ */
+export interface AskOutput {
+  answer: string;
+  coverage: AiRunCoverage;
+}
+
 /** Every artifact an AI run can land. One member per run type. */
 export type AiRunOutput =
+  | AskOutput
   | DigestOutput
   | ImprovePromptOutput
   | ReplyDraftOutput

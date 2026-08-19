@@ -1,0 +1,21 @@
+{
+  "trigger": "Preguntar a la IA",
+  "dialogLabel": "Preguntar sobre este documento",
+  "heading": "Preguntar sobre este documento",
+  "description": "Haz una pregunta y lee la respuesta. No se publica nada, y la respuesta desaparece al cerrar esto.",
+  "descriptionPassage": "Pregunta sobre el pasaje que seleccionaste. No se publica nada, y la respuesta desaparece al cerrar esto.",
+  "selectedPassage": "Pasaje seleccionado",
+  "questionLabel": "Tu pregunta",
+  "placeholder": "¿Qué dice esta sección sobre el reanclaje?",
+  "ask": "Preguntar",
+  "askAgain": "Preguntar de nuevo",
+  "asking": "Leyendo el documento…",
+  "takingTooLong": "Esto está tardando más de lo esperado. Pregunta de nuevo o vuelve en un momento.",
+  "failed": "No se pudo responder esa pregunta. Pregunta de nuevo.",
+  "copy": "Copiar respuesta",
+  "copied": "Copiado",
+  "copyFailed": "No se pudo copiar al portapapeles.",
+  "close": "Cerrar",
+  "ephemeralNotice": "Una respuesta para que la leas. No se publicó nada y esto no se guarda.",
+  "ephemeralNoticeWithModel": "Una respuesta para que la leas, generada por {model}. No se publicó nada y esto no se guarda."
+}

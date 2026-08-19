@@ -68,6 +68,7 @@
   "composer": {
     "comment": "Comment",
     "suggest": "Suggest",
+    "ask": "Ask AI",
     "reply": "Reply",
     "post": "Post",
     "cancel": "Cancel",

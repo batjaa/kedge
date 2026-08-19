@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode } from 'react';
-import { MessageSquare, Pencil, Send } from 'lucide-react';
+import { MessageCircleQuestion, MessageSquare, Pencil, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { MentionTextarea } from './mention-textarea';
 import type { AnchorCaptureFailure, AnchorSelector } from '@/lib/anchor-capture-core';
@@ -35,6 +35,7 @@ export function DocumentCommentComposer({
   onCommentTypeChange,
   onClose,
   onOpenPanel,
+  onAsk,
   onSubmit,
 }: {
   documentId: number;
@@ -49,6 +50,12 @@ export function DocumentCommentComposer({
   onCommentTypeChange: (type: CommentType) => void;
   onClose: () => void;
   onOpenPanel: () => void;
+  /**
+   * Ask the AI about this selection (M4 #139). Absent when AI is disabled on
+   * the instance — the affordance then simply isn't rendered, which is the
+   * fail-closed rule every AI surface follows: no teaser, no dead button.
+   */
+  onAsk?: () => void;
   onSubmit: () => void;
 }) {
   const t = useTranslations('threads');
@@ -65,16 +72,36 @@ export function DocumentCommentComposer({
   const { isSuggestion, suggestionUnchanged, submitDisabled } = submitState;
 
   if (composer.stage === 'affordance') {
+    // Comment and ask sit side by side on a selection: both are things a reader
+    // does with a passage they just pointed at, and one of them (ask) costs
+    // nothing and changes nothing, which is precisely why it belongs next to
+    // the one that does. Comment/suggest still live one click deeper, behind
+    // the composer panel.
     return (
-      <button
-        type="button"
-        onClick={onOpenPanel}
-        className="fixed z-50 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+      <div
+        className="fixed z-50 flex items-center gap-1"
         style={{ left: composer.x, top: composer.y, transform: 'translateX(-50%)' }}
       >
-        <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-        {t('composer.comment')}
-      </button>
+        <button
+          type="button"
+          onClick={onOpenPanel}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-inset dark:ring-emerald-400/20 dark:hover:bg-emerald-400/15"
+        >
+          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+          {t('composer.comment')}
+        </button>
+
+        {onAsk ? (
+          <button
+            type="button"
+            onClick={onAsk}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15"
+          >
+            <MessageCircleQuestion className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('composer.ask')}
+          </button>
+        ) : null}
+      </div>
     );
   }
 

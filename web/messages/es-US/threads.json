@@ -68,6 +68,7 @@
   "composer": {
     "comment": "Comentar",
     "suggest": "Sugerir",
+    "ask": "Preguntar a la IA",
     "reply": "Responder",
     "post": "Publicar",
     "cancel": "Cancelar",

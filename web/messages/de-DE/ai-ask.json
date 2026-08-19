@@ -1,0 +1,21 @@
+{
+  "trigger": "KI fragen",
+  "dialogLabel": "Zu diesem Dokument fragen",
+  "heading": "Zu diesem Dokument fragen",
+  "description": "Stelle eine Frage und lies die Antwort. Es wird nichts veröffentlicht, und die Antwort ist weg, sobald du dies schließt.",
+  "descriptionPassage": "Frage zur ausgewählten Passage. Es wird nichts veröffentlicht, und die Antwort ist weg, sobald du dies schließt.",
+  "selectedPassage": "Ausgewählte Passage",
+  "questionLabel": "Deine Frage",
+  "placeholder": "Was sagt dieser Abschnitt über die Neuverankerung?",
+  "ask": "Fragen",
+  "askAgain": "Erneut fragen",
+  "asking": "Dokument wird gelesen…",
+  "takingTooLong": "Das dauert länger als erwartet. Frage erneut oder schau gleich noch einmal vorbei.",
+  "failed": "Diese Frage konnte nicht beantwortet werden. Frage erneut.",
+  "copy": "Antwort kopieren",
+  "copied": "Kopiert",
+  "copyFailed": "Kopieren in die Zwischenablage nicht möglich.",
+  "close": "Schließen",
+  "ephemeralNotice": "Eine Antwort zum Lesen. Es wurde nichts veröffentlicht, und dies wird nicht gespeichert.",
+  "ephemeralNoticeWithModel": "Eine Antwort zum Lesen, erstellt von {model}. Es wurde nichts veröffentlicht, und dies wird nicht gespeichert."
+}

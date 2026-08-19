@@ -1,6 +1,6 @@
 import { publicApiBaseUrl } from './config';
 import { csrfSend } from './csrf-client';
-import type { AiRun, AiSplitRun, DigestOutput, ImprovePromptOutput, ReplyStance, SplitOutput, ThreadSummaryOutput } from './ai-types';
+import type { AiRun, AiSplitRun, AskQuote, DigestOutput, ImprovePromptOutput, ReplyStance, SplitOutput, ThreadSummaryOutput } from './ai-types';
 
 /**
  * The AI run client (SPEC §14, §17, M4). POST to request a generation, then poll
@@ -189,6 +189,35 @@ export async function startCommentSplit(
   }
 }
 
+/**
+ * POST /api/v1/documents/{id}/ai/ask — ask a free-form question about the
+ * document, optionally about one selected passage (M4 #139).
+ *
+ * ALWAYS 202 with a new run. This is the one generation endpoint with no
+ * dedupe: two questions about one document are two different questions, so
+ * there is no in-flight run to be handed instead of an answer to your own.
+ *
+ * There is deliberately no `readLatestAsk`. The answer lives in the panel and
+ * nowhere else — closing it is how you throw it away — so nothing here can go
+ * back and fetch one.
+ */
+export async function startAsk(
+  documentId: number,
+  question: string,
+  quote?: AskQuote | null,
+): Promise<StartAiRunOutcome> {
+  return startRun(
+    `/api/v1/documents/${documentId}/ai/ask`,
+    {
+      unavailable: 'AI features are not enabled on this instance.',
+      forbidden: 'You do not have access to ask about this document.',
+      conflict: 'This document has no imported version to read yet.',
+      error: 'Something went wrong asking that. Please try again.',
+    },
+    quote ? { question, quote } : { question },
+  );
+}
+
 /** GET /api/v1/ai-runs/{id} — the poll target. */
 export async function readAiRun<TOutput = DigestOutput>(id: number): Promise<AiRun<TOutput> | null> {
   return readRun(`/api/v1/ai-runs/${id}`);
@@ -278,7 +307,7 @@ async function readRun<TOutput = DigestOutput>(path: string): Promise<AiRun<TOut
 async function startRun(
   path: string,
   messages: { unavailable: string; forbidden: string; conflict: string; error: string },
-  body?: Record<string, string>,
+  body?: Record<string, unknown>,
 ): Promise<StartAiRunOutcome> {
   try {
     const res = await csrfSend(path, { method: 'POST', body });
