@@ -497,6 +497,7 @@ POST   /comments/{id}/ai/split
 GET    /documents/{id}/ai/digest            → latest digest run (panel re-attach on mount); 204 when none
 GET    /documents/{id}/ai/improve-prompt    → latest improve-prompt run (panel re-attach on mount); 204 when none
 GET    /threads/{id}/ai/summary             → latest summary run for the thread; 204 when none
+GET    /comments/{id}/ai/split              → latest split run for that comment (panel re-attach); 204 when none
 GET    /ai-runs/{id}
 
 GET    /notifications ?page=       PATCH /notifications/read

@@ -1,6 +1,6 @@
 import { publicApiBaseUrl } from './config';
 import { csrfSend } from './csrf-client';
-import type { AiRun, DigestOutput, ImprovePromptOutput, ReplyStance, ThreadSummaryOutput } from './ai-types';
+import type { AiRun, AiSplitRun, DigestOutput, ImprovePromptOutput, ReplyStance, SplitOutput, ThreadSummaryOutput } from './ai-types';
 
 /**
  * The AI run client (SPEC §14, §17, M4). POST to request a generation, then poll
@@ -11,9 +11,15 @@ import type { AiRun, DigestOutput, ImprovePromptOutput, ReplyStance, ThreadSumma
  * signal: a single dropped poll must never look like a finished run.
  */
 
-export type StartDigestOutcome =
-  | { ok: true; run: AiRun }
-  | { ok: false; kind: 'unavailable' | 'forbidden' | 'conflict' | 'rate-limited' | 'error'; message: string };
+export type StartRunFailure = {
+  ok: false;
+  kind: 'unavailable' | 'forbidden' | 'conflict' | 'rate-limited' | 'error';
+  message: string;
+};
+
+export type StartDigestOutcome = { ok: true; run: AiRun } | StartRunFailure;
+
+export type StartSplitOutcome = { ok: true; run: AiSplitRun } | StartRunFailure;
 
 /**
  * The same outcome for a run of any type: the caller knows which output shape it
@@ -132,9 +138,97 @@ export async function readLatestThreadSummary(threadId: number): Promise<AiRun<T
   return readRun(`/api/v1/threads/${threadId}/ai/summary`);
 }
 
+/**
+ * POST /api/v1/comments/{id}/ai/split — propose how one sprawling comment
+ * divides into separate threads. 202 with a new run, or 200 with the run already
+ * in flight FOR THIS COMMENT (server-side dedupe is per comment, not per
+ * document). Both are success: the caller polls whichever run it got back.
+ *
+ * Nothing is written by this call or by the run it starts. Each proposal becomes
+ * a thread only when the author approves it and the client forks (hard rule 5).
+ */
+export async function startCommentSplit(
+  commentId: number,
+  documentVersionId: number,
+): Promise<StartSplitOutcome> {
+  try {
+    // The version the reader's page is showing. The server refuses the request
+    // when it is no longer current, so a stale page can never be handed anchors
+    // into passages it is not displaying.
+    const res = await csrfSend(`/api/v1/comments/${commentId}/ai/split`, {
+      method: 'POST',
+      body: { document_version_id: documentVersionId },
+    });
+
+    if (res.ok) {
+      return { ok: true, run: (await res.json()) as AiSplitRun };
+    }
+
+    if (res.status === 404) {
+      return { ok: false, kind: 'unavailable', message: 'AI features are not enabled on this instance.' };
+    }
+
+    if (res.status === 403) {
+      return { ok: false, kind: 'forbidden', message: 'You do not have access to split comments here.' };
+    }
+
+    if (res.status === 409) {
+      // The comment cannot be forked, so it cannot be split: a deleted comment,
+      // a thread's opening comment, or a document with no current version.
+      const data = (await res.json().catch(() => null)) as { message?: string } | null;
+      return { ok: false, kind: 'conflict', message: data?.message ?? 'This comment cannot be split.' };
+    }
+
+    if (res.status === 429) {
+      return { ok: false, kind: 'rate-limited', message: 'Too many requests. Wait a minute, then try again.' };
+    }
+
+    return { ok: false, kind: 'error', message: 'Something went wrong proposing a split. Please try again.' };
+  } catch {
+    return { ok: false, kind: 'error', message: 'Something went wrong proposing a split. Please try again.' };
+  }
+}
+
 /** GET /api/v1/ai-runs/{id} — the poll target. */
 export async function readAiRun<TOutput = DigestOutput>(id: number): Promise<AiRun<TOutput> | null> {
   return readRun(`/api/v1/ai-runs/${id}`);
+}
+
+/** GET /api/v1/ai-runs/{id} — the poll target, typed as a split run. */
+export async function readAiSplitRun(id: number): Promise<AiSplitRun | null> {
+  return readRun<SplitOutput>(`/api/v1/ai-runs/${id}`);
+}
+
+/**
+ * The re-attach read's three answers. "No run" and "could not read" must not be
+ * the same value here: the panel treats "no run" as licence to start a NEW one,
+ * and a dropped read reported as "no run" bills the key for a second run whose
+ * answer already existed.
+ */
+export type LatestSplitOutcome =
+  | { kind: 'run'; run: AiSplitRun }
+  | { kind: 'none' }
+  | { kind: 'unavailable' };
+
+/**
+ * GET /api/v1/comments/{id}/ai/split — the split panel's re-attach when it
+ * opens. 204 means no split was ever requested for this comment.
+ */
+export async function readLatestCommentSplit(commentId: number): Promise<LatestSplitOutcome> {
+  try {
+    const res = await fetch(`${publicApiBaseUrl}/api/v1/comments/${commentId}/ai/split`, {
+      credentials: 'include',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (res.status === 204) return { kind: 'none' };
+    if (!res.ok) return { kind: 'unavailable' };
+
+    return { kind: 'run', run: (await res.json()) as AiSplitRun };
+  } catch {
+    return { kind: 'unavailable' };
+  }
 }
 
 /**
@@ -158,6 +252,7 @@ export async function readLatestImprovePrompt(
 }
 
 async function readRun<TOutput>(path: string): Promise<AiRun<TOutput> | null> {
+async function readRun<TOutput = DigestOutput>(path: string): Promise<AiRun<TOutput> | null> {
   try {
     const res = await fetch(`${publicApiBaseUrl}${path}`, {
       credentials: 'include',

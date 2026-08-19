@@ -342,6 +342,13 @@ return [
         // this is reported honestly rather than hidden.
         'max_threads' => (int) env('AI_MAX_THREADS', 500),
 
+        // Ceiling on how many split proposals one comment-split run may offer
+        // (M4 #134). Nothing is written until a human approves each one, so this
+        // bounds the REVIEW LIST, not a write: a model that answers a two-issue
+        // comment with forty proposals produces a list nobody can triage, and
+        // the surplus is dropped with the coverage line saying so.
+        'max_splits' => (int) env('AI_MAX_SPLITS', 6),
+
         // The `throttle:ai` limiter (SPEC §13), per authenticated user. Tighter
         // than the other write limiters because each request can queue a model
         // call against the workspace's key: this bounds spend, not just abuse.

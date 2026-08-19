@@ -265,11 +265,24 @@ export async function reanchorThread(
   return { ok: false, kind: 'error', message: 'Could not re-attach this thread. Please try again.' };
 }
 
+/**
+ * Fork a reply into its own thread.
+ *
+ * `anchor` is the optional client-supplied selector (m4 eng review §9): the AI
+ * split flow lands each approved proposal on its own anchor instead of
+ * inheriting the source thread's. Omitted — every manual fork — the endpoint
+ * keeps M2's copy-the-source-anchor behaviour, unchanged. The anchor is
+ * re-validated server-side against the live projection, so a stale one is a 422
+ * with nothing persisted, never a thread pointing at the wrong text.
+ */
 export async function forkComment(
   commentId: number,
   idempotencyKey: string,
+  anchor?: ThreadAnchorPayload | null,
 ): Promise<ThreadMutationOutcome> {
   const body: Record<string, unknown> = { idempotency_key: idempotencyKey };
+
+  if (anchor) body.anchor = anchor;
 
   const res = await mutate('POST', `/api/v1/comments/${commentId}/fork`, body);
 

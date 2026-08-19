@@ -3,6 +3,7 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { SplitCapability } from './ai-split-action';
 import { ThreadCard } from './document-thread-card';
 import type { ReplyToThreadInput } from '@/lib/comments-client';
 import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
@@ -19,6 +20,7 @@ export function MobileThreadSheet({
   onDeleteComment,
   onSetSuggestionStatus,
   onToggleReaction,
+  splitCapability,
 }: {
   open: boolean;
   thread: ReviewThread | null;
@@ -31,6 +33,7 @@ export function MobileThreadSheet({
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
+  splitCapability?: SplitCapability;
 }) {
   const t = useTranslations('threads');
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -105,6 +108,7 @@ export function MobileThreadSheet({
             onDeleteComment={onDeleteComment}
             onSetSuggestionStatus={onSetSuggestionStatus}
             onToggleReaction={onToggleReaction}
+            splitCapability={splitCapability}
           />
         ) : (
           <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">

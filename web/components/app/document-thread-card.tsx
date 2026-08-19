@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Check, Flag, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { SplitCapability } from './ai-split-action';
 import { AiThreadSummary } from './ai-thread-summary';
 import { StatusBadge } from './document-thread-badges';
 import { CommentRow, useCommentEditState } from './document-thread-comment-row';
@@ -32,6 +33,7 @@ export function ThreadCard({
   onDeleteComment,
   onSetSuggestionStatus,
   onToggleReaction,
+  splitCapability,
 }: {
   thread: ReviewThread;
   active: boolean;
@@ -49,6 +51,8 @@ export function ThreadCard({
   onDeleteComment: (comment: ThreadComment) => Promise<string | null>;
   onSetSuggestionStatus: (comment: ThreadComment, status: SuggestionStatus) => Promise<string | null>;
   onToggleReaction: (comment: ThreadComment) => Promise<string | null>;
+  /** Absent when the instance has no Anthropic key: no split affordance exists. */
+  splitCapability?: SplitCapability;
 }) {
   const t = useTranslations('threads');
   const aiEnabled = useAiEnabled();
@@ -192,6 +196,7 @@ export function ThreadCard({
               reactionBusy={reactionBusyId === comment.id}
               onSetSuggestionStatus={(status) => void setSuggestionStatus(comment, status)}
               onToggleReaction={() => void toggleReaction(comment)}
+              splitCapability={splitCapability}
             />
           ))}
         </div>

@@ -74,7 +74,7 @@ import { approveDocument, revokeApproval } from '@/lib/approvals-client';
 import type { Approval, Document, DocumentVersion, LifecycleStatus, Project, SyncStatus } from '@/lib/document-types';
 import { versionLabel as displayVersionLabel } from '@/lib/version-label';
 import type { AnchorSelector } from '@/lib/anchor-capture-core';
-import type { ReviewThread, SuggestionStatus, ThreadComment, ThreadStatus } from '@/lib/thread-types';
+import type { ReviewThread, SuggestionStatus, ThreadAnchorPayload, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 const SCROLL_SPY_OFFSET = 136;
 const MOBILE_BREAKPOINT = 1280;
@@ -104,6 +104,7 @@ export function DocumentReviewSurface({
   canResync = false,
   canUpdateContent = false,
   canRunAi = false,
+  canProposeCommentSplits = false,
   lastSyncStatus = null,
   syncError = null,
   children,
@@ -146,6 +147,12 @@ export function DocumentReviewSurface({
    * in the header (digest, improve-the-doc prompt) as one switch.
    */
   canRunAi?: boolean;
+  /**
+   * The per-comment AI split affordance (#134). Gated on the same BYO key as the
+   * digest, and passed separately because it is a separate surface: an instance
+   * with no key, and the share surface, both leave it false and get no button.
+   */
+  canProposeCommentSplits?: boolean;
   lastSyncStatus?: SyncStatus | null;
   syncError?: string | null;
   children: ReactNode;
@@ -651,6 +658,29 @@ export function DocumentReviewSurface({
     return null;
   }
 
+  /**
+   * Approve one AI split proposal (#134). This is the ONLY place a proposal
+   * becomes review data, and it does so by calling the ordinary fork endpoint —
+   * same Policy, same server-side anchor validation, same idempotency as the
+   * fork button beside it. The AI proposed; this click is the write.
+   *
+   * A rejected anchor comes back as the endpoint's own message and is reported
+   * against its proposal; the panel keeps the remaining proposals approvable.
+   */
+  async function approveSplit(
+    commentId: number,
+    idempotencyKey: string,
+    anchor: ThreadAnchorPayload | null,
+  ): Promise<string | null> {
+    const outcome = await forkComment(commentId, idempotencyKey, anchor);
+    if (!outcome.ok) return outcome.message;
+
+    await refreshLoadedThreads();
+    setActiveThreadId(outcome.thread.id);
+
+    return null;
+  }
+
   function syncForkingCommentIds() {
     setForkingCommentIds(forkGuardRef.current?.forkingCommentIds() ?? new Set());
   }
@@ -897,6 +927,21 @@ export function DocumentReviewSurface({
     />
   ) : null;
 
+  // The per-comment split affordance's capability (#134): passing the approval
+  // callback IS the gate, so a keyless instance renders no button at all.
+  //
+  // Absent while reading anything but the live current version. Proposals are
+  // generated against, and approved into, whatever the CURRENT version is at
+  // that moment — so offering them beside a page showing older text would let
+  // the author approve anchors into passages they cannot see. The notice, not
+  // the server-rendered ids, is the test: it also catches a version that landed
+  // while this page was open.
+  const splitCapability = canProposeCommentSplits
+    && viewedVersionId === currentVersionId
+    && newerVersionNotice === null
+    ? { documentVersionId: currentVersionId, approve: approveSplit }
+    : undefined;
+
   // The header's AI artifacts (DESIGN.md header anatomy): the digest (#130) and
   // the improve-the-doc prompt (#132). Each owns its own panel, run request, and
   // poll loop; neither writes review data, so they need nothing from this
@@ -1042,6 +1087,7 @@ export function DocumentReviewSurface({
                 onDeleteComment={remove}
                 onSetSuggestionStatus={setSuggestionStatus}
                 onToggleReaction={toggleReaction}
+                splitCapability={splitCapability}
                 pendingReattachThreadId={pendingReattachThreadId}
                 reattachingThreadId={reattachingThreadId}
                 reattachStatus={reattachStatus}
@@ -1105,6 +1151,7 @@ export function DocumentReviewSurface({
         onDeleteComment={remove}
         onSetSuggestionStatus={setSuggestionStatus}
         onToggleReaction={toggleReaction}
+        splitCapability={splitCapability}
       />
 
       <DocumentCommentComposer

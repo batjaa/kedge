@@ -5,6 +5,7 @@ namespace App\Services\AI;
 use App\Enums\AiRunType;
 use App\Models\AiRun;
 use App\Services\AI\Exceptions\UnsupportedAiRunTypeException;
+use App\Services\AI\Generators\CommentSplitGenerator;
 use App\Services\AI\Generators\ImprovePromptGenerator;
 use App\Services\AI\Generators\ReplyDraftGenerator;
 use App\Services\AI\Generators\ReviewDigestGenerator;
@@ -25,6 +26,7 @@ class AiGeneratorRegistry
         AiRunType::Digest->value => ReviewDigestGenerator::class,
         AiRunType::ImprovePrompt->value => ImprovePromptGenerator::class,
         AiRunType::ReplyDraft->value => ReplyDraftGenerator::class,
+        AiRunType::Split->value => CommentSplitGenerator::class,
         AiRunType::Summary->value => ThreadSummaryGenerator::class,
     ];
 

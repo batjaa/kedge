@@ -107,6 +107,8 @@ class AiRunLedger
                 'workspace_id' => $document->workspace_id,
                 'document_id' => $document->id,
                 'created_by' => $actor->id,
+                'target_type' => $target?->getMorphClass(),
+                'target_id' => $target?->getKey(),
                 'type' => $type,
                 'variant' => $variant,
                 'status' => AiRunStatus::Pending,
@@ -143,9 +145,9 @@ class AiRunLedger
     }
 
     /**
-     * The newest run of this type for the document, whatever its status — what
-     * the panel re-attaches to on mount so an in-flight or finished run is never
-     * forgotten (eng review §8).
+     * The newest run of this type for the document (and target), whatever its
+     * status — what the panel re-attaches to on mount so an in-flight or
+     * finished run is never forgotten (eng review §8).
      */
     public function latestFor(
         Document $document,
