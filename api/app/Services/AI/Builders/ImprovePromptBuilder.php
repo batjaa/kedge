@@ -62,8 +62,19 @@ class ImprovePromptBuilder
         // reported as coverage rather than hidden.
         $cap = max(1, (int) config('kedge.ai.max_threads', 500));
 
-        $threads = $document->threads()
-            ->open()
+        // Threads with nothing to contribute are excluded IN THE QUERY, before
+        // the cap counts them — otherwise five hundred declined-only threads
+        // would fill the budget and hide the accepted edit sitting behind them.
+        $carryingThreads = $document->threads()->open()->whereHas(
+            'comments',
+            fn ($query) => $query->withoutTrashed()->where(
+                fn ($comment) => $comment
+                    ->whereNull('suggestion_status')
+                    ->orWhere('suggestion_status', '!=', SuggestionStatus::Declined->value),
+            ),
+        );
+
+        $threads = (clone $carryingThreads)
             ->with([
                 'comments' => fn ($query) => $query->withoutTrashed()->oldest('id'),
                 'anchors' => fn ($query) => $query->where('document_version_id', $document->current_version_id),
@@ -80,8 +91,10 @@ class ImprovePromptBuilder
 
         // A thread whose every comment was deleted or declined carries no
         // feedback at all: it is not "left out for budget", it has nothing to
-        // leave out — so it is not counted against coverage either.
-        $total = $document->threads()->open()->count() - ($threads->count() - count($carrying));
+        // leave out — so it is not counted against coverage either. The query
+        // already excludes those; the in-memory filter is the same rule applied
+        // to what was actually hydrated, and the two can only ever agree.
+        $total = $carryingThreads->count() - ($threads->count() - count($carrying));
 
         $sections = array_map(
             fn (Thread $thread): PromptSection => new PromptSection(
@@ -113,15 +126,44 @@ class ImprovePromptBuilder
 
         $briefs = array_map($this->brief(...), $covered);
 
-        $coverage = $bodyOmitted
-            ? $assembled->coverage->withNote(
+        // An accepted suggested edit needs no model: the author already approved
+        // that exact text. So the required edits are taken from EVERY hydrated
+        // thread, not just the covered ones — losing an approved edit because its
+        // discussion didn't fit the budget would break the one promise this
+        // artifact makes. The omission of its discussion is confessed instead.
+        $editBriefs = array_values(array_filter(
+            array_map($this->brief(...), $carrying),
+            fn (ThreadBrief $brief): bool => $brief->requiredEdits !== [],
+        ));
+
+        $coverage = $assembled->coverage;
+
+        if ($bodyOmitted) {
+            $coverage = $coverage->withNote(
                 'The document body was too large to include, so threads were read with their quoted anchors.',
-            )
-            : $assembled->coverage;
+            );
+        }
+
+        $coveredIds = array_flip(array_map(fn (ThreadBrief $brief): int => $brief->id, $briefs));
+        $uncoveredEdits = array_sum(array_map(
+            fn (ThreadBrief $brief): int => isset($coveredIds[$brief->id]) ? 0 : count($brief->requiredEdits),
+            $editBriefs,
+        ));
+
+        if ($uncoveredEdits > 0) {
+            $coverage = $coverage->withNote(sprintf(
+                '%d accepted suggested %s from threads too large to read %s included verbatim anyway, '
+                .'without a summary of the discussion around %s.',
+                $uncoveredEdits,
+                $uncoveredEdits === 1 ? 'edit' : 'edits',
+                $uncoveredEdits === 1 ? 'is' : 'are',
+                $uncoveredEdits === 1 ? 'it' : 'them',
+            ));
+        }
 
         $requiredEdits = array_sum(array_map(
             fn (ThreadBrief $brief): int => count($brief->requiredEdits),
-            $briefs,
+            $editBriefs,
         ));
 
         return new ImprovePromptPlan(
@@ -129,6 +171,7 @@ class ImprovePromptBuilder
             versionLabel: $document->versionLabelForVersionId($document->current_version_id),
             sourceUrl: $document->source_url,
             threads: $briefs,
+            edits: $editBriefs,
             prompt: new AssembledPrompt(
                 chunks: $assembled->chunks,
                 coverage: $coverage,

@@ -55,11 +55,12 @@ class ImprovePromptGenerator implements GeneratesAiRun
         // was assembled from.
         $this->ledger->recordScope($run, $plan->meta());
 
-        if ($plan->isEmpty()) {
-            return new AiGeneration($this->output($plan, ''));
-        }
+        // Nothing to send is not the same as nothing to say: a review whose only
+        // unresolved thread is too large to read still owes the author its
+        // accepted edits, which need no model at all.
+        $instructions = $plan->hasChunks() ? $this->instructions($run, $plan) : [];
 
-        return new AiGeneration($this->output($plan, $plan->toArtifact($this->instructions($run, $plan))));
+        return new AiGeneration($this->output($plan, $plan->toArtifact($instructions)));
     }
 
     /**
