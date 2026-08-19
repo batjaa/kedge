@@ -496,6 +496,7 @@ POST   /documents/{id}/ai/digest            POST /documents/{id}/ai/digest/post-
 POST   /documents/{id}/ai/improve-prompt
 POST   /threads/{id}/ai/reply-draft {stance}
 POST   /comments/{id}/ai/split
+GET    /documents/{id}/ai/digest            → latest digest run (panel re-attach on mount); 204 when none
 GET    /ai-runs/{id}
 
 GET    /notifications ?page=       PATCH /notifications/read

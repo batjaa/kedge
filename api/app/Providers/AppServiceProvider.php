@@ -126,6 +126,17 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by('reviewer-verify-ip:'.$request->ip());
         });
 
+        // AI generation writes (SPEC §14, §13). Per authenticated user — every
+        // request can queue a model call against the workspace's own Anthropic
+        // key, so this is the spend bound as well as the abuse bound. Deliberately
+        // tighter than the other write limiters: a runaway retry loop here costs
+        // real money, and server-side dedupe already collapses honest
+        // double-clicks into one run. Polling reads stay free.
+        RateLimiter::for('ai', function (Request $request) {
+            return Limit::perMinute((int) config('kedge.ai.rate_per_minute'))
+                ->by($request->user()?->id ?: $request->ip());
+        });
+
         // Instant demo mode is an unauthenticated, public-internet abuse surface
         // (SPEC §10.3, §13), so its limiter is the most aggressive: strictly
         // per-IP, with a burst-per-minute AND a per-day ceiling (each anonymous

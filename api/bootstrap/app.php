@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureAiEnabled;
 use App\Http\Middleware\EnsureDemoModeEnabled;
 use App\Http\Middleware\EnsureResyncEnabled;
 use Illuminate\Foundation\Application;
@@ -44,7 +45,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Instant demo mode is SaaS-only (SPEC §10.3, #25): this alias 404s the
         // demo + claim routes on a self-hosted instance, per request.
+        // The BYO-key AI gate (SPEC §14, M4): with no Anthropic key configured,
+        // every AI route 404s and the web hides the whole surface.
         $middleware->alias([
+            'ai.enabled' => EnsureAiEnabled::class,
             'demo.enabled' => EnsureDemoModeEnabled::class,
             'resync.enabled' => EnsureResyncEnabled::class,
         ]);

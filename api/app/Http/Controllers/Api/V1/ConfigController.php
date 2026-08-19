@@ -33,6 +33,14 @@ class ConfigController extends Controller
             // self-hosted. Env lives only on the API, so this is the single source
             // of truth — the web never carries its own SELF_HOSTED var.
             'self_hosted' => (bool) config('kedge.self_hosted'),
+            // BYO key (SPEC §14, M4). False on an instance with no configured
+            // ANTHROPIC_API_KEY — the web then renders no AI affordance at all,
+            // and the AI routes 404 to match. The web treats a MISSING `ai`
+            // capability as false too, so a new web against an old api shows
+            // nothing broken.
+            'ai' => [
+                'enabled' => (bool) config('kedge.ai.enabled'),
+            ],
         ]);
     }
 }

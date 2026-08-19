@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\WorkspaceRole;
+use App\Jobs\GenerateAiRunJob;
 use App\Jobs\ResyncDocumentJob;
+use App\Models\AiRun;
 use App\Models\Approval;
 use App\Models\Comment;
 use App\Models\Document;
@@ -483,6 +485,80 @@ class AuthorizationMatrixTest extends TestCase
         $this->actingAs($member)->fromWebApp()
             ->postJson('/api/v1/integrations', ['token' => 'ghp_'.str_repeat('x', 36)])
             ->assertStatus(201);
+    }
+
+    /**
+     * The ai-run action column (SPEC §18.4, M4 #130). Generation is a MEMBER
+     * capability, not a reviewer one: a magic-link reviewer may read, comment,
+     * suggest, and approve one shared document, but spending the workspace's
+     * Anthropic key is not part of that grant.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function aiRunRoleMatrix(): array
+    {
+        return [
+            'author can request a digest' => ['author', 202],
+            'workspace member can request a digest' => ['member', 202],
+            'reviewer via active share cannot request a digest' => ['reviewer', 403],
+            'reviewer via a different share cannot request a digest' => ['other_reviewer', 403],
+            'non-member cannot request a digest' => ['non_member', 403],
+            'guest cannot request a digest' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('aiRunRoleMatrix')]
+    public function test_ai_digest_create_authorization(string $role, int $expectedStatus): void
+    {
+        Queue::fake();
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/digest")
+            ->assertStatus($expectedStatus);
+
+        if ($expectedStatus === 202) {
+            Queue::assertPushed(GenerateAiRunJob::class);
+        } else {
+            Queue::assertNotPushed(GenerateAiRunJob::class);
+            $this->assertDatabaseCount('ai_runs', 0);
+        }
+    }
+
+    /**
+     * Reading a run — the poll target — obeys the same workspace scope: an
+     * ai-run id in a URL is never an access path.
+     *
+     * @return array<string, array{string, int}>
+     */
+    public static function aiRunReadRoleMatrix(): array
+    {
+        return [
+            'author can poll their run' => ['author', 200],
+            'workspace member can poll the run' => ['member', 200],
+            'reviewer via active share cannot poll it' => ['reviewer', 403],
+            'reviewer via a different share cannot poll it' => ['other_reviewer', 403],
+            'non-member cannot poll it' => ['non_member', 403],
+            'guest cannot poll it' => ['guest', 401],
+        ];
+    }
+
+    #[DataProvider('aiRunReadRoleMatrix')]
+    public function test_ai_run_read_authorization(string $role, int $expectedStatus): void
+    {
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        $run = AiRun::factory()->for($document)->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $owner->id,
+        ]);
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/ai-runs/{$run->id}")
+            ->assertStatus($expectedStatus);
     }
 
     /**
