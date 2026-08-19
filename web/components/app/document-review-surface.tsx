@@ -944,10 +944,17 @@ export function DocumentReviewSurface({
   // the author approve anchors into passages they cannot see. The notice, not
   // the server-rendered ids, is the test: it also catches a version that landed
   // while this page was open.
-  // One gate for both ask affordances (the header button and the selection
-  // popover), so the panel can never be opened by a route that outlives the
-  // control rendering it.
-  const canAsk = canRunAi && viewedVersionId === currentVersionId;
+  // One gate for every read-only header AI artifact — digest, improve-prompt,
+  // and ask — and, because ask is also reachable from a text selection, for
+  // that affordance too. Shared deliberately: the panel must never be openable
+  // from a route that outlives the control rendering it.
+  //
+  // Ask sits with the read-only artifacts rather than with the split
+  // capability, which additionally requires `newerVersionNotice === null`. That
+  // extra condition exists because approving a split WRITES an anchor into the
+  // current version; an ask writes nothing, so a version landing mid-question
+  // costs a slightly stale answer, not a wrong row.
+  const canRunHeaderAi = canRunAi && viewedVersionId === currentVersionId;
 
   const splitCapability = canProposeCommentSplits
     && viewedVersionId === currentVersionId
@@ -967,7 +974,7 @@ export function DocumentReviewSurface({
   // Ask (#139) joins them with one difference: its panel is also reachable from
   // a text selection, so the OPEN state lives here rather than inside the
   // component — one panel, two ways in, and only one place an answer can be.
-  const aiArtifactControls = canAsk ? (
+  const aiArtifactControls = canRunHeaderAi ? (
     <>
       <AiDigestAction documentId={documentId} documentTitle={title} />
       <AiImprovePromptAction documentId={documentId} />
@@ -1208,7 +1215,7 @@ export function DocumentReviewSurface({
           if (submittingRef.current) return;
           if (composer.open) setComposer({ ...composer, stage: 'panel' });
         }}
-        onAsk={canAsk ? () => {
+        onAsk={canRunHeaderAi ? () => {
           if (!composer.open) return;
           // The selection's own text becomes the quoted passage; a selection
           // that failed to anchor still HAS text, so an ask about it is a

@@ -2,8 +2,8 @@
   "trigger": "Preguntar a la IA",
   "dialogLabel": "Preguntar sobre este documento",
   "heading": "Preguntar sobre este documento",
-  "description": "Haz una pregunta y lee la respuesta. No se publica nada, y la respuesta desaparece al cerrar esto.",
-  "descriptionPassage": "Pregunta sobre el pasaje que seleccionaste. No se publica nada, y la respuesta desaparece al cerrar esto.",
+  "description": "Haz una pregunta y lee la respuesta. No se publica nada en la revisión, y este panel es el único lugar donde aparece la respuesta.",
+  "descriptionPassage": "Pregunta sobre el pasaje que seleccionaste. No se publica nada en la revisión, y este panel es el único lugar donde aparece la respuesta.",
   "selectedPassage": "Pasaje seleccionado",
   "questionLabel": "Tu pregunta",
   "placeholder": "¿Qué dice esta sección sobre el reanclaje?",
@@ -16,6 +16,6 @@
   "copied": "Copiado",
   "copyFailed": "No se pudo copiar al portapapeles.",
   "close": "Cerrar",
-  "ephemeralNotice": "Una respuesta para que la leas. No se publicó nada y esto no se guarda.",
-  "ephemeralNoticeWithModel": "Una respuesta para que la leas, generada por {model}. No se publicó nada y esto no se guarda."
+  "ephemeralNotice": "Una respuesta para que la leas. No se publicó nada en la revisión, y al cerrar este panel se acaba: copia lo que quieras conservar.",
+  "ephemeralNoticeWithModel": "Una respuesta para que la leas, generada por {model}. No se publicó nada en la revisión, y al cerrar este panel se acaba: copia lo que quieras conservar."
 }

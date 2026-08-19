@@ -47,6 +47,15 @@ class DocumentAskPromptBuilder
     private const MAX_QUOTE_CHARS = 2000;
 
     /**
+     * Longest rendered heading path. The endpoint bounds the path's depth
+     * already; this bounds what the CONTEXT costs regardless of where the run's
+     * request came from — context is repeated in every chunk and subtracted
+     * from the budget rather than chunked, so it must not be able to crowd the
+     * document out of its own prompt.
+     */
+    private const MAX_SECTION_CHARS = 300;
+
+    /**
      * Assemble one ask.
      *
      * @param  string  $question  The reader's own words — untrusted, fenced below.
@@ -179,7 +188,7 @@ class DocumentAskPromptBuilder
             ));
 
             if ($section !== '') {
-                $lines[] = 'document section: '.$section;
+                $lines[] = 'document section: '.Str::limit($section, self::MAX_SECTION_CHARS, '… [path shortened]');
             }
 
             // An over-long quote is shortened with the cut MARKED, so the model

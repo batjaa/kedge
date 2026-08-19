@@ -30,6 +30,19 @@ class StoreDocumentAskRequest extends FormRequest
     public const MAX_QUESTION_CHARS = 1000;
 
     /**
+     * Deepest heading path a quoted passage may carry.
+     *
+     * Six is the deepest heading level a document has, and the capture walks
+     * one entry per level — so this is generous. It is a HARD limit rather than
+     * a tidy one: the heading path is repeated into the prompt context, which
+     * every chunk carries and which the context budget subtracts rather than
+     * chunks, so an unbounded path is a way to push arbitrary text at the
+     * provider (and into `ai_runs.request`) that the question's own ceiling
+     * would not catch.
+     */
+    public const MAX_HEADING_PATH_DEPTH = 12;
+
+    /**
      * Authorization is the controller's Policy call, as everywhere else in v1.
      */
     public function authorize(): bool
@@ -55,7 +68,7 @@ class StoreDocumentAskRequest extends FormRequest
             'question' => ['required', 'string', 'max:'.self::MAX_QUESTION_CHARS],
             'quote' => ['sometimes', 'nullable', 'array'],
             'quote.exact' => ['required_with:quote', 'string', 'max:20000'],
-            'quote.heading_path' => ['sometimes', 'array'],
+            'quote.heading_path' => ['sometimes', 'array', 'max:'.self::MAX_HEADING_PATH_DEPTH],
             'quote.heading_path.*' => ['string', 'max:255'],
         ];
     }

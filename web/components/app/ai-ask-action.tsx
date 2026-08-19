@@ -21,10 +21,15 @@ import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
  *
  * **Ephemeral by construction, not by cleanup.** The dialog's state — the
  * question, the run, the answer — lives in {@link AskDialog}, which is
- * UNMOUNTED when the reader closes the panel. Nothing is stored, nothing is
- * re-fetched on mount (there is no latest-ask read to fetch), and reopening the
- * panel gives an empty box. Resetting state on close would be a promise the
- * next refactor could quietly break; not having the state is not.
+ * UNMOUNTED when the reader closes the panel. Nothing is re-fetched on mount
+ * (there is no latest-ask read to fetch), and reopening gives an empty box.
+ * Resetting state on close would be a promise the next refactor could quietly
+ * break; not having the state is not.
+ *
+ * "Ephemeral" is a claim about this SURFACE, and the copy says exactly that:
+ * nothing is posted to the review, and closing the panel is the end of the
+ * answer. The run itself still lands in the `ai_runs` ledger, because cost is
+ * cost (SPEC §14) — but no affordance anywhere leads back to it.
  *
  * The dialog is opened by the surface rather than by this component alone,
  * because the second entry point is the selection popover — one panel, two ways

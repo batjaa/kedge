@@ -335,6 +335,60 @@ class AiDocumentAskTest extends TestCase
         $this->assertSame(1, AiRun::query()->count());
     }
 
+    /**
+     * The question's ceiling is not the whole payload's ceiling unless the
+     * quote's heading path has one too: the path is repeated into the prompt
+     * CONTEXT, which the budget subtracts rather than chunks, so an unbounded
+     * path is a way to push arbitrary text at the provider that a 1000-character
+     * question limit would never catch.
+     */
+    public function test_an_over_deep_heading_path_is_rejected(): void
+    {
+        Queue::fake();
+        [$author, $document] = $this->readyDocument();
+
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/ask", [
+                'question' => 'What does this mean?',
+                'quote' => [
+                    'exact' => 'Re-anchoring',
+                    'heading_path' => array_fill(0, StoreDocumentAskRequest::MAX_HEADING_PATH_DEPTH + 1, 'Section'),
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('quote.heading_path');
+
+        Queue::assertNotPushed(GenerateAiRunJob::class);
+        $this->assertDatabaseCount('ai_runs', 0);
+    }
+
+    /**
+     * And the builder holds the line regardless of where a run's request came
+     * from — a hand-written row cannot crowd the document out of its own prompt.
+     */
+    public function test_a_long_heading_path_is_shortened_in_the_prompt(): void
+    {
+        DocumentAskAgent::fake([['answer' => 'Answered.']]);
+        [$author, $document] = $this->readyDocument();
+
+        [$run] = app(AiRunLedger::class)->startOrJoin($document, $author, AiRunType::Ask, request: [
+            'question' => 'What does this mean?',
+            'quote' => [
+                'exact' => 'Re-anchoring',
+                'heading_path' => array_fill(0, 40, str_repeat('S', 200)),
+            ],
+        ]);
+
+        $this->runJob($run);
+
+        DocumentAskAgent::assertPrompted(function ($prompt): bool {
+            $this->assertStringContainsString('[path shortened]', $prompt->prompt);
+            $this->assertLessThan(4000, mb_strlen($prompt->prompt));
+
+            return true;
+        });
+    }
+
     public function test_a_quote_without_its_text_is_rejected(): void
     {
         Queue::fake();
@@ -569,6 +623,29 @@ class AiDocumentAskTest extends TestCase
         $this->actingAs($colleague)->fromWebApp()
             ->getJson("/api/v1/ai-runs/{$run->id}")
             ->assertForbidden();
+    }
+
+    /**
+     * A non-member's MALFORMED ask spends nothing.
+     *
+     * The FormRequest runs ahead of the controller's Policy call — the v1
+     * convention every other AI endpoint follows — so this lands 422 rather than
+     * 403. The status is not the invariant worth pinning; the absence of a row
+     * and a queued job is, because that is what "an outsider cannot spend the
+     * workspace's key" actually means.
+     */
+    public function test_a_non_member_with_a_malformed_ask_mints_nothing(): void
+    {
+        Queue::fake();
+        [, $document] = $this->readyDocument();
+        $outsider = $this->author('outsider@example.com');
+
+        $response = $this->actingAs($outsider)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/ask", ['question' => '']);
+
+        $this->assertContains($response->getStatusCode(), [403, 422]);
+        Queue::assertNotPushed(GenerateAiRunJob::class);
+        $this->assertDatabaseCount('ai_runs', 0);
     }
 
     /**
