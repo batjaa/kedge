@@ -309,6 +309,14 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
 
+## Decision log (violet AI CTAs #143, 2026-08-19)
+
+- ✅ **The violet agent register extends to AI CTAs in both themes** — violet means *a model runs*; a human write (post, reply, split approve, document approve) keeps zinc-900/emerald, and Copy stays zinc (it runs nothing). Tones centralised in `web/components/app/ai-tone.ts`; DESIGN.md amended in the same commit (status hues may now sit on a control, not just a mark — with the quiet/icon variants, the colour-only-geometry rule, and a hover exception pinned). Split **Approve** moved the other way — it wore the agent hue in dark mode, the same collision in reverse.
+
+## Known debt (#143 branch gate, 2026-08-19)
+
+- **A disabled AI CTA in light mode is fainter than the old zinc-900 fill at the same opacity** — WCAG exempts inactive controls, and dark mode has looked this way since M4 (the themes now agree). Revisit if a disabled-state pass ever happens. (XS)
+
 ## Decision log (sticky sidebar #146, 2026-08-19)
 
 - ✅ **The review-surface pin offset is measured, not guessed** — the surface observes the document header (ResizeObserver + resize, rAF-coalesced) and publishes its bottom edge as `--kedge-pin-top`; the sidebar and both column toggles pin there. The header's own sticky offset is read from its computed `top`, so nothing restates the constant. Fixing the inert sticky (auto-height `<aside>` gave it zero slack) exposed that `top-32` was a guess at a header that measures 107–164px depending on approvals and width.
