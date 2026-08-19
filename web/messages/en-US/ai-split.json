@@ -6,6 +6,7 @@
   "idle": "No split proposed for this comment yet.",
   "checking": "Checking for an existing proposal…",
   "checkFailed": "Couldn't check whether a proposal already exists — generating may create a second one.",
+  "checkAgain": "Check again",
   "generate": "Propose a split",
   "generating": "Proposing…",
   "retry": "Propose again",

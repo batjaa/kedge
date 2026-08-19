@@ -75,7 +75,7 @@ class AiCommentSplitTest extends TestCase
         [$author, , $reply] = $this->splittableThread();
 
         $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertNotFound();
 
         $this->actingAs($author)->fromWebApp()
@@ -94,7 +94,7 @@ class AiCommentSplitTest extends TestCase
         [$author, $document, $reply] = $this->splittableThread();
 
         $response = $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertStatus(202)
             ->assertJsonPath('status', 'pending')
             ->assertJsonPath('type', 'split');
@@ -507,11 +507,11 @@ class AiCommentSplitTest extends TestCase
         [$author, , $reply] = $this->splittableThread();
 
         $first = $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertStatus(202);
 
         $second = $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertOk();
 
         $this->assertSame($first->json('id'), $second->json('id'));
@@ -529,11 +529,11 @@ class AiCommentSplitTest extends TestCase
         ]);
 
         $first = $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertStatus(202);
 
         $second = $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$sibling->id}/ai/split")
+            ->postJson("/api/v1/comments/{$sibling->id}/ai/split", $this->viewing($sibling))
             ->assertStatus(202);
 
         $this->assertNotSame($first->json('id'), $second->json('id'));
@@ -551,7 +551,7 @@ class AiCommentSplitTest extends TestCase
             ->assertStatus(202);
 
         $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertStatus(202);
 
         $this->assertSame(1, AiRun::query()->where('type', AiRunType::Digest->value)->count());
@@ -593,7 +593,7 @@ class AiCommentSplitTest extends TestCase
         $opening = $reply->thread->comments()->orderBy('id')->first();
 
         $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$opening->id}/ai/split")
+            ->postJson("/api/v1/comments/{$opening->id}/ai/split", $this->viewing($opening))
             ->assertStatus(409);
 
         $this->assertDatabaseCount('ai_runs', 0);
@@ -607,7 +607,7 @@ class AiCommentSplitTest extends TestCase
         $reply->delete();
 
         $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertStatus(409);
 
         $this->assertDatabaseCount('ai_runs', 0);
@@ -633,6 +633,15 @@ class AiCommentSplitTest extends TestCase
         $this->assertDatabaseCount('ai_runs', 0);
         Queue::assertNotPushed(GenerateAiRunJob::class);
 
+        // Optional would be the same as absent — a caller could opt out of the
+        // check by leaving it off.
+        $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('document_version_id');
+
+        $this->assertDatabaseCount('ai_runs', 0);
+
         // The same request naming the live version is accepted.
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/comments/{$reply->id}/ai/split", [
@@ -648,7 +657,7 @@ class AiCommentSplitTest extends TestCase
         $document->forceFill(['status' => 'failed'])->save();
 
         $this->actingAs($author)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertStatus(409);
 
         $this->assertDatabaseCount('ai_runs', 0);
@@ -671,7 +680,7 @@ class AiCommentSplitTest extends TestCase
         );
 
         $this->actingAs($stranger)->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertForbidden();
 
         $this->actingAs($stranger)->fromWebApp()
@@ -687,7 +696,7 @@ class AiCommentSplitTest extends TestCase
         [, , $reply] = $this->splittableThread();
 
         $this->fromWebApp()
-            ->postJson("/api/v1/comments/{$reply->id}/ai/split")
+            ->postJson("/api/v1/comments/{$reply->id}/ai/split", $this->viewing($reply))
             ->assertUnauthorized();
 
         $this->assertDatabaseCount('ai_runs', 0);
@@ -783,10 +792,24 @@ class AiCommentSplitTest extends TestCase
         Queue::fake();
 
         $response = $this->actingAs($actor)->fromWebApp()
-            ->postJson("/api/v1/comments/{$comment->id}/ai/split")
+            ->postJson("/api/v1/comments/{$comment->id}/ai/split", $this->viewing($comment))
             ->assertStatus(202);
 
         return AiRun::query()->findOrFail($response->json('id'));
+    }
+
+    /**
+     * The version the reader's page is showing — required on every generation
+     * request, so a stale page is refused instead of proposing anchors it
+     * cannot display.
+     *
+     * @return array<string, int>
+     */
+    private function viewing(Comment $comment): array
+    {
+        $comment->loadMissing('thread.document');
+
+        return ['document_version_id' => (int) $comment->thread->document->current_version_id];
     }
 
     private function runJob(AiRun $run): void

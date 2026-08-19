@@ -6,6 +6,7 @@
   "idle": "Für diesen Kommentar gibt es noch keinen Aufteilungsvorschlag.",
   "checking": "Wird auf einen vorhandenen Vorschlag geprüft…",
   "checkFailed": "Es konnte nicht geprüft werden, ob bereits ein Vorschlag existiert — das Erstellen könnte einen zweiten anlegen.",
+  "checkAgain": "Erneut prüfen",
   "generate": "Aufteilung vorschlagen",
   "generating": "Wird vorgeschlagen…",
   "retry": "Erneut vorschlagen",

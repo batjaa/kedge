@@ -6,6 +6,7 @@
   "idle": "Aún no hay una división propuesta para este comentario.",
   "checking": "Comprobando si ya hay una propuesta…",
   "checkFailed": "No se pudo comprobar si ya existe una propuesta; generar podría crear una segunda.",
+  "checkAgain": "Comprobar de nuevo",
   "generate": "Proponer una división",
   "generating": "Proponiendo…",
   "retry": "Proponer de nuevo",

@@ -50,14 +50,25 @@ class CommentSplitController extends Controller
     {
         $document = $this->splittableDocument($comment);
 
-        // The reader tells us which version their page is showing. A split is
-        // always generated against — and approved into — whatever the CURRENT
-        // version is, so a stale page would offer the author anchors into
-        // passages they cannot see. Making the server the authority turns that
-        // from a UI race into a refusal; the web reloads and asks again.
+        // The reader tells us which version their page is showing, and must:
+        // optional would mean a caller could opt out of the check by leaving it
+        // off, which is the same as not having it. A split is always generated
+        // against — and approved into — whatever the CURRENT version is, so a
+        // stale page would offer the author anchors into passages they cannot
+        // see. The server is the authority; the web reloads and asks again.
+        //
+        // The residual window is a re-sync landing between this check and the
+        // queued generation. It cannot produce a WRONG anchor — the fork
+        // endpoint re-validates every anchor against the live projection before
+        // persisting, and the run records the version it actually read — so the
+        // worst case is proposals about text the page has not caught up to yet,
+        // which the new-version banner announces within one poll.
+        $request->validate([
+            'document_version_id' => ['required', 'integer'],
+        ]);
+
         abort_if(
-            $request->has('document_version_id')
-                && $request->integer('document_version_id') !== (int) $document->current_version_id,
+            $request->integer('document_version_id') !== (int) $document->current_version_id,
             409,
             'This document has a newer version. Reload before proposing a split.',
         );

@@ -79,6 +79,7 @@ export function AiSplitAction({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attach, setAttach] = useState<AttachState>('checking');
+  const [attachAttempt, setAttachAttempt] = useState(0);
   const requestingRef = useRef(false);
   const approvingRef = useRef(false);
   const attachedRef = useRef(false);
@@ -122,7 +123,7 @@ export function AiSplitAction({
     return () => {
       cancelled = true;
     };
-  }, [open, commentId]);
+  }, [open, commentId, attachAttempt]);
 
   // A new set of proposals is a new set of approvals: keying the reset on the
   // run id means a retry can never show yesterday's approved ticks against
@@ -304,13 +305,24 @@ export function AiSplitAction({
                 </p>
               ) : null}
 
-              {/* The read that would have found an existing run failed. Say so:
-                  the generate button below still works, but the author deserves
-                  to know it might be paying for an answer that already exists. */}
+              {/* The read that would have found an existing run failed, so we
+                  do NOT know whether one exists. Generating from here could bill
+                  the key for an answer already sitting in the ledger — server
+                  dedupe only covers runs still in flight — so the button below
+                  stays closed and the recourse is to check again. */}
               {attach === 'unavailable' ? (
-                <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                  {t('checkFailed')}
-                </p>
+                <div className="mt-2">
+                  <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
+                    {t('checkFailed')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAttachAttempt((attempt) => attempt + 1)}
+                    className="mt-2 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
+                  >
+                    {t('checkAgain')}
+                  </button>
+                </div>
               ) : null}
 
               {phase === 'running' ? (
@@ -348,11 +360,12 @@ export function AiSplitAction({
                 <button
                   type="button"
                   onClick={request}
-                  // Disabled until the panel knows what already exists: the
-                  // server only dedupes runs still IN FLIGHT, so clicking
-                  // through a pending re-attach read would bill a second run
-                  // for a completed answer sitting one response away.
-                  disabled={pending || busy || attach === 'checking'}
+                  // Enabled only once the panel KNOWS what already exists. The
+                  // server dedupes runs still in flight but not completed ones,
+                  // so generating on an unknown — a read still pending, or one
+                  // that failed — bills a second run for an answer that may be
+                  // one response away.
+                  disabled={pending || busy || attach !== 'settled'}
                   className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-1 dark:ring-inset dark:ring-violet-400/20 dark:hover:bg-violet-400/15"
                 >
                   {pending ? t('generating') : phase === 'idle' ? t('generate') : t('retry')}
