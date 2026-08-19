@@ -322,7 +322,7 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 ## USER ACTIONS (M4 deployment carry-overs, from #128, 2026-08-18)
 
-- [ ] **USER ACTION** Provision `ANTHROPIC_API_KEY` in the preview/SaaS env for dogfooding.
+- [x] **USER ACTION** Provision `ANTHROPIC_API_KEY` in the preview/SaaS env for dogfooding. — Done 2026-08-19: key set as a Coolify platform env, `${ANTHROPIC_API_KEY:-}` passthrough added to `deploy/preview/compose.yml` (`x-api-env`, so api/worker/scheduler all receive it); post-deploy `/api/v1/config` reports `ai.enabled: true`.
 - [ ] **USER ACTION** Post-deploy verification: one real digest on a real doc + one MCP smoke call with a freshly minted token.
 - [ ] **USER ACTION** Manual dogfood before module close-out review: digest this module's own review comments with the feature they specced.
 - [ ] **USER ACTION** Decide the #134 fragment-vs-anchor question raised on PR #138 (splits fork the whole comment, differentiated by anchor only).
