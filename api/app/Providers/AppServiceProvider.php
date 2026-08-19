@@ -174,6 +174,28 @@ class AppServiceProvider extends ServiceProvider
                 ->by($request->user()?->id ?: $request->ip());
         });
 
+        // The MCP endpoint (SPEC §15, §13, #135). Keyed on the agent TOKEN, not
+        // its owner: one runaway agent must not starve its operator's other
+        // agents, and two agents sharing a human should not share a budget. This
+        // is the ceiling on ALL MCP traffic — reads included, since one POST
+        // endpoint carries both; the tighter write allowance is spent inside
+        // McpReviewWriter, which is the only layer that knows a write from a read.
+        //
+        // The limiter runs BEFORE the authenticate middleware in the priority
+        // list, so it resolves the principal itself — and must cope with every
+        // shape that resolution can return: no user at all (a bad token), or a
+        // session-authenticated human carrying Sanctum's TransientToken, which is
+        // not a row and has no key. Only a real AgentToken buckets by credential;
+        // everything else falls back to the caller's IP.
+        RateLimiter::for('mcp', function (Request $request) {
+            $token = $request->user()?->currentAccessToken();
+            $key = $token instanceof AgentToken && $token->getKey() !== null
+                ? 'mcp-token:'.$token->getKey()
+                : 'mcp-ip:'.$request->ip();
+
+            return Limit::perMinute((int) config('kedge.mcp.rate_per_minute'))->by($key);
+        });
+
         // Instant demo mode is an unauthenticated, public-internet abuse surface
         // (SPEC §10.3, §13), so its limiter is the most aggressive: strictly
         // per-IP, with a burst-per-minute AND a per-day ceiling (each anonymous

@@ -17,6 +17,7 @@ use App\Models\Thread;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Import\TextProjector;
+use Closure;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -59,9 +60,11 @@ class CommentThreadService
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  ?Closure():void  $guard  runs INSIDE the write transaction, before
+     *                                  anything is inserted — see {@see reply()}.
      * @return array{Thread, int}
      */
-    public function create(Document $document, User $author, array $data, ?string $ip): array
+    public function create(Document $document, User $author, array $data, ?string $ip, ?Closure $guard = null): array
     {
         $idempotencyKey = (string) $data['idempotency_key'];
         $type = ThreadType::from((string) $data['type']);
@@ -93,7 +96,11 @@ class CommentThreadService
         }
 
         try {
-            [$thread, $comment] = DB::transaction(function () use ($document, $author, $data, $type, $commentType, $anchor, $version, $idempotencyKey) {
+            [$thread, $comment] = DB::transaction(function () use ($document, $author, $data, $type, $commentType, $anchor, $version, $idempotencyKey, $guard) {
+                if ($guard !== null) {
+                    $guard();
+                }
+
                 $thread = Thread::create([
                     'document_id' => $document->id,
                     'type' => $type,
@@ -137,9 +144,18 @@ class CommentThreadService
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  ?Closure():void  $guard  runs INSIDE the write transaction, before
+     *                                  the comment row is inserted. It exists for
+     *                                  one caller: the MCP write path revalidates
+     *                                  (and locks) its agent-token row there, so a
+     *                                  credential revoked mid-flight cannot commit
+     *                                  a comment after revoke has answered 204
+     *                                  (#135; the linearizability debt #131 left).
+     *                                  Throwing from it rolls the write back. REST
+     *                                  passes nothing and behaves exactly as before.
      * @return array{Comment, int}
      */
-    public function reply(Thread $thread, User $author, array $data, ?string $ip): array
+    public function reply(Thread $thread, User $author, array $data, ?string $ip, ?Closure $guard = null): array
     {
         $idempotencyKey = (string) $data['idempotency_key'];
         if ($existing = $this->idempotentComment(
@@ -156,7 +172,11 @@ class CommentThreadService
         $this->commentableVersion($thread->document);
 
         try {
-            $comment = DB::transaction(function () use ($thread, $author, $type, $data, $idempotencyKey) {
+            $comment = DB::transaction(function () use ($thread, $author, $type, $data, $idempotencyKey, $guard) {
+                if ($guard !== null) {
+                    $guard();
+                }
+
                 $comment = $thread->comments()->create($this->commentAttributes(
                     $author,
                     $type,
@@ -280,6 +300,10 @@ class CommentThreadService
      * count, and latest activity. Comments and fork counts are bulk-hydrated
      * once after pagination so soft-deleted comments stay coherent.
      *
+     * @param  ?int  $page  an explicit page number, for callers with no query
+     *                      string to resolve one from (the MCP `list_threads`
+     *                      tool, #135). Null keeps the framework's request-driven
+     *                      resolution, which is what every REST caller uses.
      * @return LengthAwarePaginator<int, Thread>
      */
     public function listForDocument(
@@ -287,6 +311,7 @@ class CommentThreadService
         int $perPage,
         ?User $viewer = null,
         ?DocumentVersion $version = null,
+        ?int $page = null,
     ): LengthAwarePaginator {
         $perPage = min(max($perPage, 1), 50);
         $targetVersionId = (int) ($version?->id ?? $document->current_version_id);
@@ -332,7 +357,7 @@ class CommentThreadService
             ->orderBy('rail_anchors.start')
             ->orderBy('threads.id');
 
-        $paginator = $query->paginate($perPage);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
         $threads = $paginator->getCollection()->transform(function (Thread $thread) use ($document) {
             $thread = $this->hydrateJoinedThread($thread);
             $thread->setRelation('document', $document);
