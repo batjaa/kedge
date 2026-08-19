@@ -36,6 +36,16 @@ export function AiArtifactDialog({
 }) {
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  // `onClose` is read through a ref so the effect below depends on `open`
+  // ALONE. With the callback in the dependency list, an inline arrow from the
+  // parent re-runs the whole effect on every render — and its cleanup would
+  // return focus to the trigger while the dialog is still open, yanking the
+  // caret out mid-interaction.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -43,7 +53,7 @@ export function AiArtifactDialog({
     document.body.style.overflow = 'hidden';
 
     function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     }
 
     document.addEventListener('keydown', onKeyDown);
@@ -53,7 +63,7 @@ export function AiArtifactDialog({
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
