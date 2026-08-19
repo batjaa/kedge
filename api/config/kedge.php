@@ -364,4 +364,37 @@ return [
         'stale_after' => (int) env('AI_STALE_AFTER', 1800),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | MCP server (SPEC §15, M4 #135)
+    |--------------------------------------------------------------------------
+    |
+    | Agents are first-class reviewers, and the MCP endpoint is how they get
+    | there. It is gated INDEPENDENTLY of the AI features above (m4-ai-agents:
+    | "MCP is gated independently"): the server is an API surface, not an
+    | inference feature, so an instance with no Anthropic key still hosts agent
+    | reviewers. Default ON — unlike the BYO-key AI gate, MCP needs no
+    | credential of ours to be useful, and an operator who does not want it
+    | switches it off explicitly.
+    |
+    | Off means ABSENT, the established feature-flag shape: the endpoint 404s
+    | and `/config` reports `mcp.enabled: false`, so the web hides the
+    | agent-token settings panel rather than minting credentials for a surface
+    | that isn't listening.
+    |
+    | Two limiters, because one POST endpoint carries both reads and writes
+    | (SPEC §13, user story 21). `rate_per_minute` is the route-level ceiling on
+    | ALL MCP traffic, keyed per token; `write_rate_per_minute` is the tighter
+    | budget the two write tools spend from, matching the human `throttle:comments`
+    | allowance so an agent can't flood a review faster than a person could.
+    |
+    */
+
+    'mcp' => [
+        'enabled' => filter_var(env('MCP_ENABLED', true), FILTER_VALIDATE_BOOL),
+
+        'rate_per_minute' => (int) env('MCP_RATE_PER_MINUTE', 120),
+        'write_rate_per_minute' => (int) env('MCP_WRITE_RATE_PER_MINUTE', 30),
+    ],
+
 ];
