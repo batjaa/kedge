@@ -308,6 +308,10 @@
 
 ## Decision log (M4 AI substrate + digest tracer, 2026-08-18)
 
+- [ ] **`DB_QUEUE_RETRY_AFTER` (90s) sits below `AI_JOB_TIMEOUT` (300s)** — a slow generation on the shared `database` queue can be redelivered to a second worker and double-billed (both calls spend; the loser's spend is discarded). Folds into the dedicated-AI-queue item; found at the #133 gate, pre-existing from #130. (M)
+- [ ] **Collapse `AiRunController::digest` onto `AiRunStarter`** — the digest start path still inlines the dispatch-or-fail logic `AiRunStarter` (#133) now owns; unify once #134 lands. Same pass: unify the duplicate phase-machine aliases (`aiArtifactPhase` #132 / `aiRunPhase` #133) onto one run-generic name. (S)
+- [ ] **Thread-triage authz rows** — reply-draft/summary authorization lives in `AiThreadRunTest`, not `AuthorizationMatrixTest`; add matrix rows for the thread AI endpoints. (S)
+
 - ✅ **Resolved threads are excluded from the improve-prompt wholesale** (#132) — an accepted suggestion sitting on a resolved thread never reaches the artifact. Matches the AC as written ("resolved threads and declined suggestions are excluded"); revisit only if authors report losing approved edits they expected to ship.
 - [ ] **Extract the shared chunk-prompt loop from the AI generators** once #133/#134 land — refusal check, structured-output check, per-call spend, `markSpendUnknown` will exist in three copies by end of M4. (S)
 - [ ] **In-app artifact staleness**: a completed digest/improve-prompt re-attached after a re-sync or triage change still renders as current. #136 adds the stale flag for MCP; the web panels should read it too. (S)

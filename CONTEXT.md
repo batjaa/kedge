@@ -130,3 +130,9 @@ Rendered server-side from the database; the model contributes only one
 instruction per thread.
 _Avoid_: improve prompt run (it is the artifact of an AI Run, type
 improve_prompt), doc prompt
+
+**Reply Stance**:
+The position the author picks before the model reads anything — accept, push
+back, or clarify. Choosing what to say is the human's act; the AI drafts only
+the wording, and there is deliberately no "let the AI decide" stance.
+_Avoid_: tone, sentiment, mood
