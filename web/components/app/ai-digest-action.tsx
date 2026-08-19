@@ -44,7 +44,11 @@ export function AiDigestAction({ documentId, documentTitle }: { documentId: numb
     let cancelled = false;
 
     readLatestDigest(documentId).then((latest) => {
-      if (!cancelled && latest !== null) setRun(latest);
+      if (cancelled || latest === null) return;
+
+      // Monotonic: a slow hydration must never displace a run the user started
+      // while it was in flight — that would strand the new run's poller.
+      setRun((current) => (current === null || current.id < latest.id ? latest : current));
     });
 
     return () => {

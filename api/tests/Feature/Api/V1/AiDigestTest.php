@@ -13,6 +13,7 @@ use App\Services\AI\Agents\ReviewDigestAgent;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
+use App\Services\AI\Exceptions\UnparseableOutputException;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -22,6 +23,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StructuredTextResponse;
 use Tests\TestCase;
 
 /**
@@ -148,6 +152,34 @@ class AiDigestTest extends TestCase
         $this->assertArrayNotHasKey('prompt', $run->input);
     }
 
+    public function test_spend_is_recorded_as_it_is_incurred_not_only_on_success(): void
+    {
+        // Chunk one answers and is billed; chunk two falls over. The run fails —
+        // and still reports what chunk one cost.
+        ReviewDigestAgent::fake([
+            new StructuredTextResponse(
+                $this->digestPayload(),
+                json_encode($this->digestPayload()),
+                new Usage(promptTokens: 1_000_000, completionTokens: 200_000),
+                new Meta('anthropic', 'claude-sonnet-5'),
+            ),
+            fn () => throw new UnparseableOutputException('bad shape'),
+        ]);
+        config(['kedge.ai.context_tokens' => 1400, 'kedge.ai.max_chunks' => 2]);
+        [$author, $document] = $this->reviewedDocument(threads: 2, commentPadding: 400);
+
+        $run = $this->requestDigest($document, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertSame(1_200_000, $run->tokens);
+        $this->assertSame('6.000000', $run->cost);
+        // The scope was written before any model call, so a failed run still
+        // says what it was going to read.
+        $this->assertSame(2, $run->input['chunks']);
+    }
+
     public function test_a_zero_thread_digest_completes_honestly_without_calling_the_model(): void
     {
         ReviewDigestAgent::fake();
@@ -212,6 +244,46 @@ class AiDigestTest extends TestCase
         $this->assertSame($first->json('id'), $second->json('id'));
         $this->assertSame(1, AiRun::query()->count());
         Queue::assertPushed(GenerateAiRunJob::class, 1);
+    }
+
+    public function test_an_abandoned_in_flight_run_is_failed_and_replaced(): void
+    {
+        Queue::fake();
+        config(['kedge.ai.stale_after' => 60]);
+        [$author, $document] = $this->reviewedDocument();
+
+        // A run whose worker was killed hard enough that its terminal handler
+        // never ran: without takeover, every later request would join it forever.
+        $stranded = AiRun::factory()->for($document)->running()->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $author->id,
+            'created_at' => now()->subMinutes(30),
+        ]);
+
+        $response = $this->actingAs($author)->fromWebApp()
+            ->postJson("/api/v1/documents/{$document->id}/ai/digest")
+            ->assertStatus(202);
+
+        $this->assertNotSame($stranded->id, $response->json('id'));
+        $this->assertSame(AiRunStatus::Failed, $stranded->refresh()->status);
+        $this->assertSame('abandoned', $stranded->error['code']);
+        Queue::assertPushed(GenerateAiRunJob::class, 1);
+    }
+
+    public function test_a_disabled_instance_fails_a_queued_run_instead_of_billing_the_key(): void
+    {
+        ReviewDigestAgent::fake([$this->digestPayload()]);
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+
+        // The key is pulled while the run sits in the queue.
+        config(['kedge.ai.enabled' => false]);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertSame('ai_disabled', $run->error['code']);
+        ReviewDigestAgent::assertNeverPrompted();
     }
 
     public function test_a_request_after_a_terminal_run_mints_a_new_one(): void

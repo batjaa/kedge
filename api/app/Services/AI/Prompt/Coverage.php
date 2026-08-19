@@ -14,12 +14,28 @@ namespace App\Services\AI\Prompt;
  */
 final class Coverage
 {
+    /**
+     * @param  list<string>  $notes  Extra omissions a builder must own up to —
+     *                               anything left out that the covered/total
+     *                               count alone would not confess.
+     */
     public function __construct(
         public readonly int $covered,
         public readonly int $total,
         public readonly bool $chunked,
         public readonly string $unit = 'threads',
+        public readonly array $notes = [],
     ) {}
+
+    /**
+     * Add an omission to the statement. Builders use this for material that the
+     * unit count can't express — a document body left out, a quote shortened —
+     * so "covers all N threads" can never be the whole truth by omission.
+     */
+    public function withNote(string $note): self
+    {
+        return new self($this->covered, $this->total, $this->chunked, $this->unit, [...$this->notes, $note]);
+    }
 
     public function isPartial(): bool
     {
@@ -30,6 +46,11 @@ final class Coverage
      * The user-facing sentence. Rendered verbatim — never re-derived in the web.
      */
     public function statement(): string
+    {
+        return trim(implode(' ', [$this->headline(), ...$this->notes]));
+    }
+
+    private function headline(): string
     {
         if ($this->total === 0) {
             return sprintf('No review %s yet — nothing to digest.', $this->unit);

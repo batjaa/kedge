@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AiFailureKind;
 use App\Enums\AiRunType;
 use App\Enums\DocumentStatus;
 use App\Http\Controllers\Controller;
@@ -10,10 +11,12 @@ use App\Jobs\GenerateAiRunJob;
 use App\Models\AiRun;
 use App\Models\Document;
 use App\Policies\AiRunPolicy;
+use App\Services\AI\AiFailure;
 use App\Services\AI\AiRunLedger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Throwable;
 
 /**
  * AI runs (SPEC §14, §17). Generation is queued, so every request returns a run
@@ -51,7 +54,23 @@ class AiRunController extends Controller
         [$run, $created] = $ledger->startOrJoin($document, $request->user(), AiRunType::Digest);
 
         if ($created) {
-            GenerateAiRunJob::dispatch($run->id);
+            try {
+                GenerateAiRunJob::dispatch($run->id);
+            } catch (Throwable $e) {
+                // The row is already committed, so a queue that refuses the job
+                // would otherwise leave a pending run no worker will ever pick
+                // up — and every later request would join that corpse. Fail it
+                // here instead, so the author's retry mints a live run.
+                $ledger->markFailed($run, new AiFailure(
+                    AiFailureKind::Transient,
+                    'dispatch_failed',
+                    'Generation could not be queued. Retry.',
+                ));
+
+                report($e);
+
+                return AiRunResource::make($run)->response()->setStatusCode(202);
+            }
         }
 
         return AiRunResource::make($run)
@@ -69,7 +88,7 @@ class AiRunController extends Controller
      */
     public function latestDigest(Document $document, AiRunLedger $ledger): AiRunResource|Response
     {
-        $this->authorize('create', [AiRun::class, $document]);
+        $this->authorize('viewAny', [AiRun::class, $document]);
 
         $run = $ledger->latestFor($document, AiRunType::Digest);
 

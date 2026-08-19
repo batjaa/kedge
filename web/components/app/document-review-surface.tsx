@@ -898,7 +898,11 @@ export function DocumentReviewSurface({
   // The primary AI-digest affordance (DESIGN.md header anatomy, #130). Owns its
   // own panel, run request, and poll loop; it writes no review data, so it needs
   // nothing from this surface but the document it summarizes.
-  const aiDigestControl = canRunAiDigest ? (
+  //
+  // Hidden while reading a historical version: a digest is always taken over the
+  // CURRENT version and its threads, so offering it here would silently answer a
+  // different question than the one the page appears to be asking.
+  const aiDigestControl = canRunAiDigest && viewedVersionId === currentVersionId ? (
     <AiDigestAction documentId={documentId} documentTitle={title} />
   ) : null;
 

@@ -88,6 +88,20 @@ class PromptAssemblerTest extends TestCase
         $this->assertContains('thread-huge', $assembled->meta['skipped_sections']);
     }
 
+    public function test_a_builder_can_own_up_to_an_omission_the_unit_count_cannot_express(): void
+    {
+        $assembler = PromptAssembler::forRun(new ContextBudget(maxTokens: 4000, maxChunks: 4));
+
+        $coverage = $assembler->assemble('TASK.', $this->sections(2, 100))
+            ->coverage
+            ->withNote('The document body was too large to include.');
+
+        $this->assertSame(
+            'Covers all 2 threads. The document body was too large to include.',
+            $coverage->statement(),
+        );
+    }
+
     public function test_nothing_to_send_produces_no_chunks_and_an_honest_empty_statement(): void
     {
         $assembler = PromptAssembler::forRun(new ContextBudget(maxTokens: 4000, maxChunks: 4));

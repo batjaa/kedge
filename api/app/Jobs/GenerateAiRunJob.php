@@ -2,7 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Enums\AiFailureKind;
 use App\Models\AiRun;
+use App\Services\AI\AiFailure;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
@@ -83,6 +85,20 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
         // A terminal run is never reopened (append-only). A redelivery after the
         // run already landed does nothing.
         if (! $ledger->markRunning($run)) {
+            return;
+        }
+
+        // The kill switch has to reach the workers too. Without this re-check, a
+        // key pulled (or AI_ENABLED=false set) while runs sit in the queue would
+        // still bill that key once per queued run — the gate would close the door
+        // and leave the window open.
+        if (! config('kedge.ai.enabled', false)) {
+            $ledger->markFailed($run, new AiFailure(
+                AiFailureKind::Deterministic,
+                'ai_disabled',
+                'AI features are not enabled on this instance.',
+            ));
+
             return;
         }
 

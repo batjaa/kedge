@@ -18,6 +18,8 @@ function run(status: AiRunStatus, overrides: Partial<AiRun> = {}): AiRun {
     type: 'digest',
     status,
     model: 'claude-sonnet-5',
+    tokens: 0,
+    cost: 0,
     output: null,
     error: null,
     created_at: CREATED_AT,

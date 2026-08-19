@@ -38,21 +38,31 @@ class DigestPromptBuilder
      */
     private const BODY_BUDGET_SHARE = 0.25;
 
+    /** Longest anchor quote carried into the prompt, before an explicit cut mark. */
+    private const MAX_QUOTE_CHARS = 600;
+
     public function build(Document $document): AssembledPrompt
     {
         $assembler = PromptAssembler::forRun();
         $fence = $assembler->fence();
 
-        // One query per relation for the whole document — the context budget,
-        // not pagination, is the volume guard on this path (spec, §"Context
-        // budget"). Trashed comments are excluded: a deleted comment is not part
-        // of the review the author is being shown.
+        // The context budget is the guard on what reaches the MODEL (spec,
+        // §"Context budget"); this cap is the guard on what reaches worker
+        // memory, so a pathological review can't hydrate itself into an OOM and
+        // take the shared queue with it. The real total is counted separately,
+        // so anything past the cap is reported as coverage, never hidden.
+        $total = $document->threads()->count();
+        $cap = max(1, (int) config('kedge.ai.max_threads', 500));
+
+        // Trashed comments are excluded: a deleted comment is not part of the
+        // review the author is being shown.
         $threads = $document->threads()
             ->with([
                 'comments' => fn ($query) => $query->withoutTrashed()->oldest('id'),
                 'anchors' => fn ($query) => $query->where('document_version_id', $document->current_version_id),
             ])
             ->oldest('id')
+            ->limit($cap)
             ->get();
 
         $sections = $threads
@@ -69,17 +79,28 @@ class DigestPromptBuilder
             task: $this->task($bodyIncluded),
             sections: $sections,
             context: $context,
-            totalUnits: $threads->count(),
+            totalUnits: $total,
             unit: 'threads',
         );
 
+        $coverage = $assembled->coverage;
+
+        // Own up to the omissions the thread count can't express, so the panel's
+        // verbatim statement is the whole truth and not just the countable part.
+        if (! $bodyIncluded) {
+            $coverage = $coverage->withNote(
+                'The document body was too large to include, so threads were read with their quoted anchors.',
+            );
+        }
+
         return new AssembledPrompt(
             chunks: $assembled->chunks,
-            coverage: $assembled->coverage,
+            coverage: $coverage,
             meta: $assembled->meta + [
                 'document_id' => $document->id,
                 'document_version_id' => $document->current_version_id,
                 'thread_ids' => $threads->pluck('id')->all(),
+                'thread_total' => $total,
                 'document_body_included' => $bodyIncluded,
             ],
         );
@@ -155,7 +176,10 @@ class DigestPromptBuilder
                 $lines[] = 'document section: '.$section;
             }
 
-            $lines[] = 'quoted from the document: '.Str::limit((string) $anchor->exact, 600);
+            // An over-long quote is shortened with the cut MARKED, so the model
+            // is never handed a silently amputated sentence to reason from.
+            $lines[] = 'quoted from the document: '
+                .Str::limit((string) $anchor->exact, self::MAX_QUOTE_CHARS, '… [quote shortened]');
         }
 
         foreach ($thread->comments as $comment) {

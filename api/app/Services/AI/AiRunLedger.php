@@ -2,6 +2,7 @@
 
 namespace App\Services\AI;
 
+use App\Enums\AiFailureKind;
 use App\Enums\AiRunStatus;
 use App\Enums\AiRunType;
 use App\Models\AiRun;
@@ -47,6 +48,22 @@ class AiRunLedger
                 ->latest('id')
                 ->first();
 
+            // Stale-run takeover (the M3.6 scan idiom). A worker killed hard
+            // enough never runs its terminal handler, so without this the dead
+            // row would be joined by every later request forever and the author
+            // could never get a digest again. Past the cutoff it is failed —
+            // honestly, as an abandoned run keeping whatever it already spent —
+            // and a replacement is minted.
+            if ($existing !== null && $this->isAbandoned($existing)) {
+                $this->markFailed($existing, new AiFailure(
+                    AiFailureKind::Transient,
+                    'abandoned',
+                    'Generation was interrupted and never finished. Retry.',
+                ));
+
+                $existing = null;
+            }
+
             if ($existing !== null) {
                 return [$existing, false];
             }
@@ -58,6 +75,10 @@ class AiRunLedger
                 'type' => $type,
                 'status' => AiRunStatus::Pending,
                 'model' => (string) config('kedge.ai.model'),
+                // Nothing spent yet — 0, not null. A null cost means "we made a
+                // call whose price we don't know", which is a different thing.
+                'tokens' => 0,
+                'cost' => 0,
             ]), true];
         });
 
@@ -110,17 +131,67 @@ class AiRunLedger
     }
 
     /**
-     * Land a completed run. A no-op on an already-terminal run.
+     * Record what this run's prompt was assembled FROM, before any model call.
+     *
+     * Written up front on purpose: a run that later fails still says what it was
+     * going to read (which version, which threads, how many chunks), so a failed
+     * run is diagnosable instead of blank. Scope metadata only — never the
+     * assembled prompt text, never a credential.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    public function recordScope(AiRun $run, array $meta): void
+    {
+        AiRun::query()
+            ->whereKey($run->id)
+            ->inFlight()
+            ->update(['input' => json_encode($meta), 'updated_at' => now()]);
+
+        $run->refresh();
+    }
+
+    /**
+     * Add one model call's spend to the run, as soon as it is incurred.
+     *
+     * Accumulated per call rather than summed at the end, because money spent is
+     * money spent: a chunked run whose third call fails still billed the first
+     * two, and a transient retry that re-runs earlier chunks really is charged
+     * twice. Recording only on success would quietly under-report AI cost/day
+     * (SPEC §19) exactly when spend is highest.
+     *
+     * A null `$cost` means the model has no published price here, so the run's
+     * total becomes permanently unknown (null) rather than silently understated.
+     */
+    public function recordSpend(AiRun $run, ?string $model, int $tokens, ?float $cost): void
+    {
+        DB::transaction(function () use ($run, $model, $tokens, $cost): void {
+            $fresh = AiRun::query()->whereKey($run->id)->lockForUpdate()->first();
+
+            if ($fresh === null || $fresh->isTerminal()) {
+                return;
+            }
+
+            $fresh->forceFill([
+                'tokens' => (int) ($fresh->tokens ?? 0) + $tokens,
+                'cost' => $cost === null || $fresh->cost === null
+                    ? null
+                    : (float) $fresh->cost + $cost,
+                'model' => $model ?? $fresh->model,
+            ])->save();
+        });
+
+        $run->refresh();
+    }
+
+    /**
+     * Land a completed run. A no-op on an already-terminal run. Spend is NOT
+     * written here — it was recorded call by call as it was incurred.
      */
     public function markCompleted(AiRun $run, AiGeneration $generation): void
     {
         $landed = $this->landTerminal($run, [
             'status' => AiRunStatus::Completed->value,
             'output' => json_encode($generation->output),
-            'input' => json_encode($generation->meta),
-            'model' => $generation->model ?? $run->model,
-            'tokens' => $generation->tokens,
-            'cost' => $generation->cost,
         ]);
 
         if (! $landed) {
@@ -169,6 +240,17 @@ class AiRunLedger
             'kind' => $failure->kind->value,
             'code' => $failure->code,
         ]);
+    }
+
+    /**
+     * A run in flight for longer than any legitimate execution could take, so no
+     * worker is coming back for it.
+     */
+    private function isAbandoned(AiRun $run): bool
+    {
+        $cutoff = max(1, (int) config('kedge.ai.stale_after', 1800));
+
+        return $run->created_at !== null && $run->created_at->lt(now()->subSeconds($cutoff));
     }
 
     /**

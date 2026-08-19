@@ -33,6 +33,16 @@ class AiRunPolicy
     }
 
     /**
+     * See this document's runs at all — the panel's re-attach read. Same
+     * workspace rule as requesting one: a reviewer who may not spend the key may
+     * not read what it produced either.
+     */
+    public function viewAny(User $user, Document $document): bool
+    {
+        return $this->memberOf($user, $document);
+    }
+
+    /**
      * Request a generation over a document. Same workspace rule as the document's
      * own mutations; share reviewers stay on the share surface.
      */

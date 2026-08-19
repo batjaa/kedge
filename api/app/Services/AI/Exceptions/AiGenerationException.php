@@ -2,6 +2,8 @@
 
 namespace App\Services\AI\Exceptions;
 
+use App\Enums\AiFailureKind;
+use App\Services\AI\AiFailure;
 use RuntimeException;
 
 /**
@@ -21,4 +23,14 @@ abstract class AiGenerationException extends RuntimeException
      * The sentence the web shows next to the retry action.
      */
     abstract public function userMessage(): string;
+
+    /**
+     * The ledger record for this failure. Lives here so a case's code and
+     * sentence are written once, whether the exception was thrown by a generator
+     * or synthesized by the classifier from a provider response.
+     */
+    public function asFailure(): AiFailure
+    {
+        return new AiFailure(AiFailureKind::Deterministic, $this->code(), $this->userMessage());
+    }
 }

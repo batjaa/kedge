@@ -546,6 +546,22 @@ class AuthorizationMatrixTest extends TestCase
     }
 
     #[DataProvider('aiRunReadRoleMatrix')]
+    public function test_ai_latest_digest_read_authorization(string $role, int $expectedStatus): void
+    {
+        config(['kedge.ai.enabled' => true]);
+        [$owner, $document] = $this->ownedDocument();
+        AiRun::factory()->for($document)->create([
+            'workspace_id' => $document->workspace_id,
+            'created_by' => $owner->id,
+        ]);
+        $this->actAsReviewRole($role, $owner, $document);
+
+        $this->fromWebApp()
+            ->getJson("/api/v1/documents/{$document->id}/ai/digest")
+            ->assertStatus($expectedStatus);
+    }
+
+    #[DataProvider('aiRunReadRoleMatrix')]
     public function test_ai_run_read_authorization(string $role, int $expectedStatus): void
     {
         config(['kedge.ai.enabled' => true]);

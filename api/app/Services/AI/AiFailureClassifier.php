@@ -4,6 +4,7 @@ namespace App\Services\AI;
 
 use App\Enums\AiFailureKind;
 use App\Services\AI\Exceptions\AiGenerationException;
+use App\Services\AI\Exceptions\ContentRefusedException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\MaxAttemptsExceededException;
@@ -33,11 +34,7 @@ class AiFailureClassifier
         return match (true) {
             // Failures Kedge raises are deterministic by construction; each
             // carries its own code and user sentence.
-            $e instanceof AiGenerationException => new AiFailure(
-                AiFailureKind::Deterministic,
-                $e->code(),
-                $e->userMessage(),
-            ),
+            $e instanceof AiGenerationException => $e->asFailure(),
 
             // The queue's own ceilings. A job timeout is terminal by design (the
             // run must never sit `running` forever); exhausted attempts mean a
@@ -116,10 +113,29 @@ class AiFailureClassifier
             );
         }
 
+        // A content-policy rejection deserves its own error: "retry" is useless
+        // advice, whereas "edit the review" is actionable.
+        if ($this->readsAsRefusal($e)) {
+            return (new ContentRefusedException('The provider refused this content.'))->asFailure();
+        }
+
         return new AiFailure(
             AiFailureKind::Deterministic,
             'provider_rejected',
             'Claude rejected the request. Retry.',
         );
+    }
+
+    private function readsAsRefusal(RequestException $e): bool
+    {
+        $message = strtolower((string) ($e->response?->json('error.message') ?? ''));
+
+        foreach (['content policy', 'policy violation', 'refus', 'safety', 'prohibited'] as $needle) {
+            if (str_contains($message, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

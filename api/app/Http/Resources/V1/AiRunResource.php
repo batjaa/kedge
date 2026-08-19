@@ -35,6 +35,12 @@ class AiRunResource extends JsonResource
             'type' => $this->type->value,
             'status' => $this->status->value,
             'model' => $this->model,
+            // The visible half of the ledger (SPEC §14, §16): what this run has
+            // cost so far. Present on an in-flight run too — spend is recorded as
+            // it is incurred, not at the end — and `cost` is null when the model
+            // has no published price rather than a fabricated zero.
+            'tokens' => $this->tokens,
+            'cost' => $this->cost === null ? null : (float) $this->cost,
             'output' => $this->output,
             'error' => $this->error,
             'created_at' => $this->created_at,

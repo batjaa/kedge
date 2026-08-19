@@ -47,6 +47,10 @@ export interface AiRun {
   type: AiRunType;
   status: AiRunStatus;
   model: string | null;
+  /** Tokens spent so far — recorded as each model call returns, not at the end. */
+  tokens: number | null;
+  /** USD spent so far, or null when the model has no published price. */
+  cost: number | null;
   output: DigestOutput | null;
   error: AiRunError | null;
   created_at: string;

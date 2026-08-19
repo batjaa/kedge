@@ -95,6 +95,16 @@ class AiFailureClassifierTest extends TestCase
         $this->assertSame($code, $failure->code);
     }
 
+    public function test_a_policy_rejection_is_named_a_refusal_not_a_generic_reject(): void
+    {
+        $failure = app(AiFailureClassifier::class)->classify(
+            $this->requestException(400, 'Output blocked by content policy filtering.'),
+        );
+
+        $this->assertSame(AiFailureKind::Deterministic, $failure->kind);
+        $this->assertSame('content_refused', $failure->code);
+    }
+
     public function test_a_missing_exception_is_still_classified(): void
     {
         $failure = app(AiFailureClassifier::class)->classify(null);
@@ -103,10 +113,10 @@ class AiFailureClassifierTest extends TestCase
         $this->assertSame('unknown', $failure->code);
     }
 
-    private function requestException(int $status): RequestException
+    private function requestException(int $status, string $message = 'nope'): RequestException
     {
         return new RequestException(new Response(
-            new \GuzzleHttp\Psr7\Response($status, [], '{"error":{"message":"nope"}}'),
+            new \GuzzleHttp\Psr7\Response($status, [], json_encode(['error' => ['message' => $message]])),
         ));
     }
 }

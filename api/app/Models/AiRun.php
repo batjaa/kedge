@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read AiRunType $type
  * @property-read AiRunStatus $status
  */
-#[Fillable(['workspace_id', 'document_id', 'created_by', 'type', 'status', 'input', 'model'])]
+#[Fillable(['workspace_id', 'document_id', 'created_by', 'type', 'status', 'input', 'model', 'tokens', 'cost'])]
 class AiRun extends Model
 {
     /** @use HasFactory<AiRunFactory> */
@@ -85,6 +85,7 @@ class AiRun extends Model
             'input' => 'array',
             'output' => 'array',
             'error' => 'array',
+            'tokens' => 'integer',
             'cost' => 'decimal:6',
         ];
     }
