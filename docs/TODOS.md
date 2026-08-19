@@ -305,3 +305,12 @@
 ## Decision log (persistent sessions, 2026-08-10)
 
 - ✅ **Remember-me on every sign-in path** — password login, registration, GitHub OAuth, and reviewer magic-link completion all call the web guard with `remember: true`. Rationale: the Sanctum SPA cookie flow stored auth only in the 120-minute server session, forcing a fresh sign-in every day; a review tool must not do that. The long-lived recaller cookie (Laravel `forever`, ~400 days, same domain/secure/SameSite attributes as the session cookie) silently re-establishes a fresh session — with session-ID regeneration — after idle expiry, so `SESSION_LIFETIME` stays short at 120. Sign-out still cycles the remember token and clears the cookie. No opt-in checkbox: staying signed in is the product default, matching contemporary SaaS.
+
+## Decision log (M4 AI substrate + digest tracer, 2026-08-18)
+
+- ✅ **`GET /documents/{id}/ai/digest` added to the API surface** (SPEC §17 amended) — the eng review's "panel re-attaches to the latest run on mount" (§8) needs a read that resolves a run without knowing its id. A singular latest-run read (200 + run, 204 when none) beats a paginated list for a surface that only ever wants the newest.
+- ✅ **Unknown generation faults classify as DETERMINISTIC** — the transient/deterministic table names every fault we can recognize; anything else is far likelier to be our bug than a provider blip, and retrying it three times bills the workspace's key three times for the same answer. Cost-safe default, documented in `AiFailureClassifier`.
+- ✅ **An unpriced model records `cost = null`, never 0** — a missing number is honest; a fabricated one silently corrupts the AI-cost/day metric (SPEC §19). Tokens are still recorded.
+- ✅ **The digest's context is the document title plus its body only when the body fits a 25% share of the budget** — otherwise the prompt says the body was left out and the model works from each thread's quoted anchor. Coverage stays thread-based so "covers N of M threads" means one thing.
+- ✅ **A section too large for a single chunk is excluded, not truncated** — silence is the one outcome SPEC §14 forbids, so an oversized thread leaves via the coverage line instead.
+- **AI runs are not written to `audit_logs`** — `ai_runs` is itself the append-only cost/audit history (SPEC §16), and the AC asks for named `Log` events. Revisit if the M3.8 activity feed should surface generations. (S)

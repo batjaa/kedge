@@ -46,8 +46,8 @@ class AiRunFactory extends Factory
                 'consensus' => [],
                 'action_items' => [],
                 'coverage' => [
-                    'covered_threads' => 0,
-                    'total_threads' => 0,
+                    'covered' => 0,
+                    'total' => 0,
                     'chunked' => false,
                     'statement' => 'No review threads yet — nothing to digest.',
                 ],
