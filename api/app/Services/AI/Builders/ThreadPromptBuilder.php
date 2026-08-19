@@ -96,7 +96,7 @@ class ThreadPromptBuilder
         $coverage = $assembled->coverage;
 
         if ($coverage->isPartial()) {
-            $coverage = $coverage->withNote('The most recent comments were read; older ones were left out.');
+            $coverage = $coverage->withNote($this->omissionNote($sections, $assembled->meta));
         }
 
         return new AssembledPrompt(
@@ -110,6 +110,33 @@ class ThreadPromptBuilder
                 'comment_total' => $total,
             ],
         );
+    }
+
+    /**
+     * What to confess about the comments that did not make it in.
+     *
+     * Newest-first ordering means the usual omission is a tail of old material,
+     * and saying so is genuinely useful. But the assembler also drops a section
+     * too large for ANY single call and carries on — so a single enormous latest
+     * comment can be skipped while older ones are read, and a blanket "the most
+     * recent comments were read" would then be a lie, about the one comment a
+     * reply or a summary most needs. Coverage that isn't true is worse than no
+     * coverage at all (SPEC §14), so the newest comment's fate is checked rather
+     * than assumed.
+     *
+     * @param  list<PromptSection>  $sections  Newest first.
+     * @param  array<string, mixed>  $meta
+     */
+    private function omissionNote(array $sections, array $meta): string
+    {
+        $skipped = $meta['skipped_sections'] ?? [];
+        $newestSkipped = $sections !== []
+            && is_array($skipped)
+            && in_array($sections[0]->label, $skipped, true);
+
+        return $newestSkipped
+            ? 'The most recent comment was too large to include, so it was left out.'
+            : 'The most recent comments were read; the rest were left out.';
     }
 
     /**

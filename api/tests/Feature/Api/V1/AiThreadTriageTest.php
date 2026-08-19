@@ -559,7 +559,7 @@ class AiThreadTriageTest extends TestCase
         $this->assertSame(3, $run->output['coverage']['total']);
         $this->assertSame(
             'Covers 1 of 3 comments — the review was too large to read in full. '
-            .'The most recent comments were read; older ones were left out.',
+            .'The most recent comments were read; the rest were left out.',
             $run->output['coverage']['statement'],
         );
 
@@ -572,6 +572,38 @@ class AiThreadTriageTest extends TestCase
 
             return true;
         });
+    }
+
+    /**
+     * The newest-first ordering usually means the omission is a tail of old
+     * material — but one enormous latest comment is skipped while older ones are
+     * read, and claiming "the most recent comments were read" would then be a lie
+     * about the one comment a summary most needs.
+     */
+    public function test_an_oversized_newest_comment_is_confessed_rather_than_glossed_over(): void
+    {
+        ThreadSummaryAgent::fake([$this->summaryPayload()]);
+        config(['kedge.ai.context_tokens' => 1400]);
+        [$author, , $thread] = $this->reviewedThread();
+
+        // Newest, and far too large for any single call.
+        $huge = $thread->comments()->create([
+            'author_id' => $author->id,
+            'body_md' => 'The latest word. '.str_repeat('detail ', 2000),
+        ]);
+
+        $run = $this->requestSummary($thread, $author);
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Completed, $run->status);
+        $this->assertSame(3, $run->output['coverage']['covered']);
+        $this->assertSame(4, $run->output['coverage']['total']);
+        $this->assertStringContainsString(
+            'The most recent comment was too large to include, so it was left out.',
+            $run->output['coverage']['statement'],
+        );
+        $this->assertContains('comment-'.$huge->id, $run->input['skipped_sections']);
     }
 
     public function test_a_summary_run_records_its_scope_before_calling_the_model(): void
