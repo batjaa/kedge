@@ -31,8 +31,26 @@
  * (unset, or an operator who cleared it) means the default, and case is
  * forgiving because the SDK's table is lowercase while `AI_PROVIDER=OpenAI` is
  * the natural thing to type.
+ *
+ * Nonsense selects NOTHING rather than falling back to the default: the env
+ * reader turns `AI_PROVIDER=false|true|null` into a real bool or null, and
+ * quietly reading those as "the default" would enable the surface off a provider
+ * the operator never chose. Nothing matches no entry in the table, and no entry
+ * has no credential.
  */
-$aiProvider = strtolower(trim((string) env('AI_PROVIDER', 'anthropic'))) ?: 'anthropic';
+$aiProvider = (static function (): string {
+    $selected = env('AI_PROVIDER', 'anthropic');
+
+    if (! is_string($selected)) {
+        return '';
+    }
+
+    // Compared as a string, never with `?:` — that would read a provider
+    // literally named "0" as blank and silently hand it the default.
+    $selected = strtolower(trim($selected));
+
+    return $selected === '' ? 'anthropic' : $selected;
+})();
 
 $aiProviderTable = (static function (): array {
     $path = __DIR__.'/ai.php';
@@ -48,12 +66,19 @@ $aiProviderTable = (static function (): array {
 /**
  * Whether the SELECTED provider has a credential configured.
  *
- * Only secret-bearing fields count. A provider entry also carries non-secret
- * settings — `url` most of all, which every provider ships a working default for
- * — so "any filled field" would read as configured for a provider that has been
- * given nothing, and turn the AI surface on against no credential at all. That
- * is the exact failure this gate exists to prevent, so the fields are an
- * allowlist, not an exclusion list, and an unknown provider name matches nothing.
+ * ONE field, and it must be a non-blank string:
+ *
+ *  - `key` only. A provider entry also carries non-secret settings — `url` most
+ *    of all, which providers ship working defaults for — so counting any filled
+ *    field would enable the surface for a provider given nothing at all. Nor do
+ *    ambient cloud credentials count: `AWS_ACCESS_KEY_ID` is already set on any
+ *    instance using S3, and letting it unlock Bedrock billing would mean a
+ *    credential Kedge was never given turns the AI surface on.
+ *  - a non-blank STRING. `filled()` is not enough here: the env reader turns
+ *    `KEY=false` into boolean false, which `filled()` reports as present. An
+ *    operator writing `false` means "no", and whitespace means nothing.
+ *
+ * An unknown or unselected provider matches no entry, and so has no credential.
  */
 $aiCredentialConfigured = (static function (array $providers, string $provider): bool {
     $entry = $providers[$provider] ?? null;
@@ -62,13 +87,9 @@ $aiCredentialConfigured = (static function (array $providers, string $provider):
         return false;
     }
 
-    foreach (['key', 'access_key_id', 'secret_access_key'] as $credential) {
-        if (filled($entry[$credential] ?? null)) {
-            return true;
-        }
-    }
+    $key = $entry['key'] ?? null;
 
-    return false;
+    return is_string($key) && trim($key) !== '';
 })($aiProviderTable, $aiProvider);
 
 return [

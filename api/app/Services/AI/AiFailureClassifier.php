@@ -12,6 +12,7 @@ use Illuminate\Queue\TimeoutExceededException;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use LogicException;
 use Throwable;
 
 /**
@@ -81,6 +82,18 @@ class AiFailureClassifier
             ),
 
             $e instanceof RequestException => $this->fromStatus($e),
+
+            // A misconfigured selection, not a fault: the SDK refuses to build a
+            // text provider for one that cannot generate text (an embeddings- or
+            // audio-only provider named in AI_PROVIDER). The gate can only see
+            // that a credential exists, so this is where the operator finds out
+            // — with the variable to fix named, rather than "retry" advice for
+            // something no retry can change.
+            $e instanceof LogicException => new AiFailure(
+                AiFailureKind::Deterministic,
+                'provider_unsupported',
+                'The configured AI provider cannot generate text. Ask an operator to check AI_PROVIDER.',
+            ),
 
             default => new AiFailure(
                 AiFailureKind::Deterministic,

@@ -137,6 +137,15 @@ outside config, so `AI_PROVIDER` can be `openai`, `gemini`, `groq`, `mistral`,
 reads its key from. Set `AI_MODEL` and `AI_SUMMARY_MODEL` when you switch — model
 ids are provider-specific, and the defaults are Claude's.
 
+The credential is that provider's **key**, and it must be a non-blank string:
+`false`, `null`, and whitespace all read as *not configured*. A provider that can
+also authenticate from an ambient cloud role needs its own token
+(`AWS_BEARER_TOKEN_BEDROCK` for Bedrock) — an `AWS_ACCESS_KEY_ID` you set for S3
+is not an AI credential and never enables AI. Pick a provider that can generate
+text: the SDK's table also holds embedding and audio providers, and selecting one
+of those fails every run with a plain "cannot generate text" rather than a wrong
+answer.
+
 **Claude is the default and the only certified path.** It is what Kedge dogfoods,
 prices, and verifies before shipping; every other provider is *best-effort* —
 provider-agnostic code, but prompts nobody has tuned against those models. Spend

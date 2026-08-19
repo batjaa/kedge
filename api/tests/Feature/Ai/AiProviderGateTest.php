@@ -133,12 +133,20 @@ class AiProviderGateTest extends TestCase
                 ], true,
             ],
 
-            // A provider whose credential is not called `key`.
-            'a provider credentialed by access keys is on' => [
-                ['AI_PROVIDER' => 'bedrock', 'AWS_ACCESS_KEY_ID' => 'AKIAEXAMPLE'], true,
+            // A cloud provider that can also authenticate from the ambient
+            // instance role. Only the credential Kedge was GIVEN counts: an
+            // AWS_ACCESS_KEY_ID is already present on any instance using S3, and
+            // unlocking model billing off it would mean the operator never
+            // handed Kedge an AI credential at all.
+            'a cloud provider is on with its own bearer token' => [
+                ['AI_PROVIDER' => 'bedrock', 'AWS_BEARER_TOKEN_BEDROCK' => 'bedrock-token'], true,
             ],
-            'that provider is off with no access keys at all' => [
-                ['AI_PROVIDER' => 'bedrock'], false,
+            'ambient cloud credentials are not an AI credential' => [
+                [
+                    'AI_PROVIDER' => 'bedrock',
+                    'AWS_ACCESS_KEY_ID' => 'AKIAEXAMPLE',
+                    'AWS_SECRET_ACCESS_KEY' => 'secret',
+                ], false,
             ],
 
             // Selection is forgiving about how it is typed, and blank means default.
@@ -147,6 +155,33 @@ class AiProviderGateTest extends TestCase
             ],
             'selection is trimmed and case-insensitive' => [
                 ['AI_PROVIDER' => '  OpenAI  ', 'OPENAI_API_KEY' => 'sk-oai-test'], true,
+            ],
+
+            // Values the env reader turns into something that is not a provider
+            // name at all. Each selects NOTHING — never the default, which would
+            // enable off a provider the operator did not choose.
+            'a boolean selection selects nothing' => [
+                ['AI_PROVIDER' => 'false', 'ANTHROPIC_API_KEY' => 'sk-ant-test'], false,
+            ],
+            'a true selection selects nothing' => [
+                ['AI_PROVIDER' => 'true', 'ANTHROPIC_API_KEY' => 'sk-ant-test'], false,
+            ],
+            'a null selection selects nothing' => [
+                ['AI_PROVIDER' => 'null', 'ANTHROPIC_API_KEY' => 'sk-ant-test'], false,
+            ],
+            'a zero selection is a provider name, not a blank' => [
+                ['AI_PROVIDER' => '0', 'ANTHROPIC_API_KEY' => 'sk-ant-test'], false,
+            ],
+
+            // The same coercion on the credential side: "no" is not a key.
+            'a false credential is not a credential' => [
+                ['AI_PROVIDER' => 'ollama', 'OLLAMA_API_KEY' => 'false'], false,
+            ],
+            'a true credential is not a credential either' => [
+                ['ANTHROPIC_API_KEY' => 'true'], false,
+            ],
+            'whitespace is not a credential' => [
+                ['ANTHROPIC_API_KEY' => '   '], false,
             ],
 
             // Invariant 3 — the kill switch.
@@ -302,23 +337,40 @@ class AiProviderGateTest extends TestCase
      * the only place a provider is named — config/kedge.php selects one, and the
      * SDK's published table in config/ai.php says what each one needs.
      *
-     * Asserted by scanning for provider ids as PHP STRING LITERALS, so prose in a
-     * docblock explaining the certified path stays legal while a call site
-     * pinning a provider does not.
+     * Asserted by TOKENIZING every application-code file and matching provider
+     * ids against string literals (either quote style) and bare identifiers — an
+     * enum case or constant called `Anthropic` names a provider just as surely.
+     * Tokenizing rather than grepping means prose in a docblock explaining the
+     * certified path stays legal, while a call site pinning a provider does not,
+     * in any spelling.
      */
     public function test_no_provider_is_named_in_application_code(): void
     {
-        /** @var array<string, mixed> $providers */
-        $providers = require base_path('config/ai.php');
-        $ids = array_keys($providers['providers']);
+        /** @var array<string, mixed> $ai */
+        $ai = require base_path('config/ai.php');
+        $ids = array_keys($ai['providers']);
 
         $offenders = [];
 
-        foreach ($this->phpFilesIn(app_path()) as $file) {
-            preg_match_all("/'([a-z0-9.\\-]+)'/", (string) file_get_contents($file), $matches);
+        // Everything that runs in production except config, which is the ONE
+        // place a provider may be named. Tests are excluded too: they select
+        // providers on purpose, which is how the gate gets asserted at all.
+        foreach ($this->phpFilesIn([
+            app_path(),
+            base_path('routes'),
+            base_path('bootstrap'),
+            base_path('database'),
+        ]) as $file) {
+            foreach (token_get_all((string) file_get_contents($file)) as $token) {
+                if (! is_array($token) || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_STRING], true)) {
+                    continue;
+                }
 
-            foreach (array_intersect($matches[1], $ids) as $named) {
-                $offenders[] = str_replace(base_path().'/', '', $file).' names "'.$named.'"';
+                $named = strtolower(trim($token[1], "'\""));
+
+                if (in_array($named, $ids, true)) {
+                    $offenders[] = str_replace(base_path().'/', '', $file).':'.$token[2].' names "'.$named.'"';
+                }
             }
         }
 
@@ -359,16 +411,19 @@ class AiProviderGateTest extends TestCase
     }
 
     /**
+     * @param  list<string>  $directories
      * @return list<string>
      */
-    private function phpFilesIn(string $directory): array
+    private function phpFilesIn(array $directories): array
     {
         $files = [];
 
-        /** @var \SplFileInfo $file */
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory)) as $file) {
-            if ($file->isFile() && $file->getExtension() === 'php') {
-                $files[] = $file->getPathname();
+        foreach ($directories as $directory) {
+            /** @var \SplFileInfo $file */
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory)) as $file) {
+                if ($file->isFile() && $file->getExtension() === 'php') {
+                    $files[] = $file->getPathname();
+                }
             }
         }
 
