@@ -117,7 +117,9 @@ class McpEndpointTest extends TestCase
 
         sort($names);
         $this->assertSame([
+            'get_digest',
             'get_document',
+            'get_improve_prompt',
             'get_thread',
             'list_documents',
             'list_threads',
@@ -146,6 +148,34 @@ class McpEndpointTest extends TestCase
         $this->assertSame(CommentClient::Mcp, $comment->client);
         $this->assertSame($this->operator->id, $comment->author_id);
         $this->assertSame(1, Thread::query()->count());
+    }
+
+    public function test_an_agent_reads_an_ai_artifact_over_http_on_an_instance_with_no_key(): void
+    {
+        // #136 over the wire, in the configuration a self-hoster is most likely
+        // to be in: MCP on, no ANTHROPIC_API_KEY. The tool answers — honestly,
+        // with an empty artifact — instead of erroring or 404ing, which is what
+        // "MCP is gated independently of AI" has to mean at the transport.
+        $this->assertFalse((bool) config('kedge.ai.enabled'));
+
+        $response = $this->rpc($this->mintToken(), 'tools/call', [
+            'name' => 'get_digest',
+            'arguments' => ['document_id' => $this->document->id],
+        ]);
+
+        $response->assertOk();
+        $body = json_decode($response->getContent(), true);
+
+        $this->assertArrayNotHasKey('error', $body);
+        $this->assertFalse($body['result']['isError']);
+        $this->assertSame([
+            'document_id' => $this->document->id,
+            'type' => 'digest',
+            'ai_enabled' => false,
+            'artifact' => null,
+            'note' => 'This Kedge instance has no AI provider configured, so no review digest exists to read. '
+                .'The rest of the review — documents, threads, comments — is unaffected.',
+        ], $body['result']['structuredContent']);
     }
 
     public function test_the_endpoint_refuses_an_unauthenticated_call(): void

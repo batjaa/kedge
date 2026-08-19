@@ -15,8 +15,8 @@ namespace App\Enums;
  *
  * The names are the wire contract an agent operator's config depends on, so
  * renaming a value breaks their integration — add cases, never re-spell one.
- * #136 extends this with the two AI-artifact reads (`get_digest`,
- * `get_improve_prompt`); nothing else is coming.
+ * #136 added the two AI-artifact reads (`get_digest`, `get_improve_prompt`),
+ * completing SPEC §15's table; nothing else is coming.
  */
 enum McpTool: string
 {
@@ -25,6 +25,13 @@ enum McpTool: string
     case GetDocument = 'get_document';
     case ListThreads = 'list_threads';
     case GetThread = 'get_thread';
+
+    // Read — the AI artifacts (#136). READS of the latest completed run, never
+    // triggers: generation spends the workspace's Anthropic key, so it stays a
+    // human act in the app. There is deliberately no `generate_digest` case, and
+    // there never will be.
+    case GetDigest = 'get_digest';
+    case GetImprovePrompt = 'get_improve_prompt';
 
     // Write — stamped `client: mcp`, attributed to the token's owner.
     case PostComment = 'post_comment';

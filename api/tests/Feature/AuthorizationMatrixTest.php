@@ -907,6 +907,10 @@ class AuthorizationMatrixTest extends TestCase
             'get_document',
             'list_threads',
             'get_thread',
+            // Reads of a completed run (#136). Requesting a generation spends the
+            // workspace's model budget, so it is human-only too and has no tool.
+            'get_digest',
+            'get_improve_prompt',
             'post_comment',
             'reply',
         ], $names);

@@ -108,9 +108,25 @@ trait ResolvesReviewSubjects
      */
     protected function documentForThreadAbility(mixed $id, string $ability): Document
     {
+        return $this->documentForClassAbility($id, $ability, Thread::class);
+    }
+
+    /**
+     * A document reached through a CLASS-level ability — the shape Laravel uses
+     * when the ability has no instance yet (`[Thread::class, $document]`,
+     * `[AiRun::class, $document]`), and the shape the equivalent REST controller
+     * passes to `authorize()`.
+     *
+     * One resolver rather than one per policy class, so the refusal wording and
+     * the not-found/not-yours unification below can never differ between tools.
+     *
+     * @param  class-string  $class
+     */
+    protected function documentForClassAbility(mixed $id, string $ability, string $class): Document
+    {
         $document = Document::query()->whereKey($this->identifier($id, 'document_id'))->first();
 
-        if ($document === null || Gate::denies($ability, [Thread::class, $document])) {
+        if ($document === null || Gate::denies($ability, [$class, $document])) {
             throw new McpToolException("No document is available at id [{$id}] for this agent token.");
         }
 
