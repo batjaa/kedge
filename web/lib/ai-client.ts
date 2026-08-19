@@ -251,7 +251,6 @@ export async function readLatestImprovePrompt(
   return readRun(`/api/v1/documents/${documentId}/ai/improve-prompt`);
 }
 
-async function readRun<TOutput>(path: string): Promise<AiRun<TOutput> | null> {
 async function readRun<TOutput = DigestOutput>(path: string): Promise<AiRun<TOutput> | null> {
   try {
     const res = await fetch(`${publicApiBaseUrl}${path}`, {
