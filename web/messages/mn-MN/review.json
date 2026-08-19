@@ -42,7 +42,11 @@
   "versions": {
     "navLabel": "Баримтын хувилбарууд",
     "latest": "(хамгийн сүүлийн)",
-    "compare": "Харьцуулах"
+    "compare": "Харьцуулах",
+    "older": "+{count, number} хуучин",
+    "olderLabel": "{count, plural, one {# хуучин хувилбарыг харуулах} other {# хуучин хувилбарыг харуулах}}",
+    "olderListLabel": "Хуучин хувилбарууд",
+    "viewing": "(үзэж байна)"
   },
   "newVersion": {
     "notice": "Та хуучин хувилбарыг үзэж байна. Хамгийн сүүлийнх нь <b>{label}</b>.",
