@@ -24,8 +24,13 @@ use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
+use App\Http\Middleware\RejectAgentTokenAuth;
+use App\Http\Middleware\RequireAgentTokenAuth;
+use App\Http\Middleware\ThrottleMcpIngress;
 use App\Http\Middleware\VerifyDiagramSecret;
+use App\Mcp\Servers\KedgeServer;
 use Illuminate\Support\Facades\Route;
+use Laravel\Mcp\Facades\Mcp;
 
 /*
 |--------------------------------------------------------------------------
@@ -104,6 +109,46 @@ Route::prefix('v1')->group(function () {
         Route::post('/demo/documents', [DemoDocumentController::class, 'store'])
             ->name('api.v1.demo.documents.store');
     });
+
+    // ---- MCP server (SPEC §15, M4 #135) -----------------------------------
+    //
+    // The ONE surface in the application that accepts an Agent Token. Everything
+    // else — this whole file, /logout, every route a later ticket adds — refuses
+    // a bearer credential via RejectAgentTokenAuth, prepended to both route
+    // groups in bootstrap/app.php. Opting back out here is what makes token
+    // acceptance a positive, reviewable capability of exactly one endpoint
+    // instead of a default nobody remembers to revoke; the IDOR sweep asserts
+    // this group is the only exemption in the app.
+    //
+    // The opt-out is on the GROUP so all three registered methods share it: the
+    // MCP protocol expects GET and DELETE on the endpoint to answer 405 (no SSE
+    // stream here), and a 401 in their place would read to a client as a
+    // credential problem rather than an unsupported transport.
+    //
+    // RequireAgentTokenAuth is the mirror image and just as load-bearing:
+    // `auth:sanctum` also accepts the first-party session cookie, so without it a
+    // signed-in human's browser could drive these tools and every comment it
+    // wrote would be badged as an agent. The endpoint takes agent tokens and
+    // nothing else.
+    //
+    // `mcp.enabled` gates the surface independently of the AI flag: a keyless
+    // self-host still hosts agent reviewers. It and ThrottleMcpIngress are
+    // hoisted ahead of the guard in the middleware priority list
+    // (AppServiceProvider), because Laravel resolves `auth:sanctum` in front of
+    // anything not in that list — a switched-off surface would otherwise 401 an
+    // anonymous call and 404 only a valid one, and the per-token limiter would
+    // never fire for traffic that fails to authenticate at all.
+    //
+    // Three limits, on three different things: ThrottleMcpIngress bounds
+    // unauthenticated ingress per IP, `throttle:mcp` bounds an authenticated
+    // agent per token, and the writer service spends a tighter per-token budget
+    // on writes — the only layer that can tell a write from a read, since one
+    // POST endpoint carries both.
+    Route::middleware(['mcp.enabled', ThrottleMcpIngress::class, 'auth:sanctum', RequireAgentTokenAuth::class, 'throttle:mcp'])
+        ->withoutMiddleware(RejectAgentTokenAuth::class)
+        ->group(function () {
+            Mcp::web('/mcp', KedgeServer::class)->name('api.v1.mcp');
+        });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', MeController::class)->name('api.v1.me');

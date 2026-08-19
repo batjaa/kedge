@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\EnsureMcpEnabled;
 use App\Http\Middleware\RejectAgentTokenAuth;
+use App\Http\Middleware\ThrottleMcpIngress;
 use App\Models\AgentToken;
 use App\Services\Fetch\CurlHttpTransport;
 use App\Services\Fetch\DnsResolver;
@@ -70,8 +72,42 @@ class AppServiceProvider extends ServiceProvider
         // knows how to answer "does this credential reach that workspace?".
         Sanctum::usePersonalAccessTokenModel(AgentToken::class);
 
+        $this->configureMcpEntryPriority();
         $this->configureAgentTokenRefusalPriority();
         $this->configureRateLimiting();
+    }
+
+    /**
+     * Hoist the MCP gate and its ingress limiter ahead of authentication
+     * (SPEC §15, #135).
+     *
+     * Laravel's priority list resolves `auth:sanctum` in FRONT of anything not
+     * in it, so left alone both of these would run LAST on the MCP route —
+     * behind the session stack, the guard, and a Sanctum token lookup. Two
+     * things break when they do:
+     *
+     *   1. A switched-off surface would answer 401 to an anonymous call and 404
+     *      only to a valid credential — turning the feature flag into a token
+     *      oracle, and doing auth work for a feature that is meant to be absent.
+     *   2. The per-token limiter never fires for a request that fails to
+     *      authenticate, leaving anonymous ingress unbounded.
+     *
+     * Prepending is order-sensitive, so it reads backwards: the LAST prepend
+     * ends up first. The resulting front of the list is
+     * RejectAgentTokenAuth -> EnsureMcpEnabled -> ThrottleMcpIngress, which is
+     * the order the rules depend on — refuse a credential where it does not
+     * belong, then answer 404 if the surface is off, then bound the ingress,
+     * all before a session, a guard, or a database row is touched.
+     *
+     * Both are attached to the MCP route group only, so no other route is
+     * affected by their presence in the list.
+     */
+    private function configureMcpEntryPriority(): void
+    {
+        $kernel = $this->app->make(HttpKernel::class);
+
+        $kernel->prependToMiddlewarePriority(ThrottleMcpIngress::class);
+        $kernel->prependToMiddlewarePriority(EnsureMcpEnabled::class);
     }
 
     /**
@@ -172,6 +208,29 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('ai', function (Request $request) {
             return Limit::perMinute((int) config('kedge.ai.rate_per_minute'))
                 ->by($request->user()?->id ?: $request->ip());
+        });
+
+        // The MCP endpoint (SPEC §15, §13, #135). Keyed on the agent TOKEN, not
+        // its owner: one runaway agent must not starve its operator's other
+        // agents, and two agents sharing a human should not share a budget. This
+        // is the ceiling on ALL MCP traffic — reads included, since one POST
+        // endpoint carries both; the tighter write allowance is spent inside
+        // McpReviewWriter, which is the only layer that knows a write from a read.
+        //
+        // This runs AFTER the guard, so it only ever sees traffic that
+        // authenticated — unauthenticated ingress is bounded per IP by
+        // ThrottleMcpIngress, ahead of the guard. It still has to cope with what
+        // authentication can hand back besides an agent token: a
+        // session-authenticated human carries Sanctum's TransientToken, which is
+        // not a row and has no key. Only a real AgentToken buckets by
+        // credential; everything else falls back to the caller's IP.
+        RateLimiter::for('mcp', function (Request $request) {
+            $token = $request->user()?->currentAccessToken();
+            $key = $token instanceof AgentToken && $token->getKey() !== null
+                ? 'mcp-token:'.$token->getKey()
+                : 'mcp-ip:'.$request->ip();
+
+            return Limit::perMinute((int) config('kedge.mcp.rate_per_minute'))->by($key);
         });
 
         // Instant demo mode is an unauthenticated, public-internet abuse surface

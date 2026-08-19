@@ -50,4 +50,13 @@ export interface Capabilities {
    * no AI affordance rather than a button that 404s.
    */
   ai: boolean;
+  /**
+   * The MCP server (SPEC §15, M4 #135) — the surface an agent token is *for*.
+   * Reported by the API independently of `ai`: MCP is on by default and stays on
+   * with no Anthropic key, so a keyless self-host still hosts agent reviewers.
+   * Fails closed, including when the payload carries no `mcp` block at all — an
+   * api from before #135 has no endpoint to point an agent at, so offering to
+   * mint a credential for it would be offering nothing.
+   */
+  mcp: boolean;
 }

@@ -69,6 +69,13 @@ enum AuditEvent: string
     case AgentTokenCreated = 'agent_token.created';
     case AgentTokenRevoked = 'agent_token.revoked';
 
+    // MCP writes (SPEC §15, user story 20). One row per write TOOL call,
+    // alongside the domain events the shared comment service already records:
+    // `comment.created` says what happened, this says an agent did it, through
+    // which tool, on which credential. Reads are observability events only —
+    // an agent reading a document is not an auditable act.
+    case McpWrite = 'mcp.write';
+
     // Approvals.
     case ApprovalGiven = 'approval.given';
     case ApprovalRevoked = 'approval.revoked';

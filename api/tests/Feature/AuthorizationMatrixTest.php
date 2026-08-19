@@ -4,8 +4,15 @@ namespace Tests\Feature;
 
 use App\Enums\AiRunType;
 use App\Enums\WorkspaceRole;
+use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Jobs\GenerateAiRunJob;
 use App\Jobs\ResyncDocumentJob;
+use App\Mcp\Servers\KedgeServer;
+use App\Mcp\Tools\GetDocumentTool;
+use App\Mcp\Tools\GetThreadTool;
+use App\Mcp\Tools\ListThreadsTool;
+use App\Mcp\Tools\PostCommentTool;
+use App\Mcp\Tools\ReplyTool;
 use App\Models\AgentToken;
 use App\Models\AiRun;
 use App\Models\Approval;
@@ -17,12 +24,14 @@ use App\Models\Share;
 use App\Models\ShareParticipant;
 use App\Models\Thread;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Services\RegistrationService;
 use App\Services\SystemWorkspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Laravel\Mcp\Server\Transport\FakeTransporter;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -46,6 +55,16 @@ class AuthorizationMatrixTest extends TestCase
      * carry no authentication before skipping them.
      */
     private const GROUPLESS_INFRASTRUCTURE_ROUTES = ['up', 'storage/{path}'];
+
+    /**
+     * The ONE surface in the application that accepts an Agent Token (SPEC §15,
+     * #135): the MCP endpoint, which opts out of the app-wide refusal with
+     * `->withoutMiddleware(RejectAgentTokenAuth::class)`. It is skipped by the
+     * sweep below for the obvious reason — accepting a token is its entire job —
+     * and the exemption is proven to be exactly this URI, in both directions, by
+     * {@see test_the_agent_token_exemption_is_exactly_the_mcp_endpoint}.
+     */
+    private const MCP_ROUTE_URI = 'api/v1/mcp';
 
     /**
      * @return array<string, array{string, string, string, int}>
@@ -676,7 +695,8 @@ class AuthorizationMatrixTest extends TestCase
             ->plainTextToken;
 
         $routes = collect(app('router')->getRoutes()->getRoutes())
-            ->reject(fn ($route): bool => in_array($route->uri(), self::GROUPLESS_INFRASTRUCTURE_ROUTES, true));
+            ->reject(fn ($route): bool => in_array($route->uri(), self::GROUPLESS_INFRASTRUCTURE_ROUTES, true))
+            ->reject(fn ($route): bool => $route->uri() === self::MCP_ROUTE_URI);
 
         // The exemption list cannot be used to smuggle a real surface past this
         // sweep: an exempt route must resolve no principal at all.
@@ -729,6 +749,209 @@ class AuthorizationMatrixTest extends TestCase
             $accepted,
             'These actions did not refuse an agent-token principal: '.implode(', ', $accepted),
         );
+    }
+
+    /**
+     * The other half of G1 (#135): the sweep above skips the MCP endpoint, so
+     * this proves the skip is honest — that `withoutMiddleware(RejectAgentTokenAuth)`
+     * appears on the MCP route group and NOWHERE else, and conversely that every
+     * other route in the application still carries the refusal.
+     *
+     * Read as a pair with the sweep, the two say: agent tokens are refused
+     * everywhere, one endpoint opts in, and that endpoint is the MCP server.
+     */
+    public function test_the_agent_token_exemption_is_exactly_the_mcp_endpoint(): void
+    {
+        $routes = collect(app('router')->getRoutes()->getRoutes());
+
+        $exempt = $routes
+            ->filter(fn ($route): bool => in_array(RejectAgentTokenAuth::class, $route->excludedMiddleware(), true))
+            ->map(fn ($route): string => $route->uri())
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->assertSame(
+            [self::MCP_ROUTE_URI],
+            $exempt,
+            'Exactly one surface may opt out of the agent-token refusal: the MCP endpoint.',
+        );
+
+        // And the refusal is genuinely resolved on everything else — a route that
+        // simply escaped both middleware groups would be invisible to the check
+        // above but wide open in production.
+        $unprotected = $routes
+            ->reject(fn ($route): bool => in_array($route->uri(), self::GROUPLESS_INFRASTRUCTURE_ROUTES, true))
+            ->reject(fn ($route): bool => $route->uri() === self::MCP_ROUTE_URI)
+            ->reject(fn ($route): bool => in_array(
+                RejectAgentTokenAuth::class,
+                app('router')->gatherRouteMiddleware($route),
+                true,
+            ))
+            ->map(fn ($route): string => $route->uri())
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->assertSame([], $unprotected, 'These routes never resolve the agent-token refusal at all.');
+    }
+
+    /**
+     * The MCP-token role row (SPEC §18.4, #135) — the matrix's newest principal,
+     * applied across every action the agent surface exposes.
+     *
+     * The rows are the three shapes an agent credential can take on a document:
+     * scoped to its workspace (allowed), scoped to a workspace the operator
+     * genuinely belongs to but which is not this document's (denied — the
+     * credential is narrower than the human), and pointed at another tenant's
+     * document entirely (denied). Each denial is proven to persist nothing.
+     *
+     * @return array<string, array{string, bool}>
+     */
+    public static function mcpTokenRoleMatrix(): array
+    {
+        return [
+            'a token scoped to the document\'s workspace may act' => ['scoped', true],
+            'a token scoped to another of its owner\'s workspaces may not' => ['other_workspace', false],
+            'a token may not reach another tenant\'s document' => ['foreign_document', false],
+        ];
+    }
+
+    #[DataProvider('mcpTokenRoleMatrix')]
+    public function test_mcp_read_tools_obey_the_token_scope(string $role, bool $allowed): void
+    {
+        [$agent, $document] = $this->mcpPrincipal($role);
+
+        $documentRead = KedgeServer::actingAs($agent)
+            ->tool(GetDocumentTool::class, ['document_id' => $document->id]);
+        $threadList = KedgeServer::actingAs($agent)
+            ->tool(ListThreadsTool::class, ['document_id' => $document->id]);
+
+        if ($allowed) {
+            $documentRead->assertOk();
+            $threadList->assertOk();
+
+            return;
+        }
+
+        $documentRead->assertHasErrors(['No document is available'])->assertDontSee('Matrix secret');
+        $threadList->assertHasErrors(['No document is available'])->assertDontSee('Matrix secret');
+    }
+
+    #[DataProvider('mcpTokenRoleMatrix')]
+    public function test_mcp_write_tools_obey_the_token_scope(string $role, bool $allowed): void
+    {
+        [$agent, $document] = $this->mcpPrincipal($role);
+        $before = Comment::query()->count();
+
+        $post = KedgeServer::actingAs($agent)->tool(PostCommentTool::class, [
+            'document_id' => $document->id,
+            'body' => 'Agent comment',
+        ]);
+
+        if ($allowed) {
+            $post->assertOk();
+            $this->assertSame($before + 1, Comment::query()->count());
+
+            return;
+        }
+
+        $post->assertHasErrors(['No document is available']);
+        $this->assertSame($before, Comment::query()->count());
+    }
+
+    #[DataProvider('mcpTokenRoleMatrix')]
+    public function test_mcp_reply_obeys_the_token_scope(string $role, bool $allowed): void
+    {
+        [$agent, $document] = $this->mcpPrincipal($role);
+        $thread = Thread::create([
+            'document_id' => $document->id,
+            'type' => 'document',
+            'status' => 'open',
+            'created_by' => $document->created_by,
+        ]);
+        $thread->comments()->create(['author_id' => $document->created_by, 'body_md' => 'Matrix secret']);
+
+        $reply = KedgeServer::actingAs($agent)->tool(GetThreadTool::class, ['thread_id' => $thread->id]);
+        $write = KedgeServer::actingAs($agent)->tool(ReplyTool::class, [
+            'thread_id' => $thread->id,
+            'body' => 'Agent reply',
+        ]);
+
+        if ($allowed) {
+            $reply->assertOk();
+            $write->assertOk();
+            $this->assertSame(2, $thread->comments()->count());
+
+            return;
+        }
+
+        $reply->assertHasErrors(['No thread is available'])->assertDontSee('Matrix secret');
+        $write->assertHasErrors(['No thread is available']);
+        $this->assertSame(1, $thread->comments()->count());
+    }
+
+    public function test_the_mcp_surface_has_no_tool_for_any_human_only_action(): void
+    {
+        // The matrix's usual question is "who may do X". For approvals,
+        // lifecycle, resolve, accept/decline and share the answer over MCP is not
+        // a role at all: there is no X. Asserted here so the matrix records it.
+        $names = (new KedgeServer(new FakeTransporter))
+            ->createContext()
+            ->tools()
+            ->map(fn ($tool): string => $tool->name())
+            ->all();
+
+        $this->assertSame([
+            'list_documents',
+            'get_document',
+            'list_threads',
+            'get_thread',
+            'post_comment',
+            'reply',
+        ], $names);
+    }
+
+    /**
+     * Build one MCP principal and the document it will be pointed at.
+     *
+     * Everything here is factories and `withAccessToken` — no HTTP round trip
+     * first, so the guard is never left resolved on an earlier actor and a
+     * denial can never masquerade as a 401.
+     *
+     * @return array{User, Document}
+     */
+    private function mcpPrincipal(string $role): array
+    {
+        [$owner, $document] = $this->ownedDocument();
+
+        $scope = match ($role) {
+            'scoped' => $owner->personalWorkspace(),
+            // A second workspace the human genuinely belongs to: the token must
+            // not inherit the human's wider reach.
+            'other_workspace' => tap(
+                Workspace::create(['name' => 'Second Team', 'slug' => 'second-team']),
+                fn (Workspace $workspace) => $owner->workspaces()
+                    ->attach($workspace->id, ['role' => WorkspaceRole::Member->value]),
+            ),
+            'foreign_document' => $owner->personalWorkspace(),
+        };
+
+        if ($role === 'foreign_document') {
+            $stranger = Workspace::create(['name' => 'Stranger', 'slug' => 'stranger']);
+            $document = Document::factory()->for($stranger, 'workspace')->ready()->create([
+                'created_by' => User::factory()->create(['email' => 'stranger@example.com'])->id,
+            ]);
+            $version = DocumentVersion::factory()->for($document)->create([
+                'plain_text' => 'Matrix secret',
+                'projection_version' => '2',
+            ]);
+            $document->forceFill(['current_version_id' => $version->id])->save();
+        }
+
+        $issued = $owner->createToken('Matrix agent', [AgentToken::workspaceAbility($scope->id)]);
+
+        return [$owner->fresh()->withAccessToken($issued->accessToken), $document->refresh()];
     }
 
     /**

@@ -2,9 +2,11 @@
 
 namespace App\Services\Agents;
 
+use App\Http\Middleware\RequireAgentTokenAuth;
 use App\Models\AgentToken;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\Collection;
 use Laravel\Sanctum\NewAccessToken;
 
@@ -47,13 +49,89 @@ class AgentTokenService
      * Returns whether THIS call removed the row. Two operators revoking the same
      * token concurrently both hold a bound model, so the delete is conditional on
      * the row still existing and only the winner reports true — the audit trail
-     * gets one revocation event, not one per racer. (A request that authenticated
-     * before the delete still finishes; making that linearizable is the MCP
-     * server's write-path concern — #135, TODOS.)
+     * gets one revocation event, not one per racer.
+     *
+     * Linearizable against in-flight MCP writes since #135: every MCP write
+     * re-reads its own token row FOR UPDATE inside the write transaction
+     * ({@see revalidateForWrite()}), so this delete and that write serialize on
+     * the same row. Whichever commits first wins, and "no write commits after
+     * revoke returned 204" holds on any engine with row locks.
      */
     public function revoke(AgentToken $token): bool
     {
         return AgentToken::query()->whereKey($token->getKey())->delete() > 0;
+    }
+
+    /**
+     * Re-assert, inside the caller's write transaction, that the acting
+     * credential still exists — the linearizability half of revocation (#135;
+     * the debt #131 recorded).
+     *
+     * Sanctum resolves the bearer once, at authentication. Without this, a
+     * request that authenticated a millisecond before {@see revoke()} would run
+     * to completion on a credential the operator has already been told is gone:
+     * "the agent's NEXT call fails" would hold, but "no write commits after
+     * revoke returns 204" would not — and revocation on a review surface has to
+     * mean the stronger thing.
+     *
+     * `lockForUpdate()` is what makes it an ordering and not just a re-read: the
+     * row is held from here until the write commits, so a concurrent delete
+     * blocks behind it rather than interleaving. (SQLite has no row locks and
+     * ignores the clause; there the re-read still closes the common case — a
+     * revoke that committed before the write began — and the barrier test is
+     * gated to an engine that can prove the rest.)
+     *
+     * @throws AuthenticationException
+     */
+    public function revalidateForWrite(User $agent): void
+    {
+        $this->assertTokenRow($agent, lock: true);
+    }
+
+    /**
+     * The unlocked pre-flight: is this credential still live at all?
+     *
+     * Called before a write path does ANYTHING — before the idempotency lookup
+     * that could return an existing comment, and before the anchor validation
+     * that can persist a refreshed projection. Neither of those inserts agent
+     * content, so neither needs the lock; both are side effects a revoked
+     * credential should not be able to cause, and this is the cheapest place to
+     * stop them. {@see revalidateForWrite()} still runs later, under lock, and
+     * remains the thing the linearizability guarantee rests on.
+     *
+     * @throws AuthenticationException
+     */
+    public function assertLive(User $agent): void
+    {
+        $this->assertTokenRow($agent, lock: false);
+    }
+
+    /**
+     * Fails CLOSED on anything that is not an agent token: the MCP surface is
+     * the only caller, {@see RequireAgentTokenAuth} has
+     * already established that a token is what is speaking, and a write path
+     * that quietly accepted some other principal is exactly the drift this
+     * whole ticket exists to prevent.
+     *
+     * @throws AuthenticationException
+     */
+    private function assertTokenRow(User $agent, bool $lock): void
+    {
+        $token = $agent->currentAccessToken();
+
+        if (! $token instanceof AgentToken) {
+            throw new AuthenticationException('This write requires an agent token.');
+        }
+
+        $query = AgentToken::query()->whereKey($token->getKey());
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        if (! $query->exists()) {
+            throw new AuthenticationException('This agent token has been revoked.');
+        }
     }
 
     /**
