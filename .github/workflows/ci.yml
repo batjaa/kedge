@@ -146,9 +146,46 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # The Chromium download is ~2.5 minutes of the job when fetched fresh, so
+      # the browser bundle is cached keyed on the exact Playwright version (a
+      # lockfile hash would churn the cache on every unrelated dep bump). On a
+      # hit only the apt-installed system libraries are (re)applied — those live
+      # outside the cached directory.
+      - name: Resolve Playwright version
+        id: playwright-version
+        working-directory: web
+        run: |
+          echo "version=$(node -e "console.log(require('./package-lock.json').packages['node_modules/@playwright/test'].version)")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
       - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: web
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: web
+        run: npx playwright install-deps chromium
+
+      # The pack runs against the PRODUCTION web build: on this 4-vCPU runner,
+      # dev-mode compile-on-demand starved the 4 parallel browser workers so
+      # badly the parallel pack ran no faster than serial. One build serves
+      # both web instances (playwright.config.ts explains why that is sound).
+      # NEXT_PUBLIC_API_URL is baked here at build time; its default is already
+      # the :8000 API the journeys use — pinned explicitly so a default change
+      # can never silently retarget the pack.
+      - name: Build web (production)
+        working-directory: web
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
 
       # Boots api (scratch SQLite, migrated fresh) + web + the loopback fixture
       # host via playwright.config.ts, drives the journey pack (#39) across every

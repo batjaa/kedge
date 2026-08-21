@@ -105,6 +105,17 @@ export APP_ENV=e2e
   echo "APP_ENV=e2e"
   echo "DB_CONNECTION=sqlite"
   echo "DB_DATABASE=${DB_FILE}"
+  # The three lines below exist because the server runs multiple PHP workers
+  # (see PHP_CLI_SERVER_WORKERS at the bottom): concurrent requests mean
+  # concurrent SQLite writers, and the driver's defaults (rollback journal,
+  # no lock wait, DEFERRED transactions) throw "database is locked" the moment
+  # two overlap — 28 such errors in one 4-worker pack run. WAL lets readers and
+  # the writer coexist, IMMEDIATE takes the write lock at BEGIN so a
+  # transaction never has to upgrade mid-flight (the unwaitable-deadlock case),
+  # and busy_timeout makes the queued writer wait instead of failing.
+  echo "DB_JOURNAL_MODE=WAL"
+  echo "DB_BUSY_TIMEOUT=5000"
+  echo "DB_TRANSACTION_MODE=IMMEDIATE"
   echo "MAIL_MAILER=log"
   echo "QUEUE_CONNECTION=sync"
   echo "CACHE_STORE=array"
@@ -136,4 +147,13 @@ php artisan storage:link --force
 : >"${API_DIR}/storage/logs/laravel.log"
 
 # --no-reload: no file watcher (deterministic) and a single served process.
+#
+# PHP_CLI_SERVER_WORKERS: PHP's built-in server handles ONE request at a time
+# per worker, and the pack now runs 4 Playwright workers in CI — a single-worker
+# API queues their overlapping browser + BFF requests until Node's fetch times
+# out and the page renders "API is unreachable". Sized above the Playwright
+# worker count because one journey issues several requests at once. Each request
+# still bootstraps fresh in every worker, so the CACHE_STORE=array reasoning
+# above is unchanged.
+export PHP_CLI_SERVER_WORKERS="${PHP_CLI_SERVER_WORKERS:-6}"
 exec php artisan serve --host=127.0.0.1 --port="${PORT}" --no-reload

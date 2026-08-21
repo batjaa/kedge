@@ -64,6 +64,12 @@ test('create share with expiry → open read-only in a fresh context → revoke 
   const revoke = page.getByRole('button', { name: 'Revoke', exact: true });
   await expect(revoke).toBeVisible();
   await revoke.click();
+  // Wait for the CONFIRMED revocation, not the button's disappearance: the
+  // label flips to "Revoking…" the moment the click lands, so the name-scoped
+  // toBeHidden() below passes while the DELETE is still in flight — and the
+  // fresh context next would race it (flaked under parallel workers). The
+  // "Revoked {date}" line renders only from the API's post-revoke response.
+  await expect(page.getByText(/^Revoked /)).toBeVisible();
   await expect(revoke).toBeHidden();
 
   // The very same URL now goes dark — the friendly gone page, on the next open.

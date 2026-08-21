@@ -37,12 +37,15 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: './e2e',
-  // The pack is worker-safe (unique users/docs per spec), but the run stays
-  // serial by choice: one worker keeps CI resource use flat and the output
-  // deterministic. fullyParallel/workers can be raised together later without
-  // touching a spec — proven green at --workers=4.
+  // The pack is worker-safe (unique users/docs per spec), so CI spreads spec
+  // FILES across 4 workers — the runner's vCPU count — which roughly halves the
+  // serial pack. fullyParallel stays off: tests within one file keep their
+  // order (some specs build state test-to-test), which is also exactly the
+  // shape the pack was proven green at (`--workers=4` parallelizes files, not
+  // in-file tests). Locally the default stays serial for deterministic output;
+  // pass --workers=N to opt in.
   fullyParallel: false,
-  workers: 1,
+  workers: isCI ? 4 : 1,
   // A flaky seam is worse than none: fail loudly instead of masking with retries.
   retries: 0,
   forbidOnly: isCI,
@@ -104,12 +107,17 @@ export default defineConfig({
     },
     {
       name: 'web',
-      // `next dev`, not a production build. The `next build` /_global-error
-      // prerender failure is fixed (#14), so a built app is now possible, but
-      // the swap is deferred: NEXT_PUBLIC_* below are build-time inlined, so a
-      // production run would need them baked at build, and rebuilding on every
-      // e2e run costs more than it proves for this single handshake journey.
-      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
+      // CI serves the PRODUCTION build (ci.yml builds it in the step before the
+      // pack); local runs keep `next dev`. The old deferral note ("rebuilding
+      // on every e2e run costs more than it proves for this single handshake
+      // journey") predates the 47-test pack: on a 4-vCPU runner, dev-mode
+      // compile-on-demand starved 4 parallel browsers so badly the parallel
+      // pack ran no faster than serial. One build serves BOTH web instances —
+      // NEXT_PUBLIC_API_URL's baked default is already the :8000 the primary
+      // needs, and the self-hosted instance's client never calls the API.
+      command: isCI
+        ? `npm run start -- --hostname 127.0.0.1 --port ${WEB_PORT}`
+        : `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
       url: `http://127.0.0.1:${WEB_PORT}/docs`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
@@ -119,6 +127,13 @@ export default defineConfig({
         // Server-side BFF hop stays on IPv4; browser hop stays on localhost.
         API_URL: `http://127.0.0.1:${API_PORT}`,
         NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}`,
+        // The projection/reanchor endpoints fail CLOSED under
+        // NODE_ENV=production with no configured secret (lib/projection-auth) —
+        // under `next start` every import 401s at the projection hop without
+        // this. Pinned to the dev-fallback value the API also defaults to, so
+        // every local combination (fresh boot, reused dev servers) keeps
+        // matching secrets.
+        PROJECTION_SHARED_SECRET: 'dev-projection-secret',
       },
     },
     {
@@ -132,7 +147,9 @@ export default defineConfig({
       // it to prove the marketing surface never leaks to a self-hosted instance.
       // Readiness is /docs (static fumadocs, no API needed). NEXT_PUBLIC_API_URL
       // rides along for parity though this branch never makes a client API call.
-      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`,
+      command: isCI
+        ? `npm run start -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`
+        : `npm run dev -- --hostname 127.0.0.1 --port ${WEB_SELFHOSTED_PORT}`,
       url: `http://127.0.0.1:${WEB_SELFHOSTED_PORT}/docs`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
@@ -141,9 +158,15 @@ export default defineConfig({
       env: {
         API_URL: `http://127.0.0.1:${FIXTURE_PORT}`,
         NEXT_PUBLIC_API_URL: `http://localhost:${FIXTURE_PORT}`,
-        // Own compile dir so this second dev server never races the primary
-        // web instance over `.next` (next.config.mjs reads NEXT_DIST_DIR).
-        NEXT_DIST_DIR: '.next-selfhosted',
+        // Parity with the primary instance (see its env comment); this branch
+        // never receives a projection call, but a fail-closed 401 here would be
+        // a confusing needle if that ever changes.
+        PROJECTION_SHARED_SECRET: 'dev-projection-secret',
+        // Own compile dir so this second DEV server never races the primary
+        // web instance over `.next` (next.config.mjs reads NEXT_DIST_DIR). In
+        // CI both instances `next start` from the one read-only production
+        // build, so the dir split is dev-only.
+        ...(isCI ? {} : { NEXT_DIST_DIR: '.next-selfhosted' }),
       },
     },
   ],
