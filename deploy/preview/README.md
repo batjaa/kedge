@@ -35,6 +35,8 @@ calls behind the proxy. Optional: `NIGHTWATCH_TOKEN` (Laravel Nightwatch
 observability, 2026-07-28) — unset means fully off (package no-ops, no agent
 starts); set it and the api entrypoint runs the agent in-container on
 `0.0.0.0:2407`, with worker/scheduler shipping to `api:2407`.
+Requests and commands default to 10% sampling; exceptions and scheduled tasks
+remain at the Nightwatch default of 100%.
 
 ## Known preview-grade shortcuts (revisit at M7)
 
@@ -47,3 +49,6 @@ starts); set it and the api entrypoint runs the agent in-container on
   when `NIGHTWATCH_TOKEN` is set). M7's reference compose should use the
   official `laravelphp/nightwatch-agent` sidecar image — as an optional
   service, never a required one.
+- The queue worker stays long-lived instead of using `queue:work --max-time`.
+  Coolify treats each intentional container recycle as a crash and can stop the
+  entire Compose application after its restart budget is exhausted.

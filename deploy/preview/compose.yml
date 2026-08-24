@@ -60,6 +60,10 @@ x-api-env: &api-env
   # api container; worker/scheduler ship their events to it via this URI.
   NIGHTWATCH_TOKEN: ${NIGHTWATCH_TOKEN:-}
   NIGHTWATCH_INGEST_URI: api:2407
+  # Preserve complete exception/task visibility while sampling the two
+  # highest-volume execution contexts at 10%.
+  NIGHTWATCH_REQUEST_SAMPLE_RATE: ${NIGHTWATCH_REQUEST_SAMPLE_RATE:-0.1}
+  NIGHTWATCH_COMMAND_SAMPLE_RATE: ${NIGHTWATCH_COMMAND_SAMPLE_RATE:-0.1}
   # BYO Anthropic key gates the ENTIRE AI surface (SPEC §14). Unset = no AI:
   # /api/v1/config reports ai.enabled=false and the web renders no AI
   # affordance — self-host-clean, same stance as mail/Nightwatch. The preview

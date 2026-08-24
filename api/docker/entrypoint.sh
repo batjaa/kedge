@@ -47,7 +47,10 @@ case "$mode" in
     exec php artisan serve --host=0.0.0.0 --port=80
     ;;
   worker)
-    exec php artisan queue:work --tries=3 --sleep=3 --max-time=3600
+    # Keep the container long-lived. Coolify counts every Docker restart as a
+    # crash; an intentional --max-time recycle can exhaust its application
+    # restart budget and cause the whole Compose stack to be stopped.
+    exec php artisan queue:work --tries=3 --sleep=3
     ;;
   scheduler)
     exec php artisan schedule:work
