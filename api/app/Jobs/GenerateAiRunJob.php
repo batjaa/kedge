@@ -120,7 +120,17 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
         }
 
         try {
-            $ledger->markCompleted($run, $registry->for($run)->generate($run));
+            // Generation runs under the ceiling THIS job carries, not whatever
+            // config the worker happens to hold: a queued job keeps the budget
+            // it was dispatched under, and the agents' socket clock has to keep
+            // it too, or a budget raised after dispatch would let one model call
+            // outlive the attempt it belongs to. Inside the scope the clock
+            // counts down, so a chunked run's later calls are bounded by what
+            // the attempt actually has left (#153).
+            $ledger->markCompleted($run, AiRunBudget::forAttempt(
+                $this->timeout,
+                fn () => $registry->for($run)->generate($run),
+            ));
         } catch (Throwable $e) {
             $failure = $classifier->classify($e);
 

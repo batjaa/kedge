@@ -10,8 +10,12 @@ use App\Services\AI\Agents\ReplyDraftAgent;
 use App\Services\AI\Agents\ReviewDigestAgent;
 use App\Services\AI\Agents\ThreadSummaryAgent;
 use App\Services\AI\AiRunBudget;
+use FilesystemIterator;
 use Laravel\Ai\Contracts\Agent;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use ReflectionClass;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -42,14 +46,27 @@ class AgentTimeoutTest extends TestCase
      */
     public static function agents(): array
     {
+        $root = dirname(__DIR__, 4).'/'.self::AGENT_DIRECTORY;
         $found = [];
 
-        foreach (glob(dirname(__DIR__, 4).'/'.self::AGENT_DIRECTORY.'/*.php') ?: [] as $file) {
-            $class = 'App\\Services\\AI\\Agents\\'.basename($file, '.php');
+        // RECURSIVE: an agent parked in a subdirectory is still an agent, and a
+        // guard that only reads the top level would let it ship on the vendor
+        // default while the named-class check below stayed green.
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
 
-            if (is_subclass_of($class, Agent::class)) {
-                $found[$class] = [$class];
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
             }
+
+            $relative = trim(str_replace($root, '', $file->getPathname()), '/');
+            $class = 'App\\Services\\AI\\Agents\\'.str_replace('/', '\\', substr($relative, 0, -4));
+
+            if (! is_subclass_of($class, Agent::class) || (new ReflectionClass($class))->isAbstract()) {
+                continue;
+            }
+
+            $found[$class] = [$class];
         }
 
         return $found;
@@ -126,6 +143,30 @@ class AgentTimeoutTest extends TestCase
 
         $this->assertSame(5, $resolved);
         $this->assertLessThan((new GenerateAiRunJob(1))->timeout, $resolved);
+    }
+
+    /**
+     * A queued job carries the ceiling it was DISPATCHED under. If the socket
+     * clock read live config instead, a budget raised after dispatch — a deploy
+     * while runs sit in the queue — would hand one model call more time than the
+     * attempt running it has, and the queue would do the killing.
+     *
+     * @param  class-string<Agent>  $class
+     */
+    #[DataProvider('agents')]
+    public function test_an_agent_obeys_the_dispatched_ceiling_not_the_workers_config(string $class): void
+    {
+        $this->freezeTime();
+        config(['kedge.ai.job_timeout' => 60]);
+        $queued = new GenerateAiRunJob(1);
+
+        // The worker booted later, with a far larger budget configured.
+        config(['kedge.ai.job_timeout' => 900]);
+
+        $resolved = AiRunBudget::forAttempt($queued->timeout, fn (): int => $this->resolvedTimeout($class));
+
+        $this->assertSame(30, $resolved);
+        $this->assertLessThan($queued->timeout, $resolved);
     }
 
     /**

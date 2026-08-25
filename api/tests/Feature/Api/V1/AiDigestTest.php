@@ -15,6 +15,7 @@ use App\Services\AI\AiFailure;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneration;
 use App\Services\AI\AiGeneratorRegistry;
+use App\Services\AI\AiRunBudget;
 use App\Services\AI\AiRunLedger;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -474,6 +475,44 @@ class AiDigestTest extends TestCase
         $this->assertSame(AiRunStatus::Failed, $run->status);
         $this->assertSame('transient', $run->error['kind']);
         $this->assertSame('provider_overloaded', $run->error['code']);
+    }
+
+    /**
+     * #153, end to end: the model call the job makes is bounded by the ceiling
+     * THAT job carries, not by whatever config the worker booted with. Without
+     * the attempt scope, a budget raised after dispatch (a deploy while runs sit
+     * in the queue) would hand this call 870s inside a 60s attempt, and the
+     * queue — not the classifier — would do the killing.
+     */
+    public function test_generation_runs_under_the_ceiling_the_job_carries(): void
+    {
+        $this->freezeTime();
+        $resolved = null;
+
+        ReviewDigestAgent::fake([function () use (&$resolved): array {
+            $resolved = AiRunBudget::http();
+
+            return $this->digestPayload();
+        }]);
+
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+
+        config(['kedge.ai.job_timeout' => 60]);
+        $job = new GenerateAiRunJob($run->id);
+
+        // The worker recycled onto a much larger budget after this was queued.
+        config(['kedge.ai.job_timeout' => 900]);
+
+        $job->handle(
+            app(AiRunLedger::class),
+            app(AiGeneratorRegistry::class),
+            app(AiFailureClassifier::class),
+        );
+
+        $this->assertSame(60, $job->timeout);
+        $this->assertSame(30, $resolved);
+        $this->assertSame(AiRunStatus::Completed, $run->refresh()->status);
     }
 
     public function test_an_unreachable_provider_is_transient(): void

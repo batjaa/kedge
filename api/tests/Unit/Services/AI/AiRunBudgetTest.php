@@ -5,6 +5,7 @@ namespace Tests\Unit\Services\AI;
 use App\Jobs\GenerateAiRunJob;
 use App\Services\AI\AiRunBudget;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -32,8 +33,8 @@ class AiRunBudgetTest extends TestCase
             'odd and small' => [3, 2],
             'two seconds' => [2, 1],
 
-            // Nonsense overrides: the job floors at one second, and so does the
-            // call it makes.
+            // Nonsense overrides: the attempt ceiling floors at two seconds so
+            // the socket clock still has a whole second below it.
             'one second' => [1, 1],
             'zero' => [0, 1],
             'negative' => [-90, 1],
@@ -49,10 +50,8 @@ class AiRunBudgetTest extends TestCase
     }
 
     /**
-     * The invariant, checked across every value an operator could plausibly
-     * type into `AI_JOB_TIMEOUT` — including the degenerate ones. A one-second
-     * budget is the sole case where the two clocks meet: nothing positive sits
-     * below the floor, and the job's alarm is armed first anyway.
+     * The invariant, unconditionally, across every value an operator could
+     * plausibly type into `AI_JOB_TIMEOUT` — degenerate ones included.
      */
     public function test_no_budget_an_operator_can_type_outlives_the_job(): void
     {
@@ -68,14 +67,6 @@ class AiRunBudgetTest extends TestCase
             $http = AiRunBudget::http();
 
             $this->assertGreaterThanOrEqual(1, $http, "http clock collapsed at job_timeout={$configured}");
-            $this->assertGreaterThanOrEqual(1, $job, "job clock collapsed at job_timeout={$configured}");
-
-            if ($job === 1) {
-                $this->assertSame(1, $http, "the floor case changed at job_timeout={$configured}");
-
-                continue;
-            }
-
             $this->assertLessThan($job, $http, "http clock outlived the job at job_timeout={$configured}");
         }
     }
@@ -88,6 +79,97 @@ class AiRunBudgetTest extends TestCase
 
         $this->assertSame(480, $job->timeout);
         $this->assertSame(AiRunBudget::job(), $job->timeout);
+    }
+
+    /**
+     * A queued job keeps the ceiling it was dispatched under; inside the attempt
+     * the socket clock has to keep it too, however the worker is configured.
+     */
+    public function test_an_attempt_overrides_the_workers_config(): void
+    {
+        $this->freezeTime();
+        config(['kedge.ai.job_timeout' => 900]);
+
+        AiRunBudget::forAttempt(60, function (): void {
+            $this->assertSame(60, AiRunBudget::job());
+            $this->assertSame(30, AiRunBudget::http());
+        });
+
+        // ...and hands the config back on the way out.
+        $this->assertSame(900, AiRunBudget::job());
+        $this->assertSame(870, AiRunBudget::http());
+    }
+
+    /**
+     * A chunked run makes several sequential calls inside ONE attempt. A
+     * constant per call cannot bound their sum, so the clock counts down: after
+     * two minutes of a five-minute attempt, the next call may have three
+     * minutes minus the margin, not five.
+     */
+    public function test_the_clock_counts_down_within_one_attempt(): void
+    {
+        $this->freezeTime();
+        config(['kedge.ai.job_timeout' => 300]);
+
+        AiRunBudget::forAttempt(300, function (): void {
+            $this->assertSame(270, AiRunBudget::http());
+
+            $this->travel(120)->seconds();
+            $this->assertSame(150, AiRunBudget::http());
+
+            // Past the ceiling: the next call fails fast on our terms rather
+            // than handing the kill to the queue.
+            $this->travel(200)->seconds();
+            $this->assertSame(1, AiRunBudget::http());
+        });
+    }
+
+    /**
+     * A long-lived worker runs job after job in one process. A leaked deadline
+     * would silently shrink every later run's clock.
+     */
+    public function test_a_failed_attempt_does_not_leak_its_deadline(): void
+    {
+        $this->freezeTime();
+        config(['kedge.ai.job_timeout' => 300]);
+
+        try {
+            AiRunBudget::forAttempt(300, function (): void {
+                $this->travel(200)->seconds();
+
+                throw new RuntimeException('the model call died');
+            });
+        } catch (RuntimeException) {
+            // The next job in this worker is what matters.
+        }
+
+        $this->assertSame(300, AiRunBudget::job());
+        $this->assertSame(270, AiRunBudget::http());
+    }
+
+    /**
+     * The invariant holds mid-attempt too, at every point on the countdown.
+     */
+    public function test_the_clock_never_outlives_the_attempt_it_runs_in(): void
+    {
+        foreach ([2, 3, 30, 60, 300, 900] as $ceiling) {
+            $this->freezeTime();
+            $start = now();
+
+            AiRunBudget::forAttempt($ceiling, function () use ($ceiling, $start): void {
+                foreach (range(0, $ceiling, max(1, intdiv($ceiling, 7))) as $elapsed) {
+                    $this->travelTo($start->copy()->addSeconds($elapsed));
+
+                    $this->assertLessThan(
+                        AiRunBudget::job(),
+                        AiRunBudget::http(),
+                        "http clock outlived a {$ceiling}s attempt at {$elapsed}s elapsed",
+                    );
+                }
+            });
+
+            $this->travelBack();
+        }
     }
 
     /**
