@@ -1,5 +1,5 @@
 import type { AnchorSelector } from './anchor-capture-core';
-import type { AskQuote } from './ai-types';
+import type { AskOutput, AskQuote } from './ai-types';
 
 /**
  * Pure helpers behind ask-about-the-doc (M4 #139). Kept out of the component so
@@ -58,4 +58,16 @@ export function askQuoteFromSelector(selector: AnchorSelector): AskQuote {
     exact: selector.exact,
     heading_path: selector.heading_path,
   };
+}
+
+/**
+ * The answer text an output carries, or the empty string.
+ *
+ * A completed run whose `answer` is missing or non-string is a shape the api
+ * should never send, and treating it as "no answer" is the only safe reading:
+ * the alternative is `undefined` reaching a `.trim()` in the transcript builder
+ * and taking the whole conversation down over one malformed field.
+ */
+export function askTurnAnswerText(output: AskOutput | null): string {
+  return typeof output?.answer === 'string' ? output.answer : '';
 }

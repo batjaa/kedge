@@ -1,5 +1,6 @@
 import { publicApiBaseUrl } from './config';
 import { csrfSend } from './csrf-client';
+import type { AskTranscriptTurn } from './ask-conversation';
 import type { AiRun, AiSplitRun, AskQuote, DigestOutput, ImprovePromptOutput, ReplyStance, SplitOutput, ThreadSummaryOutput } from './ai-types';
 
 /**
@@ -191,21 +192,37 @@ export async function startCommentSplit(
 
 /**
  * POST /api/v1/documents/{id}/ai/ask — ask a free-form question about the
- * document, optionally about one selected passage (M4 #139).
+ * document, optionally about one selected passage (M4 #139), optionally
+ * carrying the conversation it continues (#151).
  *
  * ALWAYS 202 with a new run. This is the one generation endpoint with no
  * dedupe: two questions about one document are two different questions, so
- * there is no in-flight run to be handed instead of an answer to your own.
+ * there is no in-flight run to be handed instead of an answer to your own. A
+ * follow-up is no exception — it is another new run that happens to carry its
+ * history.
  *
- * There is deliberately no `readLatestAsk`. The answer lives in the panel and
- * nowhere else — closing it is how you throw it away — so nothing here can go
- * back and fetch one.
+ * `transcript` is the client's own state travelling to the server and straight
+ * back out again. The server keeps no conversation, which is why it has to be
+ * sent at all — and why the api treats it as untrusted context exactly like the
+ * quote rather than as something it said itself.
+ *
+ * There is deliberately no `readLatestAsk`. The conversation lives on this page
+ * and nowhere else — reloading is how you throw it away — so nothing here can
+ * go back and fetch one.
  */
 export async function startAsk(
   documentId: number,
   question: string,
   quote?: AskQuote | null,
+  transcript: AskTranscriptTurn[] = [],
 ): Promise<StartAiRunOutcome> {
+  const body: Record<string, unknown> = { question };
+
+  if (quote) body.quote = quote;
+  // Omitted rather than sent empty: a first question has no conversation, and
+  // `transcript: []` would be a claim that it does.
+  if (transcript.length > 0) body.transcript = transcript;
+
   return startRun(
     `/api/v1/documents/${documentId}/ai/ask`,
     {
@@ -214,7 +231,7 @@ export async function startAsk(
       conflict: 'This document has no imported version to read yet.',
       error: 'Something went wrong asking that. Please try again.',
     },
-    quote ? { question, quote } : { question },
+    body,
   );
 }
 
