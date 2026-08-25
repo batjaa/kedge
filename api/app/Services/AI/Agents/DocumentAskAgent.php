@@ -3,6 +3,7 @@
 namespace App\Services\AI\Agents;
 
 use App\Enums\AiRunType;
+use App\Services\AI\Agents\Concerns\TimesOutInsideTheJobBudget;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Agent;
@@ -32,6 +33,7 @@ use Stringable;
 class DocumentAskAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
+    use TimesOutInsideTheJobBudget;
 
     public function instructions(): Stringable|string
     {

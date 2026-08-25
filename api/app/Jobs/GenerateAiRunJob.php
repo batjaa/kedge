@@ -7,6 +7,7 @@ use App\Models\AiRun;
 use App\Services\AI\AiFailure;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
+use App\Services\AI\AiRunBudget;
 use App\Services\AI\AiRunLedger;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -49,13 +50,17 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
     /**
      * Sized for a chunked run (config), and carried on the job so a queued job
      * keeps the ceiling it was dispatched under.
+     *
+     * The agents' HTTP timeout derives from this same budget and always lands
+     * strictly inside it ({@see AiRunBudget}), so a slow generation is caught
+     * and classified by us rather than by the queue.
      */
     public int $timeout;
 
     public function __construct(
         public readonly int $aiRunId,
     ) {
-        $this->timeout = max(1, (int) config('kedge.ai.job_timeout', 300));
+        $this->timeout = AiRunBudget::job();
     }
 
     /**
