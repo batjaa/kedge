@@ -50,7 +50,12 @@ case "$mode" in
     # Keep the container long-lived. Coolify counts every Docker restart as a
     # crash; an intentional --max-time recycle can exhaust its application
     # restart budget and cause the whole Compose stack to be stopped.
-    exec php artisan queue:work --tries=3 --sleep=3
+    #
+    # --sleep=1 because every AI turn a person is WAITING ON pays the idle
+    # poll's latency up front (#153): at --sleep=3 an ask could sit up to three
+    # seconds before the worker even looked. The cost is a database poll per
+    # second on an idle queue, which this deployment can afford.
+    exec php artisan queue:work --tries=3 --sleep=1
     ;;
   scheduler)
     exec php artisan schedule:work
