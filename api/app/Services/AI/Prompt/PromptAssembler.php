@@ -58,6 +58,34 @@ final class PromptAssembler
     }
 
     /**
+     * The token room left for SECTIONS once a chunk's fixed parts are paid for —
+     * the fence rule, the task, the repeated context, and the part-of note.
+     *
+     * Exposed (#151) so a builder assembling VARIABLE context can size it
+     * against what the sections will actually have left, rather than against the
+     * budget as a whole. The ask's replayed conversation is the case: capped in
+     * isolation it can still combine with a maximal question and quote to floor
+     * this at 1, at which point every passage is skipped and the run reports a
+     * document with no readable text. A builder can only avoid that by asking
+     * what is left, so this is the one formula and {@see self::assemble()} uses
+     * it too.
+     */
+    public function sectionCapacity(string $task, ?string $context = null): int
+    {
+        return max(1, $this->budget->maxTokens
+            - $this->budget->estimate($this->fence->rule())
+            - $this->budget->estimate($task)
+            - ($context === null ? 0 : $this->budget->estimate($context))
+            - self::CHUNK_NOTE_ALLOWANCE_TOKENS);
+    }
+
+    /** What one section costs against {@see self::sectionCapacity()}. */
+    public function sectionCost(PromptSection $section): int
+    {
+        return $this->budget->estimate($section->body) + self::SECTION_SEPARATOR_TOKENS;
+    }
+
+    /**
      * Pack sections into as many budgeted chunks as the ceiling allows, and
      * account honestly for everything that didn't fit.
      *
@@ -85,11 +113,7 @@ final class PromptAssembler
         $total = $totalUnits ?? count($sections);
         $rule = $this->fence->rule();
 
-        $capacity = max(1, $this->budget->maxTokens
-            - $this->budget->estimate($rule)
-            - $this->budget->estimate($task)
-            - ($context === null ? 0 : $this->budget->estimate($context))
-            - self::CHUNK_NOTE_ALLOWANCE_TOKENS);
+        $capacity = $this->sectionCapacity($task, $context);
 
         /** @var list<list<PromptSection>> $groups */
         $groups = [];
@@ -100,7 +124,7 @@ final class PromptAssembler
         $skipped = [];
 
         foreach ($sections as $section) {
-            $cost = $this->budget->estimate($section->body) + self::SECTION_SEPARATOR_TOKENS;
+            $cost = $this->sectionCost($section);
 
             // Too big for any single call — excluded, and counted as uncovered.
             if ($cost > $capacity) {

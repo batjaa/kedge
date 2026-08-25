@@ -458,6 +458,8 @@ class AiRunLedger
      */
     private function landTerminal(AiRun $run, array $attributes): bool
     {
+        $attributes = $this->scrubReplayedConversation($run, $attributes);
+
         $landed = AiRun::query()
             ->whereKey($run->id)
             ->whereIn('status', [AiRunStatus::Pending->value, AiRunStatus::Running->value])
@@ -466,5 +468,42 @@ class AiRunLedger
         $run->refresh();
 
         return $landed > 0;
+    }
+
+    /**
+     * Drop an ask's replayed conversation from `request` as the run lands (#151).
+     *
+     * The transcript has to reach the row at all because only the run ID rides
+     * the queue — the job reads its input back from here. But it is job INPUT,
+     * not ledger fact, and leaving it costs something real: every follow-up
+     * would otherwise write its own append-only copy of every earlier question
+     * AND every earlier model answer, so an eight-turn conversation ends up
+     * duplicated across eight rows, in backups, forever. That is a retention
+     * profile nobody agreed to, and it quietly contradicts SPEC §14's claim that
+     * the server keeps no conversation.
+     *
+     * The run's OWN question stays, exactly as #139 left it: one person's one
+     * question is what the row is a record of. What goes is the copy of turns
+     * whose own rows already exist.
+     *
+     * Terminal is the right moment: the queue may retry a transient failure and
+     * re-read the request, and only landing means nothing will read it again.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function scrubReplayedConversation(AiRun $run, array $attributes): array
+    {
+        $request = $run->requestPayload();
+
+        if (! array_key_exists('transcript', $request)) {
+            return $attributes;
+        }
+
+        unset($request['transcript']);
+
+        // Encoded by hand: a query-builder update bypasses the model's casts
+        // (the same reason `output` is encoded at its call site).
+        return $attributes + ['request' => json_encode($request)];
     }
 }

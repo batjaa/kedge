@@ -327,12 +327,16 @@ class AiDocumentAskTest extends TestCase
         $run = $this->ask($document, $author, 'And what about the offsets?', transcript: [
             ['question' => 'What is an anchor?', 'answer' => 'A quote plus the text around it.'],
         ]);
-        $this->runJob($run);
 
+        // Read before the job runs: the transcript is on the row only for as
+        // long as the job needs it, and is scrubbed when the run lands (see
+        // test_the_replayed_conversation_is_scrubbed_from_the_run_once_it_lands).
         $this->assertSame(
             [['question' => 'What is an anchor?', 'answer' => 'A quote plus the text around it.']],
             $run->refresh()->requestPayload()['transcript'],
         );
+
+        $this->runJob($run);
 
         DocumentAskAgent::assertPrompted(function ($prompt): bool {
             $this->assertStringContainsString('earlier turn 1 of 1 - reader question', $prompt->prompt);
@@ -349,6 +353,61 @@ class AiDocumentAskTest extends TestCase
 
         $this->assertSame(1, $run->refresh()->input['transcript_turns']);
         $this->assertSame(0, $run->input['transcript_dropped']);
+    }
+
+    /**
+     * The transcript reaches the row because only the run id rides the queue —
+     * and leaves it again the moment the job is done with it.
+     *
+     * Without this, every follow-up writes its own append-only copy of every
+     * earlier question AND answer, so one eight-turn conversation ends up
+     * duplicated across eight rows and every backup of them. The run's own
+     * question stays (that is what the row records); the copies of turns whose
+     * own rows already exist do not.
+     */
+    public function test_the_replayed_conversation_is_scrubbed_from_the_run_once_it_lands(): void
+    {
+        DocumentAskAgent::fake([['answer' => 'Answered.']]);
+        [$author, $document] = $this->readyDocument();
+
+        $run = $this->ask($document, $author, 'And the offsets?', transcript: [
+            ['question' => 'What is an anchor?', 'answer' => 'A quote plus its surroundings.'],
+        ]);
+
+        // Present while the job still has to read it.
+        $this->assertArrayHasKey('transcript', $run->refresh()->requestPayload());
+
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertArrayNotHasKey('transcript', $run->requestPayload());
+        $this->assertSame('And the offsets?', $run->requestPayload()['question']);
+        // The row still says how much was replayed — diagnosable without
+        // retaining what was said.
+        $this->assertSame(1, $run->input['transcript_turns']);
+
+        // And nowhere in the stored row is the earlier answer's text.
+        $this->assertStringNotContainsString(
+            'A quote plus its surroundings.',
+            json_encode($run->getAttributes()) ?: '',
+        );
+    }
+
+    /** A failed run is scrubbed too — the copies are no more useful for a post-mortem. */
+    public function test_a_failed_ask_is_scrubbed_of_its_replayed_conversation(): void
+    {
+        DocumentAskAgent::fake([['answer' => '   ']]);
+        [$author, $document] = $this->readyDocument();
+
+        $run = $this->ask($document, $author, 'And the offsets?', transcript: [
+            ['question' => 'What is an anchor?', 'answer' => 'A quote plus its surroundings.'],
+        ]);
+
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertArrayNotHasKey('transcript', $run->requestPayload());
     }
 
     /**
@@ -681,17 +740,27 @@ class AiDocumentAskTest extends TestCase
         $builder = app(DocumentAskPromptBuilder::class);
 
         // Every budget a self-hoster might plausibly retune to, against a
-        // conversation at the endpoint's own maximum.
+        // request at the endpoint's maxima on EVERY axis at once — a maximal
+        // question and a maximal quote, not just a maximal transcript. Capping
+        // the transcript in isolation is not enough: the chunk's fixed cost is
+        // all of them together, and it was the combination that floored the
+        // section capacity and produced a false "no readable text".
         $turns = array_fill(0, StoreDocumentAskRequest::MAX_TRANSCRIPT_TURNS, [
             'question' => str_repeat('q', 1000),
             'answer' => str_repeat('a', 1000),
         ]);
 
+        $question = str_repeat('why ', StoreDocumentAskRequest::MAX_QUESTION_CHARS / 4);
+        $quote = [
+            'exact' => str_repeat('quoted ', 3000),
+            'heading_path' => array_fill(0, StoreDocumentAskRequest::MAX_HEADING_PATH_DEPTH, str_repeat('S', 255)),
+        ];
+
         foreach ([2000, 8000, 24000] as $tokens) {
             config(['kedge.ai.context_tokens' => $tokens]);
 
             $baseline = $builder->build($document, 'What does this say?');
-            $assembled = $builder->build($document, 'What does this say?', null, $turns);
+            $assembled = $builder->build($document, $question, $quote, $turns);
 
             // Non-vacuity: this budget genuinely fits an ask, so "still covered"
             // below is a claim about the transcript rather than about the budget

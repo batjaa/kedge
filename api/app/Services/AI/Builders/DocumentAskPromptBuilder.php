@@ -139,10 +139,22 @@ class DocumentAskPromptBuilder
             );
         }
 
-        // Bounded BEFORE anything is measured: the capacity the passages compete
-        // for is what remains after the conversation has taken its share, so the
-        // cap has to be applied while there is still a document to shrink.
+        // Two passes, and they guard different things.
+        //
+        // First the agreed CHARACTER caps — cheap, and the same ceilings the
+        // endpoint accepted the request under.
         $replay = $this->boundedTranscript($transcript, $assembler->budget());
+
+        // Then the fit that actually protects the document. The character cap
+        // bounds the transcript IN ISOLATION, but a chunk's fixed cost is the
+        // transcript plus the question, the quote, its heading path, the title,
+        // the fences and the task — each capped on its own, and all of them
+        // together able to floor the section capacity at nothing. When that
+        // happens every passage is skipped and the run answers "this document
+        // has no readable text yet", which is a lie about the document and a
+        // waste of the reader's question. So the oldest turns are dropped until
+        // at least one passage can still fit beside the conversation.
+        $replay = $this->fitBesideTheDocument($replay, $assembler, $sections, $document, $fence, $question, $quote);
 
         $assembled = $assembler->assemble(
             task: $this->task($quote !== null, $replay['turns'], $replay['dropped']),
@@ -276,6 +288,69 @@ class DocumentAskPromptBuilder
             'chars' => $this->transcriptChars($turns),
             'dropped' => $dropped,
         ];
+    }
+
+    /**
+     * Drop the oldest replayed turns until at least one document passage still
+     * fits in the chunk beside them.
+     *
+     * Shrinking the document is the design; starving it is a bug, and the
+     * character cap alone cannot tell the difference — it bounds the transcript
+     * without knowing what the question, the quote and the task have already
+     * taken. This asks the assembler what the sections actually have left and
+     * gives the document its floor back, one dropped turn at a time.
+     *
+     * Terminates: every iteration removes a turn, and an empty transcript is
+     * accepted unconditionally. A document that does not fit even with NO
+     * conversation is the pre-existing (#139) too-small-budget case, which this
+     * deliberately does not try to fix — there is nothing left to give back.
+     *
+     * @param  array{turns: list<array{question: string, answer: string}>, chars: int, dropped: int}  $replay
+     * @param  list<PromptSection>  $sections
+     * @param  array{exact?: string, heading_path?: array<int, string>}|null  $quote
+     * @return array{turns: list<array{question: string, answer: string}>, chars: int, dropped: int}
+     */
+    private function fitBesideTheDocument(
+        array $replay,
+        PromptAssembler $assembler,
+        array $sections,
+        Document $document,
+        UntrustedFence $fence,
+        string $question,
+        ?array $quote,
+    ): array {
+        // The cheapest passage is the fairest test of "could ANY of it fit":
+        // the assembler packs in order but skips a section too large for the
+        // chunk, so coverage is non-zero exactly when some section fits.
+        $costs = array_map(fn (PromptSection $section): int => $assembler->sectionCost($section), $sections);
+
+        if ($costs === []) {
+            return $replay;
+        }
+
+        $cheapest = min($costs);
+
+        while ($replay['turns'] !== []) {
+            $capacity = $assembler->sectionCapacity(
+                $this->task($quote !== null, $replay['turns'], $replay['dropped']),
+                $this->context($document, $fence, $question, $quote, $replay['turns']),
+            );
+
+            if ($capacity >= $cheapest) {
+                break;
+            }
+
+            $turns = $replay['turns'];
+            array_shift($turns);
+
+            $replay = [
+                'turns' => array_values($turns),
+                'chars' => $this->transcriptChars($turns),
+                'dropped' => $replay['dropped'] + 1,
+            ];
+        }
+
+        return $replay;
     }
 
     /**
