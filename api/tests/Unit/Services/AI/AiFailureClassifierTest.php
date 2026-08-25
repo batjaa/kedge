@@ -58,6 +58,13 @@ class AiFailureClassifierTest extends TestCase
                 AiFailureKind::Transient,
                 'provider_unreachable',
             ],
+            // "Operation timed out" ALONE, from a proxy or a non-cURL transport,
+            // has not told us the provider was ever reached.
+            'transport timed out without a transfer' => [
+                new ConnectionException('Operation timed out'),
+                AiFailureKind::Transient,
+                'provider_unreachable',
+            ],
             'tls handshake failed' => [
                 new ConnectionException('cURL error 35: SSL connect error'),
                 AiFailureKind::Transient,

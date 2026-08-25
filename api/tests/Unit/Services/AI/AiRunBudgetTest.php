@@ -173,6 +173,68 @@ class AiRunBudgetTest extends TestCase
     }
 
     /**
+     * The third clock, and the one nobody configures on purpose: the driver's
+     * reservation lease. Shorter than an attempt, it hands a still-running job
+     * to a second worker — which re-bills the prompt, the exact failure #153
+     * exists to stop. `ShouldBeUnique` does not help: it dedupes dispatches,
+     * not redeliveries.
+     */
+    public function test_the_queue_lease_outlives_the_longest_attempt(): void
+    {
+        $ceiling = (new GenerateAiRunJob(1))->timeout;
+
+        foreach (['database', 'beanstalkd', 'redis'] as $connection) {
+            $this->assertGreaterThan(
+                $ceiling,
+                (int) config("queue.connections.{$connection}.retry_after"),
+                $connection.' would re-reserve an AI job that is still running',
+            );
+        }
+    }
+
+    /**
+     * And it follows the budget: raising `AI_JOB_TIMEOUT` cannot quietly push
+     * the attempt past a lease that stayed where it was.
+     */
+    public function test_the_queue_lease_follows_the_configured_budget(): void
+    {
+        foreach ([300, 900, 3600] as $budget) {
+            $queue = $this->queueConfigUnder($budget);
+
+            foreach (['database', 'beanstalkd', 'redis'] as $connection) {
+                $this->assertGreaterThan(
+                    $budget,
+                    (int) $queue['connections'][$connection]['retry_after'],
+                    $connection." lease did not follow AI_JOB_TIMEOUT={$budget}",
+                );
+            }
+        }
+    }
+
+    /**
+     * Re-evaluate config/queue.php under a substituted environment, the way the
+     * AI gate suite re-evaluates config/kedge.php.
+     *
+     * @return array<string, mixed>
+     */
+    private function queueConfigUnder(int $budget): array
+    {
+        $previous = getenv('AI_JOB_TIMEOUT');
+
+        putenv('AI_JOB_TIMEOUT='.$budget);
+        $_ENV['AI_JOB_TIMEOUT'] = (string) $budget;
+        $_SERVER['AI_JOB_TIMEOUT'] = (string) $budget;
+
+        try {
+            return require base_path('config/queue.php');
+        } finally {
+            unset($_ENV['AI_JOB_TIMEOUT'], $_SERVER['AI_JOB_TIMEOUT']);
+
+            $previous === false ? putenv('AI_JOB_TIMEOUT') : putenv('AI_JOB_TIMEOUT='.$previous);
+        }
+    }
+
+    /**
      * The backoff schedule and the terminal-timeout stance are the run
      * lifecycle contract; #153 changes the clocks, not the contract.
      */

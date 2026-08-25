@@ -1,5 +1,31 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| Reservation lease (#153)
+|--------------------------------------------------------------------------
+|
+| `retry_after` is how long a driver waits before deciding a reserved job died
+| and handing it to another worker. Laravel's rule is absolute: it MUST exceed
+| the longest a job can legitimately run, or a still-working job is re-reserved
+| and executed a second time while the first is mid-flight.
+|
+| An AI run is the longest job in this app — up to `AI_JOB_TIMEOUT` (300s by
+| default), and now genuinely capable of using it, since #153 lets one model
+| call run for the whole budget instead of dying on a 60s socket. At the stock
+| 90s lease that means a slow generation would be re-reserved TWICE while still
+| running, and each redelivery re-bills the prompt: `ShouldBeUnique` dedupes
+| DISPATCHES, not redeliveries, and the run ledger deliberately lets a running
+| row be re-claimed (a redelivery after a hard-killed worker has to be able to
+| pick the run back up).
+|
+| So the lease is derived from the same knob the job budget reads, plus room
+| for the job's own overhead, and an operator's explicit value can only raise
+| it: a lease shorter than the ceiling is not a preference, it is a
+| double-billing bug.
+*/
+$aiLeaseFloor = (int) env('AI_JOB_TIMEOUT', 300) + 60;
+
 return [
 
     /*
@@ -40,7 +66,7 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => max($aiLeaseFloor, (int) env('DB_QUEUE_RETRY_AFTER', 90)),
             'after_commit' => false,
         ],
 
@@ -48,7 +74,7 @@ return [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),
             'queue' => env('BEANSTALKD_QUEUE', 'default'),
-            'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => max($aiLeaseFloor, (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 90)),
             'block_for' => 0,
             'after_commit' => false,
         ],
@@ -68,7 +94,7 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => max($aiLeaseFloor, (int) env('REDIS_QUEUE_RETRY_AFTER', 90)),
             'block_for' => null,
             'after_commit' => false,
         ],

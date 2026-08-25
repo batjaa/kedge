@@ -153,15 +153,22 @@ class AiFailureClassifier
      * apart: the connect phase says "Connection timed out after N milliseconds",
      * while the transfer clock — the one an agent's timeout sets — says
      * "Operation timed out after N milliseconds with 0 bytes received". Only the
-     * second means the provider answered our SYN and then thought for too long.
+     * second means the provider answered our SYN and then thought for too long,
+     * and the byte count is the half that says so: it is reported by a transfer
+     * that was under way.
      *
-     * Deliberately narrow: anything this does not positively recognize keeps the
-     * old transient reading, so an unfamiliar transport or a reworded driver
-     * costs a retry rather than a wrongly-terminal run.
+     * BOTH halves are required, deliberately. A proxy or a non-cURL transport
+     * that says only "Operation timed out" has not told us it ever reached the
+     * provider, and everything this does not positively recognize keeps the old
+     * transient reading — an unfamiliar driver should cost a retry, not a
+     * wrongly-terminal run.
      */
     private function readsAsGenerationTimeout(ConnectionException $e): bool
     {
-        return str_contains(strtolower($e->getMessage()), 'operation timed out');
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'operation timed out')
+            && str_contains($message, 'bytes received');
     }
 
     private function fromStatus(RequestException $e): AiFailure

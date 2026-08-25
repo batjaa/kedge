@@ -21,6 +21,7 @@ use App\Services\AI\Builders\DocumentAskPromptBuilder;
 use App\Services\AI\Prompt\ContextBudget;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
@@ -956,6 +957,32 @@ class AiDocumentAskTest extends TestCase
         $run->refresh();
         $this->assertSame(AiRunStatus::Failed, $run->status);
         $this->assertSame('transient', $run->error['kind']);
+    }
+
+    /**
+     * #153. An ask that outruns our own transfer clock lands failed on the spot
+     * — the provider was reached and was working, so a backoff-and-retry would
+     * bill the same prompt again — and its cost is UNKNOWN, never a confident
+     * $0: the request the model was still working on is exactly the one it most
+     * likely billed.
+     */
+    public function test_a_generation_that_outran_our_clock_fails_at_once_with_an_unknown_cost(): void
+    {
+        DocumentAskAgent::fake([fn () => throw new ConnectionException(
+            'cURL error 28: Operation timed out after 270003 milliseconds with 0 bytes received',
+        )]);
+        [$author, $document] = $this->readyDocument();
+
+        $run = $this->ask($document, $author, 'Summarize every section in detail.');
+
+        // No try/catch: a rethrow here IS the retry.
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertSame('deterministic', $run->error['kind']);
+        $this->assertSame('generation_timeout', $run->error['code']);
+        $this->assertNull($run->cost);
     }
 
     public function test_an_empty_answer_from_the_model_fails_the_run_deterministically(): void
