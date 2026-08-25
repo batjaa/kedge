@@ -111,7 +111,16 @@ class CommentSplitGenerator implements GeneratesAiRun
         $splits = [];
 
         foreach ($chunks as $chunk) {
-            $response = CommentSplitAgent::make()->prompt($chunk);
+            try {
+                $response = CommentSplitAgent::make()->prompt($chunk);
+            } catch (Throwable $e) {
+                // The request was issued; the provider may have accepted and
+                // billed it before this died. We cannot say what it cost, so the
+                // run's cost becomes unknown rather than a confident understatement.
+                $this->ledger->markSpendUnknown($run);
+
+                throw $e;
+            }
 
             // Spend is recorded before the response is judged: a refusal or an
             // unusable shape was still billed.

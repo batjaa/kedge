@@ -81,6 +81,11 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
         AiGeneratorRegistry $registry,
         AiFailureClassifier $classifier,
     ): void {
+        // Captured before any preflight work: the queue's alarm started before
+        // this method did, so the attempt deadline must count from here, not
+        // from wherever the budget scope happens to open (#153 review).
+        $startedAt = now();
+
         $run = AiRun::query()->find($this->aiRunId);
 
         if ($run === null) {
@@ -130,6 +135,7 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
             $ledger->markCompleted($run, AiRunBudget::forAttempt(
                 $this->timeout,
                 fn () => $registry->for($run)->generate($run),
+                $startedAt,
             ));
         } catch (Throwable $e) {
             $failure = $classifier->classify($e);

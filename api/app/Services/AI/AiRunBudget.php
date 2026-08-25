@@ -77,6 +77,12 @@ final class AiRunBudget
      * Run a generation attempt under the ceiling the JOB carries, rather than
      * whatever config the worker happens to hold, and start the clock.
      *
+     * `$startedAt` anchors the deadline to when the ATTEMPT began, not to when
+     * this scope opened: the queue's own alarm starts before `handle()`, so a
+     * deadline that ignored the preflight already spent (claiming the run, the
+     * gate re-check) would run past the alarm and hand the kill back to the
+     * queue — the exact blunt death this class exists to preempt.
+     *
      * Restored on the way out — including on the way out through an exception —
      * so a long-lived worker never leaks one run's deadline into the next.
      *
@@ -85,13 +91,13 @@ final class AiRunBudget
      * @param  Closure(): TReturn  $attempt
      * @return TReturn
      */
-    public static function forAttempt(int $ceiling, Closure $attempt): mixed
+    public static function forAttempt(int $ceiling, Closure $attempt, ?CarbonInterface $startedAt = null): mixed
     {
         $previousCeiling = self::$attemptCeiling;
         $previousDeadline = self::$attemptDeadline;
 
         self::$attemptCeiling = max(self::MINIMUM_JOB_SECONDS, $ceiling);
-        self::$attemptDeadline = now()->addSeconds(self::$attemptCeiling);
+        self::$attemptDeadline = ($startedAt?->copy() ?? now())->addSeconds(self::$attemptCeiling);
 
         try {
             return $attempt();
