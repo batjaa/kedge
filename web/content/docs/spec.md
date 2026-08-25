@@ -392,7 +392,7 @@ All via `laravel/ai`, as queued jobs writing `ai_runs`; results are **drafts the
 3. **Reply drafts**: per-thread, honoring the author's chosen stance (accept / push back / clarify).
 4. **Split comment into threads**: AI proposes N splits (title + fragment + anchor); user approves → forked threads via §8.1.
 5. **Thread summary**: long thread → current state + open question.
-6. **Ask about the doc** (added 2026-08-19): select a passage — or ask doc-wide — and pose a free-form question; the answer is ephemeral and copyable, never persisted as a comment or thread. Single-turn in v1.
+6. **Ask about the doc** (added 2026-08-19; multi-turn 2026-08-25, #151): select a passage — or ask doc-wide — and pose a free-form question in a chat panel docked to the review rail; answers are ephemeral and copyable, never persisted as a comment or thread. **Conversational, with the conversation held by the CLIENT.** Follow-up turns accumulate in the panel and travel back to the server in the next request (`transcript`), where they are untrusted context fenced exactly like the document and the quote. The server stays stateless about it: no conversation table, no run-linking column, no latest-ask read — so a reload starts an empty conversation, nothing is resumable across devices, and one member can never read another's turns because there is nothing stored to read. Every turn is its own dedupe-exempt `ask` run and burns one `throttle:ai` slot. Replay is capped (8 turns / 16,000 characters, oldest dropped first, enforced at the endpoint and again at the prompt builder) and is budgeted INSIDE the context budget, so a long conversation shrinks the document the model reads and the coverage sentence says so.
 
 Failure modes: provider overloaded/rate-limited → `ai_runs.status=failed` + visible retry; every run logs model, tokens, cost. Spend is priced from a **per-provider** table (added 2026-08-19 with provider selection): a model id says nothing about what it costs, so a model with no entry for the selected provider records a **null cost** rather than a wrong number.
 
@@ -498,7 +498,8 @@ POST   /documents/{id}/ai/improve-prompt
 POST   /threads/{id}/ai/reply-draft {stance}
 POST   /threads/{id}/ai/summary
 POST   /comments/{id}/ai/split
-POST   /documents/{id}/ai/ask {question, quote?} → always a NEW run (dedupe-exempt); ephemeral answer, no latest-ask read
+POST   /documents/{id}/ai/ask {question, quote?, transcript?} → always a NEW run (dedupe-exempt); ephemeral answer, no latest-ask read
+       transcript? = prior question/answer turns, client-held and client-sent (#151): untrusted context, capped 8 turns / 16k chars, never stored as conversation
 GET    /documents/{id}/ai/digest            → latest digest run (panel re-attach on mount); 204 when none
 GET    /documents/{id}/ai/improve-prompt    → latest improve-prompt run (panel re-attach on mount); 204 when none
 GET    /threads/{id}/ai/summary             → latest summary run for the thread; 204 when none

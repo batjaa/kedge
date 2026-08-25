@@ -44,3 +44,20 @@ export const FAKE_SUMMARY_OPEN_QUESTION = 'Who writes the worked example?';
 export function fakeReplyDraft(stance: 'accept' | 'push back' | 'clarify'): string {
   return `Drafted reply (${stance}): I have read the thread and this is where I land.`;
 }
+
+/** The scripted answer to a first question. */
+export const FAKE_ASK_ANSWER =
+  'The document says the anchor is re-resolved against the new version, not recreated.';
+
+/**
+ * The scripted answer to a FOLLOW-UP — a question that arrived carrying the
+ * conversation so far (#151).
+ *
+ * Distinct from the first answer because that difference is the only way the
+ * ask journey can tell "the follow-up replayed its transcript" from "the
+ * follow-up asked a second isolated question". A single fixed answer would
+ * render identically either way, so the conversation could stop working and the
+ * journey would still pass.
+ */
+export const FAKE_ASK_FOLLOW_UP_ANSWER =
+  'Following on from what you just asked: the document adds that the offsets are recomputed, never copied.';
