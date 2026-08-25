@@ -37,7 +37,12 @@ class DocumentAskGenerator implements GeneratesAiRun
     {
         $run->loadMissing('document.currentVersion');
 
-        $assembled = $this->builder->build($run->document, $this->question($run), $this->quote($run));
+        $assembled = $this->builder->build(
+            $run->document,
+            $this->question($run),
+            $this->quote($run),
+            $this->transcript($run),
+        );
 
         // Scope first, model call second: a run that fails still says what it
         // was assembled from.
@@ -114,5 +119,47 @@ class DocumentAskGenerator implements GeneratesAiRun
                 'is_string',
             )),
         ];
+    }
+
+    /**
+     * The conversation this question continues (#151), as the client sent it.
+     *
+     * A missing or malformed transcript is an ordinary first turn, never a
+     * failure: the field is optional, an older client does not send it at all,
+     * and a follow-up that arrives without its history is answerable — just
+     * without the context that would have resolved "it". Refusing here would
+     * turn a client-side bug into a dead panel for something the model can still
+     * do.
+     *
+     * Bounding and fencing are the builder's job, not this one's. It is the last
+     * guard before the provider and applies the same ceilings whatever the row
+     * says (see {@see DocumentAskPromptBuilder}).
+     *
+     * @return list<array{question: string, answer: string}>
+     */
+    private function transcript(AiRun $run): array
+    {
+        $transcript = $run->requestPayload()['transcript'] ?? null;
+
+        if (! is_array($transcript)) {
+            return [];
+        }
+
+        $turns = [];
+
+        foreach ($transcript as $turn) {
+            if (! is_array($turn)) {
+                continue;
+            }
+
+            $question = $turn['question'] ?? null;
+            $answer = $turn['answer'] ?? null;
+
+            if (is_string($question) && is_string($answer)) {
+                $turns[] = ['question' => $question, 'answer' => $answer];
+            }
+        }
+
+        return $turns;
     }
 }
