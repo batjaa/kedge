@@ -1068,28 +1068,31 @@ export function DocumentReviewSurface({
     ? 'chat'
     : railCollapsed ? 'none' : 'threads';
 
-  // A conversation is about the version it was asked against. A re-sync landing
-  // mid-conversation swaps the document under it (the surface re-renders with
-  // new props rather than remounting), which would leave a v1 quote and v1
-  // answers travelling as context for a question the server answers from v2 —
-  // and the panel silently open over a document that is no longer the one being
-  // discussed. Close it and start over; the reader can ask again against what
-  // they are now reading.
+  // A conversation is about the version it was asked against, on a surface that
+  // was allowed to ask. A re-sync landing mid-conversation swaps the document
+  // underneath it (the surface re-renders with new props rather than
+  // remounting), which would leave a v1 quote and v1 answers travelling as
+  // context for a question the server answers from v2, under a panel still open
+  // over a document nobody is reading any more. The AI capability going away is
+  // the same problem wearing a different hat: an open chat must not outlive the
+  // gate meant to hide every AI affordance.
   //
-  // The same effect closes the panel when the AI capability goes away, so an
-  // open chat cannot outlive the gate that is supposed to hide every AI
-  // affordance.
+  // Written as a CHANGE detector rather than a plain effect, because a plain one
+  // also fires on mount — and this component mounts on every review page,
+  // including the share surface, which can never open the chat at all. Making
+  // mount a no-op keeps the reset off the hydration path entirely.
   const resetAsk = askConversation.reset;
+  const askScope = `${viewedVersionId}:${currentVersionId}:${canRunHeaderAi}`;
+  const askScopeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (canRunHeaderAi) return;
-    setAskOpen(false);
-    resetAsk();
-  }, [canRunHeaderAi, resetAsk]);
+    const previous = askScopeRef.current;
+    askScopeRef.current = askScope;
 
-  useEffect(() => {
+    if (previous === null || previous === askScope) return;
+
     setAskOpen(false);
     resetAsk();
-  }, [viewedVersionId, currentVersionId, resetAsk]);
+  }, [askScope, resetAsk]);
 
   const splitCapability = canProposeCommentSplits
     && viewedVersionId === currentVersionId

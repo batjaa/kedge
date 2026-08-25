@@ -52,17 +52,73 @@ export function decodeLogMailerBody(raw: string): string {
   return decodedLogMailerBodies(raw).at(-1) ?? '';
 }
 
+/**
+ * The extraction rule, exposed for the unit test that pins its parallel-safety
+ * (test/mailbox.test.ts). The polling wrapper above needs a real log file and a
+ * clock; the rule that decides WHICH message is yours needs neither.
+ */
+export function extractMagicLinkForTest(raw: string, email: string): string | null {
+  return extractLatestMagicLinkUrl(raw, email.trim().toLowerCase());
+}
+
+/**
+ * The newest link ADDRESSED TO this reviewer — matched per log entry, never by
+ * proximity.
+ *
+ * This used to take a ±character window around the last occurrence of the
+ * address and return the last link inside it, which is correct only while the
+ * pack runs serially. Four specs send reviewer magic links to this one shared
+ * log (i18n-shared, i18n-review, reviewer-magic-link, suggestion), and one
+ * message runs to a couple of hundred lines — so once the pack went parallel
+ * (#148) the forward half of that window routinely reached into the NEXT
+ * reviewer's message, and `.at(-1)` handed back their link. Verification then
+ * ran for the wrong reviewer and the journey failed on a redirect that never
+ * carried `?verified=1`.
+ *
+ * The log mailer writes one MIME message per log entry, so an entry is the
+ * natural unit: split on entry boundaries, keep the entries whose `To:` header
+ * is this reviewer, and read the link out of the newest of those. Proximity
+ * never enters into it.
+ */
 function extractLatestMagicLinkUrl(raw: string, normalizedEmail: string): string | null {
-  for (const decoded of decodedLogMailerBodies(raw)) {
-    const matchingWindow = latestWindowForEmail(decoded, normalizedEmail);
-    const matches = [...matchingWindow.matchAll(VERIFY_LINK_PATTERN)]
-      .map((match) => normalizeExtractedUrl(match[0]))
-      .filter(isCompleteMagicLinkUrl);
-    const match = matches.at(-1);
-    if (match) return match;
+  const entries = logEntries(raw);
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    for (const decoded of decodedLogMailerBodies(entries[index])) {
+      if (!isAddressedTo(decoded, normalizedEmail)) continue;
+
+      const matches = [...decoded.matchAll(VERIFY_LINK_PATTERN)]
+        .map((match) => normalizeExtractedUrl(match[0]))
+        .filter(isCompleteMagicLinkUrl);
+      const match = matches.at(-1);
+      if (match) return match;
+    }
   }
 
   return null;
+}
+
+/**
+ * Split the log into its entries. Every line Laravel writes starts with a
+ * `[YYYY-MM-DD HH:MM:SS]` stamp; a mailed message is one such entry whose
+ * payload runs over many unstamped lines until the next one.
+ */
+export function logEntries(raw: string): string[] {
+  return raw
+    .split(/^(?=\[\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/m)
+    .filter((entry) => entry.trim() !== '');
+}
+
+/**
+ * Whether this message was SENT TO the reviewer, read from the `To:` header
+ * rather than from the text anywhere in the entry — an address can legitimately
+ * appear in a body (journey comments embed the author's email verbatim), and
+ * matching that would reintroduce exactly the cross-talk this replaced.
+ */
+function isAddressedTo(decoded: string, normalizedEmail: string): boolean {
+  return (decoded.match(/^to:.*$/gim) ?? []).some(
+    (header) => header.toLowerCase().includes(normalizedEmail),
+  );
 }
 
 function decodedLogMailerBodies(raw: string): string[] {
@@ -72,17 +128,6 @@ function decodedLogMailerBodies(raw: string): string[] {
     decodeHtmlEntities(withoutSoftBreaks),
     decodeHtmlEntities(decodeQuotedPrintable(raw)),
   ];
-}
-
-function latestWindowForEmail(decoded: string, normalizedEmail: string): string {
-  const lower = decoded.toLowerCase();
-  const index = lower.lastIndexOf(normalizedEmail);
-  if (index === -1) return '';
-
-  const start = Math.max(0, index - 12_000);
-  const end = Math.min(decoded.length, index + 24_000);
-
-  return decoded.slice(start, end);
 }
 
 function normalizeExtractedUrl(value: string): string {

@@ -180,8 +180,13 @@ export function useAskConversation(documentId: number): AskConversation {
     // panel accepting questions it silently threw away.
     epochRef.current += 1;
     sendingRef.current = false;
-    setTurns([]);
-    setPendingQuote(null);
+    // Idempotent: resetting an already-empty conversation returns the SAME
+    // array so React bails out instead of re-rendering. The surface calls this
+    // from a scope-change effect, and every review surface — including the
+    // share surface, which can never open the chat at all — would otherwise pay
+    // a needless extra render during hydration.
+    setTurns((current) => (current.length === 0 ? current : []));
+    setPendingQuote((current) => (current === null ? current : null));
     nextIdRef.current = 1;
   }, []);
 

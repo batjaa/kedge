@@ -206,8 +206,58 @@ export async function verifyReviewerByMagicLink(
   await expect(page.getByRole('heading', { name: title }).first()).toBeVisible();
 }
 
+/**
+ * Wait until the review surface's own `mouseup` handler is attached.
+ *
+ * `selectDocumentText` below works by DISPATCHING a mouseup at the prose, and
+ * before hydration that event lands on nothing: React has not wired
+ * `captureSelection` yet, so no selection is captured, no affordance appears,
+ * and the assertion at the end of the helper times out with a baffling
+ * "Comment button not visible" on a page that plainly shows the document. The
+ * race is invisible on an idle machine and shows up on a loaded CI runner —
+ * the same lesson `formIsHydrated` learned for the auth forms.
+ *
+ * The signal is the handler itself rather than a hydration heuristic: walk up
+ * from the prose to whichever ancestor React stamped `onMouseUp` onto. That is
+ * exactly the thing this helper depends on, so it cannot pass while the
+ * dependency is missing.
+ *
+ * Non-fatal, for `formIsHydrated`'s reason: `__reactProps$` is an internal, so a
+ * React release that renamed it must not time out every selection journey for a
+ * reason unrelated to the product. Falling through leaves the pack exactly where
+ * it was — correct when the page is ready, loud when it is not.
+ */
+async function selectionHandlerIsAttached(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => {
+        let node: Element | null = document.querySelector('article.prose');
+        if (node === null) return false;
+
+        while (node !== null) {
+          const key = Object.keys(node).find((name) => name.startsWith('__reactProps$'));
+          const props = key === undefined
+            ? null
+            : (node as unknown as Record<string, { onMouseUp?: unknown }>)[key];
+          if (typeof props?.onMouseUp === 'function') return true;
+          node = node.parentElement;
+        }
+
+        return false;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+  } catch {
+    // Attachment could not be observed. Dispatch anyway rather than failing on
+    // a probe: the assertions after the selection are the real contract.
+  }
+}
+
 /** Programmatically select exact rendered prose so the browser Selection API drives anchor capture. */
 export async function selectDocumentText(page: Page, exact: string, occurrence = 0): Promise<void> {
+  await selectionHandlerIsAttached(page);
+
   const result = await page.evaluate(
     async ({ exact, occurrence }) => {
       const root = document.querySelector<HTMLElement>('article.prose');
