@@ -9,6 +9,7 @@ use Closure;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Throwable;
 
 /**
  * One structured model call, with the three things every generator must do
@@ -41,7 +42,19 @@ class StructuredCall
      */
     public function invoke(AiRun $run, Closure $call): array
     {
-        $response = $call();
+        try {
+            $response = $call();
+        } catch (Throwable $e) {
+            // The request went out; the provider may have accepted and billed
+            // it before this died — a client-side generation timeout most of
+            // all, which by definition means the model was working (#153).
+            // Sealing the row at its last known figure would state a number we
+            // know to be too low, so cost becomes unknown rather than a
+            // confident $0. Same rule the chunked generators apply per chunk.
+            $this->ledger->markSpendUnknown($run);
+
+            throw $e;
+        }
 
         $model = $response->meta->model;
         $this->ledger->recordSpend(

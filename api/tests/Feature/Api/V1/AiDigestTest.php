@@ -15,6 +15,7 @@ use App\Services\AI\AiFailure;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneration;
 use App\Services\AI\AiGeneratorRegistry;
+use App\Services\AI\AiRunBudget;
 use App\Services\AI\AiRunLedger;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -476,14 +477,81 @@ class AiDigestTest extends TestCase
         $this->assertSame('provider_overloaded', $run->error['code']);
     }
 
-    public function test_a_connection_timeout_is_transient(): void
+    /**
+     * #153, end to end: the model call the job makes is bounded by the ceiling
+     * THAT job carries, not by whatever config the worker booted with. Without
+     * the attempt scope, a budget raised after dispatch (a deploy while runs sit
+     * in the queue) would hand this call 870s inside a 60s attempt, and the
+     * queue — not the classifier — would do the killing.
+     */
+    public function test_generation_runs_under_the_ceiling_the_job_carries(): void
+    {
+        $this->freezeTime();
+        $resolved = null;
+
+        ReviewDigestAgent::fake([function () use (&$resolved): array {
+            $resolved = AiRunBudget::http();
+
+            return $this->digestPayload();
+        }]);
+
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+
+        config(['kedge.ai.job_timeout' => 60]);
+        $job = new GenerateAiRunJob($run->id);
+
+        // The worker recycled onto a much larger budget after this was queued.
+        config(['kedge.ai.job_timeout' => 900]);
+
+        $job->handle(
+            app(AiRunLedger::class),
+            app(AiGeneratorRegistry::class),
+            app(AiFailureClassifier::class),
+        );
+
+        $this->assertSame(60, $job->timeout);
+        $this->assertSame(30, $resolved);
+        $this->assertSame(AiRunStatus::Completed, $run->refresh()->status);
+    }
+
+    public function test_an_unreachable_provider_is_transient(): void
     {
         [$author, $document] = $this->reviewedDocument();
         $run = $this->requestDigest($document, $author);
 
-        (new GenerateAiRunJob($run->id))->failed(new ConnectionException('timed out'));
+        (new GenerateAiRunJob($run->id))->failed(new ConnectionException(
+            'cURL error 7: Failed to connect to api.example.test port 443: Connection refused',
+        ));
 
         $this->assertSame('transient', $run->refresh()->error['kind']);
+    }
+
+    /**
+     * #153. Our own transfer clock expiring is not "unreachable": the provider
+     * answered, was working, and has already billed the prompt. The job must
+     * therefore land the run instead of rethrowing — a rethrow is how the queue
+     * is asked to send the same 32k-token prompt into the same wall again.
+     */
+    public function test_a_generation_that_outran_our_clock_lands_failed_without_retrying(): void
+    {
+        ReviewDigestAgent::fake([fn () => throw new ConnectionException(
+            'cURL error 28: Operation timed out after 270003 milliseconds with 0 bytes received',
+        )]);
+        [$author, $document] = $this->reviewedDocument();
+        $run = $this->requestDigest($document, $author);
+
+        // No try/catch: a rethrow here IS the retry, and would fail the test.
+        $this->runJob($run);
+        $run->refresh();
+
+        $this->assertSame(AiRunStatus::Failed, $run->status);
+        $this->assertSame('deterministic', $run->error['kind']);
+        $this->assertSame('generation_timeout', $run->error['code']);
+
+        // The sentence the author reads next to the retry action asks for a
+        // smaller ask rather than promising a retry will help.
+        $this->assertStringContainsStringIgnoringCase('shorter', $run->error['message']);
     }
 
     public function test_a_job_timeout_lands_the_run_failed(): void

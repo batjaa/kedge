@@ -7,6 +7,7 @@ use App\Models\AiRun;
 use App\Services\AI\AiFailure;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
+use App\Services\AI\AiRunBudget;
 use App\Services\AI\AiRunLedger;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -49,13 +50,17 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
     /**
      * Sized for a chunked run (config), and carried on the job so a queued job
      * keeps the ceiling it was dispatched under.
+     *
+     * The agents' HTTP timeout derives from this same budget and always lands
+     * strictly inside it ({@see AiRunBudget}), so a slow generation is caught
+     * and classified by us rather than by the queue.
      */
     public int $timeout;
 
     public function __construct(
         public readonly int $aiRunId,
     ) {
-        $this->timeout = max(1, (int) config('kedge.ai.job_timeout', 300));
+        $this->timeout = AiRunBudget::job();
     }
 
     /**
@@ -76,6 +81,11 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
         AiGeneratorRegistry $registry,
         AiFailureClassifier $classifier,
     ): void {
+        // Captured before any preflight work: the queue's alarm started before
+        // this method did, so the attempt deadline must count from here, not
+        // from wherever the budget scope happens to open (#153 review).
+        $startedAt = now();
+
         $run = AiRun::query()->find($this->aiRunId);
 
         if ($run === null) {
@@ -115,7 +125,18 @@ class GenerateAiRunJob implements ShouldBeUnique, ShouldQueue
         }
 
         try {
-            $ledger->markCompleted($run, $registry->for($run)->generate($run));
+            // Generation runs under the ceiling THIS job carries, not whatever
+            // config the worker happens to hold: a queued job keeps the budget
+            // it was dispatched under, and the agents' socket clock has to keep
+            // it too, or a budget raised after dispatch would let one model call
+            // outlive the attempt it belongs to. Inside the scope the clock
+            // counts down, so a chunked run's later calls are bounded by what
+            // the attempt actually has left (#153).
+            $ledger->markCompleted($run, AiRunBudget::forAttempt(
+                $this->timeout,
+                fn () => $registry->for($run)->generate($run),
+                $startedAt,
+            ));
         } catch (Throwable $e) {
             $failure = $classifier->classify($e);
 
