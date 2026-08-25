@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
-import { AiAskAction, type AskRequest } from './ai-ask-action';
+import { AiAskAction } from './ai-ask-action';
+import { AiAskChatPanel, AiAskChatSheet, useAskChatIsSheet } from './ai-ask-chat-panel';
 import { AiDigestAction } from './ai-digest-action';
 import { AiImprovePromptAction } from './ai-improve-prompt-action';
 import { DocumentCommentComposer, type ComposerState } from './document-comment-composer';
@@ -28,6 +29,10 @@ import { DocumentThreadRail, type ReattachStatus } from './document-thread-rail'
 import { DocumentVersionSwitcher } from './document-version-switcher';
 import { MobileThreadSheet } from './mobile-thread-sheet';
 import { askQuoteFromSelector } from '@/lib/ai-ask';
+import { readAiRun } from '@/lib/ai-client';
+import { aiRunSettled } from '@/lib/ai-run';
+import { useAskConversation } from '@/lib/use-ask-conversation';
+import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { captureAnchorFromSelection } from '@/lib/anchor-capture-dom';
 import { commentComposerSubmitState } from '@/lib/comment-composer';
 import { postDocumentComposerDraft } from '@/lib/comment-composer-actions';
@@ -76,6 +81,7 @@ import { approveDocument, revokeApproval } from '@/lib/approvals-client';
 import type { Approval, Document, DocumentVersion, LifecycleStatus, Project, SyncStatus } from '@/lib/document-types';
 import { versionLabel as displayVersionLabel } from '@/lib/version-label';
 import type { AnchorSelector } from '@/lib/anchor-capture-core';
+import type { AiRun, AskOutput, AskQuote } from '@/lib/ai-types';
 import type { ReviewThread, SuggestionStatus, ThreadAnchorPayload, ThreadComment, ThreadStatus } from '@/lib/thread-types';
 
 const SCROLL_SPY_OFFSET = 136;
@@ -181,12 +187,22 @@ export function DocumentReviewSurface({
   const [anchorPositions, setAnchorPositions] = useState<Record<number, number>>({});
   const [documentHeight, setDocumentHeight] = useState(320);
   const [composer, setComposer] = useState<ComposerState>({ open: false });
-  // The ask panel (#139), open when non-null and carrying the passage it was
-  // opened for. Held here rather than in the component because two affordances
-  // open it — the header button and the selection popover — and a reader must
-  // never end up with two panels holding two different answers. Closing it
-  // unmounts the panel, which is what makes the answer ephemeral.
-  const [askRequest, setAskRequest] = useState<AskRequest | null>(null);
+  // The ask chat (#139, made a conversation in #151). Two things live here
+  // rather than in the panel, for two different reasons:
+  //
+  //  - OPEN is here because two affordances open the panel (the header button
+  //    and the selection popover), and a reader must never end up with two
+  //    panels holding two different conversations.
+  //  - The CONVERSATION is here because the panel unmounts when it closes, and
+  //    the turns must survive that. In #139 the opposite was true and
+  //    deliberate — the dialog owned the answer, so closing destroyed it — and
+  //    reversing exactly that is what this ticket is.
+  //
+  // A page reload still clears everything, because nothing about it is
+  // persisted anywhere: no conversation table, no re-attach read (SPEC §14).
+  const [askOpen, setAskOpen] = useState(false);
+  const askConversation = useAskConversation(documentId);
+  const askIsSheet = useAskChatIsSheet();
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [headerMessage, setHeaderMessage] = useState<string | null>(null);
@@ -452,6 +468,8 @@ export function DocumentReviewSurface({
       ?? threads[0]?.id
       ?? null;
     setMobileThreadId(targetId);
+    // The other half of the one-sheet-at-a-time rule (see openAskChat).
+    setAskOpen(false);
     if (targetId !== null) setActiveThreadId(targetId);
   }, [activeThreadId, threads]);
 
@@ -1013,6 +1031,69 @@ export function DocumentReviewSurface({
   // costs a slightly stale answer, not a wrong row.
   const canRunHeaderAi = canRunAi && viewedVersionId === currentVersionId;
 
+  /**
+   * Open the chat, optionally pointing the NEXT question at a passage (#151).
+   *
+   * Opening never resets the conversation — that is what the panel's "New
+   * conversation" is for. Asking from a second selection while the chat is
+   * already open therefore replaces the pending passage chip and leaves the
+   * turns alone, which is the whole reason the chip is a property of the next
+   * turn rather than of the panel.
+   *
+   * A header ask passes null, and null CLEARS any pending chip: "Ask about this
+   * document" is a doc-wide question, and silently attaching a passage the
+   * reader selected minutes ago would answer a narrower one than they asked.
+   */
+  function openAskChat(quote: AskQuote | null) {
+    askConversation.attachQuote(quote);
+    // Below xl both present as modal sheets, and two of them means two focus
+    // traps, two Escape handlers and two body-scroll locks fighting each other.
+    // The mobile surface holds one sheet at a time; opening either closes the
+    // other.
+    setMobileThreadId(null);
+    setAskOpen(true);
+  }
+
+  // Who has the right-hand column (#151). An explicit occupant rather than two
+  // independent booleans, because "chat OR threads, never both" is the actual
+  // rule: overlaying them would hide the rail behind the chat, and a third
+  // column would squeeze the prose below its 52rem measure (DESIGN.md).
+  //
+  // The chat wins over `railCollapsed` while it is open — a reader who
+  // collapsed the thread rail and then asked a question wants the answer, not a
+  // slim gutter. Closing hands the column back to whatever the collapse
+  // preference says, so the preference is remembered rather than overwritten:
+  // the gutter toggle and `useCollapsePreference` stay thread-rail concerns.
+  const railOccupant: 'chat' | 'threads' | 'none' = askOpen && !askIsSheet
+    ? 'chat'
+    : railCollapsed ? 'none' : 'threads';
+
+  // A conversation is about the version it was asked against, on a surface that
+  // was allowed to ask. A re-sync landing mid-conversation swaps the document
+  // underneath it (the surface re-renders with new props rather than
+  // remounting), which would leave a v1 quote and v1 answers travelling as
+  // context for a question the server answers from v2, under a panel still open
+  // over a document nobody is reading any more. The AI capability going away is
+  // the same problem wearing a different hat: an open chat must not outlive the
+  // gate meant to hide every AI affordance.
+  //
+  // Written as a CHANGE detector rather than a plain effect, because a plain one
+  // also fires on mount — and this component mounts on every review page,
+  // including the share surface, which can never open the chat at all. Making
+  // mount a no-op keeps the reset off the hydration path entirely.
+  const resetAsk = askConversation.reset;
+  const askScope = `${viewedVersionId}:${currentVersionId}:${canRunHeaderAi}`;
+  const askScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = askScopeRef.current;
+    askScopeRef.current = askScope;
+
+    if (previous === null || previous === askScope) return;
+
+    setAskOpen(false);
+    resetAsk();
+  }, [askScope, resetAsk]);
+
   const splitCapability = canProposeCommentSplits
     && viewedVersionId === currentVersionId
     && newerVersionNotice === null
@@ -1029,18 +1110,14 @@ export function DocumentReviewSurface({
   // answer a different question than the one the page appears to be asking.
   //
   // Ask (#139) joins them with one difference: its panel is also reachable from
-  // a text selection, so the OPEN state lives here rather than inside the
-  // component — one panel, two ways in, and only one place an answer can be.
+  // a text selection and it docks to the rail rather than opening a dialog, so
+  // the open state and the conversation live here — one panel, two ways in, and
+  // only one place a conversation can be.
   const aiArtifactControls = canRunHeaderAi ? (
     <>
       <AiDigestAction documentId={documentId} documentTitle={title} />
       <AiImprovePromptAction documentId={documentId} />
-      <AiAskAction
-        documentId={documentId}
-        request={askRequest}
-        onOpen={(quote) => setAskRequest({ quote })}
-        onClose={() => setAskRequest(null)}
-      />
+      <AiAskAction onOpen={() => openAskChat(null)} />
     </>
   ) : null;
 
@@ -1137,7 +1214,7 @@ export function DocumentReviewSurface({
           <div
             className={cn(
               'mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 px-6 py-8 xl:justify-center',
-              railCollapsed
+              railOccupant === 'none'
                 ? 'xl:grid-cols-[minmax(0,52rem)]'
                 : 'xl:grid-cols-[minmax(0,52rem)_320px] 2xl:grid-cols-[minmax(0,52rem)_360px]',
             )}
@@ -1151,7 +1228,11 @@ export function DocumentReviewSurface({
               {children}
             </div>
 
-            {railCollapsed ? null : (
+            {railOccupant === 'chat' ? (
+              <AiAskChatPanel conversation={askConversation} onClose={() => setAskOpen(false)} />
+            ) : null}
+
+            {railOccupant === 'threads' ? (
               <DocumentThreadRail
                 threads={threads}
                 page={page}
@@ -1189,7 +1270,7 @@ export function DocumentReviewSurface({
                 reattachingThreadId={reattachingThreadId}
                 reattachStatus={reattachStatus}
               />
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -1197,7 +1278,18 @@ export function DocumentReviewSurface({
           <div className="sticky top-[var(--kedge-pin-top,8rem)] flex flex-col items-center gap-2 py-8">
             <ColumnToggleButton
               label={railCollapsed ? t('surface.showRail') : t('surface.hideRail')}
-              onClick={() => setRailCollapsed(!railCollapsed)}
+              onClick={() => {
+                setRailCollapsed(!railCollapsed);
+                // The gutter is the THREAD RAIL's control and keeps writing the
+                // thread rail's preference (#151 leaves `useCollapsePreference`
+                // alone). Using it therefore means "give me the rail, in
+                // whatever state my preference says" — so it hands the column
+                // back from the chat in both directions. Without this the
+                // button is a visible no-op whenever the chat is the occupant:
+                // hiding hides nothing, and showing shows the chat that was
+                // already there.
+                setAskOpen(false);
+              }}
             >
               {railCollapsed ? (
                 <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
@@ -1287,13 +1379,46 @@ export function DocumentReviewSurface({
           // The selection's own text becomes the quoted passage; a selection
           // that failed to anchor still HAS text, so an ask about it is a
           // doc-wide ask rather than nothing at all.
-          setAskRequest({ quote: composer.anchor ? askQuoteFromSelector(composer.anchor) : null });
+          openAskChat(composer.anchor ? askQuoteFromSelector(composer.anchor) : null);
           setComposer({ open: false });
         } : undefined}
         onSubmit={() => void submit()}
       />
+
+      {/* Below xl the rail does not exist, so the same conversation presents as
+          a slide-over sheet (the MobileThreadSheet pattern). Mounted
+          exclusively with the rail panel — the sheet locks body scroll, which a
+          merely `xl:hidden` copy would do on a desktop it is invisible on. */}
+      {askOpen && askIsSheet ? (
+        <AiAskChatSheet conversation={askConversation} onClose={() => setAskOpen(false)} />
+      ) : null}
+
+      {/* The conversation's one poll loop, deliberately OUTSIDE the panel: a
+          reader who closes the chat mid-question has already spent the
+          workspace's key, and reopening should show them the answer rather than
+          a turn stuck on "thinking" because nobody was listening. */}
+      {askConversation.pollRunId !== null ? (
+        <AskRunPoller runId={askConversation.pollRunId} onSettled={askConversation.settle} />
+      ) : null}
     </div>
   );
+}
+
+/** One in-flight ask run's poll loop. Renders nothing. */
+function AskRunPoller({
+  runId,
+  onSettled,
+}: {
+  runId: number;
+  onSettled: (run: AiRun<AskOutput>) => void;
+}) {
+  usePollUntilSettled<AiRun<AskOutput>>({
+    poll: async () => aiRunSettled(await readAiRun<AskOutput>(runId)),
+    onSettled,
+    key: runId,
+  });
+
+  return null;
 }
 
 function ColumnToggleButton({

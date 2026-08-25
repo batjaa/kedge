@@ -30,6 +30,14 @@ use Illuminate\Http\JsonResponse;
  * opposite of ephemeral. Polling still runs through the shared
  * `GET /ai-runs/{id}`, which the asker alone may read (the run is per-actor).
  *
+ * The conversation (#151) does not change any of that. Follow-ups made the ask
+ * multi-turn on the SURFACE while the server stayed exactly as stateless as it
+ * was: no conversation table, no `parent_run_id`, no read path that returns a
+ * transcript. The client holds the turns its own page is showing and replays
+ * them in the next request, where they are untrusted context like the quote —
+ * which is why a reload starts an empty conversation and why one member can
+ * never read another's, there being nothing on the server to read.
+ *
  * Authorization is {@see AiRunPolicy} over the document — spending the
  * workspace's key is a member capability, not a share reviewer's — and the route
  * sits behind the `ai.enabled` gate, so a keyless instance 404s exactly as if it
@@ -51,10 +59,12 @@ class AiAskController extends Controller
      * document are two different questions, and handing the second asker the
      * first one's answer would be confidently wrong rather than merely thrifty.
      * `throttle:ai` is what bounds the spend that dedupe would otherwise have
-     * bounded.
+     * bounded — and a follow-up burns one like any other question, which is the
+     * whole reason a conversation needs no throttle group of its own.
      *
-     * Single-turn, by construction: nothing about the run refers to a previous
-     * one, so a follow-up is simply another ask.
+     * Nothing about the run refers to a previous one. A follow-up is another
+     * ask that happens to CARRY its history in the request; the ledger sees six
+     * independent rows, not a conversation.
      */
     public function store(StoreDocumentAskRequest $request, Document $document): JsonResponse
     {

@@ -51,3 +51,25 @@ export const AI_TONE_QUIET_CLASS =
  */
 export const AI_ICON_TONE_CLASS =
   'text-violet-600 ring-1 ring-inset ring-violet-600/20 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-300 dark:ring-violet-400/20 dark:hover:bg-violet-400/10 dark:hover:text-violet-200';
+
+/**
+ * The SURFACE variant (#151): a block of model-written text sitting among human
+ * text, where the register has to say "a model wrote this" for as long as it is
+ * on screen — the ask chat's assistant turns, against the reader's own zinc
+ * ones.
+ *
+ * Not interactive, so it defines no hover: hovering an answer does nothing, and
+ * a tint that moved under the pointer would promise otherwise.
+ *
+ * The tint and the ring carry the register; the PROSE inside stays zinc. That is
+ * the calm-surface principle (DESIGN.md §Principles 6) holding where it matters
+ * most — an answer is several paragraphs of reading, and violet body text at
+ * that length is a headache rather than a signal. Reserving the hue for the
+ * container and the speaker label keeps "who is talking" unmistakable in both
+ * themes without colouring the words themselves.
+ */
+export const AI_SURFACE_TONE_CLASS =
+  'bg-violet-50 ring-1 ring-inset ring-violet-600/20 dark:bg-violet-400/10 dark:ring-violet-400/20';
+
+/** The speaker label on an AI surface — the hue, at a size that can carry it. */
+export const AI_SURFACE_LABEL_CLASS = 'text-violet-700 dark:text-violet-300';

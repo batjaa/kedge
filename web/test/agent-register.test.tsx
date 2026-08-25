@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { AI_BUTTON_CLASS, AI_NEUTRAL_BUTTON_CLASS } from '@/components/app/ai-artifact-dialog';
 import { ReplyDraftConfirm } from '@/components/app/ai-reply-draft';
 import { AiSplitProposals } from '@/components/app/ai-split-proposals';
-import { AI_ICON_TONE_CLASS, AI_TONE_CLASS, AI_TONE_QUIET_CLASS } from '@/components/app/ai-tone';
+import {
+  AI_ICON_TONE_CLASS,
+  AI_SURFACE_LABEL_CLASS,
+  AI_SURFACE_TONE_CLASS,
+  AI_TONE_CLASS,
+  AI_TONE_QUIET_CLASS,
+} from '@/components/app/ai-tone';
 import { DocumentCommentComposer, type ComposerState } from '@/components/app/document-comment-composer';
 import { IconButton } from '@/components/app/document-thread-ui';
 import { initialSplitApprovals } from '@/lib/ai-split';
@@ -123,6 +129,27 @@ describe('the agent register', () => {
   ])('defines a hover in both themes for the %s tone', (_name, tone) => {
     expect(tone).toMatch(/(?<!dark:)hover:bg-/);
     expect(tone).toMatch(/dark:hover:bg-/);
+  });
+
+  it('tints the AI surface in both themes without colouring the prose or claiming a hover', () => {
+    // The register's first non-CONTROL use (#151): a block of model-written
+    // text among human text. It carries the hue on the container and the
+    // speaker label, and deliberately defines no hover — hovering an answer
+    // does nothing, and a tint that moved under the pointer would say otherwise.
+    expect(AI_SURFACE_TONE_CLASS).toMatch(/(?<!dark:)bg-violet-\d+/);
+    expect(AI_SURFACE_TONE_CLASS).toMatch(/dark:bg-violet-\d+/);
+    expect(AI_SURFACE_TONE_CLASS).toMatch(/(?<!dark:)ring-violet-\d+/);
+    expect(AI_SURFACE_TONE_CLASS).toMatch(/dark:ring-violet-\d+/);
+    expect(AI_SURFACE_TONE_CLASS).not.toContain('hover:');
+
+    expect(AI_SURFACE_LABEL_CLASS).toMatch(/(?<!dark:)text-violet-\d00/);
+    expect(AI_SURFACE_LABEL_CLASS).toMatch(/dark:text-violet-\d00/);
+
+    // Never the human primary, and never a body-text colour: the answer's own
+    // prose stays zinc (DESIGN.md — an answer is paragraphs of reading).
+    expect(AI_SURFACE_TONE_CLASS).not.toContain('bg-zinc-900');
+    expect(AI_SURFACE_TONE_CLASS).not.toContain('emerald');
+    expect(AI_SURFACE_TONE_CLASS).not.toMatch(/text-/);
   });
 
   it('builds the shared AI button on the filled tone, and leaves Copy neutral', () => {

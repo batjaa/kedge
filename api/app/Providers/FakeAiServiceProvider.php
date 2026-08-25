@@ -81,6 +81,19 @@ class FakeAiServiceProvider extends ServiceProvider
     /** The scripted ask answer (#139). */
     public const ASK_ANSWER = 'The document says the anchor is re-resolved against the new version, not recreated.';
 
+    /**
+     * The scripted answer to a FOLLOW-UP — a question that arrived carrying the
+     * conversation so far (#151).
+     *
+     * Distinct from the first answer on purpose. It is the only way the ask
+     * journey can tell "the follow-up replayed its transcript" from "the follow-up
+     * asked the model a second isolated question", which is precisely the
+     * behaviour #151 adds and precisely what would break silently if the
+     * transcript stopped reaching the builder.
+     */
+    public const ASK_FOLLOW_UP_ANSWER =
+        'Following on from what you just asked: the document adds that the offsets are recomputed, never copied.';
+
     public function boot(): void
     {
         if (! config('kedge.ai.fake')) {
@@ -185,13 +198,26 @@ class FakeAiServiceProvider extends ServiceProvider
     }
 
     /**
-     * A single grounded answer. Scripted like the rest so no agent is left
-     * unfaked in an environment that has no key to fall back on — an ask reached
-     * from any journey answers deterministically rather than erroring.
+     * A grounded answer, and a DIFFERENT one once the question arrives with a
+     * conversation behind it (#151).
+     *
+     * This reads its prompt for the same reason the improve-prompt and
+     * reply-draft fakes read theirs: the journey's assertion has to be able to
+     * fail. A fixed answer would render identically whether or not the prior
+     * turns reached the builder, so the follow-up half of the ask journey would
+     * pass against a client that quietly stopped sending them.
+     *
+     * The marker is the builder's own fence label for a replayed turn
+     * (`DocumentAskPromptBuilder::context()`) — the other half of this contract.
+     * If that wording changes, the journey fails loudly rather than drifting.
      */
     private function fakeDocumentAsk(): void
     {
-        DocumentAskAgent::fake(fn (): array => ['answer' => self::ASK_ANSWER]);
+        DocumentAskAgent::fake(fn (string $prompt): array => [
+            'answer' => str_contains($prompt, 'earlier turn ')
+                ? self::ASK_FOLLOW_UP_ANSWER
+                : self::ASK_ANSWER,
+        ]);
     }
 
     /**
