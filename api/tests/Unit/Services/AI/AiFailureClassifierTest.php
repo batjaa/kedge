@@ -40,6 +40,34 @@ class AiFailureClassifierTest extends TestCase
             'connection failure' => [
                 new ConnectionException('timed out'), AiFailureKind::Transient, 'provider_unreachable',
             ],
+
+            // #153: cURL calls all of these "connection errors", but only one of
+            // them means the provider was reached, was working, and was billed.
+            'name resolution failed' => [
+                new ConnectionException('cURL error 6: Could not resolve host: api.example.test'),
+                AiFailureKind::Transient,
+                'provider_unreachable',
+            ],
+            'connection refused' => [
+                new ConnectionException('cURL error 7: Failed to connect to api.example.test port 443: Connection refused'),
+                AiFailureKind::Transient,
+                'provider_unreachable',
+            ],
+            'connect phase timed out' => [
+                new ConnectionException('cURL error 28: Connection timed out after 10001 milliseconds'),
+                AiFailureKind::Transient,
+                'provider_unreachable',
+            ],
+            'tls handshake failed' => [
+                new ConnectionException('cURL error 35: SSL connect error'),
+                AiFailureKind::Transient,
+                'provider_unreachable',
+            ],
+            'generation outran our clock' => [
+                new ConnectionException('cURL error 28: Operation timed out after 270003 milliseconds with 0 bytes received'),
+                AiFailureKind::Deterministic,
+                'generation_timeout',
+            ],
             'job timeout' => [
                 new TimeoutExceededException('timed out'), AiFailureKind::Transient, 'job_timeout',
             ],
@@ -110,6 +138,43 @@ class AiFailureClassifierTest extends TestCase
 
         $this->assertSame(AiFailureKind::Deterministic, $failure->kind);
         $this->assertSame('content_refused', $failure->code);
+    }
+
+    /**
+     * The #153 decision, stated as behavior: a retry after our own transfer
+     * clock expires re-bills a prompt the provider already accepted, so the
+     * reader gets an action instead of an automatic second billing.
+     */
+    public function test_a_generation_that_outran_our_clock_is_never_retried(): void
+    {
+        $failure = app(AiFailureClassifier::class)->classify(new ConnectionException(
+            'cURL error 28: Operation timed out after 270003 milliseconds with 0 bytes received',
+        ));
+
+        $this->assertFalse($failure->isTransient());
+        $this->assertSame('generation_timeout', $failure->code);
+
+        // The sentence has to be actionable — "retry" is what got us here.
+        $this->assertStringNotContainsStringIgnoringCase('retry', $failure->message);
+        $this->assertStringContainsStringIgnoringCase('shorter', $failure->message);
+    }
+
+    /**
+     * The other half of the same decision: a provider we never reached is still
+     * a blip worth backing off for, and nothing was billed.
+     */
+    public function test_a_provider_that_was_never_reached_is_still_transient(): void
+    {
+        foreach ([
+            'cURL error 6: Could not resolve host: api.example.test',
+            'cURL error 7: Failed to connect to api.example.test port 443: Connection refused',
+            'cURL error 28: Connection timed out after 10001 milliseconds',
+        ] as $message) {
+            $failure = app(AiFailureClassifier::class)->classify(new ConnectionException($message));
+
+            $this->assertTrue($failure->isTransient(), $message.' should still retry');
+            $this->assertSame('provider_unreachable', $failure->code);
+        }
     }
 
     public function test_a_missing_exception_is_still_classified(): void

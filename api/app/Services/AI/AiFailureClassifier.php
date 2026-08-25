@@ -67,11 +67,7 @@ class AiFailureClassifier
                 'rate_limited',
                 'The AI provider is rate-limiting this key. Retry in a moment.',
             ),
-            $e instanceof ConnectionException => new AiFailure(
-                AiFailureKind::Transient,
-                'provider_unreachable',
-                'Could not reach the AI provider. Retry.',
-            ),
+            $e instanceof ConnectionException => $this->fromConnectionFailure($e),
 
             // Quota is gone, not busy — a retry inside the backoff window buys
             // nothing and bills nothing back.
@@ -101,6 +97,71 @@ class AiFailureClassifier
                 'Generation failed. Retry.',
             ),
         };
+    }
+
+    /**
+     * One exception type, two genuinely different faults (#153).
+     *
+     * Laravel raises `ConnectionException` for everything cURL calls a
+     * connection error, and cURL 28 sits in that list — so a generation that
+     * simply outran OUR OWN clock arrived wearing the same coat as a refused
+     * connection. Read as "unreachable" it was transient, so the queue backed
+     * off and re-sent a ~32k-token prompt into the identical wall: run 5 on the
+     * preview spent 2m51s and three billings failing that way.
+     *
+     * They are split here because the right answer differs in both directions:
+     *
+     *  - NOT REACHED (DNS, refused, connect-phase timeout, TLS): the provider
+     *    never saw the request, nothing was billed, and a blip clears. Transient
+     *    — unchanged.
+     *  - REACHED, TOO SLOW: the provider was working. The request is already
+     *    billed server-side and may well complete there after we hang up, so a
+     *    retry can bill the same prompt twice for one answer nobody sees. It is
+     *    also unlikely to help: the clock is now the job's whole budget minus
+     *    the margin (`AiRunBudget::http()`), and a backoff of seconds does not
+     *    make the next generation shorter. Genuine provider slowness has its own
+     *    honest codes — overloaded, 5xx, rate-limited — which stay transient.
+     *
+     * So the slow case is DETERMINISTIC, matching the classifier's cost-safe
+     * house rule, and it says the one thing that actually helps. It also keeps
+     * faith with its sibling: the job's own timeout 30 seconds later is terminal
+     * too, so the two nearly-identical conditions no longer behave in opposite
+     * ways depending on which clock happened to win.
+     */
+    private function fromConnectionFailure(ConnectionException $e): AiFailure
+    {
+        if ($this->readsAsGenerationTimeout($e)) {
+            return new AiFailure(
+                AiFailureKind::Deterministic,
+                'generation_timeout',
+                'The answer took too long to generate. Try a shorter question, or a smaller selection.',
+            );
+        }
+
+        return new AiFailure(
+            AiFailureKind::Transient,
+            'provider_unreachable',
+            'Could not reach the AI provider. Retry.',
+        );
+    }
+
+    /**
+     * Whether a connection failure is our transfer clock expiring rather than a
+     * provider we never reached.
+     *
+     * cURL 28 covers BOTH of its clocks, and the wording is what tells them
+     * apart: the connect phase says "Connection timed out after N milliseconds",
+     * while the transfer clock — the one an agent's timeout sets — says
+     * "Operation timed out after N milliseconds with 0 bytes received". Only the
+     * second means the provider answered our SYN and then thought for too long.
+     *
+     * Deliberately narrow: anything this does not positively recognize keeps the
+     * old transient reading, so an unfamiliar transport or a reworded driver
+     * costs a retry rather than a wrongly-terminal run.
+     */
+    private function readsAsGenerationTimeout(ConnectionException $e): bool
+    {
+        return str_contains(strtolower($e->getMessage()), 'operation timed out');
     }
 
     private function fromStatus(RequestException $e): AiFailure
