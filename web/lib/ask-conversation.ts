@@ -100,6 +100,31 @@ export function askConversationPollRunId(turns: readonly AskTurn[]): number | nu
 }
 
 /**
+ * Whether this turn may be retried at all — the ORDERING half of the rule; the
+ * panel adds the "could a retry even help?" half (a deterministic failure
+ * cannot).
+ *
+ * Only the conversation's last turn qualifies, and that is correctness rather
+ * than simplification. A failed turn contributes nothing to the transcript, so
+ * a reader can ask a further question while it sits there failed. Retrying it
+ * afterwards would slot its answer in FRONT of an answer written without it,
+ * and every later request would replay the pair in display order — presenting
+ * an answer as though it had been written with context it never saw. Re-asking
+ * is the honest way back to a turn the conversation has moved past.
+ *
+ * A turn whose own run is still in flight is retryable: that is how a reader
+ * escapes a run that outlived the client's ceiling, which nothing else will
+ * ever settle. An EARLIER turn in flight still blocks — one question at a time.
+ */
+export function askTurnIsRetryable(turns: readonly AskTurn[], turnId: number): boolean {
+  const index = turns.findIndex((turn) => turn.id === turnId);
+
+  if (index === -1 || index !== turns.length - 1) return false;
+
+  return !askConversationIsBusy(turns.slice(0, index));
+}
+
+/**
  * The prior turns a new question carries as context — the client half of the
  * double cap (the endpoint and the prompt builder each enforce it again).
  *

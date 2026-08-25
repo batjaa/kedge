@@ -49,7 +49,7 @@ function conversation(overrides: Partial<AskConversation> = {}): AskConversation
     pendingQuote: null,
     busy: false,
     pollRunId: null,
-    ask: () => {},
+    ask: () => true,
     retry: () => {},
     attachQuote: () => {},
     clearPendingQuote: () => {},
@@ -180,7 +180,7 @@ describe('ask chat panel', () => {
     expect(html).not.toContain('Retry');
   });
 
-  it('offers a retry on a transient failure', () => {
+  it('offers a retry on a transient failure, in the agent register', () => {
     const html = render({
       turns: [turn({
         run: run({
@@ -193,6 +193,49 @@ describe('ask chat panel', () => {
 
     expect(html).toContain('The provider is busy.');
     expect(html).toContain('Retry');
+    // Retry starts a model run, so it wears violet — DESIGN.md's rule is about
+    // what the click leads to, not about the control being a "primary" (#143).
+    const retry = html.slice(0, html.indexOf('Retry'));
+    expect(retry.slice(-600)).toContain('violet');
+  });
+
+  it('offers a retry once a run outlives the client ceiling, so a dead worker cannot wedge the chat', () => {
+    // A worker killed hard enough never runs its terminal handler, so this run
+    // will never settle on its own. Without a way out, the composer stays
+    // disabled until the reader discards the whole conversation.
+    const html = render({
+      turns: [turn({
+        run: run({
+          status: 'running',
+          output: null,
+          created_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+        }),
+      })],
+      busy: true,
+    });
+
+    expect(html).toContain('taking longer than expected');
+    expect(html).toContain('Retry');
+  });
+
+  it('offers retry only on the last turn', () => {
+    // Retrying an earlier turn would slot its answer in front of answers
+    // written without it, and every later request would replay the pair in
+    // display order as though that ordering were causal.
+    const failure = {
+      run: run({
+        status: 'failed',
+        output: null,
+        error: { kind: 'transient' as const, code: 'provider_overloaded', message: 'The provider is busy.' },
+      }),
+    };
+
+    const lastFailed = render({ turns: [turn({ id: 1 }), turn({ id: 2, ...failure })] });
+    expect(lastFailed).toContain('Retry');
+
+    const middleFailed = render({ turns: [turn({ id: 1, ...failure }), turn({ id: 2 })] });
+    expect(middleFailed).toContain('The provider is busy.');
+    expect(middleFailed).not.toContain('Retry');
   });
 
   it('renders a 429 in the chat rather than wedging the panel', () => {

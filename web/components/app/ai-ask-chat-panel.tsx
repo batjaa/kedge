@@ -15,7 +15,12 @@ import {
 } from './ai-tone';
 import { MAX_ASK_QUESTION_CHARS, askQuestionIsAskable, askQuotePreview } from '@/lib/ai-ask';
 import { aiRunPhase } from '@/lib/ai-run';
-import { askTurnIsPending, askTurnOutput, type AskTurn } from '@/lib/ask-conversation';
+import {
+  askTurnIsPending,
+  askTurnIsRetryable,
+  askTurnOutput,
+  type AskTurn,
+} from '@/lib/ask-conversation';
 import type { AskConversation } from '@/lib/use-ask-conversation';
 import { cn } from '@/lib/cn';
 
@@ -87,18 +92,12 @@ export function AiAskChatPanel({
   onClose: () => void;
 }) {
   const t = useTranslations('ai-ask');
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const previousFocusRef = useOpenerFocus();
 
   // Focus restoration, lifted from AiArtifactDialog along with the Escape key —
   // the modal is gone, but the reader who opened this from a keyboard still has
   // to get back to where they were.
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-
-    return () => {
-      previousFocusRef.current?.focus();
-    };
-  }, []);
+  useEffect(() => () => restoreFocus(previousFocusRef.current), [previousFocusRef]);
 
   return (
     <aside
@@ -117,9 +116,13 @@ export function AiAskChatPanel({
       // arbitrary utility on purpose: a `var()` nested inside a `calc()` inside
       // a bracketed class is exactly the construct that has taken this build
       // down before, and the value is dynamic anyway (see the surface's own
-      // --kedge-pin-top assignment). Height, not max-height: a percentage
-      // max-height on the children would have nothing to resolve against.
-      style={{ maxHeight: 'calc(100vh - var(--kedge-pin-top, 8rem) - 2rem)' }}
+      // --kedge-pin-top assignment).
+      //
+      // HEIGHT, not max-height. Under max-height a short conversation
+      // shrink-wraps and the composer rides up under the last answer, jumping
+      // down the page as turns accumulate. A fixed height keeps it pinned to the
+      // bottom of the rail where the reader left it.
+      style={{ height: 'calc(100vh - var(--kedge-pin-top, 8rem) - 2rem)' }}
     >
       <AskChatBody conversation={conversation} onClose={onClose} autoFocus />
     </aside>
@@ -143,7 +146,7 @@ export function AiAskChatSheet({
   onClose: () => void;
 }) {
   const t = useTranslations('ai-ask');
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const previousFocusRef = useOpenerFocus();
 
   // `onClose` through a ref so this effect depends on nothing: with the callback
   // in the dependency list an inline arrow from the parent re-runs it every
@@ -155,7 +158,6 @@ export function AiAskChatSheet({
   });
 
   useEffect(() => {
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
@@ -168,9 +170,9 @@ export function AiAskChatSheet({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
-      previousFocusRef.current?.focus();
+      restoreFocus(previousFocusRef.current);
     };
-  }, []);
+  }, [previousFocusRef]);
 
   return (
     <div className="fixed inset-0 z-50 xl:hidden">
@@ -233,8 +235,18 @@ export function AskChatBody({
 
   function send() {
     if (!sendable) return;
-    conversation.ask(draft);
-    setDraft('');
+    // Cleared only if the conversation actually took it. A send racing a "New
+    // conversation" is refused, and wiping the draft anyway would delete a
+    // question the reader watched vanish without ever being asked.
+    if (conversation.ask(draft)) setDraft('');
+  }
+
+  function startNewConversation() {
+    conversation.reset();
+    // The button that was just clicked disappears with the transcript, so focus
+    // would fall to <body>. Send the reader to the composer instead — the one
+    // thing a fresh conversation is for.
+    composerRef.current?.focus();
   }
 
   const quotePreview = pendingQuote ? askQuotePreview(pendingQuote.exact) : null;
@@ -253,7 +265,7 @@ export function AskChatBody({
         {turns.length > 0 ? (
           <button
             type="button"
-            onClick={conversation.reset}
+            onClick={startNewConversation}
             className="ml-auto rounded-full px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-100"
           >
             {t('newConversation')}
@@ -281,7 +293,14 @@ export function AskChatBody({
         ) : null}
 
         {turns.map((turn) => (
-          <AskTurnView key={turn.id} turn={turn} onRetry={() => conversation.retry(turn.id)} />
+          <AskTurnView
+            key={turn.id}
+            turn={turn}
+            // The same predicate the hook guards `retry` with, so the button
+            // can never appear on a turn the hook would refuse.
+            retryable={askTurnIsRetryable(turns, turn.id)}
+            onRetry={() => conversation.retry(turn.id)}
+          />
         ))}
       </div>
 
@@ -354,7 +373,15 @@ export function AskChatBody({
  * banner, because in a conversation "which question failed?" is a real question
  * — a run that failed three turns ago must not look like the current one did.
  */
-function AskTurnView({ turn, onRetry }: { turn: AskTurn; onRetry: () => void }) {
+function AskTurnView({
+  turn,
+  retryable,
+  onRetry,
+}: {
+  turn: AskTurn;
+  retryable: boolean;
+  onRetry: () => void;
+}) {
   const t = useTranslations('ai-ask');
   const [now, setNow] = useState(() => Date.now());
   const pending = askTurnIsPending(turn);
@@ -399,10 +426,19 @@ function AskTurnView({ turn, onRetry }: { turn: AskTurn; onRetry: () => void }) 
           </p>
         ) : null}
 
+        {/* Past the client's ceiling the run may never land at all — a worker
+            killed hard enough never runs its terminal handler, so nothing will
+            ever settle this poll. The retry is what unwedges it: it drops the
+            stale run id, which stops the poll and starts a fresh run. Without
+            it the composer stays disabled until the reader throws the whole
+            conversation away. */}
         {phase === 'taking-too-long' ? (
-          <p role="status" className="mt-1 text-sm leading-6 text-amber-700 dark:text-amber-300">
-            {t('takingTooLong')}
-          </p>
+          <div className="mt-1 space-y-2">
+            <p role="status" className="text-sm leading-6 text-amber-700 dark:text-amber-300">
+              {t('takingTooLong')}
+            </p>
+            {retryable ? <AskRetryButton onRetry={onRetry} /> : null}
+          </div>
         ) : null}
 
         {output ? (
@@ -431,7 +467,7 @@ function AskTurnView({ turn, onRetry }: { turn: AskTurn; onRetry: () => void }) 
         ) : null}
 
         {phase === 'failed' || turn.startFailure ? (
-          <AskTurnFailure turn={turn} onRetry={onRetry} />
+          <AskTurnFailure turn={turn} retryable={retryable} onRetry={onRetry} />
         ) : null}
       </div>
     </article>
@@ -447,7 +483,15 @@ function AskTurnView({ turn, onRetry }: { turn: AskTurn; onRetry: () => void }) 
  * is not the turn's fault and it WILL work shortly, so it says so in the chat
  * instead of leaving a dead panel.
  */
-function AskTurnFailure({ turn, onRetry }: { turn: AskTurn; onRetry: () => void }) {
+function AskTurnFailure({
+  turn,
+  retryable,
+  onRetry,
+}: {
+  turn: AskTurn;
+  retryable: boolean;
+  onRetry: () => void;
+}) {
   const t = useTranslations('ai-ask');
   const startFailure = turn.startFailure;
   const runError = turn.run?.error ?? null;
@@ -457,8 +501,10 @@ function AskTurnFailure({ turn, onRetry }: { turn: AskTurn; onRetry: () => void 
     : startFailure?.message ?? runError?.message ?? t('failed');
 
   // Deterministic run failures cannot be retried into a different answer, and
-  // "AI is not enabled here" cannot either. Everything else can.
-  const retryable = runError?.kind !== 'deterministic'
+  // "AI is not enabled here" cannot either. Everything else can — provided the
+  // turn is the conversation's last, which is the caller's half of the rule.
+  const canRetry = retryable
+    && runError?.kind !== 'deterministic'
     && startFailure?.kind !== 'unavailable'
     && startFailure?.kind !== 'forbidden';
 
@@ -467,17 +513,31 @@ function AskTurnFailure({ turn, onRetry }: { turn: AskTurn; onRetry: () => void 
       <p role="alert" className="text-sm leading-6 text-rose-700 dark:text-rose-300">
         {message}
       </p>
-      {retryable ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-900/10 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
-        >
-          <RefreshCw className="h-3 w-3" aria-hidden="true" />
-          {t('retry')}
-        </button>
-      ) : null}
+      {canRetry ? <AskRetryButton onRetry={onRetry} /> : null}
     </div>
+  );
+}
+
+/**
+ * Retry one turn — and therefore start a model run, which is why it wears the
+ * agent register rather than the neutral zinc a Copy gets. DESIGN.md's rule is
+ * about what the click LEADS TO, and this leads to a run (#143).
+ */
+function AskRetryButton({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations('ai-ask');
+
+  return (
+    <button
+      type="button"
+      onClick={onRetry}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+        AI_TONE_CLASS,
+      )}
+    >
+      <RefreshCw className="h-3 w-3" aria-hidden="true" />
+      {t('retry')}
+    </button>
   );
 }
 
@@ -509,6 +569,40 @@ function AskTurnCopy({ answer }: { answer: string }) {
       {state === 'copied' ? t('copied') : state === 'failed' ? t('copyFailed') : t('copy')}
     </button>
   );
+}
+
+/**
+ * Remember what had focus when the panel opened, captured during the FIRST
+ * RENDER rather than in an effect.
+ *
+ * Timing is the whole point. Child effects run before parent effects, so the
+ * composer's autofocus fires first and an effect here would record the
+ * textarea as "what had focus before" — closing the panel would then try to
+ * return focus to a node it had just unmounted. Render happens before any
+ * effect, so this catches the actual opener.
+ */
+function useOpenerFocus() {
+  const ref = useRef<HTMLElement | null | undefined>(undefined);
+
+  if (ref.current === undefined) {
+    ref.current = typeof document === 'undefined' || !(document.activeElement instanceof HTMLElement)
+      ? null
+      : document.activeElement;
+  }
+
+  return ref as { current: HTMLElement | null };
+}
+
+/**
+ * Hand focus back, but only if there is still somewhere to hand it.
+ *
+ * The opener is often gone by the time the panel closes — the selection popover
+ * that carried the Ask pill unmounts the moment the panel opens. Focusing a
+ * detached node silently drops focus to `<body>`, so leaving it where the
+ * browser put it is the better of the two.
+ */
+function restoreFocus(element: HTMLElement | null) {
+  if (element?.isConnected) element.focus();
 }
 
 function trapFocus(event: ReactKeyboardEvent<HTMLElement>) {

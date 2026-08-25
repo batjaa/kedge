@@ -6,6 +6,7 @@ import { askQuestionIsAskable } from './ai-ask';
 import {
   askConversationIsBusy,
   askConversationPollRunId,
+  askTurnIsRetryable,
   replayableTranscript,
   type AskTurn,
 } from './ask-conversation';
@@ -35,7 +36,16 @@ export interface AskConversation {
   busy: boolean;
   /** The one in-flight run to poll, or null. */
   pollRunId: number | null;
-  ask: (question: string) => void;
+  /**
+   * Ask the next question. Returns whether it was ACCEPTED — the composer must
+   * not clear a draft the conversation silently dropped (a send racing a reset
+   * used to do exactly that).
+   */
+  ask: (question: string) => boolean;
+  /**
+   * Retry one turn. Only the LAST turn is retryable; see the guard below for
+   * why a middle turn is not.
+   */
   retry: (turnId: number) => void;
   attachQuote: (quote: AskQuote | null) => void;
   clearPendingQuote: () => void;
@@ -62,6 +72,13 @@ export function useAskConversation(documentId: number): AskConversation {
   const sendingRef = useRef(false);
   const nextIdRef = useRef(1);
 
+  // Which conversation a send belongs to. "New conversation" bumps it, so a
+  // POST that was already in flight lands on an epoch nobody is looking at and
+  // is discarded instead of appearing as the first turn of the fresh
+  // conversation — and, just as importantly, instead of leaving `sendingRef`
+  // latched so the next question is silently swallowed.
+  const epochRef = useRef(0);
+
   const busy = useMemo(() => askConversationIsBusy(turns), [turns]);
   const pollRunId = useMemo(() => askConversationPollRunId(turns), [turns]);
 
@@ -78,9 +95,17 @@ export function useAskConversation(documentId: number): AskConversation {
     quote: AskQuote | null,
     history: AskTurn[],
   ) => {
+    const epoch = epochRef.current;
     sendingRef.current = true;
 
     const outcome = await startAsk(documentId, question, quote, replayableTranscript(history));
+
+    // The conversation this send belonged to is gone. Leave `sendingRef` alone
+    // — the reset already cleared it, and a later send may legitimately own it
+    // by now — and drop the result rather than folding it into a conversation
+    // that never asked the question. The run itself is abandoned exactly as
+    // closing the tab would abandon it.
+    if (epoch !== epochRef.current) return;
 
     sendingRef.current = false;
 
@@ -93,11 +118,11 @@ export function useAskConversation(documentId: number): AskConversation {
     }));
   }, [documentId]);
 
-  const ask = useCallback((question: string) => {
+  const ask = useCallback((question: string): boolean => {
     const trimmed = question.trim();
 
-    if (sendingRef.current || !askQuestionIsAskable(trimmed)) return;
-    if (askConversationIsBusy(turnsRef.current)) return;
+    if (sendingRef.current || !askQuestionIsAskable(trimmed)) return false;
+    if (askConversationIsBusy(turnsRef.current)) return false;
 
     const history = turnsRef.current;
     const id = nextIdRef.current++;
@@ -113,19 +138,21 @@ export function useAskConversation(documentId: number): AskConversation {
     setPendingQuote(null);
 
     void start(id, trimmed, quote, history);
+
+    return true;
   }, [pendingQuote, start]);
 
   const retry = useCallback((turnId: number) => {
     if (sendingRef.current) return;
-    if (askConversationIsBusy(turnsRef.current)) return;
+
+    // The ordering rule lives in `askTurnIsRetryable`, so the hook and the
+    // panel cannot disagree about which turn offers the button.
+    if (!askTurnIsRetryable(turnsRef.current, turnId)) return;
 
     const index = turnsRef.current.findIndex((turn) => turn.id === turnId);
-    if (index === -1) return;
-
     const turn = turnsRef.current[index];
-    // The history is what came BEFORE this question, not the whole list: a turn
-    // must never replay itself, and the turns after it (if a later one somehow
-    // exists) were not context for it when it was asked.
+    // The history is what came BEFORE this question — a turn must never replay
+    // itself. With retry pinned to the last turn, that is every earlier turn.
     const history = turnsRef.current.slice(0, index);
 
     setTurns((current) => current.map((existing) => existing.id === turnId
@@ -147,6 +174,12 @@ export function useAskConversation(documentId: number): AskConversation {
   }, []);
 
   const reset = useCallback(() => {
+    // Bumping the epoch is what makes this safe mid-flight: a POST already on
+    // the wire lands on an epoch nobody is looking at and is dropped. Clearing
+    // `sendingRef` alongside it is the other half — leaving it latched left the
+    // panel accepting questions it silently threw away.
+    epochRef.current += 1;
+    sendingRef.current = false;
     setTurns([]);
     setPendingQuote(null);
     nextIdRef.current = 1;

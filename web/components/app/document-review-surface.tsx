@@ -468,6 +468,8 @@ export function DocumentReviewSurface({
       ?? threads[0]?.id
       ?? null;
     setMobileThreadId(targetId);
+    // The other half of the one-sheet-at-a-time rule (see openAskChat).
+    setAskOpen(false);
     if (targetId !== null) setActiveThreadId(targetId);
   }, [activeThreadId, threads]);
 
@@ -1044,6 +1046,11 @@ export function DocumentReviewSurface({
    */
   function openAskChat(quote: AskQuote | null) {
     askConversation.attachQuote(quote);
+    // Below xl both present as modal sheets, and two of them means two focus
+    // traps, two Escape handlers and two body-scroll locks fighting each other.
+    // The mobile surface holds one sheet at a time; opening either closes the
+    // other.
+    setMobileThreadId(null);
     setAskOpen(true);
   }
 
@@ -1060,6 +1067,29 @@ export function DocumentReviewSurface({
   const railOccupant: 'chat' | 'threads' | 'none' = askOpen && !askIsSheet
     ? 'chat'
     : railCollapsed ? 'none' : 'threads';
+
+  // A conversation is about the version it was asked against. A re-sync landing
+  // mid-conversation swaps the document under it (the surface re-renders with
+  // new props rather than remounting), which would leave a v1 quote and v1
+  // answers travelling as context for a question the server answers from v2 —
+  // and the panel silently open over a document that is no longer the one being
+  // discussed. Close it and start over; the reader can ask again against what
+  // they are now reading.
+  //
+  // The same effect closes the panel when the AI capability goes away, so an
+  // open chat cannot outlive the gate that is supposed to hide every AI
+  // affordance.
+  const resetAsk = askConversation.reset;
+  useEffect(() => {
+    if (canRunHeaderAi) return;
+    setAskOpen(false);
+    resetAsk();
+  }, [canRunHeaderAi, resetAsk]);
+
+  useEffect(() => {
+    setAskOpen(false);
+    resetAsk();
+  }, [viewedVersionId, currentVersionId, resetAsk]);
 
   const splitCapability = canProposeCommentSplits
     && viewedVersionId === currentVersionId
@@ -1246,16 +1276,16 @@ export function DocumentReviewSurface({
             <ColumnToggleButton
               label={railCollapsed ? t('surface.showRail') : t('surface.hideRail')}
               onClick={() => {
-                const collapsed = !railCollapsed;
-                setRailCollapsed(collapsed);
-                // The gutter stays the thread rail's control and keeps writing
-                // the thread rail's preference (#151 leaves `useCollapsePreference`
-                // alone). But "hide" has to mean something while the chat holds
-                // the column: without this, collapsing during a conversation is
-                // a button that visibly does nothing. Collapsing yields the
-                // column entirely; the thread rail comes back with it when the
-                // reader expands again.
-                if (collapsed) setAskOpen(false);
+                setRailCollapsed(!railCollapsed);
+                // The gutter is the THREAD RAIL's control and keeps writing the
+                // thread rail's preference (#151 leaves `useCollapsePreference`
+                // alone). Using it therefore means "give me the rail, in
+                // whatever state my preference says" — so it hands the column
+                // back from the chat in both directions. Without this the
+                // button is a visible no-op whenever the chat is the occupant:
+                // hiding hides nothing, and showing shows the chat that was
+                // already there.
+                setAskOpen(false);
               }}
             >
               {railCollapsed ? (

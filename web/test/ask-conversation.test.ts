@@ -5,6 +5,7 @@ import {
   askConversationIsBusy,
   askConversationPollRunId,
   askTurnIsPending,
+  askTurnIsRetryable,
   askTurnOutput,
   replayableTranscript,
   transcriptChars,
@@ -174,6 +175,41 @@ describe('askConversationPollRunId', () => {
     expect(askConversationPollRunId([answered(1, 'q', 'a'), pending(2, 'q')])).toBe(200);
     expect(askConversationPollRunId([answered(1, 'q', 'a')])).toBeNull();
     expect(askConversationPollRunId([failed(1, 'q')])).toBeNull();
+  });
+});
+
+describe('askTurnIsRetryable', () => {
+  it('offers retry on the last turn', () => {
+    const turns = [answered(1, 'q', 'a'), failed(2, 'q')];
+
+    expect(askTurnIsRetryable(turns, 2)).toBe(true);
+  });
+
+  it('refuses a middle turn, so a retry can never reorder the conversation', () => {
+    // Q1 failed, the reader moved on and Q2 was answered WITHOUT it. Retrying
+    // Q1 now would slot A1 in front of an A2 written without it, and every
+    // later request would replay the pair in display order as though that
+    // ordering were causal. Re-asking is the honest way back.
+    const turns = [failed(1, 'first'), answered(2, 'second', 'answered without the first')];
+
+    expect(askTurnIsRetryable(turns, 1)).toBe(false);
+    expect(askTurnIsRetryable(turns, 2)).toBe(true);
+  });
+
+  it('allows retrying a turn whose own run is still in flight', () => {
+    // The escape hatch for a run that outlived the client ceiling: a worker
+    // killed hard enough never lands its row, so nothing else will ever settle
+    // this poll and the composer would stay disabled forever.
+    expect(askTurnIsRetryable([pending(1, 'stuck')], 1)).toBe(true);
+  });
+
+  it('refuses while an EARLIER turn is still in flight', () => {
+    expect(askTurnIsRetryable([pending(1, 'earlier'), failed(2, 'later')], 2)).toBe(false);
+  });
+
+  it('refuses a turn that is not there', () => {
+    expect(askTurnIsRetryable([answered(1, 'q', 'a')], 99)).toBe(false);
+    expect(askTurnIsRetryable([], 1)).toBe(false);
   });
 });
 
