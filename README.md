@@ -188,3 +188,9 @@ dependency of the open-source app. Self-hosted deployments run without it.
 
 [AGPL-3.0](LICENSE). Contributions welcome — the repo behaves as public from
 commit one.
+
+## Production database maintenance
+
+The Coolify Compose stack uses PostgreSQL 16.15. Database volumes have versioned names so the pre-upgrade volumes can be retained for recovery. Back up and rehearse a restore before changing database versions; stop app writers and drain workers before the final copy.
+
+Retained old volumes are migration snapshots, not replicas. Reconcile writes made after the upgrade before any rollback; never start an older database image against an upgraded data directory.

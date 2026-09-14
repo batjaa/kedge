@@ -151,7 +151,7 @@ services:
     # Pinned to match CI (ticket #26). The core image DELEGATES mermaid, bpmn,
     # and excalidraw to companion containers (#49) — without them those engines
     # 500 while plantuml/graphviz work.
-    image: yuzutech/kroki:0.31.0
+    image: yuzutech/kroki:0.32.1
     restart: unless-stopped
     environment:
       KROKI_MERMAID_HOST: kroki-mermaid
@@ -165,25 +165,25 @@ services:
       - kroki-excalidraw
 
   kroki-mermaid:
-    image: yuzutech/kroki-mermaid:0.31.0
+    image: yuzutech/kroki-mermaid:0.32.1
     restart: unless-stopped
     expose:
       - "8002"
 
   kroki-bpmn:
-    image: yuzutech/kroki-bpmn:0.31.0
+    image: yuzutech/kroki-bpmn:0.32.1
     restart: unless-stopped
     expose:
       - "8003"
 
   kroki-excalidraw:
-    image: yuzutech/kroki-excalidraw:0.31.0
+    image: yuzutech/kroki-excalidraw:0.32.1
     restart: unless-stopped
     expose:
       - "8004"
 
   db:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:-kedge}
@@ -195,7 +195,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data-v16-15:/var/lib/postgresql/data
 
 volumes:
-  postgres-data:
+  postgres-data-v16-15:
