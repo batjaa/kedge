@@ -541,6 +541,7 @@ Confidence-ordered; PHPUnit (api), Vitest/Playwright (web):
 | Re-sync | source gone / token revoked | keep current version | "Sync failed — last good version" + reconnect |
 | MDX compile | invalid/rejected MDX | fallback render + log | plain render + banner |
 | Re-anchor | no match / matcher timeout | orphan state | Orphaned tray |
+| Repo preview / scan (M3.6) | GitHub confirms the repository has no commits | `empty_repository`; no files imported | "Push an initial commit containing your documents, then try again" (2026-09-26) |
 | Scan (M3.6) | tree listing truncated | repo-level scan failure | "Repo too large to scan" + cap guidance |
 | Scan (M3.6) | blob fetch rate-limited | per-file failed w/ reason | failed row + report entry; Re-scan retries |
 | Scan (M3.6) | worker died mid-scan | stale-running takeover (~15min) | Re-scan claimable; takeover noted in report |

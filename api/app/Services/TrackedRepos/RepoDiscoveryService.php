@@ -121,6 +121,7 @@ class RepoDiscoveryService
     private function mapListingFailure(RepoListingException $e, ?string $ref): DiscoveryException
     {
         return match ($e->reason) {
+            RepoListingReason::EmptyRepository => DiscoveryException::emptyRepository(),
             RepoListingReason::BranchNotFound => DiscoveryException::invalidRef((string) $ref),
             RepoListingReason::NotFound => DiscoveryException::unreachable(),
             RepoListingReason::Unauthorized => DiscoveryException::unauthorized(),

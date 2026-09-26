@@ -2,6 +2,10 @@
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
+## Decision log (empty repository imports, 2026-09-26)
+
+- ✅ GitHub's `409` with `Git Repository is empty.` now produces `empty_repository` in both preview and scan, with guidance to push an initial commit. An explicitly entered branch gets the same recovery: a branch 404 triggers a non-recursive HEAD probe to confirm emptiness. Unconfirmed failures retain the original branch error; zero matching documents in a valid tree remains a successful preview. This avoids asking users with working credentials to reconnect GitHub.
+
 ## Decision log (CEO plan review, 2026-07-01 — all resolved)
 
 - ✅ Approach **B′** (moat-first milestone order) — approved; applied to SPEC.md §21.

@@ -50,9 +50,9 @@ class GithubRepoClient
 
     /**
      * Confirm the ref names a branch (2A). A 404 on the branch endpoint means it
-     * is not a branch — a tag, a commit SHA, or a typo — surfaced as
-     * {@see RepoListingReason::BranchNotFound}. Call after {@see defaultBranch}, so
-     * a repo-level 404 is already ruled out and this 404 is unambiguously the ref.
+     * is not a branch — a tag, a commit SHA, or a typo — unless HEAD confirms an
+     * empty repository. Call after {@see defaultBranch} to rule out a repo-level
+     * 404; empty repositories still have metadata but no branches.
      */
     public function assertBranch(RepoRef $repo, string $ref, ?string $token): void
     {
@@ -60,6 +60,17 @@ class GithubRepoClient
             $this->getJson($this->apiUrl($repo, '/branches/'.$this->encodeRef($ref)), $token);
         } catch (RepoListingException $e) {
             if ($e->reason === RepoListingReason::NotFound) {
+                // Empty repos also return a branch 404. Probe HEAD without a
+                // recursive listing to distinguish that from a bad ref. Only a
+                // confirmed empty response supersedes the original branch error.
+                try {
+                    $this->getJson($this->apiUrl($repo, '/git/trees/HEAD'), $token);
+                } catch (RepoListingException $probe) {
+                    if ($probe->reason === RepoListingReason::EmptyRepository) {
+                        throw $probe;
+                    }
+                }
+
                 throw new RepoListingException(RepoListingReason::BranchNotFound, $e->detail);
             }
 
@@ -146,6 +157,10 @@ class GithubRepoClient
 
         if ($result->status === 404) {
             return new RepoListingException(RepoListingReason::NotFound, $this->reason($result));
+        }
+
+        if ($result->status === 409 && $this->reason($result) === 'Git Repository is empty.') {
+            return new RepoListingException(RepoListingReason::EmptyRepository);
         }
 
         return new RepoListingException(RepoListingReason::Unavailable, $this->reason($result));

@@ -63,6 +63,14 @@ class DiscoveryException extends RuntimeException
         );
     }
 
+    public static function emptyRepository(): self
+    {
+        return new self(
+            'empty_repository',
+            'This repository has no commits yet. Push an initial commit containing your documents, then try again.',
+        );
+    }
+
     public static function unauthorized(): self
     {
         return new self(

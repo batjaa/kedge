@@ -11,6 +11,9 @@ namespace App\Services\TrackedRepos\Exceptions;
  */
 enum RepoListingReason: string
 {
+    /** GitHub confirms the repository has no commits yet (409). */
+    case EmptyRepository = 'empty_repository';
+
     /** The repository (or its metadata) could not be reached — 404 or private. */
     case NotFound = 'not_found';
 

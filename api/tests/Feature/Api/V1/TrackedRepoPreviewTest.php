@@ -108,14 +108,16 @@ class TrackedRepoPreviewTest extends TestCase
         $transport = $this->bindGithub();
         $transport->respond(200, [], $this->metadata('main'));
         $transport->respond(404, [], json_encode(['message' => 'Branch not found']));
+        $transport->respond(200, [], $this->tree(false, ['README.md'])); // HEAD exists
 
         $this->preview(['ref' => 'v1.2.0', 'path_pattern' => 'docs/**'])
             ->assertStatus(422)
             ->assertJsonPath('error', 'invalid_ref')
             ->assertJsonPath('message', fn (string $m): bool => str_contains($m, 'branch'));
 
-        // No tree call once the ref fails the branch check.
-        $this->assertCount(2, $transport->requests);
+        // Only a non-recursive HEAD probe; no recursive listing for an invalid ref.
+        $this->assertCount(3, $transport->requests);
+        $this->assertStringEndsWith('/git/trees/HEAD', $transport->requests[2]->url);
     }
 
     public function test_a_commit_sha_ref_is_rejected_as_not_a_branch(): void
@@ -123,12 +125,14 @@ class TrackedRepoPreviewTest extends TestCase
         $transport = $this->bindGithub();
         $transport->respond(200, [], $this->metadata('main'));
         $transport->respond(404, [], json_encode(['message' => 'Branch not found']));
+        $transport->respond(200, [], $this->tree(false, ['README.md'])); // HEAD exists
 
         $this->preview(['ref' => 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0', 'path_pattern' => 'docs/**'])
             ->assertStatus(422)
             ->assertJsonPath('error', 'invalid_ref');
 
-        $this->assertCount(2, $transport->requests);
+        $this->assertCount(3, $transport->requests);
+        $this->assertStringEndsWith('/git/trees/HEAD', $transport->requests[2]->url);
     }
 
     // ---- over-cap (story 18) -----------------------------------------------
