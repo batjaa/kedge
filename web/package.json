@@ -6,7 +6,7 @@
     "build": "NODE_ENV=production next build",
     "dev": "next dev",
     "start": "next start",
-    "e2e": "playwright test",
+    "e2e": "bash ../deploy/preview/proxy/test-routes.sh && playwright test",
     "test": "vitest run",
     "test:update": "vitest run -u",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
