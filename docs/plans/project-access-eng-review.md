@@ -1,7 +1,7 @@
 # Project access — engineering review
 
-> Updated 2026-09-27 · Engineering review resumed; decisions 1A–19A accepted.
-> Performance review continues; sections 8–11 remain pending. Ticket publishing
+> Updated 2026-09-27 · Engineering review resumed; decisions 1A–20A accepted.
+> Performance checkpoint recorded; sections 8–11 remain pending. Ticket publishing
 > is on hold. This is not implementation or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
@@ -16,7 +16,7 @@
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
 | 5. Code quality | One finding resolved through decision 16A; checkpoint below |
 | 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 28 planned coverage gaps |
-| 7. Performance | 18A and 19A accepted; remaining performance checks in progress |
+| 7. Performance | Three findings resolved through 18A–20A; checkpoint below |
 | 8. Observability | Pending |
 | 9. Deployment and rollout | Pending |
 | 10. Long-term trajectory | Pending |
@@ -673,9 +673,60 @@ inside the transaction; external work stays outside locks. Exact defaults must
 be finite, documented and validated against enclosing runtime limits before
 rollout; no arbitrary latency promise is inferred from this decision.
 
-Performance review remains open for memory, indexes, background work sizing,
-estimated slow paths and connection pressure. No latency measurement or performance
-test has been run during this planning review.
+### Issue 20 — retained scan history and report memory are unbounded: 20A
+
+**P2, confidence 9/10.** At
+`api/app/Services/TrackedRepos/TrackedRepoScanService.php:190–192`, the scan uses
+`$repo->documents()->get(['id', 'tracked_path', 'tracked_blob_sha', 'current_version_id'])->keyBy('tracked_path')`.
+`ScanReport.php:142` appends `$this->files[] = [` for every outcome, including
+missing historical paths. `api/config/kedge.php:155` configures
+`'file_cap' => (int) env('TRACKED_REPO_FILE_CAP', 200),` for current discovery;
+retaining Documents across path/branch changes means this does not cap cumulative
+rows or the report payload. The unbounded allocation is verified; no out-of-memory
+incident is claimed.
+
+**Accepted:** bounded database batches and a persisted, database-paginated full
+latest report. Do not discard detail into a capped sample. Stage results by scan/
+configuration generation and atomically publish only a valid completed report;
+old workers cannot replace newer state. Pin pages to one publication, return an
+explicit refresh result for retired generations, retain the prior report until
+replacement and show current progress/failure separately. Clean staging/obsolete
+reports in bounded generation-safe work. No generic operation-history service.
+
+Apply current source/document authority to every page and total, including moved
+Documents and reader access loss. Preserve branch binding, failure classification,
+operation generations and bounded locks. Migrate existing reports and update both
+API and UI. Tests cover histories above the current-match cap, bounded reads and
+allocations, complete outcomes/totals, page boundaries, publication races, crashes,
+revocation and obsolete cleanup. Existing content/history must remain intact.
+
+### Performance checkpoint
+
+| Area | Assessment and accepted boundary |
+|---|---|
+| N+1 and response memory | 18A batches only the current bounded page; query-count tests cover repeated capability projections; no in-memory pagination |
+| Indexes | The module already requires explicit indexes on every lookup/join column, unique project/user and current project/email constraints; apply that requirement to 20A generation/page lookups too and verify realistic query plans during implementation |
+| Caching | Request-only read facts plus existing content/render deduplication; 12A live asset authorization and 18A fresh write/job checks remain mandatory |
+| Scan/report memory | 20A removes the all-history collection and report array; current discovery/fetch byte/file caps remain, and results are paginated at storage |
+| Background sizing | Existing source/AI caps and deadlines remain; 5A cleanup uses bounded batches, 20A stages bounded report work, and 19A avoids holding shared locks around external calls |
+| Connection pressure | API writes, database queue workers and scheduler share the DB; 19A limits waiting/retries, and bounded batches release locks between protected units; SQLite still has one writer, so more workers do not imply more write throughput |
+
+The three slowest affected paths are estimated below, not benchmarked. These are
+order-of-magnitude p99 hypotheses for planning under healthy dependencies, not
+SLOs or guarantees; outages end through configured deadlines. Queue wait is a
+separate, load-dependent component and must not be mistaken for execution time.
+
+| Affected path | Planning tail-latency hypothesis | Dominant cost / existing bound |
+|---|---|---|
+| Delegated AI generation | Tens of seconds to several minutes | Provider/chunk work; configured AI job timeout defaults to 300 seconds, with existing lease/deadline accounting |
+| Tracked scan and descendant imports | Seconds to minutes for a full batch, longer with accumulated history | Discovery plus bounded DB work, then asynchronous per-file jobs; default current-match cap 200; scan report completion does not mean every import completed |
+| Import/re-sync including render/re-anchor/assets | Seconds to tens of seconds per typical document, potentially minutes with many assets | Fetch defaults to 15 seconds per call, projection/re-anchor to 10 seconds each; individual limits are not a total pipeline deadline |
+
+Measure actual query counts, batch memory, queue wait, lock wait and stage timings
+on representative small/full pages and retained histories in the agreed integration
+profile before choosing deployment concurrency. These estimates do not justify
+relaxing revocation, dropping outcomes, or increasing all worker counts. No
+application performance test was run during this documentation review.
 
 ## System boundary
 
@@ -982,6 +1033,14 @@ are illustrative; match repository conventions during implementation.
     preserved input; safe retries reload authority with original preconditions;
     no external/paid replay or falsely successful removal; recovery on both engines.
 
+- [ ] **T19 (P2)** — Tracked scans — bound retained-history processing and paginate full reports.
+  - Surfaced by: issue 20 / decision 20A.
+  - Files: scan service/report storage and migrations, report resource/API and UI,
+    tracked-repo tests, generation-safe cleanup and deployment compatibility checks.
+  - Verify: retained history above discovery cap stays bounded; complete scoped
+    outcomes page coherently; atomic publication, revoked readers, stale workers,
+    crash cleanup and legacy migration preserve valid reports/content/history.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -1000,9 +1059,9 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-The user resumed engineering review before publishing tickets and accepted 18A and 19A
-on 2026-09-27. All presented decisions through 19 are resolved. Performance,
-observability, rollout, long-term assessment and UX review remain unfinished;
+The user resumed engineering review before publishing tickets and accepted decisions through 20A
+on 2026-09-27. Performance is complete as a planning checkpoint. Observability,
+rollout, long-term assessment and UX review remain unfinished;
 the separate design review is also pending.
 
 The [ticket breakdown](project-access-tickets.md) is an unpublished draft and must
