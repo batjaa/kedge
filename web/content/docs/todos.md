@@ -5,6 +5,10 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
+## Decision log (project access engineering review, 2026-09-27)
+
+- ✅ **Engineering review security 11A confirmed:** harden shared sign-out for ordinary logout and invitation account switching, with confirmed completion, retry on failure/uncertainty, and preserved invitation destination. Reproduce the documented concurrency race before choosing the smallest proven server fix; cover session rotation, remember-me, and controlled in-flight requests without network-idle workarounds. The existing logout debt is now required M4.1 work; implementation and remaining review are pending.
+
 ## Decision log (project access planning, 2026-09-26)
 
 - ✅ **Engineering review security 10A confirmed:** reject cross-origin redirects for authenticated repository discovery/document fetches before contacting the destination; do not forward credentials across scheme/host/port changes. Enforce approved repository/owner identity even on same-origin redirects, retain public credential-free redirects and SSRF protections, and require regression coverage for each origin component and multi-hop chains. The current fetcher reuses headers on every hop; implementation remains pending.
@@ -558,7 +562,7 @@ Found while diagnosing CI failures on the #151 PR. The failing journeys were **n
 
 ## Known debt (CI e2e speedup, 2026-08-19)
 
-- **Logout races in-flight authenticated requests (session resurrection)** — real app behavior, found via a 4-worker trace: an authenticated request still in flight when `POST /logout` lands re-saves the old session row at request terminate (Laravel persists the session *after* the response), and its response re-sets the stale session cookie — so the browser can end up signed back in after a completed logout. The doc page's fan-out (threads, shares, AI panel) makes this window real. The journey quiesces before signing out because it asserts the guard, not this race; a product-level fix needs something like a session generation/epoch check at auth time. (M)
+- **Logout races in-flight authenticated requests (session resurrection)** — real app behavior, found via a 4-worker trace: an authenticated request still in flight when `POST /logout` lands re-saves the old session row at request terminate (Laravel persists the session *after* the response), and its response re-sets the stale session cookie — so the browser can end up signed back in after a completed logout. The doc page's fan-out (threads, shares, AI panel) makes this window real. The journey quiesces before signing out because it asserts the guard, not this race; a product-level fix needs something like a session generation/epoch check at auth time. (M) **M4.1 decision 11A (2026-09-27):** required shared-sign-out work, not deferred; reproduce against the current driver before choosing the server fix (the historical mechanism above is not newly verified), then cover rotation/remember-me and concurrent requests. See [engineering review T10](plans/project-access-eng-review.md).
 
 ## Decision log (AI timeout budget #153, 2026-08-25)
 

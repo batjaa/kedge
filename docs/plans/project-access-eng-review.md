@@ -1,6 +1,6 @@
 # Project access — engineering review
 
-> 2026-09-26 · In progress. Architecture and error-map checkpoints recorded;
+> Updated 2026-09-27 · In progress. Architecture and error-map checkpoints recorded;
 > security review started, sections 4–11 remain pending. This is not implementation
 > or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
@@ -12,7 +12,7 @@
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
-| 3. Security and threat model | In progress; decisions 8A–10A accepted |
+| 3. Security and threat model | In progress; decisions 8A–11A accepted |
 | 4. Data flow and interaction edge cases | Pending |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
@@ -311,6 +311,37 @@ also calls out the security implications of forwarding sensitive headers.
 origin changes, asserting no request or credential reaches the rejected target;
 retain public-redirect coverage and reject same-origin repository substitution.
 
+### Issue 11 — reliable shared sign-out and account switching: 11A
+
+**P1, confidence 9/10 for client failure handling.**
+`web/lib/auth-client.ts:102` declares `signOut(): Promise<void>`; its final logout
+response is never checked for success, and line 112 says
+`// swallow — the redirect + server re-check is the source of truth`.
+`api/app/Http/Controllers/Auth/SessionController.php:40` calls
+`$request->session()->invalidate();`, but the browser test explicitly avoids a
+documented concurrent-session race: `web/e2e/auth-edges.spec.ts:75` uses
+`await page.waitForLoadState('networkidle');` before sign-out. The historical
+four-worker finding is recorded in the logout debt in `docs/TODOS.md`; its exact
+mechanism has **not** been reproduced against the current driver during this
+review. Client failure handling is verified by source inspection.
+
+**Accepted:** harden the shared sign-out flow, including ordinary logout. Account
+switching waits for confirmed completion, keeps the internal invitation return
+destination, and offers retry after failed or uncertain outcomes. Completed
+logout must not be undone by an in-flight request. Reproduce the historical race
+first, then choose the smallest server fix proven with the actual session driver,
+including session-ID rotation and remember-me restoration. Neither a browser
+network-idle wait nor blocking only the logout route establishes this guarantee.
+Do not preselect custom session epochs without evidence. Reuse the shared auth
+flow rather than introducing an invitation-specific duplicate; verified recipient
+matching remains a separate server-side acceptance check.
+
+**CRITICAL regression requirement:** ordinary logout and invitation switching
+cover failed/uncertain responses, exhausted CSRF recovery, retry, preserved return
+destination, and controlled overlap with authenticated requests, rotation, and
+remember-me restoration. Browser and server concurrency tests must prove the old
+account cannot return after confirmed logout; tests are planned, not executed.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -495,6 +526,18 @@ are illustrative; match repository conventions during implementation.
   - Verify: critical regression tests for changed host/port/scheme and multi-hop
     redirects; rejected destinations receive no request or credentials; approved
     same-origin identity handling and credential-free public redirects still work.
+
+- [ ] **T10 (P1)** — Shared authentication — make sign-out reliable for account switching.
+  - Surfaced by: issue 11 / decision 11A; existing logout concurrency debt.
+  - Files: `web/lib/auth-client.ts`, shared sign-out callers and invitation UI,
+    `api/app/Http/Controllers/Auth/SessionController.php`, session/auth middleware
+    or configuration as justified by reproduction, API auth concurrency tests,
+    `web/e2e/auth-edges.spec.ts` and invitation journeys.
+  - Verify: reproduce the documented race with the current driver; prove the
+    smallest server fix across in-flight requests, session rotation, and
+    remember-me; test failed/uncertain logout, CSRF exhaustion, retry and return
+    destination. Both ordinary logout and account switching use the shared flow;
+    no network-idle workaround substitutes for concurrency coverage.
 
 ## NOT in scope
 
