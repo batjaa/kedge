@@ -3,7 +3,8 @@
 > 2026-09-26 · Superseded by the [module spec](../specs/m4.1-project-access.md).
 > All product decisions and testing seams are now confirmed. This brief preserves
 > the planning context and decision summary; the module spec is authoritative.
-> Engineering/design review is pending; no implementation has started.
+> [Engineering review](project-access-eng-review.md) is in progress; design review
+> is pending and no implementation has started.
 
 ## Destination
 

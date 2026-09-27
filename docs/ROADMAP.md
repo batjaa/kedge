@@ -24,7 +24,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | done (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
-| Project access | L | Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | specced (review pending) | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
+| Project access | L | Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | specced (engineering review in progress) | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
 | Self-host distribution | M | everything above | deciding | — |
@@ -53,7 +53,7 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Project access — product decisions complete (2026-09-26); engineering/design review pending.** Roles, member administration, owner-approved private repos, per-role AI, sharing/removal, document moves, invitation lifecycle, and content/moderation are confirmed. Testing seams are agreed. Next: review authorization/query consistency, queued work and revocation, source delegation, and the acceptance/member flows before ticketing. [Module spec](specs/m4.1-project-access.md).
+**Project access — product decisions complete (2026-09-26); engineering review in progress, design review pending.** Roles, member administration, owner-approved private repos, per-role AI, sharing/removal, document moves, invitation lifecycle, and content/moderation are confirmed. Testing seams are agreed. The [engineering review](plans/project-access-eng-review.md) records the accepted architecture decisions; error mapping and subsequent sections remain before ticketing. [Module spec](specs/m4.1-project-access.md).
 
 1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
