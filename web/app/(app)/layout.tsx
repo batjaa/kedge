@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app/app-shell';
 import { getSession } from '@/lib/session';
+import { verificationPath } from '@/lib/auth-redirect';
 
 // The authenticated shell for everything under (app) except the root — the
 // document reading surface (#17) and beyond. Server-side guard: forwards the
@@ -17,6 +18,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (!session) {
     const path = (await headers()).get('x-kedge-pathname') || '/';
     redirect(`/signin?next=${encodeURIComponent(path)}`);
+  }
+
+  if (session.email_verified === false) {
+    const path = (await headers()).get('x-kedge-pathname') || '/';
+    redirect(verificationPath(path));
   }
 
   return <AppShell user={session.user}>{children}</AppShell>;

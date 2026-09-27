@@ -1,3 +1,4 @@
+import { confirmAccount } from './helpers';
 import { expect, test } from '@playwright/test';
 
 // The M0 demo criterion, end to end (SPEC scaffold — Testing Decisions, seam 2).
@@ -38,6 +39,7 @@ test('register → land on the shell → reload persists → sign out', async ({
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await confirmAccount(page, email);
 
   // 2. Land on the authenticated shell — the whole point of the handshake.
   await expect(page).toHaveURL('/');

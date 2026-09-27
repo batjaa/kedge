@@ -5,7 +5,6 @@ namespace Tests\Feature\Api\V1;
 use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Models\Document;
 use App\Models\User;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\DB;
@@ -37,7 +36,7 @@ class AgentTokenRestRejectionTest extends TestCase
 
     private function member(): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Agent Operator',
             email: 'operator@example.com',
             password: 'correct-horse-battery',

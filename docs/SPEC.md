@@ -151,6 +151,10 @@ MCP --> API : same policies, same data
 
 **Auth pattern (pinned):** `app.kedge.review` + `api.kedge.review`, `SESSION_DOMAIN=.kedge.review`, `SANCTUM_STATEFUL_DOMAINS=app.kedge.review`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are additive within `/v1`** — the two deployables are never atomic.
 
+**Account confirmation and recovery (2026-09-26):** Email/password signup queues a welcome email with a signed confirmation link (60-minute lifetime). The account has a session immediately, but workspace resources and MCP require a verified email; identity, sign-out, and throttled confirmation resend remain available. Links confirm mailbox possession on any device without logging the recipient in. The web preserves the requested destination through confirmation. Existing unverified password accounts must also confirm; no timestamp is backfilled without mailbox proof. GitHub registration/linking trusts its verified primary email and new GitHub accounts receive a welcome email. Upgrading a reviewer to a password account requires fresh confirmation, since entering a previously verified reviewer's email is not proof of ownership.
+
+Password recovery uses Laravel's password broker with hashed, single-use, 60-minute tokens, a one-minute per-account email throttle, and the shared auth rate limit. Both request and reset endpoints normalize email addresses. Requests return the same success response for absent, throttled, and passwordless accounts; reviewer-only and OAuth-only users keep their existing login method. Reset mail links to the web app; successful resets rotate the remember token and revoke database sessions, then require sign-in. Resetting a password does not bypass account confirmation. Authentication mail is queued after commit through the configured Laravel transport (Postmark or SMTP in production; log locally).
+
 ### 4.1 Stack
 
 **api/ — Laravel 13** (standard scaffold recipe):

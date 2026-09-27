@@ -15,7 +15,6 @@ use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\Fetch\DnsResolver;
 use App\Services\Fetch\HttpTransport;
-use App\Services\RegistrationService;
 use App\Services\TrackedRepos\TrackedRepoScanService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -697,7 +696,7 @@ class TrackedRepoScanTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

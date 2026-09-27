@@ -17,7 +17,6 @@ use App\Services\AI\AiGeneration;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunBudget;
 use App\Services\AI\AiRunLedger;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\TimeoutExceededException;
@@ -755,7 +754,7 @@ class AiDigestTest extends TestCase
 
     private function author(): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Author User',
             email: 'author@example.com',
             password: 'correct-horse-battery',

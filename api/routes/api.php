@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\V1\TrackedRepoController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceSummaryController;
 use App\Http\Controllers\Internal\DiagramController;
+use App\Http\Middleware\EnsureAccountVerified;
 use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Http\Middleware\RequireAgentTokenAuth;
 use App\Http\Middleware\ThrottleMcpIngress;
@@ -146,14 +147,15 @@ Route::prefix('v1')->group(function () {
     // agent per token, and the writer service spends a tighter per-token budget
     // on writes — the only layer that can tell a write from a read, since one
     // POST endpoint carries both.
-    Route::middleware(['mcp.enabled', ThrottleMcpIngress::class, 'auth:sanctum', RequireAgentTokenAuth::class, 'throttle:mcp'])
+    Route::middleware(['mcp.enabled', ThrottleMcpIngress::class, 'auth:sanctum', EnsureAccountVerified::class, RequireAgentTokenAuth::class, 'throttle:mcp'])
         ->withoutMiddleware(RejectAgentTokenAuth::class)
         ->group(function () {
             Mcp::web('/mcp', KedgeServer::class)->name('api.v1.mcp');
         });
 
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/me', MeController::class)->name('api.v1.me');
+    Route::get('/me', MeController::class)->middleware('auth:sanctum')->name('api.v1.me');
+
+    Route::middleware(['auth:sanctum', EnsureAccountVerified::class])->group(function () {
 
         // Workspace settings — General (SPEC §16, M3.7 decision 11A). Rename /
         // re-slug the caller's OWN personal workspace: no id in the URL

@@ -48,6 +48,10 @@ class GitHubAuthService
 
         // 1. Returning user — this GitHub account is already linked.
         if ($existing = User::firstWhere('github_id', $githubId)) {
+            if ($existing->email === $verifiedEmail && ! $existing->hasVerifiedEmail()) {
+                $existing->markEmailAsVerified();
+            }
+
             return $existing;
         }
 
@@ -77,6 +81,7 @@ class GitHubAuthService
         return DB::transaction(function () use ($user, $githubUser, $githubId, $ip): User {
             $user->forceFill([
                 'github_id' => $githubId,
+                'email_verified_at' => $user->email_verified_at ?? now(),
                 // Backfill an avatar only if the account never had one.
                 'avatar_url' => $user->avatar_url ?? $githubUser->getAvatar(),
             ])->save();

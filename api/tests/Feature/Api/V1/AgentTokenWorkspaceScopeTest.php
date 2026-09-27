@@ -10,7 +10,6 @@ use App\Models\Thread;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Policies\Concerns\AuthorizesWorkspaceMembership;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
@@ -47,7 +46,7 @@ class AgentTokenWorkspaceScopeTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = app(RegistrationService::class)->register(
+        $this->user = $this->registerVerifiedUser(
             name: 'Agent Operator',
             email: 'operator@example.com',
             password: 'correct-horse-battery',

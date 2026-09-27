@@ -85,7 +85,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // root-level session routes always answer JSON — a 401/419 must
         // reach the web app as JSON, never as a redirect (SPEC 4).
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'register', 'login', 'logout', 'sanctum/*')
+            fn (Request $request) => $request->is('api/*', 'register', 'login', 'logout', 'forgot-password', 'reset-password', 'email/*', 'sanctum/*')
                 || $request->expectsJson(),
         );
     })->create();

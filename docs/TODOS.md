@@ -545,3 +545,11 @@ Found while diagnosing CI failures on the #151 PR. The failing journeys were **n
 - **The preview verification is post-deploy, not covered by tests** — no suite makes a live provider call (the SDK fake never sits on a socket), so the tests pin the RESOLVED CONFIGURATION and the classifier mapping, not wall-clock behavior. The ticket's last acceptance criterion — an ask over 60s completing on attempt 1, no cURL 28 in worker logs, `ai_runs` wall time equal to generation plus fixed overhead — is verified on the preview after this deploys. (S)
 - **`unparseable_output` on preview run 5's five-second third attempt is still unexplained** — a structured-output correctness bug, not a latency one; recorded out of scope by #153 and worth its own ticket (repro: ledger run 5, workspace 4, document 99 on the preview). (M)
 - **The ask still ships ~24k tokens of document context every turn** — roughly a dime and a slow first token per turn, and the reason a long ask can approach these clocks at all. Ties into the existing proximity-to-selection debt; streaming (accepted debt in `docs/specs/m4-ai-agents.md`) remains the real cure for perceived latency. (M)
+
+## Decision log (account confirmation and recovery, 2026-09-26)
+
+- ✅ Signup now queues a welcome/confirmation email; unverified accounts can sign in to resend it but cannot access protected resources or MCP. Confirmation is signed, expires after 60 minutes, works on another device, and never creates a login session. Existing unverified accounts confirm on their next visit.
+- ✅ GitHub verified email establishes confirmation; a password signup upgrading a reviewer must prove mailbox ownership again.
+- ✅ Added forgot/reset password API routes and translated web screens. Broker tokens are single-use and expire after 60 minutes; unknown/passwordless/throttled requests receive identical responses. Resets revoke database sessions and remember cookies without auto-verifying email.
+- ✅ Browser signup helpers now follow real welcome-email links; resource-test fixtures explicitly provision verified owners.
+- Delivery configuration: local `MAIL_MAILER=log` records messages without sending to inboxes. Live delivery requires a configured mail transport and running queue worker; this change does not alter deployment secrets.

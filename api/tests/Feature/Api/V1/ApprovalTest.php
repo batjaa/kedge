@@ -6,7 +6,6 @@ use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
-use App\Services\RegistrationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -233,7 +232,7 @@ class ApprovalTest extends TestCase
 
     private function registerUser(string $email, string $name = 'Reviewer'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: $name,
             email: $email,
             password: 'correct-horse-battery',

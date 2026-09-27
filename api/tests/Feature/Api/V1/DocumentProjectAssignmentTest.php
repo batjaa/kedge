@@ -6,7 +6,6 @@ use App\Enums\WorkspaceRole;
 use App\Models\Document;
 use App\Models\Project;
 use App\Models\User;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -260,7 +259,7 @@ class DocumentProjectAssignmentTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

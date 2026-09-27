@@ -18,7 +18,6 @@ use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\DocumentImporter;
 use App\Services\Import\Exceptions\ImportFailedException;
 use App\Services\Import\Exceptions\ProjectionFailedException;
-use App\Services\RegistrationService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -436,7 +435,7 @@ class DocumentImportTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

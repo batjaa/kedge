@@ -10,7 +10,6 @@ use App\Models\Share;
 use App\Models\ShareMagicLinkCompletion;
 use App\Models\Thread;
 use App\Models\User;
-use App\Services\RegistrationService;
 use App\Services\Sharing\ReviewerMagicLinkService;
 use App\Support\EmailDigest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -199,7 +198,7 @@ class ReviewerMagicLinkTest extends TestCase
     public function test_magic_link_for_existing_workspace_member_requires_sign_in_without_logging_in(): void
     {
         [, , $share, $token] = $this->sharedDocument();
-        app(RegistrationService::class)->register(
+        $this->registerVerifiedUser(
             name: 'Workspace Member',
             email: 'member-reviewer@example.com',
             password: null,
@@ -559,7 +558,7 @@ class ReviewerMagicLinkTest extends TestCase
      */
     private function readyDocument(?User $owner = null, string $plainText = 'Alpha target text'): array
     {
-        $owner ??= app(RegistrationService::class)->register(
+        $owner ??= $this->registerVerifiedUser(
             name: 'Owner User',
             email: 'owner-'.Str::lower(Str::random(8)).'@example.com',
             password: 'correct-horse-battery',

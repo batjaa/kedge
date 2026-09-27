@@ -1,3 +1,4 @@
+import { confirmAccount } from './helpers';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { FIXTURE_DOC_TITLE, FIXTURE_DOC_URL } from './fixture-doc';
 
@@ -111,6 +112,7 @@ test('paste a URL → rendered doc with live diagram → share opens read-only �
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await confirmAccount(page, email);
 
   //    The claim intent resolves to the owned doc: the interstitial POSTs the
   //    claim, then replaces to /documents/{id} (no ?claim=1 residue).

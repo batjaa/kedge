@@ -14,7 +14,6 @@ use App\Services\AI\AiArtifactStaleness;
 use App\Services\AI\Artifacts\StalenessReport;
 use App\Services\AI\Builders\DigestPromptBuilder;
 use App\Services\AI\Builders\ImprovePromptBuilder;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -49,7 +48,7 @@ class ArtifactStalenessTest extends TestCase
         // do not call models.
         Http::preventStrayRequests();
 
-        $this->author = app(RegistrationService::class)->register(
+        $this->author = $this->registerVerifiedUser(
             name: 'Author',
             email: 'author@example.com',
             password: 'correct-horse-battery',

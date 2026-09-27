@@ -7,7 +7,6 @@ use App\Models\Approval;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -312,7 +311,7 @@ class DocumentVersionTest extends TestCase
 
     private function registerUser(string $email): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Reviewer',
             email: $email,
             password: 'correct-horse-battery',

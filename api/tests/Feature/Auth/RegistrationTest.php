@@ -47,7 +47,7 @@ class RegistrationTest extends TestCase
 
         $this->assertNotNull($user);
         $this->assertNotNull($workspace);
-        $this->assertNull($user->email_verified_at, 'M0 email+password accounts are unverified (spec: out of scope until M2)');
+        $this->assertNull($user->email_verified_at);
 
         $this->assertDatabaseHas('workspace_members', [
             'workspace_id' => $workspace->id,
@@ -136,7 +136,7 @@ class RegistrationTest extends TestCase
 
         $shadow->refresh();
         $this->assertNotNull($shadow->password);
-        $this->assertNotNull($shadow->email_verified_at);
+        $this->assertNull($shadow->email_verified_at);
 
         $this->assertDatabaseHas('workspace_members', [
             'user_id' => $shadow->id,

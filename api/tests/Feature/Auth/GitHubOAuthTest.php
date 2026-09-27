@@ -4,8 +4,10 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use App\Models\Workspace;
+use App\Notifications\WelcomeEmail;
 use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Laravel\Socialite\Contracts\Provider;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Facades\Socialite;
@@ -71,6 +73,7 @@ class GitHubOAuthTest extends TestCase
 
     public function test_first_time_sign_in_creates_user_workspace_membership_and_audit_atomically(): void
     {
+        Notification::fake();
         $this->enableGitHub();
         $this->fakeGitHubUser([
             'id' => '424242',
@@ -91,6 +94,8 @@ class GitHubOAuthTest extends TestCase
         $this->assertSame('Ada Lovelace', $user->name);
         $this->assertSame('https://avatars.githubusercontent.com/u/424242', $user->avatar_url);
         $this->assertNull($user->password, 'OAuth-only accounts have no password');
+        $this->assertTrue($user->hasVerifiedEmail());
+        Notification::assertSentTo($user, WelcomeEmail::class);
         $this->assertAuthenticatedAs($user);
 
         $workspace = $user->personalWorkspace();

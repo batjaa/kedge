@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { signIn, signUp, type AuthOutcome } from '@/lib/auth-client';
 import { signupEmailHandoffKey } from '@/lib/shared';
+import { safeAuthNext, verificationPath } from '@/lib/auth-redirect';
 
 type Mode = 'signin' | 'signup';
 
@@ -29,8 +30,7 @@ function knownOauthError(code: string): KnownOauthError {
 
 // Only allow same-origin, non-protocol-relative return paths (no open redirects).
 function safeNext(next: string | undefined): string {
-  if (next && next.startsWith('/') && !next.startsWith('//')) return next;
-  return '/';
+  return safeAuthNext(next);
 }
 
 function withNext(href: string, next: string): string {
@@ -107,7 +107,10 @@ export function AuthForm({
     if (outcome.ok) {
       // Cookie is set; land on the requested page and refresh so the server
       // guard re-reads the now-authenticated session.
-      router.replace(next);
+      if (outcome.session.email_verified === false) {
+        try { sessionStorage.setItem('kedge.auth.next', next); } catch { /* Optional continuity. */ }
+      }
+      router.replace(outcome.session.email_verified === false ? verificationPath(next) : next);
       router.refresh();
       return;
     }
@@ -222,6 +225,12 @@ export function AuthForm({
             }}
           />
 
+          {mode === 'signin' ? (
+            <Link href="/forgot-password" className="inline-block text-sm font-medium text-emerald-700 hover:underline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-emerald-400">
+              {t('forgot.link')}
+            </Link>
+          ) : null}
+
           <button
             type="submit"
             disabled={pending}
@@ -257,7 +266,7 @@ function GitHubMark() {
   );
 }
 
-function Field({
+export function Field({
   id,
   label,
   type,

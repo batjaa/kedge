@@ -12,7 +12,6 @@ use App\Models\User;
 use App\Services\Fetch\DnsResolver;
 use App\Services\Fetch\HttpTransport;
 use App\Services\Import\DocumentImporter;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -159,7 +158,7 @@ class PatImportTest extends TestCase
 
     private function registerUser(): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: 'author@example.com',
             password: 'correct-horse-battery',

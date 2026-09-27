@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\GitHubController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use Illuminate\Support\Facades\Route;
@@ -21,7 +23,14 @@ Route::get('/', function () {
 |
 */
 
+Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->middleware('throttle:30,1')->name('verification.verify');
+Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+    ->middleware(['auth:sanctum', 'throttle:1,1'])->name('verification.send');
+
 Route::middleware('throttle:auth')->group(function () {
+    Route::post('/forgot-password', [PasswordResetController::class, 'store'])->name('password.email');
+    Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
     Route::post('/register', [RegisteredUserController::class, 'store'])->name('register');
     Route::post('/login', [SessionController::class, 'store'])->name('login');
 

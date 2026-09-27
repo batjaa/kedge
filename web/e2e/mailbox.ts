@@ -80,16 +80,16 @@ export function extractMagicLinkForTest(raw: string, email: string): string | nu
  * is this reviewer, and read the link out of the newest of those. Proximity
  * never enters into it.
  */
-function extractLatestMagicLinkUrl(raw: string, normalizedEmail: string): string | null {
+function extractLatestMagicLinkUrl(raw: string, normalizedEmail: string, pattern = VERIFY_LINK_PATTERN): string | null {
   const entries = logEntries(raw);
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     for (const decoded of decodedLogMailerBodies(entries[index])) {
       if (!isAddressedTo(decoded, normalizedEmail)) continue;
 
-      const matches = [...decoded.matchAll(VERIFY_LINK_PATTERN)]
+      const matches = [...decoded.matchAll(pattern)]
         .map((match) => normalizeExtractedUrl(match[0]))
-        .filter(isCompleteMagicLinkUrl);
+        .filter((value) => pattern === VERIFY_LINK_PATTERN ? isCompleteMagicLinkUrl(value) : true);
       const match = matches.at(-1);
       if (match) return match;
     }
@@ -175,4 +175,19 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&#(\d+);/g, (_match, decimal: string) => {
       return String.fromCodePoint(Number.parseInt(decimal, 10));
     });
+}
+
+
+/** Auth mail links, isolated by recipient just like reviewer magic links. */
+export async function latestAccountMailUrl(email: string, kind: 'verify' | 'reset'): Promise<string> {
+  const pattern = kind === 'verify'
+    ? /https?:\/\/[^\s"'<>]+\/email\/verify\/[^\s"'<>]+/g
+    : /https?:\/\/[^\s"'<>]+\/reset-password\?[^\s"'<>]+/g;
+  let result: string | null = null;
+  await expect.poll(async () => {
+    const raw = await readFile(DEFAULT_MAIL_LOG_PATH, 'utf8').catch(() => '');
+    result = extractLatestMagicLinkUrl(raw, email.toLowerCase(), pattern);
+    return result;
+  }, { timeout: 15_000 }).not.toBeNull();
+  return result!;
 }

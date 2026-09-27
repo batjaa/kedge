@@ -6,7 +6,6 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Share;
 use App\Models\User;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -146,7 +145,7 @@ class ClaimDocumentTest extends TestCase
 
     private function registerUser(string $email = 'claimer@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Claimer',
             email: $email,
             password: 'correct-horse-battery',

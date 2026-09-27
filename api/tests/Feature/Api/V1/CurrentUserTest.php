@@ -31,6 +31,7 @@ class CurrentUserTest extends TestCase
         $response
             ->assertOk()
             ->assertExactJson([
+                'email_verified' => false,
                 'user' => [
                     'id' => $user->id,
                     'name' => 'Ada Lovelace',

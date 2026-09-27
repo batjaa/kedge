@@ -19,7 +19,6 @@ use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
 use App\Services\AI\Builders\DocumentAskPromptBuilder;
 use App\Services\AI\Prompt\ContextBudget;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -1290,7 +1289,7 @@ class AiDocumentAskTest extends TestCase
 
     private function author(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Author User',
             email: $email,
             password: 'correct-horse-battery',

@@ -10,6 +10,7 @@ import { getProjects } from '@/lib/projects';
 import { getWorkspaceSummary } from '@/lib/workspace';
 import { getWorkspaceActivity } from '@/lib/activity';
 import { getSession } from '@/lib/session';
+import { verificationPath } from '@/lib/auth-redirect';
 import { getCapabilities } from '@/lib/capabilities';
 import type { Workspace } from '@/lib/auth-types';
 
@@ -26,6 +27,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function RootPage() {
   const session = await getSession();
+
+  if (session?.email_verified === false) redirect(verificationPath('/'));
 
   if (session) {
     return (

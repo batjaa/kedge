@@ -8,7 +8,6 @@ use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\NewAccessToken;
@@ -50,7 +49,7 @@ abstract class McpTestCase extends TestCase
     {
         parent::setUp();
 
-        $this->operator = app(RegistrationService::class)->register(
+        $this->operator = $this->registerVerifiedUser(
             name: 'Agent Operator',
             email: 'operator@example.com',
             password: 'correct-horse-battery',

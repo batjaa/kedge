@@ -9,7 +9,6 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
 use App\Services\AI\AiRunLedger;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -179,7 +178,7 @@ class AiRunDedupeExemptionTest extends TestCase
 
     private function member(string $email = 'asker@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Asking User',
             email: $email,
             password: 'correct-horse-battery',

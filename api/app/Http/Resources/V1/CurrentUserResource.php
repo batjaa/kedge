@@ -31,6 +31,7 @@ class CurrentUserResource extends JsonResource
     {
         return [
             'user' => UserResource::make($this->resource),
+            'email_verified' => $this->hasVerifiedEmail(),
             'workspace' => WorkspaceResource::make($this->personalWorkspace()),
         ];
     }

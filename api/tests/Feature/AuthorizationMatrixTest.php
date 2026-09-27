@@ -27,7 +27,6 @@ use App\Models\ShareParticipant;
 use App\Models\Thread;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Services\RegistrationService;
 use App\Services\SystemWorkspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
@@ -509,7 +508,7 @@ class AuthorizationMatrixTest extends TestCase
 
     public function test_a_member_can_connect_an_integration_in_their_own_workspace(): void
     {
-        $member = app(RegistrationService::class)->register(
+        $member = $this->registerVerifiedUser(
             name: 'Member User',
             email: 'member@example.com',
             password: 'correct-horse-battery',
@@ -752,7 +751,7 @@ class AuthorizationMatrixTest extends TestCase
      */
     public function test_every_route_in_the_application_rejects_an_agent_token_principal(): void
     {
-        $owner = app(RegistrationService::class)->register(
+        $owner = $this->registerVerifiedUser(
             name: 'Agent Operator',
             email: 'operator@example.com',
             password: 'correct-horse-battery',
@@ -1180,7 +1179,7 @@ class AuthorizationMatrixTest extends TestCase
     {
         match ($role) {
             'guest' => null,
-            'member' => $this->actingAs(app(RegistrationService::class)->register(
+            'member' => $this->actingAs($this->registerVerifiedUser(
                 name: 'Member User',
                 email: 'member@example.com',
                 password: 'correct-horse-battery',
@@ -1193,7 +1192,7 @@ class AuthorizationMatrixTest extends TestCase
      */
     private function ownedDocument(bool $failed = false): array
     {
-        $owner = app(RegistrationService::class)->register(
+        $owner = $this->registerVerifiedUser(
             name: 'Owner User',
             email: 'owner@example.com',
             password: 'correct-horse-battery',
@@ -1227,7 +1226,7 @@ class AuthorizationMatrixTest extends TestCase
      */
     private function ownedIntegration(): array
     {
-        $owner = app(RegistrationService::class)->register(
+        $owner = $this->registerVerifiedUser(
             name: 'Owner User',
             email: 'owner@example.com',
             password: 'correct-horse-battery',
@@ -1245,7 +1244,7 @@ class AuthorizationMatrixTest extends TestCase
         match ($role) {
             'guest' => null,
             'owner' => $this->actingAs($owner),
-            'other' => $this->actingAs(app(RegistrationService::class)->register(
+            'other' => $this->actingAs($this->registerVerifiedUser(
                 name: 'Other User',
                 email: 'other@example.com',
                 password: 'correct-horse-battery',
@@ -1261,7 +1260,7 @@ class AuthorizationMatrixTest extends TestCase
             'member' => $this->workspaceMemberFor($document),
             'reviewer' => $this->verifiedReviewerFor($document, 'reviewer@example.com'),
             'other_reviewer' => $this->verifiedReviewerFor(Document::factory()->ready()->create(), 'other-reviewer@example.com'),
-            'non_member' => app(RegistrationService::class)->register(
+            'non_member' => $this->registerVerifiedUser(
                 name: 'Non Member',
                 email: 'non-member@example.com',
                 password: 'correct-horse-battery',

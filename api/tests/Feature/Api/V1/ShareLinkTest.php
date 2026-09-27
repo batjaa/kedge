@@ -6,7 +6,6 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Share;
 use App\Models\User;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -219,7 +218,7 @@ class ShareLinkTest extends TestCase
      */
     private function ownedDocument(string $content = "# Doc\n\nBody.\n"): array
     {
-        $owner = app(RegistrationService::class)->register(
+        $owner = $this->registerVerifiedUser(
             name: 'Owner User',
             email: 'owner@example.com',
             password: 'correct-horse-battery',

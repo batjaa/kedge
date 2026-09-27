@@ -110,6 +110,14 @@ SQLite is used in dev and test; queue, session, and cache all run on the
 `SELF_HOSTED` flag (`config/kedge.php`) distinguishes self-hosted from managed
 deployments; every other external value is env-driven via `.env.example`.
 
+### Account email
+
+New password accounts receive a welcome email with a confirmation link and must confirm before using the app. Existing accounts with an unverified email are directed to the confirmation screen, where they can resend the email. GitHub users are verified through GitHub. “Forgot password?” on the sign-in page sends a one-use reset link for password accounts; GitHub-only users should continue with GitHub.
+
+Locally, `MAIL_MAILER=log` writes emails (including links) to `api/storage/logs/laravel.log`. Run the queue worker with `composer dev` or `php artisan queue:work` from `api/`; signup and password reset emails are queued.
+
+For inbox delivery, configure `MAIL_MAILER=postmark`, `POSTMARK_API_KEY`, a verified `MAIL_FROM_ADDRESS`, and `MAIL_FROM_NAME` in the API environment, or use Laravel's SMTP settings for self-hosting. Keep `APP_URL` set to the public API origin and `FRONTEND_URL` to the public web origin: confirmation links go to the API, reset links to the web app. A running queue worker is required; restart workers after deployment and check `php artisan queue:failed` if messages do not arrive.
+
 ## AI provider (bring your own key)
 
 The AI features — review digest, improve-the-doc prompt, reply drafts, comment

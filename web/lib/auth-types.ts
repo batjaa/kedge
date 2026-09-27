@@ -18,6 +18,8 @@ export interface Workspace {
 
 /** GET /api/v1/me, and the register/login responses, all return this shape. */
 export interface Session {
+  /** Absent only when talking to an older API during rollout. */
+  email_verified?: boolean;
   user: User;
   workspace: Workspace;
 }

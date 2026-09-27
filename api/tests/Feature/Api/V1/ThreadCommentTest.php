@@ -20,7 +20,6 @@ use App\Services\AuditLogger;
 use App\Services\Comments\CommentModerationService;
 use App\Services\Comments\CommentThreadService;
 use App\Services\Import\TextProjector;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -2482,7 +2481,7 @@ class ThreadCommentTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

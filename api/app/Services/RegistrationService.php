@@ -55,7 +55,7 @@ class RegistrationService
                     'password' => $password,
                     'avatar_url' => $avatarUrl ?? $user->avatar_url,
                     'github_id' => $githubId,
-                    'email_verified_at' => now(),
+                    'email_verified_at' => $githubId !== null ? now() : null,
                 ])->save();
             } else {
                 $user = User::create([
@@ -65,6 +65,10 @@ class RegistrationService
                     'avatar_url' => $avatarUrl,
                     'github_id' => $githubId,
                 ]);
+            }
+
+            if ($githubId !== null && ! $user->hasVerifiedEmail()) {
+                $user->markEmailAsVerified();
             }
 
             $workspace = Workspace::create([
@@ -78,6 +82,8 @@ class RegistrationService
 
             $this->auditLogger->record($workspace, $user, AuditEvent::UserRegistered, $user, ip: $ip);
             $this->auditLogger->record($workspace, $user, AuditEvent::WorkspaceCreated, $workspace, ip: $ip);
+
+            $user->sendEmailVerificationNotification();
 
             return $user;
         });

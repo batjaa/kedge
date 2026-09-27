@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Services\Fetch\FetchResult;
 use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\DocumentImporter;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -120,7 +119,7 @@ class DocumentMdxTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

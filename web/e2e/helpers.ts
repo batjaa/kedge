@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { latestReviewerMagicLinkUrl } from './mailbox';
+import { latestAccountMailUrl, latestReviewerMagicLinkUrl } from './mailbox';
 
 // Shared journey steps for the coverage pack (#39). Every spec registers its OWN
 // unique user and creates its OWN documents through these helpers — no fixture
@@ -50,7 +50,7 @@ export function uniqueIdentity(prefix: string): Identity {
  * the pack exactly where it was before this guard existed: correct when the
  * page is ready, and loud about the URL if it is not.
  */
-async function formIsHydrated(page: Page): Promise<void> {
+export async function formIsHydrated(page: Page): Promise<void> {
   try {
     await page.waitForFunction(
       () => {
@@ -87,6 +87,7 @@ export async function register(page: Page, identity: Identity): Promise<void> {
   await page.locator('input[name="password"]').fill(identity.password);
   await page.locator('form button[type="submit"]').click();
 
+  await confirmAccount(page, identity.email);
   await expect(page).toHaveURL('/');
   // Locale-agnostic (M3.9): the queue heading is a catalog string and the i18n
   // journeys register under es-US/de-DE contexts.
@@ -363,4 +364,13 @@ export async function proposeSuggestion(
 
 export function threadRail(page: Page): Locator {
   return page.getByRole('complementary', { name: 'Thread rail' });
+}
+
+
+export async function confirmAccount(page: Page, email: string): Promise<void> {
+  await expect(page).toHaveURL(/\/verify-email(?:\?|$)/);
+  const verificationScreen = page.url();
+  await page.goto(await latestAccountMailUrl(email, 'verify'));
+  // Re-open the original screen to retain a deep-link/claim intent.
+  await page.goto(verificationScreen);
 }

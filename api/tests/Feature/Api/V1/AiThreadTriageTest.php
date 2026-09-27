@@ -17,7 +17,6 @@ use App\Services\AI\Agents\ThreadSummaryAgent;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -720,7 +719,7 @@ class AiThreadTriageTest extends TestCase
     {
         Queue::fake();
         [, , $thread] = $this->reviewedThread();
-        $stranger = app(RegistrationService::class)->register(
+        $stranger = $this->registerVerifiedUser(
             name: 'Stranger',
             email: 'stranger@example.com',
             password: 'correct-horse-battery',
@@ -757,7 +756,7 @@ class AiThreadTriageTest extends TestCase
             ->create(['created_by' => $author->id]);
         $thread = $this->threadOn($failed, $author, 'Orphaned conversation.');
 
-        $stranger = app(RegistrationService::class)->register(
+        $stranger = $this->registerVerifiedUser(
             name: 'Stranger',
             email: 'stranger@example.com',
             password: 'correct-horse-battery',
@@ -849,7 +848,7 @@ class AiThreadTriageTest extends TestCase
 
     private function author(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Author User',
             email: $email,
             password: 'correct-horse-battery',

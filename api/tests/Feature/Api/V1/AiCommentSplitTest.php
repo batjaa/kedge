@@ -16,7 +16,6 @@ use App\Services\AI\Agents\CommentSplitAgent;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -673,7 +672,7 @@ class AiCommentSplitTest extends TestCase
         Queue::fake();
         [, , $reply] = $this->splittableThread();
 
-        $stranger = app(RegistrationService::class)->register(
+        $stranger = $this->registerVerifiedUser(
             name: 'Stranger',
             email: 'stranger@example.com',
             password: 'correct-horse-battery',
@@ -856,7 +855,7 @@ class AiCommentSplitTest extends TestCase
         // When asked, the body carries the passage TWICE and the thread is
         // anchored to the second copy — the duplicate-text case.
         $body = $repeatPassage ? self::PASSAGE.' '.self::BODY : self::BODY;
-        $author = app(RegistrationService::class)->register(
+        $author = $this->registerVerifiedUser(
             name: 'Author User',
             email: 'author@example.com',
             password: 'correct-horse-battery',

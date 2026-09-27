@@ -11,8 +11,8 @@ import type { Session, ValidationErrorBody } from './auth-types';
 // Failure messages are API prose when the response body provides one (passed
 // through untranslated, SPEC m3.9 scope) and null otherwise — the consuming
 // component supplies the localized fallback from its catalog (#124).
-export type AuthOutcome =
-  | { ok: true; session: Session }
+export type AuthOutcome<T = Session> =
+  | { ok: true; session: T }
   | { ok: false; kind: 'validation'; message: string | null; errors: Record<string, string[]> }
   | { ok: false; kind: 'rate-limited'; message: string | null }
   | { ok: false; kind: 'error'; message: string | null };
@@ -30,38 +30,56 @@ function post(path: string, body?: Record<string, unknown>): Promise<Response> {
   });
 }
 
-async function mutate(
+async function mutate<T = Session>(
   path: string,
   body: Record<string, unknown>,
-): Promise<AuthOutcome> {
-  await ensureCsrfCookie();
-  let res = await post(path, body);
+): Promise<AuthOutcome<T>> {
+  try {
+    await ensureCsrfCookie();
+    let res = await post(path, body);
 
-  // 419 = stale/absent CSRF token. Refresh once and retry before giving up.
-  if (res.status === 419) {
-    await refreshCsrfCookie();
-    res = await post(path, body);
+    // 419 = stale/absent CSRF token. Refresh once and retry before giving up.
+    if (res.status === 419) {
+      await refreshCsrfCookie();
+      res = await post(path, body);
+    }
+
+    if (res.ok) {
+      return { ok: true, session: (await res.json()) as T };
+    }
+
+    if (res.status === 422) {
+      const data = (await res.json().catch(() => null)) as ValidationErrorBody | null;
+      return {
+        ok: false,
+        kind: 'validation',
+        message: data?.message ?? null,
+        errors: data?.errors ?? {},
+      };
+    }
+
+    if (res.status === 429) {
+      return { ok: false, kind: 'rate-limited', message: null };
+    }
+
+    return { ok: false, kind: 'error', message: null };
+  } catch {
+    return { ok: false, kind: 'error', message: null };
   }
+}
 
-  if (res.ok) {
-    return { ok: true, session: (await res.json()) as Session };
-  }
+export function requestPasswordReset(email: string) {
+  return mutate<{ message: string }>('/forgot-password', { email });
+}
 
-  if (res.status === 422) {
-    const data = (await res.json().catch(() => null)) as ValidationErrorBody | null;
-    return {
-      ok: false,
-      kind: 'validation',
-      message: data?.message ?? null,
-      errors: data?.errors ?? {},
-    };
-  }
+export function resetPassword(email: string, token: string, password: string, confirmation: string) {
+  return mutate<{ message: string }>('/reset-password', {
+    email, token, password, password_confirmation: confirmation,
+  });
+}
 
-  if (res.status === 429) {
-    return { ok: false, kind: 'rate-limited', message: null };
-  }
-
-  return { ok: false, kind: 'error', message: null };
+export function resendConfirmation() {
+  return mutate<{ message: string }>('/email/verification-notification', {});
 }
 
 export function signIn(email: string, password: string): Promise<AuthOutcome> {

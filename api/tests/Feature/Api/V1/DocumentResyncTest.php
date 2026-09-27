@@ -19,7 +19,6 @@ use App\Services\Fetch\GuardedFetcher;
 use App\Services\Import\Exceptions\ProjectionFailedException;
 use App\Services\Import\Exceptions\TokenRevokedException;
 use App\Services\Reanchor\Exceptions\ReanchorUnavailableException;
-use App\Services\RegistrationService;
 use App\Services\Resync\ResyncService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -782,7 +781,7 @@ class DocumentResyncTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

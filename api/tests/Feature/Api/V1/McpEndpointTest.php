@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Enums\CommentClient;
+use App\Http\Middleware\EnsureAccountVerified;
 use App\Http\Middleware\EnsureMcpEnabled;
 use App\Http\Middleware\RejectAgentTokenAuth;
 use App\Http\Middleware\RequireAgentTokenAuth;
@@ -13,7 +14,6 @@ use App\Models\DocumentVersion;
 use App\Models\Thread;
 use App\Models\User;
 use App\Services\Agents\AgentTokenService;
-use App\Services\RegistrationService;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\SubstituteBindings;
@@ -48,7 +48,7 @@ class McpEndpointTest extends TestCase
     {
         parent::setUp();
 
-        $this->operator = app(RegistrationService::class)->register(
+        $this->operator = $this->registerVerifiedUser(
             name: 'Agent Operator',
             email: 'operator@example.com',
             password: 'correct-horse-battery',
@@ -358,6 +358,7 @@ class McpEndpointTest extends TestCase
             Authenticate::class.':sanctum',
             ThrottleRequests::class.':mcp',
             SubstituteBindings::class,
+            EnsureAccountVerified::class,
             RequireAgentTokenAuth::class,
             ReorderJsonAccept::class,
             AddWwwAuthenticateHeader::class,

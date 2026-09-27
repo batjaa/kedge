@@ -9,7 +9,6 @@ use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\Fetch\DnsResolver;
 use App\Services\Fetch\HttpTransport;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\Support\Fetch\FakeDnsResolver;
@@ -397,7 +396,7 @@ class TrackedRepoPreviewTest extends TestCase
 
     private function registerUser(string $email = 'author@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Doc Author',
             email: $email,
             password: 'correct-horse-battery',

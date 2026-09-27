@@ -14,7 +14,6 @@ use App\Services\AI\Agents\ImprovePromptAgent;
 use App\Services\AI\AiFailureClassifier;
 use App\Services\AI\AiGeneratorRegistry;
 use App\Services\AI\AiRunLedger;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -742,7 +741,7 @@ class AiImprovePromptTest extends TestCase
 
     private function author(): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Author User',
             email: 'author@example.com',
             password: 'correct-horse-battery',

@@ -7,7 +7,6 @@ use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\Agents\AgentTokenService;
 use App\Services\AuditLogger;
-use App\Services\RegistrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use RuntimeException;
@@ -26,7 +25,7 @@ class AgentTokenTest extends TestCase
 
     private function member(string $email = 'operator@example.com'): User
     {
-        return app(RegistrationService::class)->register(
+        return $this->registerVerifiedUser(
             name: 'Agent Operator',
             email: $email,
             password: 'correct-horse-battery',

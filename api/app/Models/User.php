@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\WorkspaceRole;
+use App\Notifications\ResetAccountPassword;
+use App\Notifications\WelcomeEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,14 +19,22 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 #[Fillable(['name', 'email', 'avatar_url', 'github_id', 'password'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The workspaces the user is a member of.
-     */
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new WelcomeEmail);
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetAccountPassword($token));
+    }
+
+    /** The workspaces the user is a member of. */
     public function workspaces(): BelongsToMany
     {
         return $this->belongsToMany(Workspace::class, 'workspace_members')
