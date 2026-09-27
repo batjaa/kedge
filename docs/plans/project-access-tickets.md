@@ -5,12 +5,11 @@
 > Tracker: GitHub, native sub-issues and dependencies plus canonical Blocked by lines.
 > Spec: [M4.1](../specs/m4.1-project-access.md) · [Roadmap](../ROADMAP.md).
 
-The user explicitly switched from engineering review to ticketing after accepting
-17A. Issue 18 is unanswered; performance review is unfinished, and observability,
-deployment, long-term assessment and engineering UX review remain pending. The
-separate design review is also pending. This draft does not amend the spec or
-silently accept 18A. T01 resolves those gaps before new invitation surfaces land;
-already-agreed refactoring/verification slices can start independently.
+The user resumed engineering review before approving or publishing this draft.
+Decisions 1A–18A are now accepted; performance and later review sections remain
+unfinished. Ticket publishing is on hold. Reconcile this breakdown after review,
+including whether proposed T01 is still needed; do not start its proposed frontier
+as a substitute for completing the review.
 
 Numbers below are draft IDs, not GitHub issue numbers. Upon approval, create one
 module parent, then these children in order, using real identifiers for both native
@@ -34,7 +33,8 @@ implementation. Fixture-enabled demos may show a completed slice, but unintegrat
 project-only mutations fail closed and public enablement waits for T25. Existing
 independent workspace/Share grants retain their specified behavior. Maintain the
 workspace expansion seam without adding workspace invitation UI or a generic ACL.
-Issue 18’s optimization is an unresolved decision, not an acceptance criterion.
+18A requires bounded-page grant reads and response-only reuse, with fresh write/job
+authority; incorporate it in the access and read-projection slices.
 
 ## Dependency overview
 
@@ -81,10 +81,10 @@ Finish the remaining project-access review and make the implementation and rollo
 
 ### Acceptance criteria
 
-- [ ] Resolve unanswered engineering issue 18 without treating the recommended option as accepted; finish performance, observability, deployment, long-term and UX review.
+- [ ] Finish performance, observability, deployment, long-term and UX review; issue 18 is resolved as 18A. This proposed review ticket may be removed once the interactive review finishes.
 - [ ] Complete the design review for invitations, Members, Shared with you, role changes, source approval and access-loss states using the existing design language.
 - [ ] Record chosen query/lock budgets, operational signals, migration/rollback sequence, rollout controls and any changed dependencies; reconcile later ticket criteria before implementation.
-- [ ] Keep accepted decisions 1A–17A unless the user explicitly revises them; do not silently reduce scope.
+- [ ] Keep accepted decisions 1A–18A unless the user explicitly revises them; do not silently reduce scope.
 
 ### Blocked by
 
@@ -626,9 +626,9 @@ agents in parallel.
 | 15A one active content update | T19 |
 | 16A consolidate AI starts; refactor as needed | T02, T23 |
 | 17A required focused CI | T03; extended in every relevant slice |
-| Unanswered 18 and remaining review | T01; no inferred decision |
+| 18A batched request-local read facts; fresh writes/jobs | T11–T12 and each affected read/mutation slice |
+| Remaining review | In progress before ticket publishing; reconcile proposed T01 |
 
 Dependency edges are implementation prerequisites, not shared-directory warnings.
 There are no cycles; T25 transitively includes every implementation slice. Publishing
-and changing the roadmap to ticketed wait for granularity approval. The spec stays
-unchanged during this ticketing pass.
+and changing the roadmap to ticketed wait for granularity approval. Ticketing is paused while the active engineering review updates the spec.

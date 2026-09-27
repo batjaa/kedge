@@ -1,9 +1,8 @@
 # Project access — engineering review
 
-> Updated 2026-09-27 · Review interrupted for ticketing after decision 17A.
-> Architecture, error-map, security, interaction, code-quality and test checkpoints
-> recorded; performance issue 18 is unanswered, sections 8–11 remain pending.
-> This is not implementation or release approval.
+> Updated 2026-09-27 · Engineering review resumed; decisions 1A–18A accepted.
+> Performance review continues; sections 8–11 remain pending. Ticket publishing
+> is on hold. This is not implementation or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
 ## Review progress
@@ -17,7 +16,7 @@
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
 | 5. Code quality | One finding resolved through decision 16A; checkpoint below |
 | 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 28 planned coverage gaps |
-| 7. Performance | Issue 18 unanswered; carried into draft ticket T01 |
+| 7. Performance | 18A accepted; remaining performance checks in progress |
 | 8. Observability | Pending |
 | 9. Deployment and rollout | Pending |
 | 10. Long-term trajectory | Pending |
@@ -616,6 +615,38 @@ The execution-harness choice is now 17A. The map includes a failure registry for
 all 18 code-path groups. These tests remain implementation requirements; no
 application tests have been run or new test coverage implemented in this review.
 
+## Performance findings and accepted decisions
+
+### Issue 18 — repeated grant queries and safe request-local reuse: 18A
+
+**P2, confidence 8/10.** The existing membership helper at
+`api/app/Policies/Concerns/AuthorizesWorkspaceMembership.php:52` executes
+`&& $user->workspaces()->whereKey($workspaceId)->exists();` on each call.
+`api/app/Http/Resources/V1/DocumentResource.php:64,69` invokes separate
+`can('updateLifecycle', ...)` and `can('updateContent', ...)` projections.
+The planned paginated project list includes effective capabilities, so reusing
+that per-call query pattern risks multiplying grant queries by rows and actions;
+this is an inspected design risk, not a measured M4.1 production slowdown.
+
+**Accepted:** bulk-load grants for the bounded page and reuse read facts only
+inside the current actor/credential/access-surface/resource context. Follow the
+existing request-attribute pattern in `ThreadCapabilities::for()` without treating
+its current key as sufficient for every credential/surface. Policies and query
+scopes retain the same capability rules. No cross-request cache, unbounded grant
+collection, or worker-lifetime reuse. This uses ordinary explicit Eloquent bulk/
+eager loading; see the [Laravel relationship guidance](https://laravel.com/framework/docs/eloquent-relationships#eager-loading).
+
+The coordinator and queued checkpoints always reload current authority; response
+facts cannot authorize a later mutation. Invalidate/bypass them after in-request
+changes. Every new asset request resolves current access. Query-count tests cover
+small/full pages and repeated projections; separate actor/credential/share contexts
+must not bleed, and removal/downgrade/move must be visible on the next request and
+at write/job checkpoints even when prior read facts were warmed.
+
+Performance review remains open for lock contention, memory, indexes, background
+work sizing, estimated slow paths and connection pressure. No latency measurement
+or performance test has been run during this planning review.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -905,6 +936,14 @@ are illustrative; match repository conventions during implementation.
     prerequisites fail clearly; fixtures/processes are isolated and cleaned up;
     safe diagnostics persist on failure; the required check blocks merge/release.
 
+- [ ] **T17 (P2)** — Authorization reads — batch bounded-page grants and scope response reuse.
+  - Surfaced by: issue 18 / decision 18A.
+  - Files: shared capability resolver/query scopes, affected Policies and API
+    resources/controllers, authorization/project-list/concurrency feature tests.
+  - Verify: small/full-page grant query counts do not grow per row/capability;
+    actor/credential/surface contexts remain isolated; writes/jobs and later
+    requests observe grant/placement changes despite warmed read facts.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -923,12 +962,12 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-On 2026-09-27 the user switched to `$to-tickets` after accepting 17A. Issue 18
-(request-local, batched grant reads) remains unanswered; neither option is accepted.
-Performance, observability, rollout, long-term assessment and UX have not completed
-review. The separate design review is also pending.
+The user resumed engineering review before publishing tickets and accepted 18A
+on 2026-09-27. All presented decisions through 18 are resolved. Performance,
+observability, rollout, long-term assessment and UX review remain unfinished;
+the separate design review is also pending.
 
-[Draft ticket T01](project-access-tickets.md) carries those reviews forward before
-new invitation surfaces land; already-agreed prefactors can start independently.
-Ticketing does not mark this review complete. Potential follow-up TODOs must still
-be presented individually before being deferred.
+The [ticket breakdown](project-access-tickets.md) is an unpublished draft and must
+be reconciled after review before granularity approval. Do not treat its proposed
+T01 review ticket as a substitute for finishing this interactive review. Potential
+follow-up TODOs must still be presented individually before being deferred.
