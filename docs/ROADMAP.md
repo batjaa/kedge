@@ -53,13 +53,15 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Project access — engineering/design review pending.** The spec uses Viewer / Reviewer / Maintainer and explicitly labels the remaining choices as draft defaults, not separately confirmed user decisions. Review source/AI authority, grant revocation, invitation lifecycle, and the acceptance/member flows. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
+**Project access — engineering/design review pending.** Viewer / Reviewer / Maintainer and Reviewer as the invitation default are confirmed (2026-09-26). Next input: whether Maintainers may administer peer Maintainer seats. Detailed source/AI authority, grant revocation, invitation lifecycle, and the acceptance/member flows remain for review. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
 
 1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
 3. **Domains, org & trademark** (P1, user actions) — register kedge.review/kedge.ink, create the kedgehq org, USPTO/EUIPO search. Gates **Launch**. (TODOS.md)
 
 ## Decisions so far
+
+- **Project roles confirmed (2026-09-26)** — Viewer, Reviewer, and Maintainer; Reviewer is the default invitation role. Detailed Maintainer powers remain under discussion. [Module spec](specs/m4.1-project-access.md).
 
 - **Project access pulled forward; workspace management follows later** — user direction, 2026-09-26. Invitation grants only the project; preserve an expansion path to workspace membership. [Module spec](specs/m4.1-project-access.md) synthesizes draft role/action defaults; testing uses agreed PHPUnit API features, Playwright journeys, database concurrency checks, and a real-mail deployment smoke test.
 - **Approach B′, moat-first milestone order** — CEO plan review, TODOS.md decision log 2026-07-01.

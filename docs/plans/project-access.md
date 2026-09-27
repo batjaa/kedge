@@ -4,7 +4,8 @@
 > This brief preserves the original planning recommendations. The module spec
 > supplies draft defaults for its open choices and the user-agreed testing seams;
 > engineering/design review is pending. The recommendations were not separately
-> confirmed by the user.
+> confirmed by the user at drafting. Update 2026-09-26: all three roles and
+> Reviewer as the invitation default are now confirmed; remaining choices are open.
 
 ## Destination
 
@@ -143,8 +144,8 @@ revocation while an independent document share still grants access.
 
 ## Remaining decisions, in order
 
-1. **Role set** — Viewer / Reviewer / Maintainer is recommended; alternatives
-   are Reviewer / Maintainer or one full collaborator role.
+1. **Role set — resolved 2026-09-26:** Viewer / Reviewer / Maintainer confirmed
+   by the user, with Reviewer as the default invitation role.
 2. **Maintainer authority** — exact document/moderation/invitation actions;
    whether maintainers may appoint peers. Recommend owner-only changes to
    Maintainer seats and owner-only cross-project moves initially.
