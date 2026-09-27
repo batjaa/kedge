@@ -12,7 +12,7 @@
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
-| 3. Security and threat model | In progress; no new decisions recorded yet |
+| 3. Security and threat model | In progress; decision 8A accepted |
 | 4. Data flow and interaction edge cases | Pending |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
@@ -238,6 +238,34 @@ stop
 @enduml
 ```
 
+## Security findings and accepted decisions
+
+### Issue 8 — invitation tokens in request metadata: 8A
+
+**P1, confidence 9/10.** The planned API embeds the token in the request path.
+When optional Nightwatch is enabled,
+`api/vendor/laravel/nightwatch/src/Sensors/RequestSensor.php:89` builds the full
+path/query URL and line 120 emits `'url' => $record->url`.
+`api/config/nightwatch.php:12–14` configures payload/header redaction, which does
+not itself redact URL segments. `web/lib/auth-redirect.ts:8` puts the destination
+in `next` through `encodeURIComponent(safeAuthNext(next))`. The new flow must
+explicitly protect those surfaces; this is not a claim that project invitations
+already exist or have leaked in production.
+
+**Accepted:** retain only allowlisted request diagnostics such as route template,
+status, timing, and correlation ID. Strip secrets before capture across web/API,
+token-bearing auth return paths (including nested destinations), headers, and
+deployed proxy logs. Include no-referrer, no-store, and no-indexing controls on
+invitation/token-bearing auth-return responses, including errors. Nightwatch
+remains optional; self-hosted protections cannot depend on it.
+
+`web/app/(auth)/reset-password/page.tsx:4` already sets
+`referrer: 'no-referrer'`. The same protection principle is supported by
+[OWASP's emailed-token guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html#url-tokens).
+Apply that principle to invitations while preserving their separate verified
+account requirement. Verify synthetic token absence from logs/telemetry/referrers
+and retain enough safe diagnostics to investigate failures.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -399,6 +427,14 @@ are illustrative; match repository conventions during implementation.
     prevents later path processing and child dispatch; unexpected DB/programming
     failures stop/report without false success; prior content and replacements
     survive; inaccessible moved documents remain redacted skips.
+- [ ] **T7 (P1)** — Invitation secrets — protect browser and diagnostic surfaces.
+  - Surfaced by: issue 8 / decision 8A.
+  - Files: invitation/auth-return pages, `web/next.config.mjs`, web/API logging
+    boundaries, optional telemetry integration, proxy configuration/docs.
+  - Verify: synthetic direct/encoded/nested invitation tokens never appear in
+    request/error logs, telemetry, or browser referrers; safe diagnostics remain;
+    success/error responses enforce no-referrer/no-store/no-indexing; protection
+    works with Nightwatch disabled; deployment smoke inspects proxy logging.
 
 ## NOT in scope
 
