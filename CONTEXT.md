@@ -14,8 +14,8 @@ credential, and audit record belongs to exactly one.
 _Avoid_: team, org, account
 
 **Project**:
-An organizational container inside a workspace that documents attach to
-(post-v1). A project is what you're working on, not where content lives — it
+An organizational container inside a workspace that documents attach to.
+A project is what you're working on, not where content lives — it
 can mix documents from many sources, and one repo can feed many projects.
 _Avoid_: repo (a repo is a Source), folder, collection
 
@@ -67,6 +67,16 @@ pipeline defines what a document *is* for both reading and anchoring.
 _Avoid_: plain text (ambiguous), extraction
 
 ### Access & review
+
+**Project Member**:
+A person granted access to a project and its documents, within an assigned
+role. Project membership alone grants no access to the rest of its workspace.
+_Avoid_: workspace member, Share Participant
+
+**Invitation**:
+An offer to a named recipient to join a project or workspace in an assigned
+role. An invitation grants membership only when accepted by that recipient.
+_Avoid_: Share, magic link
 
 **Integration**:
 A workspace's stored credential for a private source (today: a GitHub PAT).

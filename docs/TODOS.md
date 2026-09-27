@@ -2,6 +2,12 @@
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
+## Decision log (project access planning, 2026-09-26)
+
+- ✅ **Project access pulled forward from post-v1** at the user's request: invite someone to a project, without access to the rest of its workspace. Workspace membership management follows later; the project design must accommodate that expansion. SPEC §10.1/§11/§21 and ROADMAP amended; glossary distinguishes Project Member from a Share Participant.
+- [ ] **Project access (M4.1, M/L) — deciding.** [Planning brief](plans/project-access.md) captures the destination, shipped constraints, proposed flows, workspace expansion path, and verification seams. First decision: Viewer / Reviewer / Maintainer role set. Maintainer/source authority, AI/agent access, removal/share interactions, and invitation lifecycle remain open. No implementation spec or tickets yet.
+- **Implementation hazards found during planning:** personal-workspace scoping in project/document/source controllers and the project page; authorship-based permissions surviving membership loss; workspace credentials used for private-source imports; AI/MCP permissions tied to workspace membership. All must be handled explicitly before invitations ship.
+
 ## Decision log (empty repository imports, 2026-09-26)
 
 - ✅ GitHub's `409` with `Git Repository is empty.` now produces `empty_repository` in both preview and scan, with guidance to push an initial commit. An explicitly entered branch gets the same recovery: a branch 404 triggers a non-recursive HEAD probe to confirm emptiness. Unconfirmed failures retain the original branch error; zero matching documents in a valid tree remains a successful preview. This avoids asking users with working credentials to reconnect GitHub.
