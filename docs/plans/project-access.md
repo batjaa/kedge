@@ -8,7 +8,9 @@
 > Reviewer as the invitation default are now confirmed. Membership administration
 > is also confirmed: Maintainers manage Viewers/Reviewers, only the owner manages
 > Maintainer seats, and members may leave. Source management is confirmed within
-> owner-approved private repositories. Remaining choices are open.
+> owner-approved private repositories. AI access is confirmed: Reviewers use Ask/
+> reply drafts, Maintainers use all existing tools, and Viewers read shared results
+> only; personal questions/drafts stay private. Remaining choices are open.
 
 ## Destination
 
@@ -160,10 +162,11 @@ revocation while an independent document share still grants access.
    credentials and approvals remain owner-controlled. Public fetches use no
    credential fallback. This replaces the original owner-only source-setup
    recommendation at the user's request for greater Maintainer access.
-4. **AI and agents** — decide whether project roles can read shared AI artifacts
-   or spend the owner's AI budget. Keep per-actor drafts private. Recommend
-   leaving new project-scoped MCP tokens for later and preserving all existing
-   token scope checks; inviting a human grants no new agent authority.
+4. **AI access — resolved 2026-09-26:** Reviewers can generate Ask answers and
+   reply drafts; Maintainers can use all existing AI tools; Viewers read shared
+   results but do not generate. Personal questions/drafts remain private. Costs
+   use the owning workspace's provider under existing limits. New project-scoped
+   MCP tokens remain deferred; human invitations grant no new agent authority.
 5. **Grant interactions** — approve the removal/authorship rule, document move
    semantics, and how independent share access is explained to the owner.
 6. **Invitation lifecycle** — recommend seven-day expiry, one pending invitation
