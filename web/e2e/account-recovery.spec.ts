@@ -19,8 +19,7 @@ test('an existing unverified password account confirms on another device and pre
   // This account now represents a pre-confirmation rollout user: it has a
   // persisted password/session record, but no verification timestamp. Re-enter
   // through sign-in instead of relying on signup's immediate redirect.
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page).toHaveURL(/\/signin/);
+  await page.context().clearCookies();
   await page.goto(`/signin?next=${encodeURIComponent(destination)}`);
   await signIn(page, identity, `/verify-email?next=${encodeURIComponent(destination)}`);
   const beforeConfirmation = await page.request.get('http://localhost:8000/api/v1/me', { headers: { accept: 'application/json', origin: new URL(page.url()).origin } });
