@@ -12,7 +12,7 @@
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
-| 3. Security and threat model | In progress; decisions 8A–9A accepted |
+| 3. Security and threat model | In progress; decisions 8A–10A accepted |
 | 4. Data flow and interaction edge cases | Pending |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
@@ -286,6 +286,31 @@ Imported content/history remain subject to normal project permissions; a later
 transfer back cannot revive an already-invalidated grant or queued operation.
 This introduces an intentional recovery step when control of the source changes.
 
+### Issue 10 — credential forwarding through redirects: 10A
+
+**P1, confidence 10/10.**
+`api/app/Services/Import/Connectors/GithubPatConnector.php:52` returns
+`['Authorization' => 'Bearer '.$this->token($source)]`.
+`GuardedFetcher.php:70–78` passes the same `$headers` on each redirect hop, and
+line 143 passes them into `PinnedRequest` unchanged. `CurlHttpTransport.php:44`
+uses `$client->withHeaders($request->headers)` before sending the request.
+`GuardedFetcherTest.php:169–182` explicitly permits an ordinary redirect to a
+different public host. The forwarding path is verified; no actual credential
+exposure was observed during this review.
+
+**Accepted:** authenticated repository requests reject a changed scheme, host,
+or effective port before contacting that destination. Same-origin redirects must
+still satisfy approved repository/owner identity. Keep credential-free public
+redirects and the current SSRF/DNS/size/timeout defenses. Apply to discovery and
+document fetches, including multi-hop chains. This chooses a simple credential
+boundary over adding connector-specific anonymous download redirects.
+[HTTP redirect guidance](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.4)
+also calls out the security implications of forwarding sensitive headers.
+
+**CRITICAL regression requirement:** test host/port/scheme changes and later-hop
+origin changes, asserting no request or credential reaches the rejected target;
+retain public-redirect coverage and reject same-origin repository substitution.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -463,6 +488,13 @@ are illustrative; match repository conventions during implementation.
     fails; changed owner ID stops delegated work until explicit reapproval;
     queued work and transfer-back cannot revive the invalidated approval;
     imported content/history remain readable under normal project grants.
+- [ ] **T9 (P1)** — Source credentials — reject authenticated cross-origin redirects.
+  - Surfaced by: issue 10 / decision 10A.
+  - Files: `GuardedFetcher`, `GithubPatConnector`, `GithubRepoClient`, relevant
+    fetch/domain failure handling, `GuardedFetcherTest`, `GithubPatConnectorTest`.
+  - Verify: critical regression tests for changed host/port/scheme and multi-hop
+    redirects; rejected destinations receive no request or credentials; approved
+    same-origin identity handling and credential-free public redirects still work.
 
 ## NOT in scope
 
