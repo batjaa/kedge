@@ -12,7 +12,7 @@ images, and backup/upgrade guides.
 Single origin. Caddy (`proxy/`) routes on one domain:
 
 - `/api/bff/*` → **web** (Next.js route handlers — must not hit Laravel)
-- `/api/*`, `/sanctum/*`, `/auth/*`, `/login`, `/logout`, `/register`, `/up`, `/storage/*` → **api**
+- `/api/*`, `/sanctum/*`, `/auth/*`, `/email/*`, `/login`, `/logout`, `/register`, `/up`, `/storage/*` → **api**
 - everything else → **web**
 
 Same-origin cookies, zero CORS configuration — the third topology worked
@@ -38,11 +38,28 @@ starts); set it and the api entrypoint runs the agent in-container on
 Requests and commands default to 10% sampling; exceptions and scheduled tasks
 remain at the Nightwatch default of 100%.
 
+## Email-confirmation release check
+
+Before declaring an email-confirmation release healthy, an operator must check
+the deployed proxy revision and the sanitized effective API origin settings
+(`APP_URL` and `FRONTEND_URL`), then use a real pre-existing unverified password
+account. Confirm that its original session is blocked from protected resources,
+that resend reaches Laravel and is consumed by the running worker, and that the
+received HTTPS confirmation link returns to the web confirmation screen. After
+confirmation in a second browser, refresh the original session and sign in in a
+fresh browser; both must enter the originally requested app destination. Record
+only revisions and outcomes — never cookies, addresses, keys, or signed links.
+
+`MAIL_MAILER=log` and a synchronous test queue prove neither transport delivery
+nor proxy routing. Production needs a configured transport, a live worker, and
+the check above after every proxy/auth rollout.
+
 ## Known preview-grade shortcuts (revisit at M7)
 
 - `php artisan serve` as the app server (fine for a preview; M7 uses FrankenPHP).
-- No TrustProxies configuration in api source; `SESSION_SECURE_COOKIE=true` is
-  set explicitly instead. TLS terminates upstream (SWAG → Coolify proxy).
+- TLS terminates upstream (SWAG → Coolify proxy). Laravel trusts forwarded
+  scheme/port (but not forwarded host) so signed URLs retain the public HTTPS
+  origin; `SESSION_SECURE_COOKIE=true` is set explicitly as well.
 - Single-stage web image (no standalone output pruning).
 - No Kroki container yet — lands with the M1 diagram ticket, add it here then.
 - Nightwatch agent runs inside the api container (entrypoint backgrounds it
