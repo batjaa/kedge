@@ -1,8 +1,10 @@
 # Project access — planning brief
 
-> 2026-09-26 · Status: deciding · Roadmap module: Project access (M4.1).
-> This is a planning brief, not an implementation spec. Only the destination is
-> confirmed; the recommendations below remain proposals until resolved.
+> 2026-09-26 · Status: synthesized into the [module spec](../specs/m4.1-project-access.md).
+> This brief preserves the original planning recommendations. The module spec
+> supplies draft defaults for its open choices and the user-agreed testing seams;
+> engineering/design review is pending. The recommendations were not separately
+> confirmed by the user.
 
 ## Destination
 

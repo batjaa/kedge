@@ -24,7 +24,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | done (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
-| Project access | M/L | Projects & tracked repos · Comments & suggestions · Versions, diff & approvals | deciding | — ([planning brief](plans/project-access.md)) |
+| Project access | L | Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | specced (review pending) | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
 | Self-host distribution | M | everything above | deciding | — |
@@ -43,7 +43,7 @@ Gists (full scope + demo criteria: SPEC §21):
 - **Web i18n** (M3.9, wedge 2026-07-23) — en-US · es-US · mn-MN · de-DE via next-intl without locale routing (strict-allowlist cookie + negotiation, en-US merge fallback); mn-MN display font falls back to the system stack (no Cyrillic in Space Grotesk); chip strings as a constrained glossary; document content never translated. Runs after M3.10 so the glossary snapshots stable strings.
 - **Source provenance** (M3.10, wedge 2026-07-24) — read-only provenance chips on every row (repo path · owner/repo + path · host · pasted) derived server-side from stored columns; project pages group repo-sourced docs under their tracked repo, path-ordered with directory dividers (flattened tree — projects stay the only user-managed hierarchy, wikis/folders non-goal intact); `tracked_repo` filter + `order=path` on the shared list query. Group-by-source toggle deferred.
 - **AI & agents** (M4) — digest, improve-prompt, reply drafts, comment split, thread summaries, `ai_runs` UI; MCP server with agent badges.
-- **Project access** (M4.1, planned 2026-09-26) — invite by email, accept into a project, discover and review its documents within a role, manage pending invitations/members, and remove access. No implicit workspace membership; designed for later workspace invitations. [Scope, recommendations, and open decisions](plans/project-access.md).
+- **Project access** (M4.1, specced 2026-09-26) — invite by email, accept into a project, discover and review its documents within a role, manage pending invitations/members, and remove access. No implicit workspace membership; designed for later workspace invitations. [Module spec and draft defaults for review](specs/m4.1-project-access.md).
 - **Notifications & review queue** (M5) — in-app inbox, Postmark email, mentions, digest scheduling, per-user prefs, review-queue dashboard.
 - **Private sources & post-back** (M6) — GitHub App with push-webhook auto re-sync, Confluence import via API token, digest post-back to PR/Confluence.
 - **Self-host distribution** (M7) — `deploy/` compose + Caddy single-origin, tagged images, migrate-on-boot, telemetry ping + opt-out, backup/upgrade/self-hosting guides, public-repo hygiene (CONTRIBUTING, SECURITY.md).
@@ -53,7 +53,7 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Project access — role set** is the current decision: Viewer / Reviewer / Maintainer recommended. Then resolve maintainer/source authority, AI/agent access, grant interactions, and invitation lifecycle before `$to-spec`. [Decision sequence](plans/project-access.md#remaining-decisions-in-order).
+**Project access — engineering/design review pending.** The spec uses Viewer / Reviewer / Maintainer and explicitly labels the remaining choices as draft defaults, not separately confirmed user decisions. Review source/AI authority, grant revocation, invitation lifecycle, and the acceptance/member flows. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
 
 1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
@@ -61,7 +61,7 @@ Work these one per session (`/wayfinder` work mode):
 
 ## Decisions so far
 
-- **Project access pulled forward; workspace management follows later** — user direction, 2026-09-26. Invitation grants only the project; preserve an expansion path to workspace membership. Roles and implementation remain proposed. [Planning brief](plans/project-access.md).
+- **Project access pulled forward; workspace management follows later** — user direction, 2026-09-26. Invitation grants only the project; preserve an expansion path to workspace membership. [Module spec](specs/m4.1-project-access.md) synthesizes draft role/action defaults; testing uses agreed PHPUnit API features, Playwright journeys, database concurrency checks, and a real-mail deployment smoke test.
 - **Approach B′, moat-first milestone order** — CEO plan review, TODOS.md decision log 2026-07-01.
 - **Seven v1 expansions** (MCP server, approvals lite, suggested edits, digest post-back, instant demo mode, diff view + comment overlay, review queue) — SPEC.md Rev 2.
 - **Self-hostable distribution** (AGPL-3.0, full parity, compose reference; Fumadocs replaces Protocol code; PAT permanent; Nova optional) — SPEC.md Rev 3, TODOS.md 2026-07-01.
