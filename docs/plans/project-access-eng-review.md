@@ -13,7 +13,7 @@
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
 | 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
-| 4. Data flow and interaction edge cases | In progress; decision 13A accepted |
+| 4. Data flow and interaction edge cases | In progress; decisions 13A–14A accepted |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
 | 7. Performance | Pending |
@@ -42,7 +42,7 @@ API/web/worker/scheduler deployment paths carry this feature.
 |---|---|
 | Laravel Policies and workspace authorization concerns | Add project capabilities and matching query scopes; retain credential restrictions |
 | Registration, mailbox verification, reviewer upgrade, safe auth return flows | Reuse for invited verified-account acceptance |
-| Encrypted queued auth notifications and after-commit dispatch | Reuse transport and encryption for invitation delivery |
+| Encrypted queued auth notifications and database queue | Reuse transport/encryption; 14A persists invitation jobs atomically instead of copying auth mail's after-commit dispatch |
 | Document shares and share-reviewer identity | Keep as independent document access |
 | MCP token revalidation inside write transactions | Compose with the shared mutation coordinator |
 | Import, re-sync, scan, AI run and audit services | Add authority and operation checks around their existing behavior |
@@ -187,7 +187,7 @@ resolved by 6A and 7A. Detailed assertions and test coverage remain section 6 wo
 | Invitation preview | Invalid, expired, revoked or replaced token | Typed invalid/inactive outcome, not an infrastructure exception | Uniform invalid response or permitted recognized recovery state; no grant | Invalid/gone page |
 | Acceptance identity | Wrong email or reviewer identity lacks fresh verification | Typed identity/verification outcome | Keep membership unchanged; reuse account switch/upgrade/verification | Correct-account guidance |
 | Acceptance transaction | Expiry/revoke races, replay, inviter lost authority | Typed inactive/conflict outcome; expected unique-key race | Atomic checks; accepted replay returns existing membership, removed replay never recreates it | Existing destination, 409 or recognized 410 |
-| Invitation queue dispatch | Database queue unavailable after invitation commit | `QueryException` / configured queue transport exception | Preserve recoverable invitation; report delivery failure when storage is available | Saved invitation with delivery recovery |
+| Invitation queue handoff | Job insert fails, configuration differs, process dies around commit | `QueryException`, explicit configuration failure, or no exception on hard kill | 14A: same-transaction encrypted queue insert; rollback issue/resend on failure; committed job survives caller loss | Failed save or committed queued invitation; previous generation survives failed resend |
 | Invitation mail send | Known transport failure or uncertain acceptance | Symfony `TransportException` family; crash has no exception | Bounded same-generation retry, then explicit failure; no expiry extension | Failed/resend, with may-have-arrived copy when uncertain |
 | Invitation stale delivery | Resend/revoke/expiry/authority loss wins | Typed stale-generation/inactive outcome | Skip send or obsolete status write; cannot recall an already-sent message | Current invitation state |
 | Member/role/move mutation | Permission/resource placement changed mid-request | `AuthorizationException` or typed conflict | Coordinator reauthorizes; roll back forbidden mutation | 403/404/409 under visibility rules |
@@ -422,6 +422,39 @@ document moves away/back; no stale mutation/dispatch; preserved 403/404 behavior
 two concurrent requests with the same revision; two browser contexts with refresh
 and explicit retry; uncertain response followed by current-state recovery.
 
+### Issue 14 — crash between invitation commit and delivery enqueue: 14A
+
+**P1, confidence 9/10 for the planned failure window.** Before this decision,
+`docs/specs/m4.1-project-access.md:365` said
+`Queue mail after the invitation transaction commits`. A process death after
+commit but before enqueue leaves no job for normal retries. Framework source
+`api/vendor/laravel/framework/src/Illuminate/Queue/Queue.php:370` registers an
+in-memory transaction callback via `addCallback`, while
+`DatabaseQueue.php:344` inserts a job through `$this->database->table($this->table)`.
+`api/config/queue.php` already defaults to the database driver, with a configurable
+database connection. This is a plan gap supported by source, not a reproduced
+production incident.
+
+**Accepted:** invitation issue/resend, required audit, and encrypted job insertion
+share the same application database connection and transaction. Workers see only
+committed work; a rollback removes the new generation/job, and a process dying
+after commit leaves a durable job. Failed resend preserves the old generation.
+Validate configuration and refuse mismatched/synchronous invitation queue paths;
+do not assume `beforeCommit()` alone proves shared-transaction behavior. Preserve
+other jobs' dispatch rules and configured Laravel mail transports. No new outbox
+platform is required; 6A retry and secret-protection rules still apply.
+
+[Laravel's queue transaction guidance](https://github.com/laravel/docs/blob/13.x/queues.md#jobs-and-database-transactions)
+distinguishes immediate from deferred dispatch. The same-connection transactional
+handoff is the chosen application design and must be proved against both supported
+databases; it is not a blanket guarantee for all queue drivers.
+
+**Required coverage:** real encrypted database jobs, independent worker visibility,
+rollback and job-insert failure, failed resend preserving old state, and process
+loss before/after commit with worker recovery. Exercise PostgreSQL and file-backed
+SQLite, reject incompatible configuration, and run invitation browser journeys
+with an asynchronous worker rather than a queue fake/synchronous substitute.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -438,7 +471,7 @@ component "Policies + capability resolver\nand matching query scopes" as Access
 component "Existing domain services" as Services
 component "Shared mutation coordinator" as Guard
 database "Existing database\n+ memberships, invitations, approvals\n+ operation generations" as DB
-queue "Existing work queue" as Queue
+queue "Existing work queue\nInvitation jobs use application DB" as Queue
 component "Existing workers" as Workers
 cloud "Mail / sources / AI" as External
 component "Existing scheduler\n+ bounded operation cleanup" as Cleanup
@@ -448,8 +481,9 @@ Routes --> Services : validated action
 Services --> Guard : protected mutation
 Guard --> Access : revalidate live authority
 Guard --> DB : lock + conditional commit
-Services --> Queue : dispatch after commit
-Queue --> Workers
+Services --> Queue : other work: existing dispatch rules
+Guard --> Queue : invitation + encrypted job in same DB transaction
+Queue --> Workers : committed jobs only
 Workers --> Access : check before external work
 Workers --> External : outside DB transaction
 Workers --> Guard : commit current operation result
@@ -482,8 +516,12 @@ if (Existing member or conflicting current invitation?) then (yes)
   :Return existing/conflict state; no promotion or duplicate mail;
   stop
 endif
-:Persist pending token generation and audit;
-:Queue encrypted mail after commit;
+:Persist token generation, audit and encrypted job\nin the same database transaction;
+if (Transaction commits?) then (no)
+  :Roll back new generation and job; preserve prior invitation;
+  stop
+endif
+:Worker reads committed job and rechecks authority/generation;
 if (Delivery fails?) then (yes)
   :Expose delivery failure and authorized resend;
   stop
@@ -516,7 +554,7 @@ or replace the exception-level failure registry due in sections 2 and 6.
 
 | Path | Production failure | Agreed protection |
 |---|---|---|
-| Invitation issue/resend | Commit succeeds, delivery fails | Separate delivery status, visible failure, authorized token-rotating resend |
+| Invitation issue/resend | Caller dies around commit or transport fails later | Atomic encrypted job handoff; rollback preserves prior generation; committed delivery uses 6A retries and failure recovery |
 | Invitation acceptance | Revoke races acceptance | Shared transaction boundary; one membership, live inviter/token checks |
 | Discovery and direct reads | Foreign project appears in counts or lists | Matching query scopes, explicit project authorization and minimized resources |
 | Member changes and review writes | Request retains a removed grant | Coordinator revalidation and serialization through commit |
@@ -639,6 +677,17 @@ are illustrative; match repository conventions during implementation.
     targets cannot match stale state; stale actions cause no side effects;
     authorization/discovery boundaries remain intact; UI refreshes and requires
     explicit retry, including after an ambiguous network outcome.
+
+- [ ] **T13 (P1)** — Invitation delivery — persist an atomic encrypted queue handoff.
+  - Surfaced by: issue 14 / decision 14A.
+  - Files: invitation issue/resend service, encrypted delivery job, queue config
+    validation, shared transaction coordinator integration, deployment/worker
+    docs, real database-queue tests and asynchronous invitation browser setup.
+  - Verify: invitation/audit/job share a connection and transaction; workers see
+    no uncommitted work; rollback and job-insert failure leave no new generation;
+    failed resend preserves previous state; committed jobs survive caller loss;
+    ciphertext payloads and 6A retry behavior remain intact. Test PostgreSQL and
+    file-backed SQLite; incompatible queue settings fail explicitly.
 
 ## NOT in scope
 
