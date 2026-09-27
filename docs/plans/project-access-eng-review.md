@@ -12,7 +12,7 @@
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
-| 3. Security and threat model | In progress; decision 8A accepted |
+| 3. Security and threat model | In progress; decisions 8A–9A accepted |
 | 4. Data flow and interaction edge cases | Pending |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
@@ -266,6 +266,26 @@ Apply that principle to invitations while preserving their separate verified
 account requirement. Verify synthetic token absence from logs/telemetry/referrers
 and retain enough safe diagnostics to investigate failures.
 
+### Issue 9 — repository identity and transfer: 9A
+
+**P1, confidence 9/10.** The module's canonical-identity requirement did not yet
+define rename/transfer policy. `api/app/Services/TrackedRepos/RepoRef.php:53`
+identifies the repository as `return "{$this->owner}/{$this->repo}";`.
+`GithubRepoClient.php:41–48` reads repository metadata but returns only the default
+branch. GitHub documents redirects after
+[renames](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
+and [transfers](https://docs.github.com/en/repositories/creating-and-managing-repositories/transferring-a-repository),
+and explains that another repository at the original location can replace the
+redirect. Therefore a URL alone is insufficient evidence of the approved identity.
+
+**Accepted:** bind approval to GitHub repository ID and owner ID. Matching-ID
+renames continue; replacement repositories do not inherit grants. A different
+owner ID requires explicit Kedge workspace-owner reapproval before delegated
+credentialed work resumes. Apply to preview and all source/descendant jobs.
+Imported content/history remain subject to normal project permissions; a later
+transfer back cannot revive an already-invalidated grant or queued operation.
+This introduces an intentional recovery step when control of the source changes.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -435,6 +455,14 @@ are illustrative; match repository conventions during implementation.
     request/error logs, telemetry, or browser referrers; safe diagnostics remain;
     success/error responses enforce no-referrer/no-store/no-indexing; protection
     works with Nightwatch disabled; deployment smoke inspects proxy logging.
+- [ ] **T8 (P1)** — Repository approvals — bind identity and require transfer reapproval.
+  - Surfaced by: issue 9 / decision 9A.
+  - Files: planned Repository Approval persistence/service, `GithubRepoClient`,
+    source connectors, preview/scan/import/re-sync authorization and owner UI.
+  - Verify: matching repository/owner IDs survive rename; old-URL replacement
+    fails; changed owner ID stops delegated work until explicit reapproval;
+    queued work and transfer-back cannot revive the invalidated approval;
+    imported content/history remain readable under normal project grants.
 
 ## NOT in scope
 
