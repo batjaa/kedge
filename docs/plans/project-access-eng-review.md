@@ -1,8 +1,8 @@
 # Project access — engineering review
 
 > Updated 2026-09-27 · In progress. Architecture and error-map checkpoints recorded;
-> security and interaction checkpoints recorded; code-quality review started,
-> sections 6–11 remain pending. This is not implementation
+> security, interaction and code-quality checkpoints recorded; test review started,
+> sections 7–11 remain pending. This is not implementation
 > or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
@@ -15,8 +15,8 @@
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
 | 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
-| 5. Code quality | In progress |
-| 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
+| 5. Code quality | One finding resolved through decision 16A; checkpoint below |
+| 6. Tests and coverage diagram | In progress; [coverage map](project-access-test-map.md) diagrams 18 code and 10 journey groups, all planned gaps |
 | 7. Performance | Pending |
 | 8. Observability | Pending |
 | 9. Deployment and rollout | Pending |
@@ -534,6 +534,62 @@ No interaction decision presented so far is unanswered. The three findings were
 stale administrative intent (13A), missing delivery handoff (14A), and overlapping
 content input (15A); no further finding is promoted at this checkpoint.
 
+## Code-quality findings and accepted decisions
+
+### Issue 16 — duplicate AI run-start orchestration: 16A
+
+**P2, confidence 9/10; duplication verified in source.**
+`api/app/Http/Controllers/Api/V1/AiRunController.php:111–115` calls
+`$ledger->startOrJoin(...)` then `GenerateAiRunJob::dispatch($run->id)` and handles
+dispatch failure inline. `CommentSplitController.php:76–94` duplicates that
+sequence. `api/app/Services/AI/AiRunStarter.php:48–63` already owns it, and Ask/thread
+controllers already call that service. The existing TODO flags digest consolidation.
+This is a maintenance/integration risk, not evidence of a new production breach.
+
+**Accepted:** consolidate digest, improve-prompt, and split starts through existing
+`AiRunStarter`, then compose project grant snapshots and the shared coordinator
+there. Policies retain run-type authorization; controllers retain appropriate
+validation and HTTP projection. Preserve readiness/version checks, dedupe-exempt
+Ask, actor/target/variant scope, 200/202 behavior, dispatch failure, per-actor privacy,
+provider/rate gates, cost accounting and explicit retry. A join does not redispatch
+or replace the original initiating authority. No generic AI framework is added.
+
+The user explicitly approved necessary refactoring as well as consolidation. Make
+the shared service/coordinator integration coherent instead of forcing a minimal
+diff that duplicates rules. Pin current endpoint behavior first, refactor, then
+add the project-role changes. Implementation has not started. The backend part of
+the old consolidation TODO is absorbed here; unrelated frontend phase aliases
+remain outside this finding.
+
+**Required coverage:** all six run types through real endpoints; mint/join and
+dispatch failure; actor/target/variant/Ask dedupe distinctions; required input and
+status codes; private reads and provider/cost behavior; project-role denial and
+revocation before outbound work/commit. Existing fakes avoid live provider calls.
+
+### Code-quality checkpoint
+
+| Dimension evaluated | Disposition |
+|---|---|
+| Organization and boundaries | Existing Policies, request validation, resources and domain services remain; 2A owns shared transactions, 16A owns AI start orchestration |
+| Duplication | 16A removes the verified duplicate start paths; capability/query/projection parity uses the already-agreed resolver rather than separate role checks in controllers/UI |
+| Names and state ownership | Keep grant revision, operation generation, invitation token generation, target revision and delivery status distinct; each protects a different invariant |
+| Error patterns | 7A replaces scan catch-all continuation; known AI dispatch failure handling remains deliberate and shared; no catch-all conversion of DB faults to lifecycle conflicts |
+| Complexity and defensive branches | Keep validation, grant resolution, operation admission, external execution and conditional completion as explicit service steps; the existing ledger keeps its dedupe/state transitions, with refactoring authorized where needed for integration |
+| Over/under-engineering | No new generic ACL, AI framework, outbox platform or snapshot backlog; shared guard, operation IDs and typed outcomes address the observed boundaries |
+| Comments and diagrams | Update stale ownership/workspace-only comments in Policies/resources when behavior changes; existing ledger state comments and plan diagrams must match the final transaction flow |
+
+No additional code-quality finding is promoted at this checkpoint. The mandatory
+branch/user-flow coverage review follows; code organization is not test evidence.
+
+## Test review checkpoint — in progress
+
+The [test coverage map](project-access-test-map.md) records the detected PHPUnit/
+Playwright seams, inspected baseline assertions, a combined code/user-flow diagram,
+per-entry-point branch/error requirements, proposed test files, and real-queue/
+database boundaries. None of the 28 new M4.1 contract groups is implemented yet;
+existing tests are regression foundations, not evidence for new project grants.
+The execution-harness decision and final failure registry still require review.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -803,6 +859,15 @@ are illustrative; match repository conventions during implementation.
     rejected drafts survive in the UI; explicit retry works after settlement;
     failures/revocation and late cleanup retain the agreed operation guarantees.
 
+- [ ] **T15 (P2)** — AI starts — consolidate orchestration and refactor for project access.
+  - Surfaced by: issue 16 / decision 16A and explicit authorization to refactor.
+  - Files: `AiRunController`, `CommentSplitController`, `AiRunStarter`, integration
+    with `AiRunLedger`/the coordinator, AI Policies and affected endpoint tests.
+  - Verify: endpoint behavior is pinned before consolidation; all six run types
+    use shared orchestration with no duplicate dispatch or grant replacement on
+    join; preserve privacy, validation/status, dedupe, provider gates and cost;
+    project revocation checks apply consistently before work and result commit.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -822,6 +887,6 @@ are illustrative; match repository conventions during implementation.
 ## Decisions still pending
 
 No architecture, error-policy, security, or interaction choice presented so far is unanswered.
-Code quality, test coverage, performance,
+Test coverage, performance,
 observability, rollout, long-term assessment, and UX have not completed review.
 Potential follow-up TODOs must be presented individually before being deferred.
