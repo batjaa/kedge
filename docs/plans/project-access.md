@@ -1,22 +1,9 @@
 # Project access — planning brief
 
-> 2026-09-26 · Status: synthesized into the [module spec](../specs/m4.1-project-access.md).
-> This brief preserves the original planning recommendations. The module spec
-> supplies draft defaults for its open choices and the user-agreed testing seams;
-> engineering/design review is pending. The recommendations were not separately
-> confirmed by the user at drafting. Update 2026-09-26: all three roles and
-> Reviewer as the invitation default are now confirmed. Membership administration
-> is also confirmed: Maintainers manage Viewers/Reviewers, only the owner manages
-> Maintainer seats, and members may leave. Source management is confirmed within
-> owner-approved private repositories. AI access is confirmed: Reviewers use Ask/
-> reply drafts, Maintainers use all existing tools, and Viewers read shared results
-> only; personal questions/drafts stay private. Maintainer document-share
-> management and removal semantics are confirmed: end the direct grant, preserve
-> review history, and leave independent links active until explicitly revoked.
-> Document moves are confirmed for Maintainers in both same-workspace projects;
-> the owner may also move to/from Unfiled. Invitation lifecycle is confirmed:
-> seven days, replacement on resend, verified recipient acceptance, revocation,
-> and cancellation on loss of inviter authority. Content/moderation remains open.
+> 2026-09-26 · Superseded by the [module spec](../specs/m4.1-project-access.md).
+> All product decisions and testing seams are now confirmed. This brief preserves
+> the planning context and decision summary; the module spec is authoritative.
+> Engineering/design review is pending; no implementation has started.
 
 ## Destination
 
@@ -54,16 +41,16 @@ Code entry points: `ProjectController`, `DocumentController`,
 `TrackedRepoController`, `AuthorizesWorkspaceMembership`,
 `ResolvesShareReviewers`, `AiRunPolicy`, and `web/app/(app)/projects/[id]/page.tsx`.
 
-## Proposed first release
+## First-release scope
 
-One medium-to-large vertical module: **Project access**. Its demo is an owner
+One large vertical module: **Project access**. Its demo is an owner
 inviting a second account into Kedge's own documentation project, that account
 reviewing a document, and the owner removing its access. The invitee cannot see
 an unrelated project, Unfiled documents, workspace settings, or integrations.
 
-### Roles — first open decision
+### Roles — confirmed 2026-09-26
 
-Recommended starting set:
+Confirmed role set:
 
 | Capability | Viewer | Reviewer | Maintainer |
 |---|---|---|---|
@@ -78,10 +65,10 @@ project ownership transfer in this release. Default invite role: Reviewer.
 The Reviewer project role is distinct from the existing magic-link Reviewer
 identity; UI and domain language must make that distinction explicit.
 
-"Manage documents" needs a full action matrix before implementation: lifecycle,
-content replacement, import/retry/re-sync, moves, source configuration, share-link
-creation, moderation, and AI use must each have an explicit rule. A generic
-`isMember` permission cannot represent a read-only Viewer.
+The module spec now defines the full action matrix for lifecycle, content
+replacement, import/retry/re-sync, moves, source configuration, share links,
+moderation, and AI. A generic `isMember` permission cannot represent a read-only
+Viewer.
 
 ### Invitation and membership experience
 
@@ -134,7 +121,7 @@ exceptions remain a later decision, not implied promises of this release.
 
 ### Removal, document moves, and existing share links
 
-Recommended rule: authorship preserves attribution, not a perpetual right to
+Confirmed rule: authorship preserves attribution, not a perpetual right to
 access or mutate a project. Re-check current access on each request and at the
 commit point of sensitive writes. Removal/role changes must also cover cached
 capabilities, polling, queued user-initiated work, and requests already in flight.
@@ -156,15 +143,14 @@ Maintainers may create, list, and revoke project-document shares; Viewers and
 Reviewers may not. It must not promise complete access
 revocation while an independent document share still grants access.
 
-## Remaining decisions, in order
+## Confirmed decisions (2026-09-26)
 
 1. **Role set — resolved 2026-09-26:** Viewer / Reviewer / Maintainer confirmed
    by the user, with Reviewer as the default invitation role.
 2. **Membership administration — resolved 2026-09-26:** Maintainers may invite,
    change roles, and remove Viewers/Reviewers; only the workspace owner may
    appoint, demote, or remove Maintainers. Any member may leave voluntarily.
-   Exact content/moderation actions remain draft defaults; moves are confirmed
-   below.
+   Content/moderation and document moves are confirmed below.
 3. **Source authority — resolved 2026-09-26:** Maintainers manage project
    sources: public URL imports, tracked repos, branches/path filters, imports
    and re-scans. Private repositories must be owner-approved for the project;
@@ -188,9 +174,11 @@ revocation while an independent document share still grants access.
    verified account; invitations may be revoked before acceptance; loss of the
    inviter's authority to grant the role cancels pending invitations. The spec
    additionally defines duplicate handling and idempotent acceptance.
-7. **Content/moderation — final open product decision:** the spec proposes that
-   Maintainers manage lifecycle, pasted/uploaded content, and review moderation,
-   but cannot rewrite another person's comment.
+7. **Content/moderation — resolved 2026-09-26:** Maintainers manage project
+   details, lifecycle, pasted/uploaded content versions, threads, suggestions,
+   and comment moderation. They cannot rewrite another person's comment or
+   approve on their behalf. Reviewers manage their own comments/threads;
+   Viewers remain read-only.
 
 ## Delivery outline and verification seams
 
@@ -222,7 +210,7 @@ an invitation path until its reachable actions are fully constrained.
   invitations or bulk project-member backfills; explicit indexes on membership
   and invitation lookup/join columns; additive API rollout before web.
 
-After the decisions are resolved: synthesize an implementation spec with
-`$to-spec`, review engineering and UI flows, then split into tracer-bullet tickets.
+All product decisions are resolved and the module spec is written. Next: review
+engineering and UI flows, then split the spec into tracer-bullet tickets.
 Workspace invitations/management, teams, billing, SSO, and project-scoped agent
 tokens are outside this first module.
