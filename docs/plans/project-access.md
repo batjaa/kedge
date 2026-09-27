@@ -13,7 +13,8 @@
 > only; personal questions/drafts stay private. Maintainer document-share
 > management and removal semantics are confirmed: end the direct grant, preserve
 > review history, and leave independent links active until explicitly revoked.
-> Remaining choices are open.
+> Document moves are confirmed for Maintainers in both same-workspace projects;
+> the owner may also move to/from Unfiled. Remaining choices are open.
 
 ## Destination
 
@@ -139,8 +140,9 @@ Retain historical comments and approvals; do not erase someone's review history.
 
 Documents inherit access from their current project, including historical
 versions. Moving a document changes its audience and must be treated as an
-access change. Recommended first-release boundary: only the workspace owner
-can move documents between projects or to/from Unfiled; no cross-workspace move.
+access change. Confirmed 2026-09-26: Maintainers may move between projects where
+they maintain both ends, within the same workspace. The workspace owner may also
+move to/from Unfiled; no cross-workspace move.
 Preserve the relationship between a tracked repo and its imported documents so
 later scans cannot move content across an access boundary accidentally.
 
@@ -159,8 +161,8 @@ revocation while an independent document share still grants access.
 2. **Membership administration — resolved 2026-09-26:** Maintainers may invite,
    change roles, and remove Viewers/Reviewers; only the workspace owner may
    appoint, demote, or remove Maintainers. Any member may leave voluntarily.
-   Exact content/moderation actions and owner-only cross-project moves remain
-   draft defaults.
+   Exact content/moderation actions remain draft defaults; moves are confirmed
+   below.
 3. **Source authority — resolved 2026-09-26:** Maintainers manage project
    sources: public URL imports, tracked repos, branches/path filters, imports
    and re-scans. Private repositories must be owner-approved for the project;
@@ -176,7 +178,9 @@ revocation while an independent document share still grants access.
    share links. Removal immediately ends the direct project grant, preserves
    review history, and keeps independent shares active until explicitly revoked.
    Explain remaining link access and offer review/revocation in the removal flow.
-   **Document moves remain open.**
+   **Document moves resolved 2026-09-26:** Maintainers may move between two
+   projects they maintain in the same workspace. The workspace owner may also
+   move to/from Unfiled. Cross-workspace moves remain out of scope.
 6. **Invitation lifecycle** — recommend seven-day expiry, one pending invitation
    per normalized email/project, resend replacing the token, and idempotent
    acceptance. Decide what changing or removing an inviter does to pending
