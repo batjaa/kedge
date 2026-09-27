@@ -1,6 +1,6 @@
 # Project access — test coverage map
 
-> 2026-09-27 · Engineering review section 6, in progress.
+> 2026-09-27 · Engineering review section 6 checkpoint; decision 17A accepted.
 > Source: [module spec](../specs/m4.1-project-access.md) and
 > [accepted review decisions](project-access-eng-review.md).
 > This is a coverage plan, not a test-run report. No application tests were run
@@ -26,7 +26,12 @@
   database queues, workers, cookies, local storage, and account/invitation flows
   must remain real where their integration is the behavior under test.
 
-The CI/process arrangement for these required tests is still being reviewed.
+**17A accepted:** a required focused integration CI profile runs the PostgreSQL
+and file-backed SQLite contracts and affected Playwright journeys with a real
+database worker and shared cache state. Keep the existing fast suites. Isolate
+fixtures and processes, use explicit barriers/readiness, clean up on failure, and
+retain safe diagnostics. Missing prerequisites or skipped required checks fail the
+profile; configure it as a required merge/release gate and document a local command.
 Do not treat a synchronous job invocation or queue fake as the 14A/15A proof.
 
 ## Existing regression foundations
@@ -171,7 +176,40 @@ large journeys by behavior as implementation warrants. No new browser framework.
   queue and scheduler execution, log/referrer redaction, private object storage
   and CDN/origin bypass checks. Already downloaded bytes are not recallable.
 
+## Failure-mode registry
+
+All handling below is **planned**, not newly implemented or verified. `GAP` means
+the module-specific test is required by the matching C row above. Logging follows
+8A's secret-free diagnostics; concrete operational metrics/alerts remain section 8
+work. A visibility-safe denial is deliberate, not a silent success.
+
+| Code path | Realistic failure | Required handling | Test | User sees | Diagnostic requirement |
+|---|---|---|---|---|---|
+| C01 capability/scopes | Removed grant retained during a write | Fresh coordinator check blocks commit | GAP, concurrency | Denied/access removed | Safe action/outcome correlation |
+| C02 discovery/projection | DB failure rendered as an empty list | Propagate recoverable load error | GAP, API/browser | Failed load with retry | Route/status/error context |
+| C03 membership mutation | Old tab removes a recreated membership | Target revision conflict, no write | GAP, API/concurrency | Refresh then explicit retry | Conflict classification, no private target leak |
+| C04 invitation lifecycle | Old resend job targets replaced slot | Generation/authority checks skip obsolete work | GAP, API/job | Current generation/status | Safe generation/outcome metadata |
+| C05 queue/delivery | Process dies around invitation commit | Atomic handoff; committed job survives, rollback removes both | GAP, real queue/process | Queued or failed save, never stranded success | Queue readiness/failure and correlated generation |
+| C06 acceptance | Revoke races acceptance | Single protected transition; no unauthorized grant | GAP, both DB engines | Joined once or inactive/conflict | Sanitized acceptance outcome |
+| C07 approval/fetch | Redirect exposes credential or repository transfers | Reject origin/identity change before delegated access | GAP, transport | Source access/reapproval recovery | Redacted origin/identity failure category |
+| C08 import/re-sync | Old worker completes after replacement | Conditional commit/cleanup refuses obsolete operation | GAP, concurrency | New operation preserved | Operation/generation and ignored stale outcome |
+| C09 scan/config | Catch-all swallows global authority loss | Stop/report scan; preserve valid prior work | GAP, job | Interrupted/partial scan | Explicit failure category, no inaccessible paths |
+| C10 AI | Role revoked after paid call starts | Keep spend, suppress forbidden output; no automatic paid retry | GAP, job/API | Access lost or safe failed state | Run identity, cost and terminal reason, no prompt |
+| C11 review/mentions | Former author writes or mentions hidden person | Live reach and audience validation before mutation | GAP, API | Denial or field feedback | Safe validation/action result |
+| C12 move/shares | Destination authority changes during move | Recheck both ends/revision, rollback move | GAP, concurrency | Conflict/denial with old placement intact | Safe move outcome |
+| C13 assets | Old public URL bypasses removal | Private origin plus live document/asset check | GAP, local/API/deploy | Asset denied or safe render fallback | Status/storage failure without token/path disclosure |
+| C14 logout | Late response restores old account | Proven shared server/session fix and confirmed UI completion | GAP, concurrent API/browser | Retry or confirmed account switch | Safe auth outcome without cookies/return token |
+| C15 telemetry | Error logger captures token in nested return URL | Redact before capture; response/referrer controls | GAP, synthetic token/deploy | Normal recovery page | Allowlisted diagnostics only |
+| C16 schema/audit | Audit fails during privilege escalation | Atomic rollback; reductions follow safe audit rule | GAP, failure injection | Failed escalation, no stranded grant | Sanitized persistence failure |
+| C17 cleanup | Hard-killed worker never settles | Scheduled bounded, generation-safe terminal cleanup | GAP, command/concurrency | Honest settled failure on return | Cleanup result/backlog/error signal |
+| C18 content update | Unique job suppresses second accepted body | Reject second request before input changes | GAP, async/API/browser | Busy, retained draft, explicit retry | Admission conflict/current operation |
+
+No new failure row is intentionally left without planned handling or user-visible
+recovery. All rows still have a **release-blocking implementation/test gap** until
+the required assertions execute successfully; a complete plan is not a passed gate.
+
 Coverage checkpoint: **0/28 M4.1 contract groups implemented**, with **18 code
 groups and 10 browser-flow groups specified above**. All remain planned gaps;
-baseline tests are reuse evidence only. The execution-harness decision and final
-failure-mode registry remain open review work.
+baseline tests are reuse evidence only. The execution harness is decided by 17A,
+and the failure registry above will be maintained as later review sections refine
+performance, operations, deployment and UX requirements.

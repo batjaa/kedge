@@ -1,8 +1,8 @@
 # Project access — engineering review
 
 > Updated 2026-09-27 · In progress. Architecture and error-map checkpoints recorded;
-> security, interaction and code-quality checkpoints recorded; test review started,
-> sections 7–11 remain pending. This is not implementation
+> security, interaction, code-quality and test checkpoints recorded; performance
+> review started, sections 8–11 remain pending. This is not implementation
 > or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
@@ -16,15 +16,15 @@
 | 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
 | 5. Code quality | One finding resolved through decision 16A; checkpoint below |
-| 6. Tests and coverage diagram | In progress; [coverage map](project-access-test-map.md) diagrams 18 code and 10 journey groups, all planned gaps |
-| 7. Performance | Pending |
+| 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 28 planned coverage gaps |
+| 7. Performance | In progress |
 | 8. Observability | Pending |
 | 9. Deployment and rollout | Pending |
 | 10. Long-term trajectory | Pending |
 | 11. Design and UX | Pending |
 
-The final failure registry, coverage diagram, deployment sequence, worktree
-strategy, and consolidated task list will be completed through those sections.
+The coverage diagram and failure registry are recorded in the test map. Deployment
+sequence, worktree strategy and final task consolidation remain for later sections.
 No unasked finding is treated as an accepted decision.
 
 ## Scope checkpoint: 1A
@@ -581,14 +581,40 @@ revocation before outbound work/commit. Existing fakes avoid live provider calls
 No additional code-quality finding is promoted at this checkpoint. The mandatory
 branch/user-flow coverage review follows; code organization is not test evidence.
 
-## Test review checkpoint — in progress
+## Test review findings and accepted decisions
+
+### Issue 17 — CI does not exercise required queue/concurrency behavior: 17A
+
+**P1, confidence 10/10 for the configuration mismatch.**
+`web/e2e/serve-api.sh:120` writes `QUEUE_CONNECTION=sync`;
+`api/phpunit.xml:42` sets `DB_DATABASE` to `:memory:` and line 45 selects the
+synchronous queue. `McpWriteToolsTest.php:655` skips its lock test outside
+MySQL/PostgreSQL. Those existing defaults cannot establish the new cross-process
+mail/content guarantees or PostgreSQL locking, even if those suites pass.
+
+**Accepted:** a required focused integration profile alongside the existing fast
+suites. Run concurrency contracts on PostgreSQL and file-backed SQLite and affected
+Playwright journeys with a real database worker/shared cache state. Use isolated,
+committed fixtures; controlled barriers; readiness and teardown; safe logs/traces.
+Missing engines/workers, incompatible configuration or skipped required contracts
+must fail the profile. Configure a required merge/release check and document local
+reproduction. Keep deterministic external-service fixtures; no whole-suite async
+migration or extra test framework is required.
+
+This makes the existing accepted test requirements executable rather than reducing
+coverage. Costs are a focused CI harness and its process lifecycle; the unrelated
+fast suites keep their current purpose.
+
+### Test review checkpoint
 
 The [test coverage map](project-access-test-map.md) records the detected PHPUnit/
 Playwright seams, inspected baseline assertions, a combined code/user-flow diagram,
 per-entry-point branch/error requirements, proposed test files, and real-queue/
 database boundaries. None of the 28 new M4.1 contract groups is implemented yet;
 existing tests are regression foundations, not evidence for new project grants.
-The execution-harness decision and final failure registry still require review.
+The execution-harness choice is now 17A. The map includes a failure registry for
+all 18 code-path groups. These tests remain implementation requirements; no
+application tests have been run or new test coverage implemented in this review.
 
 ## System boundary
 
@@ -868,6 +894,17 @@ are illustrative; match repository conventions during implementation.
     join; preserve privacy, validation/status, dedupe, provider gates and cost;
     project revocation checks apply consistently before work and result commit.
 
+- [ ] **T16 (P1)** — Integration CI — require real queue and database concurrency evidence.
+  - Surfaced by: issue 17 / decision 17A.
+  - Files: `.github/workflows/ci.yml`, focused PHPUnit/Playwright configuration,
+    `web/e2e/serve-api.sh` or reusable profile boot helpers, worker/shared-cache
+    setup, concurrency fixtures/barriers and local test documentation; required
+    check configuration on the repository.
+  - Verify: PostgreSQL and file-backed SQLite contracts execute without skips;
+    browser journeys use committed database jobs and a real worker; missing
+    prerequisites fail clearly; fixtures/processes are isolated and cleaned up;
+    safe diagnostics persist on failure; the required check blocks merge/release.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -887,6 +924,6 @@ are illustrative; match repository conventions during implementation.
 ## Decisions still pending
 
 No architecture, error-policy, security, or interaction choice presented so far is unanswered.
-Test coverage, performance,
+Performance,
 observability, rollout, long-term assessment, and UX have not completed review.
 Potential follow-up TODOs must be presented individually before being deferred.
