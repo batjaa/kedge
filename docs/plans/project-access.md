@@ -14,7 +14,9 @@
 > management and removal semantics are confirmed: end the direct grant, preserve
 > review history, and leave independent links active until explicitly revoked.
 > Document moves are confirmed for Maintainers in both same-workspace projects;
-> the owner may also move to/from Unfiled. Remaining choices are open.
+> the owner may also move to/from Unfiled. Invitation lifecycle is confirmed:
+> seven days, replacement on resend, verified recipient acceptance, revocation,
+> and cancellation on loss of inviter authority. Content/moderation remains open.
 
 ## Destination
 
@@ -181,10 +183,14 @@ revocation while an independent document share still grants access.
    **Document moves resolved 2026-09-26:** Maintainers may move between two
    projects they maintain in the same workspace. The workspace owner may also
    move to/from Unfiled. Cross-workspace moves remain out of scope.
-6. **Invitation lifecycle** — recommend seven-day expiry, one pending invitation
-   per normalized email/project, resend replacing the token, and idempotent
-   acceptance. Decide what changing or removing an inviter does to pending
-   invitations; acceptance must never activate authority the inviter has lost.
+6. **Invitation lifecycle — resolved 2026-09-26:** seven-day expiry; resend
+   replaces the link and restarts the seven days; acceptance requires the invited
+   verified account; invitations may be revoked before acceptance; loss of the
+   inviter's authority to grant the role cancels pending invitations. The spec
+   additionally defines duplicate handling and idempotent acceptance.
+7. **Content/moderation — final open product decision:** the spec proposes that
+   Maintainers manage lifecycle, pasted/uploaded content, and review moderation,
+   but cannot rewrite another person's comment.
 
 ## Delivery outline and verification seams
 
