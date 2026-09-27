@@ -10,7 +10,7 @@
 |---|---|
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
-| 2. Error and rescue map | In progress; no new decisions recorded yet |
+| 2. Error and rescue map | In progress; decision 6A accepted |
 | 3. Security and threat model | Pending |
 | 4. Data flow and interaction edge cases | Pending |
 | 5. Code quality | Pending |
@@ -128,6 +128,25 @@ Recovery requires the scheduler and database to be available. Scheduler executio
 must be verified in both deployment modes. This adds bounded database scans but
 does not depend on the work queue making progress to perform cleanup.
 
+## Error-map findings and accepted decisions
+
+### Issue 6 — uncertain email delivery: 6A
+
+**P2, confidence 9/10.** The module requires bounded transport retries but
+previously left uncertain send outcomes implicit. Laravel's
+`api/vendor/laravel/framework/src/Illuminate/Notifications/NotificationSender.php:165`
+calls `$this->manager->driver($channel)->send(...)` before `afterSending(...)`
+at line 183 and `NotificationSent` at line 187. A worker or status-write failure
+between those steps cannot undo mail already accepted by the transport.
+
+**Accepted:** bounded automatic retries retain the same token/generation/expiry;
+only explicit Resend rotates the invitation. Duplicate emails may arrive but
+acceptance stays idempotent. Recheck current invitation authority before every
+attempt and condition status writes on generation. Exhausted uncertain sends
+show Failed with honest "may have arrived" copy and resend recovery. Do not
+promise exactly-once delivery or guaranteed inbox receipt. This favors delivery
+reliability over suppressing every duplicate email.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -243,7 +262,7 @@ scheduler; ordinary delivery depends on mail/workers. Deployment review must pin
 mixed-version behavior and rollback rather than assuming a web rollback revokes
 already-issued access.
 
-## Implementation tasks from accepted architecture findings
+## Implementation tasks from accepted findings
 
 These are planning requirements, not published tickets. Proposed new filenames
 are illustrative; match repository conventions during implementation.
@@ -274,6 +293,13 @@ are illustrative; match repository conventions during implementation.
   - Verify: command tests without browser traffic; repeated/concurrent cleanup;
     legitimate waiting/retrying work preserved; no import/AI dispatch or lost
     spend; local/self-host and SaaS scheduler smoke checks.
+- [ ] **T5 (P2)** — Invitation delivery — make uncertain send retries explicit.
+  - Surfaced by: issue 6 / decision 6A.
+  - Files: planned invitation delivery service/notification, delivery-state
+    persistence/resources, invitation management UI and translations.
+  - Verify: a send accepted before worker/status-write failure retries with the
+    same token/generation/expiry; duplicate links accept once; exhausted uncertain
+    sends have recovery copy; stale status writes cannot overwrite a resend.
 
 ## NOT in scope
 
