@@ -1,9 +1,9 @@
 # Project access — engineering review
 
-> Updated 2026-09-27 · In progress. Architecture and error-map checkpoints recorded;
-> security, interaction, code-quality and test checkpoints recorded; performance
-> review started, sections 8–11 remain pending. This is not implementation
-> or release approval.
+> Updated 2026-09-27 · Review interrupted for ticketing after decision 17A.
+> Architecture, error-map, security, interaction, code-quality and test checkpoints
+> recorded; performance issue 18 is unanswered, sections 8–11 remain pending.
+> This is not implementation or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
 ## Review progress
@@ -17,7 +17,7 @@
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
 | 5. Code quality | One finding resolved through decision 16A; checkpoint below |
 | 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 28 planned coverage gaps |
-| 7. Performance | In progress |
+| 7. Performance | Issue 18 unanswered; carried into draft ticket T01 |
 | 8. Observability | Pending |
 | 9. Deployment and rollout | Pending |
 | 10. Long-term trajectory | Pending |
@@ -923,7 +923,12 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-No architecture, error-policy, security, or interaction choice presented so far is unanswered.
-Performance,
-observability, rollout, long-term assessment, and UX have not completed review.
-Potential follow-up TODOs must be presented individually before being deferred.
+On 2026-09-27 the user switched to `$to-tickets` after accepting 17A. Issue 18
+(request-local, batched grant reads) remains unanswered; neither option is accepted.
+Performance, observability, rollout, long-term assessment and UX have not completed
+review. The separate design review is also pending.
+
+[Draft ticket T01](project-access-tickets.md) carries those reviews forward before
+new invitation surfaces land; already-agreed prefactors can start independently.
+Ticketing does not mark this review complete. Potential follow-up TODOs must still
+be presented individually before being deferred.
