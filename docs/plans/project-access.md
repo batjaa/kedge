@@ -5,7 +5,9 @@
 > supplies draft defaults for its open choices and the user-agreed testing seams;
 > engineering/design review is pending. The recommendations were not separately
 > confirmed by the user at drafting. Update 2026-09-26: all three roles and
-> Reviewer as the invitation default are now confirmed; remaining choices are open.
+> Reviewer as the invitation default are now confirmed. Membership administration
+> is also confirmed: Maintainers manage Viewers/Reviewers, only the owner manages
+> Maintainer seats, and members may leave. Remaining choices are open.
 
 ## Destination
 
@@ -146,9 +148,11 @@ revocation while an independent document share still grants access.
 
 1. **Role set — resolved 2026-09-26:** Viewer / Reviewer / Maintainer confirmed
    by the user, with Reviewer as the default invitation role.
-2. **Maintainer authority** — exact document/moderation/invitation actions;
-   whether maintainers may appoint peers. Recommend owner-only changes to
-   Maintainer seats and owner-only cross-project moves initially.
+2. **Membership administration — resolved 2026-09-26:** Maintainers may invite,
+   change roles, and remove Viewers/Reviewers; only the workspace owner may
+   appoint, demote, or remove Maintainers. Any member may leave voluntarily.
+   Exact content/moderation actions and owner-only cross-project moves remain
+   draft defaults.
 3. **Source authority** — recommend that only the workspace owner connects
    credentials or authorizes a new private repo/path/ref. Maintainers may
    re-scan already authorized sources. Broader source setup needs an explicit
