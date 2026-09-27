@@ -13,7 +13,7 @@
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
 | 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
-| 4. Data flow and interaction edge cases | In progress |
+| 4. Data flow and interaction edge cases | In progress; decision 13A accepted |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
 | 7. Performance | Pending |
@@ -391,6 +391,37 @@ These are reviewed plan requirements, not claims that implementation is secure.
 No additional security finding is promoted at this checkpoint. Stale admin intent
 and user-visible conflict recovery are evaluated next under interaction edges.
 
+## Interaction findings and accepted decisions
+
+### Issue 13 — stale administrative intent: 13A
+
+**P1, confidence 9/10 for the plan gap.** The pre-decision module spec at
+`docs/specs/m4.1-project-access.md:286` specified a membership `grant version`,
+but its API contract at line 411 specified only
+`PATCH /projects/{project}/members/{user}` with role. The coordinator already
+rechecks the actor's authority; that does not prove the target is the membership
+the administrator saw before another administrator removed and recreated it.
+These are references to the reviewed spec, not implemented endpoint behavior.
+
+**Accepted:** require the reviewed target identity/revision for membership,
+invitation, approval, tracked-source configuration, and document-move actions.
+Compare under the shared coordinator, reusing the relevant existing version
+where possible. Include target incarnation so a remove/recreate or move away/back
+cannot satisfy a stale precondition merely by returning to the same visible value.
+Keep current authorization and inaccessible-resource behavior. Missing/malformed
+preconditions fail validation; stale actionable targets return 409 without side
+effects. Refresh only permitted state, explain the conflict, and require explicit
+retry; never automatically substitute a fresh revision and replay. Recover lost
+responses by reading current state. Acceptance retains its separate token and
+idempotency semantics. This adds API/UI work but preserves the administrator's
+intent when multiple people manage a project.
+
+**Required coverage:** fresh/missing/malformed/stale preconditions; re-invited
+members, rotated/reissued invitations, replaced approvals, changed source config,
+document moves away/back; no stale mutation/dispatch; preserved 403/404 behavior;
+two concurrent requests with the same revision; two browser contexts with refresh
+and explicit retry; uncertain response followed by current-state recovery.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -598,6 +629,16 @@ are illustrative; match repository conventions during implementation.
     revocation apply while valid independent grants still work; old public paths
     and cache/origin routes cannot bypass checks; migration preserves history.
     Verify both local and deployed object-storage delivery. No 12B mode is built.
+
+- [ ] **T12 (P1)** — Administrative mutations — reject stale target revisions.
+  - Surfaced by: issue 13 / decision 13A.
+  - Files: membership/invitation/approval/source/move request contracts and
+    resources, persistence revisions, shared transaction coordinator, admin UI
+    clients/dialogs, API concurrency tests and project-access browser journeys.
+  - Verify: target identity and revision are compared atomically; replacement
+    targets cannot match stale state; stale actions cause no side effects;
+    authorization/discovery boundaries remain intact; UI refreshes and requires
+    explicit retry, including after an ambiguous network outcome.
 
 ## NOT in scope
 
