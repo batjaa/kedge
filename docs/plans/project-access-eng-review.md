@@ -1,7 +1,8 @@
 # Project access — engineering review
 
 > Updated 2026-09-27 · In progress. Architecture and error-map checkpoints recorded;
-> security checkpoint recorded; interaction review started, sections 5–11 remain pending. This is not implementation
+> security and interaction checkpoints recorded; code-quality review started,
+> sections 6–11 remain pending. This is not implementation
 > or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
@@ -13,8 +14,8 @@
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
 | 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
-| 4. Data flow and interaction edge cases | In progress; decisions 13A–14A accepted |
-| 5. Code quality | Pending |
+| 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
+| 5. Code quality | In progress |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
 | 7. Performance | Pending |
 | 8. Observability | Pending |
@@ -173,8 +174,9 @@ This maps required behavior, not verified implementation. Existing exception
 types are named below; new project-specific domain outcomes still need typed
 representations during implementation. HTTP status mapping follows the module
 spec. A process crash has no catchable PHP exception, so it is listed separately.
-There are 24 path groups; the two error-policy gaps raised in this section were
-resolved by 6A and 7A. Detailed assertions and test coverage remain section 6 work.
+There are 28 path groups, including later security/interaction findings; the two
+error-policy gaps originally raised in this section were resolved by 6A and 7A.
+Detailed assertions and test coverage remain section 6 work.
 
 | Method/codepath | Failure | Exception or outcome | Required handling | User sees |
 |---|---|---|---|---|
@@ -202,6 +204,10 @@ resolved by 6A and 7A. Detailed assertions and test coverage remain section 6 wo
 | AI execution | Provider/rate/deadline/queue fault or revoked authority | Existing `AiFailureClassifier` types plus typed access-revoked outcome | Keep deterministic/transient rules and cost-safe default; retain spend, suppress unauthorized output | Existing failed-run state and safe reason |
 | Worker crash or obsolete completion | Failure handler never runs; old generation writes late | No exception on hard kill; typed obsolete-operation outcome | 3A/5A: conditional writes and scheduled cleanup; never overwrite replacement | Settled failure or intact newer success |
 | Cleanup/read/status endpoints | Database unavailable or poll fails | `QueryException`, transport/network failure | Report failure, retain last known data; cleanup can run again when dependencies recover | Load/recovery state, never an invented empty/success state |
+| Shared logout/account switch | Failed response or overlapping request restores old identity | Network/HTTP failure or session race | 11A: confirmed shared logout, retry, server concurrency guarantee | Recoverable sign-out failure; retained invitation destination |
+| Document asset delivery | Missing grant, wrong document association, storage unavailable | Authorization/not-found or storage failure | 12A: authorize each request and association; private origin; retain safe rendering fallback | Denial or asset error, no bypass through public storage |
+| Stale administrative action | Changed/recreated target after screen was loaded | Typed revision conflict | 13A: compare target revision under coordinator; no mutation; refresh permitted state | 409 then explicit retry, preserving 403/404 precedence |
+| Competing content update | Another update is pending/running | Typed busy conflict | 15A: reject before input changes or dispatch; retain accepted operation | 409, preserved draft, refresh and explicit retry |
 
 The existing AI job's outer `catch (Throwable)` delegates to an explicit typed
 classifier with a deterministic fallback; preserve that cost-safe behavior.
@@ -455,6 +461,79 @@ loss before/after commit with worker recovery. Exercise PostgreSQL and file-back
 SQLite, reject incompatible configuration, and run invitation browser journeys
 with an asynchronous worker rather than a queue fake/synchronous substitute.
 
+### Issue 15 — silently coalesced content updates: 15A
+
+**P1, confidence 9/10 from source and existing debt, not a new reproduction.**
+`api/app/Http/Controllers/Api/V1/DocumentController.php:475–484` saves
+`'source_meta' => $this->pasteSourceMeta(...)` before
+`ResyncDocumentJob::dispatch($document, $request->user()?->id)` and then returns 202.
+`api/app/Jobs/ResyncDocumentJob.php:31` implements `ShouldBeUnique`; line 54 returns
+the document ID as `uniqueId()`. A second submission can therefore change stored
+input while its dispatch is suppressed. If the first worker already read its
+body, the second body has no worker; if it has not, attribution can belong to the
+wrong actor. The existing Update pasted content debt records the lost-update case.
+3A protects conditional completion but does not decide admission for new input.
+
+**Accepted:** atomically admit one active content update before changing source
+content; reject competing updates with 409 while pending/running. Use the shared
+coordinator and operation state/generation, not only queue uniqueness or UI
+disabling. A rejected update changes neither payload nor actor/generation and
+queues no work. Preserve the competing editor's draft, refresh after settlement,
+and require explicit retry. Accepted work retains its input and attribution;
+grant revalidation and generation-safe failure/cleanup remain required. No ordered
+backlog of submitted bodies is introduced.
+
+**CRITICAL regression requirement:** controlled overlap after the first worker
+reads its input, admission races before worker start, correct body/actor/version,
+and no second job or mutation on rejection. Cover failed/revoked operation recovery
+and two Maintainer browser contexts preserving the unsent draft. Use asynchronous
+dispatch and independent database connections; a synchronous queue cannot prove
+the worker overlap. Poll timeout is not proof of completion or unchanged content.
+
+### Interaction checkpoint: data flow and boundary cases
+
+The following traces cover the new flow families. They specify required behavior;
+test implementation and coverage accounting remain section 6 work. Each row runs
+through input, validation, transformation, persistence, and output. Typed errors
+and infrastructure exceptions follow the error map above, without silent success.
+
+| Flow | Input → validation → transform | Persist → output | Nil, empty, error, timeout and concurrency |
+|---|---|---|---|
+| Discovery/project/roster | Actor + page/filter → live scope and bounded pagination → safe capability/resource projection | Read only → page + metadata | Empty collection is valid; hidden project is 404; failed load is not empty; 10k rows remain DB-paginated |
+| Invitation issue | Email + role → normalized bounded input and grantable role → current slot/token generation | Invitation + audit + encrypted job atomically → queued response | Missing/invalid input 422; existing member conflicts; duplicate pending request sends no extra mail; 14A handles crash/rollback |
+| Resend/revoke | Target revision → actor and current slot rechecked → rotate generation or terminate pending grant | Conditional transaction → current delivery state/204 | Missing revision 422; stale state 409; old mail/status writes cannot affect replacement; failed resend preserves old generation |
+| Preview/account switch | Token + current account → token state/safe metadata and internal return path → sign-in/verification or switch | GET grants nothing; shared logout confirms completion → explicit Join action | Invalid/inactive link recovery; wrong account creates no membership; 11A covers logout/network/CSRF failure and overlap |
+| Acceptance | Token + verified full account → exact normalized recipient and live inviter authority → direct grant | Membership + accepted state + audit atomically → project destination | Duplicate acceptance is idempotent; expiry/revoke race cannot grant; replay after removal never recreates access; lost response can retry safely |
+| Role/removal/leave | Target + expected revision → actor/target authority → grant revision and capability changes | Coordinator mutation + required invalidation/audit → state/204 | 13A rejects stale/recreated targets; inherited/independent grants remain; stale client responses are discarded after access loss |
+| Review/moderation/shares | Resource IDs + action/body → reach and per-action role/ownership → existing domain mutation | Protected write and attribution → updated resource | Cross-project nested IDs denied; former author cannot write; no impersonation; shares retain their own grant path and explicit revocation |
+| Repository approval/config | Repository/config + expected revision → owner/source capability, identity, bounded ref/path input → canonical approval/config revision | Protected save/audit → configuration | 9A/10A reject transfer/substitution/credential-origin changes; stale revision or active scan conflicts; external validation failure grants nothing |
+| Import/re-sync/scan | Source + initiating grant/config → live authority → existing guarded fetch/normalization pipeline | Current operation result only → good content or explicit failure/report | Empty repository vs no matches remain distinct; 4A branch binding, 7A partial failures, generation-safe cleanup and last-good-content preservation |
+| Content replacement | Body + actor → validation and atomic operation admission → accepted source input | One active operation → queued/terminal status | 15A prevents overlapping payload/actor overwrite; keep unsent draft on 409; timeout is not completion; retry requires settled state |
+| Document move | Destination + placement revision → both ends/current actor → new audience | Atomic placement change with history/provenance → document | Null means owner-authorized Unfiled; no cross-workspace move; away/back or changed destination authority is rechecked; shares remain independent |
+| AI generation/artifact read | Run type/target/question + actor → role, privacy, provider gates → existing run identity/dedupe | Current authorized run/output + cost accounting → private/shared artifact | Empty latest result differs from denial/failure; downgrade stops forbidden work; preserve spend and personal draft privacy; no automatic paid retry |
+| Image/diagram delivery | Document/version + asset reference → live reach and association → private stored/rendered bytes | Internal cache only → safe authorized image | 12A covers moved/removed grants, shared hashes, missing assets and old public URLs; valid share/demo access remains; delivered bytes cannot be recalled |
+
+Cross-flow interaction requirements:
+
+- Double-click/rapid submit: duplicate invite/accept behavior is explicit; target
+  revisions guard administrative actions; content updates use atomic admission;
+  AI retains its existing start-or-join contract.
+- Stale CSRF, expired session, and network failure: follow existing auth recovery
+  and confirmed logout; keep unsent input and internal destinations, with no
+  mutation claimed from an ambiguous result.
+- Navigation away: committed delivery/operations continue under server authority;
+  returning reads current state, never resubmits implicitly. Private drafts keep
+  their existing per-actor boundary.
+- Concurrent role changes, moves, resend/revoke, and worker completion: 2A/3A/13A
+  govern authoritative ordering, target revisions, and conditional result writes.
+- Zero/large results: inherited access is distinct from an empty direct roster;
+  shared projects, members, invitations and source lists paginate in the database;
+  loading/error/empty states remain distinguishable.
+
+No interaction decision presented so far is unanswered. The three findings were
+stale administrative intent (13A), missing delivery handoff (14A), and overlapping
+content input (15A); no further finding is promoted at this checkpoint.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -546,6 +625,30 @@ Invitation lifecycle remains pending → accepted/revoked/expired. Resend rotate
 the pending token generation and expiry; delivery queued/sent/failed is separate.
 An accepted replay cannot regrant removed membership. An empty Shared with you
 list is a valid empty state, distinct from a failed load or denied project read.
+
+```plantuml
+@startuml
+[*] --> Pending : issue + encrypted job commit
+Pending --> Pending : explicit resend / fresh generation + expiry
+Pending --> Accepted : verified matching account / atomic grant
+Pending --> Revoked : revoke or inviter loses grant authority
+Pending --> Expired : expiry reached
+Revoked --> Pending : new authorized invitation / fresh generation
+Expired --> Pending : new authorized invitation / fresh generation
+Accepted --> Pending : explicit re-invite after membership removal / fresh generation
+note right of Accepted
+Replay returns the accepted grant only if still active.
+Removal does not make the old link grant access again.
+Re-inviting an existing member cannot change their role.
+end note
+note bottom of Pending
+Delivery queued/sent/failed is separate from access state.
+Failure sends no grant; resend alone rotates the token.
+Old generations never act on the new invitation slot.
+Authority restoration alone never revives revoked links.
+end note
+@enduml
+```
 
 ## Architecture failure scenarios
 
@@ -689,6 +792,17 @@ are illustrative; match repository conventions during implementation.
     ciphertext payloads and 6A retry behavior remain intact. Test PostgreSQL and
     file-backed SQLite; incompatible queue settings fail explicitly.
 
+- [ ] **T14 (P1)** — Content updates — reject competing work before changing input.
+  - Surfaced by: issue 15 / decision 15A and the existing content coalescing debt.
+  - Files: `DocumentController::updateContent`, content-update service/admission
+    through the coordinator, `ResyncDocumentJob`, operation state/payload handling,
+    update-content UI and polling, `DocumentContentUpdateTest`, asynchronous
+    concurrency coverage and `web/e2e/update-content.spec.ts`.
+  - Verify: only one update is admitted; a second gets 409 without overwriting
+    input/actor/generation or queuing work; accepted content alone commits;
+    rejected drafts survive in the UI; explicit retry works after settlement;
+    failures/revocation and late cleanup retain the agreed operation guarantees.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -707,7 +821,7 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-No architecture, error-policy, or security choice presented so far is unanswered.
-Interaction edges, code quality, test coverage, performance,
+No architecture, error-policy, security, or interaction choice presented so far is unanswered.
+Code quality, test coverage, performance,
 observability, rollout, long-term assessment, and UX have not completed review.
 Potential follow-up TODOs must be presented individually before being deferred.
