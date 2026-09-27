@@ -6,7 +6,7 @@
 > Spec: [M4.1](../specs/m4.1-project-access.md) · [Roadmap](../ROADMAP.md).
 
 The user resumed engineering review before approving or publishing this draft.
-Decisions 1A–18A are now accepted; performance and later review sections remain
+Decisions 1A–19A are now accepted; performance and later review sections remain
 unfinished. Ticket publishing is on hold. Reconcile this breakdown after review,
 including whether proposed T01 is still needed; do not start its proposed frontier
 as a substitute for completing the review.
@@ -84,7 +84,7 @@ Finish the remaining project-access review and make the implementation and rollo
 - [ ] Finish performance, observability, deployment, long-term and UX review; issue 18 is resolved as 18A. This proposed review ticket may be removed once the interactive review finishes.
 - [ ] Complete the design review for invitations, Members, Shared with you, role changes, source approval and access-loss states using the existing design language.
 - [ ] Record chosen query/lock budgets, operational signals, migration/rollback sequence, rollout controls and any changed dependencies; reconcile later ticket criteria before implementation.
-- [ ] Keep accepted decisions 1A–18A unless the user explicitly revises them; do not silently reduce scope.
+- [ ] Keep accepted decisions 1A–19A unless the user explicitly revises them; do not silently reduce scope.
 
 ### Blocked by
 
@@ -602,7 +602,7 @@ Blocked by: T13, T14, T15, T16, T19, T22, T24, #156
 
 ## Frontier and decision coverage
 
-Initial frontier: T01 (remaining reviews), T02 (AI prefactor), T03 (integration
+Proposed frontier after review and breakdown approval: T01 (remaining reviews), T02 (AI prefactor), T03 (integration
 profile), T06 (credential redirects). Work one ticket at a time with `$implement`,
 clearing context between tickets; frontier independence is not a request to run
 agents in parallel.
@@ -627,6 +627,7 @@ agents in parallel.
 | 16A consolidate AI starts; refactor as needed | T02, T23 |
 | 17A required focused CI | T03; extended in every relevant slice |
 | 18A batched request-local read facts; fresh writes/jobs | T11–T12 and each affected read/mutation slice |
+| 19A bounded coordinator contention and safe retries | T04 and each affected mutation/worker/UI slice |
 | Remaining review | In progress before ticket publishing; reconcile proposed T01 |
 
 Dependency edges are implementation prerequisites, not shared-directory warnings.

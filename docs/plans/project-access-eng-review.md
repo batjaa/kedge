@@ -1,6 +1,6 @@
 # Project access — engineering review
 
-> Updated 2026-09-27 · Engineering review resumed; decisions 1A–18A accepted.
+> Updated 2026-09-27 · Engineering review resumed; decisions 1A–19A accepted.
 > Performance review continues; sections 8–11 remain pending. Ticket publishing
 > is on hold. This is not implementation or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
@@ -16,7 +16,7 @@
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
 | 5. Code quality | One finding resolved through decision 16A; checkpoint below |
 | 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 28 planned coverage gaps |
-| 7. Performance | 18A accepted; remaining performance checks in progress |
+| 7. Performance | 18A and 19A accepted; remaining performance checks in progress |
 | 8. Observability | Pending |
 | 9. Deployment and rollout | Pending |
 | 10. Long-term trajectory | Pending |
@@ -643,9 +643,39 @@ small/full pages and repeated projections; separate actor/credential/share conte
 must not bleed, and removal/downgrade/move must be visible on the next request and
 at write/job checkpoints even when prior read facts were warmed.
 
-Performance review remains open for lock contention, memory, indexes, background
-work sizing, estimated slow paths and connection pressure. No latency measurement
-or performance test has been run during this planning review.
+### Issue 19 — unbounded contention at the shared write guard: 19A
+
+**P2, confidence 8/10.** The module specifies that writes “serialize on a stable
+project access guard inside short transactions”; short lock ownership does not
+bound waiting to acquire it. At `api/config/database.php:44`, SQLite's
+`'busy_timeout' => env('DB_BUSY_TIMEOUT'),` leaves the wait to deployment/framework
+configuration. PostgreSQL's default lock timeout is disabled
+([official setting](https://www.postgresql.org/docs/16/runtime-config-client.html#GUC-LOCK-TIMEOUT));
+SQLite has its own [busy timeout](https://www.sqlite.org/c3ref/busy_timeout.html).
+The proposed shared guard adds contention between interactive writes and workers.
+This is a verified missing plan contract, not a measured production incident.
+
+**Accepted:** finite total lock-wait/backoff/retry budgets below request/job
+limits, with database-specific controls and documented defaults. Avoid leaking
+connection-local settings. Retry only classified transient contention after
+confirmed rollback; reacquire locks and recheck live authority/placement with the
+original revision and operation identity. No external, mail or paid-call replay,
+no retry of stale preconditions or an uncertain commit. Exhaustion rolls back and
+returns a retryable busy outcome with preserved input and explicit retry after
+refresh. A removal cannot be reported successful until its commit is confirmed.
+Worker paths retain the existing generation-safe settlement/recovery contract.
+
+Hold locks using independent connections on both engines to prove bounded exit,
+no partial effects, live authority and unchanged preconditions on retry, plus
+recovery after release. Include concurrent removal/worker completion and SQLite's
+single-writer contention across projects. Measure lock wait separately from work
+inside the transaction; external work stays outside locks. Exact defaults must
+be finite, documented and validated against enclosing runtime limits before
+rollout; no arbitrary latency promise is inferred from this decision.
+
+Performance review remains open for memory, indexes, background work sizing,
+estimated slow paths and connection pressure. No latency measurement or performance
+test has been run during this planning review.
 
 ## System boundary
 
@@ -944,6 +974,14 @@ are illustrative; match repository conventions during implementation.
     actor/credential/surface contexts remain isolated; writes/jobs and later
     requests observe grant/placement changes despite warmed read facts.
 
+- [ ] **T18 (P2)** — Mutation coordinator — bound contention and safe transaction retries.
+  - Surfaced by: issue 19 / decision 19A.
+  - Files: shared coordinator, database/runtime configuration, API error/UI
+    recovery mappings, worker settlement and concurrency integration tests.
+  - Verify: controlled locks exhaust a finite total budget with rollback and
+    preserved input; safe retries reload authority with original preconditions;
+    no external/paid replay or falsely successful removal; recovery on both engines.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -962,8 +1000,8 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-The user resumed engineering review before publishing tickets and accepted 18A
-on 2026-09-27. All presented decisions through 18 are resolved. Performance,
+The user resumed engineering review before publishing tickets and accepted 18A and 19A
+on 2026-09-27. All presented decisions through 19 are resolved. Performance,
 observability, rollout, long-term assessment and UX review remain unfinished;
 the separate design review is also pending.
 
