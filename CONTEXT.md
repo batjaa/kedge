@@ -83,6 +83,12 @@ A workspace's stored credential for a private source (today: a GitHub PAT).
 Credentials are never shown after connect.
 _Avoid_: connection, token (the token is the secret inside it)
 
+**Repository Approval**:
+A workspace owner's authorization for a project to import from a particular
+private repository using a workspace integration. It grants no access to other
+repositories reachable through that integration.
+_Avoid_: Integration, Tracked Repo (neither is a delegation of access)
+
 **Share**:
 An unguessable, revocable link granting read-only access to one document. The
 token is shown once; possession of it grants exactly that document.

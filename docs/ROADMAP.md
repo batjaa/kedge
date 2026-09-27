@@ -53,13 +53,15 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Project access — engineering/design review pending.** Viewer / Reviewer / Maintainer and Reviewer as the invitation default are confirmed (2026-09-26). Membership administration is also confirmed: Maintainers manage Viewers/Reviewers; only the owner manages Maintainer seats; anyone can leave their direct membership. Next input: Maintainer authority over document sources. Detailed source/AI authority, grant revocation, invitation lifecycle, and the acceptance/member flows remain for review. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
+**Project access — engineering/design review pending.** Viewer / Reviewer / Maintainer and Reviewer as the invitation default are confirmed (2026-09-26). Membership administration is also confirmed: Maintainers manage Viewers/Reviewers; only the owner manages Maintainer seats; anyone can leave their direct membership. Source authority is confirmed: Maintainers manage project sources within owner-approved private repositories; credentials/approvals remain owner-controlled. Next input: AI access. Detailed content/moderation, grant revocation, invitation lifecycle, and the acceptance/member flows remain for review. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
 
 1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
 3. **Domains, org & trademark** (P1, user actions) — register kedge.review/kedge.ink, create the kedgehq org, USPTO/EUIPO search. Gates **Launch**. (TODOS.md)
 
 ## Decisions so far
+
+- **Project source management confirmed (2026-09-26)** — Maintainers manage sources, branches/path filters, imports, and scans; private repositories require owner approval per project. Credentials and Repository Approvals stay owner-controlled. [Module spec](specs/m4.1-project-access.md).
 
 - **Project roles confirmed (2026-09-26)** — Viewer, Reviewer, and Maintainer; Reviewer is the default invitation role. Membership administration is confirmed: Maintainers manage Viewers/Reviewers, only the owner manages Maintainer seats, and members may leave voluntarily. Other Maintainer powers remain under discussion. [Module spec](specs/m4.1-project-access.md).
 

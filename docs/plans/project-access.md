@@ -7,7 +7,8 @@
 > confirmed by the user at drafting. Update 2026-09-26: all three roles and
 > Reviewer as the invitation default are now confirmed. Membership administration
 > is also confirmed: Maintainers manage Viewers/Reviewers, only the owner manages
-> Maintainer seats, and members may leave. Remaining choices are open.
+> Maintainer seats, and members may leave. Source management is confirmed within
+> owner-approved private repositories. Remaining choices are open.
 
 ## Destination
 
@@ -153,11 +154,12 @@ revocation while an independent document share still grants access.
    appoint, demote, or remove Maintainers. Any member may leave voluntarily.
    Exact content/moderation actions and owner-only cross-project moves remain
    draft defaults.
-3. **Source authority** — recommend that only the workspace owner connects
-   credentials or authorizes a new private repo/path/ref. Maintainers may
-   re-scan already authorized sources. Broader source setup needs an explicit
-   delegation model so project access cannot consume arbitrary workspace PAT
-   permissions. Public/paste/upload imports need their own explicit rule.
+3. **Source authority — resolved 2026-09-26:** Maintainers manage project
+   sources: public URL imports, tracked repos, branches/path filters, imports
+   and re-scans. Private repositories must be owner-approved for the project;
+   credentials and approvals remain owner-controlled. Public fetches use no
+   credential fallback. This replaces the original owner-only source-setup
+   recommendation at the user's request for greater Maintainer access.
 4. **AI and agents** — decide whether project roles can read shared AI artifacts
    or spend the owner's AI budget. Keep per-actor drafts private. Recommend
    leaving new project-scoped MCP tokens for later and preserving all existing
