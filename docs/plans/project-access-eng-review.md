@@ -1,7 +1,7 @@
 # Project access — engineering review
 
 > Updated 2026-09-27 · In progress. Architecture and error-map checkpoints recorded;
-> security review started, sections 4–11 remain pending. This is not implementation
+> security checkpoint recorded; interaction review started, sections 5–11 remain pending. This is not implementation
 > or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
@@ -12,8 +12,8 @@
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
 | 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
-| 3. Security and threat model | In progress; decisions 8A–11A accepted |
-| 4. Data flow and interaction edge cases | Pending |
+| 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
+| 4. Data flow and interaction edge cases | In progress |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
 | 7. Performance | Pending |
@@ -48,6 +48,7 @@ API/web/worker/scheduler deployment paths carry this feature.
 | Import, re-sync, scan, AI run and audit services | Add authority and operation checks around their existing behavior |
 | AI run IDs and conditional terminal transitions | Retain rather than introduce another run-history model |
 | Local/preview scheduler services | Run bounded cleanup outside the work queue |
+| Content-addressed image and diagram storage | Retain caching/deduplication behind private storage and document-authorized delivery; migrate public references |
 | PHPUnit authorization matrix, MCP concurrency tests, Playwright auth/share journeys | Extend agreed test seams; no new test framework |
 
 Framework references verified during review:
@@ -342,6 +343,54 @@ destination, and controlled overlap with authenticated requests, rotation, and
 remember-me restoration. Browser and server concurrency tests must prove the old
 account cannot return after confirmed logout; tests are planned, not executed.
 
+### Issue 12 — document asset delivery bypasses access checks: 12A
+
+**P1, confidence 9/10 from source and configuration, not a production probe.**
+`api/app/Services/Import/Normalization/ImageReHoster.php:160` returns
+`[$disk->url($path), null]`; `api/app/Services/Diagrams/DiagramRenderer.php:80`
+returns `$disk->url($path)` on cache hit. `api/config/kedge.php:277` defaults
+`MEDIA_DISK` to `public`, and `api/config/filesystems.php:45` configures
+`'visibility' => 'public'`. Those default storage URLs do not recheck document
+reach after a member is removed. A hash in the path is not an access check.
+
+**Accepted:** begin with document-authorized image/diagram delivery backed by
+private storage, rechecking live access for every new request. Bind asset lookup
+to the requested document/version; shared hashes cannot grant access. Retain
+render/storage caching behind the authorization boundary. Existing assets and
+references are part of migration, as are direct origin/storage/CDN bypasses.
+Preserve historical version hashes/anchors, safe embedding/CSP, valid independent
+shares, and public demo access. Already delivered/in-flight bytes cannot be recalled.
+
+The user asked whether 12B could follow later. Keep storage and delivery separate
+to make that change manageable, without implementing a speculative second mode.
+[Laravel temporary URLs](https://github.com/laravel/docs/blob/13.x/filesystem.md#temporary-urls)
+are a potential later delivery mechanism, but issued URLs can remain usable until
+expiry after membership removal. A switch therefore needs measured justification
+and explicit acceptance of weaker asset revocation; it is not an automatic
+performance fallback or a commitment to build 12B.
+
+**CRITICAL regression requirement:** API/browser coverage for access loss, moves,
+share revocation and valid independent grants, wrong-document asset IDs, shared
+hashes, public bypasses, and legacy references. Migration must preserve version
+hashes and anchors. Exercise local storage automatically and verify deployed
+object-store/cache rules before enabling invitations.
+
+### Security checkpoint
+
+These are reviewed plan requirements, not claims that implementation is secure.
+
+| Threat surface evaluated | Required control / disposition |
+|---|---|
+| New endpoints, nested IDs, cross-project reads and mutations | Policies plus live scoped capabilities/query scopes; nested binding and field projection; same inaccessible-resource response; 2A coordinator |
+| Input and identity | Validated bounded email/role/repository/ref/path input, backed enums, exact normalized verified recipient, internal auth-return destinations, CSRF and throttles; reuse existing validation patterns |
+| Secret handling and source substitution | 8A redaction and response controls; encrypted invitation jobs; 9A stable repository/owner identity; 10A credential-origin boundary; no public-to-private credential fallback |
+| Sessions, derived resources, and access loss | 11A reliable shared logout; 12A live asset authorization/private storage; document-bound AI privacy, mention audience, independent shares and unchanged MCP credential scope |
+| SQL, content, template, and prompt injection | Existing parameterized queries/validated identifiers, untrusted rendering and SVG defenses, Kroki allowlist, SSRF controls, and human-confirmed AI drafts remain required |
+| Dependency exposure | Reuse current framework/storage/mail/queue seams; no new permission engine or mandatory SaaS telemetry dependency proposed |
+
+No additional security finding is promoted at this checkpoint. Stale admin intent
+and user-visible conflict recovery are evaluated next under interaction edges.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -539,6 +588,17 @@ are illustrative; match repository conventions during implementation.
     destination. Both ordinary logout and account switching use the shared flow;
     no network-idle workaround substitutes for concurrency coverage.
 
+- [ ] **T11 (P1)** — Document assets — enforce live authorization for delivery.
+  - Surfaced by: issue 12 / decision 12A and the user's future-transition question.
+  - Files: image rehosting, diagram rendering/delivery, filesystem/media config,
+    document/share/demo rendering, new authorized asset routes, legacy-reference
+    migration, proxy/cache configuration, API media tests and browser journeys.
+  - Verify: new image/diagram requests require current document reach; asset IDs
+    and shared hashes cannot cross document boundaries; removal/moves/share
+    revocation apply while valid independent grants still work; old public paths
+    and cache/origin routes cannot bypass checks; migration preserves history.
+    Verify both local and deployed object-storage delivery. No 12B mode is built.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -552,10 +612,12 @@ are illustrative; match repository conventions during implementation.
   existing explicit retry and honest accounting rules.
 - Revoking independent shares/workspace grants during project removal: they are
   separate authorities, with explicit management and explanatory UI.
+- A second asset-delivery mode using temporary storage URLs: possible future
+  optimization only after measured need and an explicit revocation-policy decision.
 
 ## Decisions still pending
 
-No architecture or error-policy choice presented so far is unanswered.
-Security, interaction edges, code quality, test coverage, performance,
+No architecture, error-policy, or security choice presented so far is unanswered.
+Interaction edges, code quality, test coverage, performance,
 observability, rollout, long-term assessment, and UX have not completed review.
 Potential follow-up TODOs must be presented individually before being deferred.

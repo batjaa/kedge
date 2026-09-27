@@ -4,6 +4,7 @@
 
 ## Decision log (project access engineering review, 2026-09-27)
 
+- ✅ **Engineering review security 12A confirmed:** start with private storage and document-authorized delivery for imported images/diagrams, rechecking current access on each new request. Include legacy assets/URLs and public origin/cache bypasses; preserve independent share/demo access, version hashes, and anchors. Keep storage separate from delivery so a future change is manageable. Short-lived storage URLs (12B) remain an option only if measured need warrants explicitly relaxing immediate asset revocation; no second delivery mode is planned now. Implementation and remaining review are pending.
 - ✅ **Engineering review security 11A confirmed:** harden shared sign-out for ordinary logout and invitation account switching, with confirmed completion, retry on failure/uncertainty, and preserved invitation destination. Reproduce the documented concurrency race before choosing the smallest proven server fix; cover session rotation, remember-me, and controlled in-flight requests without network-idle workarounds. The existing logout debt is now required M4.1 work; implementation and remaining review are pending.
 
 ## Decision log (project access planning, 2026-09-26)
