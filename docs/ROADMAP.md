@@ -53,13 +53,15 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Project access — engineering/design review pending.** Viewer / Reviewer / Maintainer and Reviewer as the invitation default are confirmed (2026-09-26). Membership administration is also confirmed: Maintainers manage Viewers/Reviewers; only the owner manages Maintainer seats; anyone can leave their direct membership. Source authority is confirmed: Maintainers manage project sources within owner-approved private repositories; credentials/approvals remain owner-controlled. AI access is confirmed: Reviewer Ask/reply drafts, Maintainer all existing AI tools, Viewer shared-result reads only, with personal artifact privacy. Next input: document share-link management. Detailed content/moderation, grant revocation, invitation lifecycle, and the acceptance/member flows remain for review. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
+**Project access — engineering/design review pending.** Viewer / Reviewer / Maintainer and Reviewer as the invitation default are confirmed (2026-09-26). Membership administration is also confirmed: Maintainers manage Viewers/Reviewers; only the owner manages Maintainer seats; anyone can leave their direct membership. Source authority is confirmed: Maintainers manage project sources within owner-approved private repositories; credentials/approvals remain owner-controlled. AI access is confirmed: Reviewer Ask/reply drafts, Maintainer all existing AI tools, Viewer shared-result reads only, with personal artifact privacy. Document sharing is confirmed: Maintainers create/list/revoke project-document share links; Viewers/Reviewers cannot. Next input: removal and independent share access. Detailed content/moderation, grant revocation, invitation lifecycle, and the acceptance/member flows remain for review. Testing seams were confirmed by the user on 2026-09-26. [Module spec](specs/m4.1-project-access.md).
 
 1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
 3. **Domains, org & trademark** (P1, user actions) — register kedge.review/kedge.ink, create the kedgehq org, USPTO/EUIPO search. Gates **Launch**. (TODOS.md)
 
 ## Decisions so far
+
+- **Project document sharing confirmed (2026-09-26)** — Maintainers may create, list, and revoke document share links within the project. Viewers and Reviewers cannot manage shares. Removal behavior for independent share grants remains under discussion. [Module spec](specs/m4.1-project-access.md).
 
 - **Project AI access confirmed (2026-09-26)** — Reviewers generate Ask answers and reply drafts; Maintainers use all existing AI tools; Viewers read shared results only. Personal questions/drafts remain private; existing provider gates/rate limits apply. [Module spec](specs/m4.1-project-access.md).
 

@@ -10,7 +10,8 @@
 > Maintainer seats, and members may leave. Source management is confirmed within
 > owner-approved private repositories. AI access is confirmed: Reviewers use Ask/
 > reply drafts, Maintainers use all existing tools, and Viewers read shared results
-> only; personal questions/drafts stay private. Remaining choices are open.
+> only; personal questions/drafts stay private. Maintainer document-share
+> management is confirmed. Remaining choices are open.
 
 ## Destination
 
@@ -143,8 +144,9 @@ later scans cannot move content across an access boundary accidentally.
 
 Existing document share links remain independent grants. Removing project
 membership cannot revoke a bearer link someone already possesses. The final
-spec must define the removal copy and share-management permissions, including
-whether a Maintainer can create new shares. It must not promise complete access
+spec must define the removal copy. Share management was confirmed 2026-09-26:
+Maintainers may create, list, and revoke project-document shares; Viewers and
+Reviewers may not. It must not promise complete access
 revocation while an independent document share still grants access.
 
 ## Remaining decisions, in order
@@ -167,8 +169,10 @@ revocation while an independent document share still grants access.
    results but do not generate. Personal questions/drafts remain private. Costs
    use the owning workspace's provider under existing limits. New project-scoped
    MCP tokens remain deferred; human invitations grant no new agent authority.
-5. **Grant interactions** — approve the removal/authorship rule, document move
-   semantics, and how independent share access is explained to the owner.
+5. **Sharing and grant interactions** — Maintainer create/list/revoke of
+   project-document share links confirmed 2026-09-26. Still to confirm: the
+   removal/authorship rule, document moves, and how independent share access
+   behaves and is explained after removal.
 6. **Invitation lifecycle** — recommend seven-day expiry, one pending invitation
    per normalized email/project, resend replacing the token, and idempotent
    acceptance. Decide what changing or removing an inviter does to pending
