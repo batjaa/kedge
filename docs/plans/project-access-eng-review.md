@@ -1,7 +1,8 @@
 # Project access — engineering review
 
-> 2026-09-26 · In progress. Architecture checkpoint recorded; error-map review
-> started, sections 3–11 remain pending. This is not implementation or release approval.
+> 2026-09-26 · In progress. Architecture and error-map checkpoints recorded;
+> security review started, sections 4–11 remain pending. This is not implementation
+> or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
 ## Review progress
@@ -10,8 +11,8 @@
 |---|---|
 | Step 0: scope challenge | 1A accepted: retain the full approved scope |
 | 1. Architecture | Four findings resolved through decisions 2A–5A |
-| 2. Error and rescue map | In progress; decision 6A accepted |
-| 3. Security and threat model | Pending |
+| 2. Error and rescue map | Two findings resolved through decisions 6A–7A; planned failure map below |
+| 3. Security and threat model | In progress; no new decisions recorded yet |
 | 4. Data flow and interaction edge cases | Pending |
 | 5. Code quality | Pending |
 | 6. Tests and coverage diagram | Pending; requirements below are not implemented coverage |
@@ -146,6 +147,96 @@ attempt and condition status writes on generation. Exhausted uncertain sends
 show Failed with honest "may have arrived" copy and resend recovery. Do not
 promise exactly-once delivery or guaranteed inbox receipt. This favors delivery
 reliability over suppressing every duplicate email.
+
+### Issue 7 — catch-all per-file continuation: 7A
+
+**P1, confidence 8/10.**
+`api/app/Services/TrackedRepos/TrackedRepoScanService.php:214–225` catches
+`Throwable`, records `$report->failed($path, 'This file could not be imported.');`,
+and executes `continue;`. If new authority checks throw within that path, the
+handler would swallow them along with database and programming failures. This is
+an integration risk in the planned change, not a claim that project-access code
+already exists.
+
+**Accepted:** continue only for explicitly classified, recoverable file errors.
+Lost scan authority/approval stops the scan; unexpected infrastructure/programming
+errors stop and are reported. Preserve previous valid commits and content. An
+inaccessible moved document is still a redacted skip under the confirmed scope
+rules. Settle failure conditionally on operation identity; use scheduled cleanup
+when a failure prevents immediate persistence. This preserves useful partial
+progress while keeping security and system failures visible.
+
+## Planned error and rescue map
+
+This maps required behavior, not verified implementation. Existing exception
+types are named below; new project-specific domain outcomes still need typed
+representations during implementation. HTTP status mapping follows the module
+spec. A process crash has no catchable PHP exception, so it is listed separately.
+There are 24 path groups; the two error-policy gaps raised in this section were
+resolved by 6A and 7A. Detailed assertions and test coverage remain section 6 work.
+
+| Method/codepath | Failure | Exception or outcome | Required handling | User sees |
+|---|---|---|---|---|
+| Invite issue/resend input | Missing, malformed email/role | `ValidationException` | Reject before grant/mail mutation | 422 field feedback |
+| Authenticated actions | No session, unverified identity, stale CSRF | `AuthenticationException`, authorization denial, `TokenMismatchException` | Existing auth/verification/CSRF handling; no mutation | Sign in, verify, or refresh/retry |
+| Scoped resource lookup | Missing or foreign project/nested ID | `ModelNotFoundException` or policy not-found response | Same not-found boundary, no metadata leak | 404 |
+| Visible action authorization | Role cannot perform action | `AuthorizationException` | Deny; do not infer write authority from read access | 403 with allowed recovery |
+| Invite/resend/preview throttles | Limit or cooldown exceeded | `ThrottleRequestsException` / cooldown outcome | Refuse extra attempt without rotating/sending | 429 and retry guidance |
+| Invitation slot lifecycle | Existing member, pending duplicate, conflicting state | Unique-key `QueryException` or typed lifecycle outcome | Resolve expected conflict under coordinator; never promote or send twice accidentally | Existing state or 409 |
+| Invitation preview | Invalid, expired, revoked or replaced token | Typed invalid/inactive outcome, not an infrastructure exception | Uniform invalid response or permitted recognized recovery state; no grant | Invalid/gone page |
+| Acceptance identity | Wrong email or reviewer identity lacks fresh verification | Typed identity/verification outcome | Keep membership unchanged; reuse account switch/upgrade/verification | Correct-account guidance |
+| Acceptance transaction | Expiry/revoke races, replay, inviter lost authority | Typed inactive/conflict outcome; expected unique-key race | Atomic checks; accepted replay returns existing membership, removed replay never recreates it | Existing destination, 409 or recognized 410 |
+| Invitation queue dispatch | Database queue unavailable after invitation commit | `QueryException` / configured queue transport exception | Preserve recoverable invitation; report delivery failure when storage is available | Saved invitation with delivery recovery |
+| Invitation mail send | Known transport failure or uncertain acceptance | Symfony `TransportException` family; crash has no exception | Bounded same-generation retry, then explicit failure; no expiry extension | Failed/resend, with may-have-arrived copy when uncertain |
+| Invitation stale delivery | Resend/revoke/expiry/authority loss wins | Typed stale-generation/inactive outcome | Skip send or obsolete status write; cannot recall an already-sent message | Current invitation state |
+| Member/role/move mutation | Permission/resource placement changed mid-request | `AuthorizationException` or typed conflict | Coordinator reauthorizes; roll back forbidden mutation | 403/404/409 under visibility rules |
+| Protected DB transaction | Deadlock, lock timeout, database unavailable | `QueryException` / underlying `PDOException` | Roll back; report failure with context, never claim success | Recoverable error; prior state remains |
+| Grant creation/escalation audit | Required audit write fails | `QueryException` | Roll back grant and audit together | Failure without a stranded grant |
+| Access reduction audit | Audit/log sink fails after reduction | Existing `AuditLogger::recordSafely` boundary | Preserve security change; best-effort sanitized reporting | Successful reduction |
+| Repository approval/preview | Invalid repo/ref/pattern, upstream denial/rate limit | `DiscoveryException` with existing stable discriminator | Existing source failure mapping, constrained by project authority | Validation/source recovery; no credential disclosure |
+| Source config/untrack | Pending/running work or changed config | Typed conflict/generation outcome | Refuse conflicting edit or suppress obsolete result | 409 or current operation state |
+| Import/re-sync external work | SSRF block, revoked PAT, throttling, fetch/projection/re-anchor failure | `BlockedUrlException`, `TokenRevokedException`, `RateLimitedException`, `FetchException`, `ProjectionFailedException`, `ReanchorUnavailableException`, `ReanchorRequestException` | Preserve existing specific retry/terminal policies; new authority/generation checks apply to every attempt and commit | Import failed or last-good-version recovery |
+| Delegated worker authority | Removed grant or approval | Typed access-revoked outcome | Stop external/descendant work; conditional terminal cleanup | Access/source withdrawn, no unauthorized result |
+| Scan file processing | Recoverable file failure versus system failure | Allowlisted file-domain errors/confirmed unique-key conflict versus unexpected `QueryException`, `Error`, other exceptions | 7A: continue only for known recoverable cases; otherwise stop/report; moved inaccessible documents skip without disclosure | Accurate partial report or interrupted scan |
+| AI execution | Provider/rate/deadline/queue fault or revoked authority | Existing `AiFailureClassifier` types plus typed access-revoked outcome | Keep deterministic/transient rules and cost-safe default; retain spend, suppress unauthorized output | Existing failed-run state and safe reason |
+| Worker crash or obsolete completion | Failure handler never runs; old generation writes late | No exception on hard kill; typed obsolete-operation outcome | 3A/5A: conditional writes and scheduled cleanup; never overwrite replacement | Settled failure or intact newer success |
+| Cleanup/read/status endpoints | Database unavailable or poll fails | `QueryException`, transport/network failure | Report failure, retain last known data; cleanup can run again when dependencies recover | Load/recovery state, never an invented empty/success state |
+
+The existing AI job's outer `catch (Throwable)` delegates to an explicit typed
+classifier with a deterministic fallback; preserve that cost-safe behavior.
+`AuditLogger::recordSafely` intentionally shields an already-committed security
+reduction from audit failure. Neither justifies a catch-all continue inside the
+scan's file loop. Never translate every `QueryException` into a duplicate or a
+user-validation error; only a verified matching constraint conflict qualifies.
+
+```plantuml
+@startuml
+start
+:Protected action or worker step;
+if (Authority lost or operation obsolete?) then (yes)
+  :Stop unauthorized / obsolete work;
+  :Conditional failure cleanup only for current operation;
+  stop
+endif
+if (Expected recoverable error?) then (yes)
+  :Use explicit domain handling;
+  :Bounded retry, allowed file continuation, or user recovery;
+  stop
+endif
+if (Unexpected failure?) then (yes)
+  :Stop; roll back current transaction;
+  :Report sanitized error with context;
+  if (Can persist terminal state?) then (yes)
+    :Conditionally settle current operation;
+  else (no)
+    :Scheduled recovery after dependencies return;
+  endif
+  stop
+endif
+:Commit authorized result for current operation;
+stop
+@enduml
+```
 
 ## System boundary
 
@@ -300,6 +391,14 @@ are illustrative; match repository conventions during implementation.
   - Verify: a send accepted before worker/status-write failure retries with the
     same token/generation/expiry; duplicate links accept once; exhausted uncertain
     sends have recovery copy; stale status writes cannot overwrite a resend.
+- [ ] **T6 (P1)** — Scan errors — replace catch-all continuation with typed handling.
+  - Surfaced by: issue 7 / decision 7A.
+  - Files: `TrackedRepoScanService`, scan/domain exception types, scan job failure
+    settlement, and `TrackedRepoScanTest`.
+  - Verify: expected file failures allow later files; lost scan/approval authority
+    prevents later path processing and child dispatch; unexpected DB/programming
+    failures stop/report without false success; prior content and replacements
+    survive; inaccessible moved documents remain redacted skips.
 
 ## NOT in scope
 
@@ -317,7 +416,7 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-No architecture choice presented so far is unanswered. Detailed error mapping,
-security, interaction edges, code quality, test coverage, performance,
+No architecture or error-policy choice presented so far is unanswered.
+Security, interaction edges, code quality, test coverage, performance,
 observability, rollout, long-term assessment, and UX have not completed review.
 Potential follow-up TODOs must be presented individually before being deferred.
