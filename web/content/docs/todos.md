@@ -5,6 +5,10 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
+## Decision log (Symphony delivery, 2026-09-26)
+
+- Adopted the Jolly delivery workflow for ready GitHub issues: isolated implementation, meaningful local verification, independent agent review, all three existing CI jobs, and eligible automatic delivery. Four builder attempts are persisted per ticket. Product decisions and release verification retain explicit human handoffs; the product rule that AI output is a human-confirmed draft is unchanged. The operator guide is `.github/SYMPHONY.md`; `scripts/agent` provides locked bootstrap and local verification.
+
 ## Decision log (project access planning, 2026-09-26)
 
 - ✅ **Project access pulled forward from post-v1** at the user's request: invite someone to a project, without access to the rest of its workspace. Workspace membership management follows later; the project design must accommodate that expansion. SPEC §10.1/§11/§21 and ROADMAP amended; glossary distinguishes Project Member from a Share Participant.

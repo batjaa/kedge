@@ -27,6 +27,9 @@ per-module specs.
 
 ## Prerequisites
 
+The maintainer's issue-driven delivery workflow and reproducible agent checks are
+documented in [the Symphony guide](.github/SYMPHONY.md).
+
 - PHP 8.5+ and [Composer](https://getcomposer.org) (for `api/`)
 - Node 20+ and npm (for `web/`, and the vite pane of the API dev script)
 

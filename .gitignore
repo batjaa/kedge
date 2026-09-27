@@ -1,4 +1,5 @@
 # Dependencies
+.symphony/
 node_modules/
 vendor/
 
