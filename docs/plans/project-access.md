@@ -11,7 +11,9 @@
 > owner-approved private repositories. AI access is confirmed: Reviewers use Ask/
 > reply drafts, Maintainers use all existing tools, and Viewers read shared results
 > only; personal questions/drafts stay private. Maintainer document-share
-> management is confirmed. Remaining choices are open.
+> management and removal semantics are confirmed: end the direct grant, preserve
+> review history, and leave independent links active until explicitly revoked.
+> Remaining choices are open.
 
 ## Destination
 
@@ -142,9 +144,10 @@ can move documents between projects or to/from Unfiled; no cross-workspace move.
 Preserve the relationship between a tracked repo and its imported documents so
 later scans cannot move content across an access boundary accidentally.
 
-Existing document share links remain independent grants. Removing project
-membership cannot revoke a bearer link someone already possesses. The final
-spec must define the removal copy. Share management was confirmed 2026-09-26:
+Removal semantics confirmed 2026-09-26: end the direct project grant immediately,
+preserve comments/suggestions/approvals, and leave independent document share
+links active until explicitly revoked. A removed member may still use a valid
+link. The removal flow explains this and offers link review/revocation. Share management was confirmed 2026-09-26:
 Maintainers may create, list, and revoke project-document shares; Viewers and
 Reviewers may not. It must not promise complete access
 revocation while an independent document share still grants access.
@@ -169,10 +172,11 @@ revocation while an independent document share still grants access.
    results but do not generate. Personal questions/drafts remain private. Costs
    use the owning workspace's provider under existing limits. New project-scoped
    MCP tokens remain deferred; human invitations grant no new agent authority.
-5. **Sharing and grant interactions** — Maintainer create/list/revoke of
-   project-document share links confirmed 2026-09-26. Still to confirm: the
-   removal/authorship rule, document moves, and how independent share access
-   behaves and is explained after removal.
+5. **Sharing and removal — resolved 2026-09-26:** Maintainers manage document
+   share links. Removal immediately ends the direct project grant, preserves
+   review history, and keeps independent shares active until explicitly revoked.
+   Explain remaining link access and offer review/revocation in the removal flow.
+   **Document moves remain open.**
 6. **Invitation lifecycle** — recommend seven-day expiry, one pending invitation
    per normalized email/project, resend replacing the token, and idempotent
    acceptance. Decide what changing or removing an inviter does to pending
