@@ -1,8 +1,9 @@
 # Project access — engineering review
 
-> Updated 2026-09-27 · Engineering review resumed; decisions 1A–21A accepted.
-> Performance and observability checkpoints recorded; sections 9–11 remain pending. Ticket publishing
-> is on hold. This is not implementation or release approval.
+> Completed 2026-09-27 · Decisions 1A–21A and user-directed deployment decision 22
+> recorded. All engineering review sections complete; separate design review,
+> ticket publication and implementation remain pending. This is a planning
+> checkpoint, not evidence of passing implementation or release tests.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
 ## Review progress
@@ -18,13 +19,13 @@
 | 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 29 planned coverage gaps |
 | 7. Performance | Three findings resolved through 18A–20A; checkpoint below |
 | 8. Observability | One finding resolved through 21A; checkpoint below |
-| 9. Deployment and rollout | Pending |
-| 10. Long-term trajectory | Pending |
-| 11. Design and UX | Pending |
+| 9. Deployment and rollout | Issue 22 resolved by user direction: ordinary deployment; checkpoint below |
+| 10. Long-term trajectory | No new issues; reversibility 3/5; checkpoint below |
+| 11. Design and UX | No new engineering issues; flow/states checked; separate visual review pending |
 
 The coverage diagram and failure registry are recorded in the test map. Deployment
-sequence, worktree strategy and final task consolidation remain for later sections.
-No unasked finding is treated as an accepted decision.
+sequence, implementation ordering and final tasks are recorded below. No unasked
+finding is treated as an accepted decision. No application code was changed.
 
 ## Scope checkpoint: 1A
 
@@ -173,7 +174,7 @@ This maps required behavior, not verified implementation. Existing exception
 types are named below; new project-specific domain outcomes still need typed
 representations during implementation. HTTP status mapping follows the module
 spec. A process crash has no catchable PHP exception, so it is listed separately.
-There are 29 path groups, including later security/interaction findings; the two
+There are 30 error-path rows, including later review findings; the two
 error-policy gaps originally raised in this section were resolved by 6A and 7A.
 Detailed assertions and test coverage remain section 6 work.
 
@@ -192,7 +193,7 @@ Detailed assertions and test coverage remain section 6 work.
 | Invitation mail send | Known transport failure or uncertain acceptance | Symfony `TransportException` family; crash has no exception | Bounded same-generation retry, then explicit failure; no expiry extension | Failed/resend, with may-have-arrived copy when uncertain |
 | Invitation stale delivery | Resend/revoke/expiry/authority loss wins | Typed stale-generation/inactive outcome | Skip send or obsolete status write; cannot recall an already-sent message | Current invitation state |
 | Member/role/move mutation | Permission/resource placement changed mid-request | `AuthorizationException` or typed conflict | Coordinator reauthorizes; roll back forbidden mutation | 403/404/409 under visibility rules |
-| Protected DB transaction | Deadlock, lock timeout, database unavailable | `QueryException` / underlying `PDOException` | Roll back; report failure with context, never claim success | Recoverable error; prior state remains |
+| Protected DB transaction | Deadlock, lock timeout, database unavailable | `QueryException` / underlying `PDOException` | 19A bounded safe retry after rollback, then busy/failure; retain original preconditions, no external replay | Recoverable error; prior state remains |
 | Grant creation/escalation audit | Required audit write fails | `QueryException` | Roll back grant and audit together | Failure without a stranded grant |
 | Access reduction audit | Audit/log sink fails after reduction | Existing `AuditLogger::recordSafely` boundary | Preserve security change; best-effort sanitized reporting | Successful reduction |
 | Repository approval/preview | Invalid repo/ref/pattern, upstream denial/rate limit | `DiscoveryException` with existing stable discriminator | Existing source failure mapping, constrained by project authority | Validation/source recovery; no credential disclosure |
@@ -207,6 +208,8 @@ Detailed assertions and test coverage remain section 6 work.
 | Document asset delivery | Missing grant, wrong document association, storage unavailable | Authorization/not-found or storage failure | 12A: authorize each request and association; private origin; retain safe rendering fallback | Denial or asset error, no bypass through public storage |
 | Stale administrative action | Changed/recreated target after screen was loaded | Typed revision conflict | 13A: compare target revision under coordinator; no mutation; refresh permitted state | 409 then explicit retry, preserving 403/404 precedence |
 | Competing content update | Another update is pending/running | Typed busy conflict | 15A: reject before input changes or dispatch; retain accepted operation | 409, preserved draft, refresh and explicit retry |
+| Scan report paging/publication | Requested generation retired, partial staging or reader lost access | Typed refresh/conflict or authorization outcome | 20A: never mix pages or expose staging; reauthorize each page; preserve valid publication | Refresh current report or access-loss state |
+| Operations check | Worker/scheduler stopped, no successful heartbeat, or check storage unavailable | Typed unhealthy/unavailable result | 21A: independent detection, safe diagnostics and runbook; no automatic repair | Operator unhealthy/unavailable status; existing user recovery states |
 
 The existing AI job's outer `catch (Throwable)` delegates to an explicit typed
 classifier with a deterministic fallback; preserve that cost-safe behavior.
@@ -781,6 +784,148 @@ reconstruct safe lifecycle transitions but intentionally cannot reconstruct secr
 payloads or events lost during a total logging outage. No live monitoring was
 changed or alerts sent during this review.
 
+## Deployment and rollout checkpoint
+
+### Issue 22 — ordinary deployment accepted for the current stage
+
+The proposed maintenance cutover (22A) and rolling compatibility release (22B)
+were **not accepted**. On 2026-09-27 the user said there was no need for a
+maintenance cutover or guardrails because traffic is low and there are no real
+customers. Record this as a user-directed choice, not an unanswered issue or an
+implicit acceptance of 22A.
+
+The motivating code was `api/docker/entrypoint.sh:58`,
+`exec php artisan queue:work --tries=3 --sleep=1`, and the separate API/worker/
+scheduler services in `deploy/preview/compose.yml`. Long-lived processes need
+ordinary restarts to load code. This remains a deployment instruction; it does
+not justify imposing a fleet gate the user declined. The current target is the
+home-server Coolify/Compose setup described in `.github/README.md` and
+`deploy/preview/README.md`, not the earlier Forge assumption.
+
+**Chosen approach:** existing deploy path, additive migrations and data conversion,
+normal process restarts, smoke checks and manual recovery. Accept temporary
+interruption and mixed-version exposure during this early-stage redeploy. No
+maintenance window protocol, compatibility bridge release, forced job drain,
+fleet-version verifier or enforced rollback floor. A compatible previous build
+can be redeployed; otherwise fix forward. Schema/private-asset/report changes mean
+transparent downgrade cannot be promised. No automated backup/restore or destructive
+reset is implied by this planning choice.
+
+| Deployment concern | Plan at this stage |
+|---|---|
+| Schema changes | Add tables/columns/indexes and convert legacy assets/reports with existing migration tools; no owner-membership backfill; measure locks on representative fixtures, with interruption acceptable |
+| Version overlap | Restart API, worker and scheduler through the ordinary deployment; no zero-downtime compatibility guarantee or additional fleet coordination |
+| Feature enablement | Ship the complete permission boundary as already agreed; no new feature-flag platform or automated rollout gate |
+| Recovery | Manual compatible redeploy or fix-forward; do not claim web rollback alone restores schema/asset compatibility |
+| Smoke evidence | Core invite/verified accept/review/remove, configured mail/queue, cleanup/operations status, and private asset delivery; existing #156 verification recovery remains required for the actual acceptance journey |
+
+```plantuml
+@startuml
+actor Operator
+participant "Existing Coolify / Compose deploy" as Deploy
+database "Application DB / asset storage" as Data
+participant "API / worker / scheduler" as Runtime
+participant Web
+Operator -> Deploy : Deploy the completed module normally
+Deploy -> Data : Additive migrations and data conversion
+Deploy -> Runtime : Replace / restart processes with new code
+Deploy -> Web : Deploy matching web build
+Operator -> Runtime : Core flow, mail, cleanup and asset smoke checks
+alt Checks pass
+  Operator -> Web : Use invitations
+else Deployment needs recovery
+  Operator -> Deploy : Manual compatible redeploy or fix forward
+end
+note over Deploy, Runtime
+Temporary interruption is accepted.
+No maintenance-cutover or fleet-version protocol.
+end note
+@enduml
+```
+
+The diagram is a plan, not a deployment log. No production service was changed.
+
+## Long-term trajectory checkpoint
+
+**No new issues found.** Reversibility is **3/5**: capability resolution and
+invitation lifecycle remain ordinary services, but persisted grants, private asset
+references and paginated reports require deliberate data-compatible changes.
+
+| One-year concern | Assessment |
+|---|---|
+| Workspace expansion | Explicit project grants remain distinct from workspace membership; the shared resolver can compose future workspace roles without treating every project member as a workspace member |
+| Domain clarity | Project Member, Invitation, Share Participant, Integration and Repository Approval remain separate concepts in CONTEXT.md; source approval never delegates the credential itself |
+| Operation complexity | Reuse resource generations and AI Run identity; latest-report storage does not become a general history framework |
+| Maintenance cost | Shared transaction/start services reduce duplicated rules; query/freshness/concurrency tests make their contracts discoverable for a new engineer |
+| Existing debt | Logout races, overlapping content updates and duplicate AI starts are already required work under 11A/15A/16A; no new deferred debt ticket is proposed |
+| Later product evolution | Preserve Document/version lineage and ADR 0001; this module does not introduce PR-document identity or workspace-management UI |
+
+_No new tasks from long-term trajectory._
+
+## Engineering design and UX checkpoint
+
+**No new engineering issues found.** This checks the planned information flow,
+state behavior, accessibility and recovery against the module and DESIGN.md; it
+does not claim a separate visual design review or implemented screen validation.
+
+| Surface | First action and required states |
+|---|---|
+| Shared with you / project header | Workspace identity and project distinguish invitations from personal work; direct project lookup replaces personal-list-only discovery; loading, empty and load failure differ |
+| Members | Inherited owner access, direct members and pending invitations are distinguishable; default Reviewer and only grantable roles; per-target actions and paginated rows |
+| Invite acceptance | Safe preview leads through sign-in/signup/verification or confirmed account switch to explicit Join; expired/replaced/revoked links explain recovery; opening a link alone grants nothing |
+| Role change, removal and leave | Show capability/audience consequences; stale revision refreshes without replay; contributions and independent shares remain; access loss discards stale responses instead of creating a sign-in loop |
+| Sources and scan reports | Owner approval vs Maintainer use is clear; preview/config busy/failure and 20A generation-pinned pagination have explicit states; hidden documents do not appear in paths/totals |
+| Responsive/accessibility | Existing Tailwind panel/form vocabulary, both themes, four locales, labelled errors, keyboard/focus behavior, long names and narrow viewports are already required |
+
+The existing project page resolves via `getProjects()` and redirects some 403s to
+sign-in. The approved direct-project contract and access-removed state explicitly
+replace those baseline assumptions; this is covered work, not a newly discovered
+scope choice. The existing token flow/state diagram and U01–U10 cover the detailed
+branches; the high-level journey is:
+
+```plantuml
+@startuml
+start
+:Open invitation preview;
+if (Link active?) then (yes)
+  :Sign in / sign up and verify;
+confirm correct account;
+  :Explicit Join project;
+  :Project home from Shared with you;
+workspace identity shown;
+  :Read / review / maintain within current role;
+  if (Access changed?) then (yes)
+    :Refresh capabilities or show access removed;
+keep contributions and explain independent shares;
+  endif
+else (no)
+  :Explain inactive link and inviter recovery;
+endif
+stop
+@enduml
+```
+
+_No new tasks from engineering design/UX._ Separate visual design review remains
+pending as recorded in the module; no screens were built or visually tested here.
+
+## Implementation ordering and worktrees
+
+Sequential implementation, no parallelization opportunity under the review's
+module-directory rule: the complete product slices share `api/`, most also share
+`web/`, and the CI/deployment work depends on their queue/concurrency contracts.
+Do not create concurrent worktrees merely because draft tickets have different
+names. The unpublished ticket draft must be reconciled before implementation.
+
+| Workstream | Modules touched | Depends on |
+|---|---|---|
+| Accepted prefactors and integration profile | api, web test harness, .github | Existing baseline tests |
+| Shared authorization, private assets and invitation journey | api, web | Prefactors/profile and agreed roles/transactions |
+| Role-aware review, sources and AI | api, web | Project grant lifecycle and protected mutation boundary |
+| Bounded reports, cleanup and operational diagnostics | api, web, deploy | Operation identity plus implemented source/AI flows |
+| Complete experience and normal deployment | api, web, deploy, docs | All capability paths, required tests and acceptance recovery |
+
+No agent delegation or new worktree was performed during this review.
+
 ## System boundary
 
 The diagram describes the agreed target, not code already implemented. Existing
@@ -1102,8 +1247,18 @@ are illustrative; match repository conventions during implementation.
     Nightwatch or browser traffic; idle/backoff are not false failures; unavailable
     checks fail honestly; diagnostics redact secrets and never mutate user work.
 
+- [ ] **T21 (P2)** — Deployment docs — document the ordinary early-stage redeploy.
+  - Surfaced by: issue 22, user direction rejecting maintenance/guardrail overhead.
+  - Files: existing Coolify/Compose deployment documentation, migration/conversion
+    instructions and core smoke-test checklist.
+  - Verify: ordinary migrations and process restarts are documented with manual
+    recovery; no maintenance protocol, rolling bridge or fleet gate is introduced.
+
 ## NOT in scope
 
+- Maintenance cutover, rolling compatibility release, fleet-version gate and
+  enforced rollback floor: explicitly declined for the current low-traffic,
+  pre-customer stage; ordinary deployment and manual recovery suffice.
 - Workspace invitations/management, team ACLs and custom roles: future expansion
   uses the same capability/lifecycle seams with explicit scope records.
 - A generic permission framework or universal operation-history table: the user
@@ -1118,14 +1273,31 @@ are illustrative; match repository conventions during implementation.
 - A second asset-delivery mode using temporary storage URLs: possible future
   optimization only after measured need and an explicit revocation-policy decision.
 
-## Decisions still pending
+## Completion summary
 
-The user resumed engineering review before publishing tickets and accepted decisions through 21A
-on 2026-09-27. Performance and observability are complete as planning checkpoints.
-Rollout, long-term assessment and UX review remain unfinished;
-the separate design review is also pending.
+| Review section | Result |
+|---|---|
+| Step 0 | Full scope retained by 1A |
+| Architecture | 4 issues resolved, 2A–5A |
+| Error map | 30 error-path rows; 2 original policy gaps resolved, 6A–7A |
+| Security | 5 high-priority findings resolved in the plan, 8A–12A |
+| Interaction edge cases | 3 issues resolved, 13A–15A; cross-flow scenarios and recovery recorded |
+| Code quality | 1 issue resolved, 16A; required refactoring authorized |
+| Tests | Coverage diagram and failure registry: 29 planned groups (19 code, 10 user journeys); all implementation gaps; 17A integration profile |
+| Performance | 3 issues resolved, 18A–20A; unmeasured tail estimates and resource bounds recorded |
+| Observability | 1 issue resolved, 21A; independent checks and safe correlation |
+| Deployment | 1 issue resolved by user direction (22); normal deploy, interruption/manual recovery accepted |
+| Long-term | Reversibility 3/5; no newly deferred debt |
+| Engineering design/UX | Evaluated; no new issues; separate visual review pending |
+| Not in scope / reuse | Both recorded; no new runtime platform |
+| TODO proposals | 0 new deferred proposals; accepted work is in the flat implementation-task list |
+| Failure modes | Every code group has planned handling/tests; no unplanned silent critical row, but none of the 29 new groups is implemented or verified |
 
-The [ticket breakdown](project-access-tickets.md) is an unpublished draft and must
-be reconciled after review before granularity approval. Do not treat its proposed
-T01 review ticket as a substitute for finishing this interactive review. Potential
-follow-up TODOs must still be presented individually before being deferred.
+No unresolved engineering decision remains. Decisions 1A–21A and the custom
+response to 22 are preserved without treating the rejected 22A/22B as accepted.
+Separate visual design review and reconciliation/approval of the ticket breakdown
+remain; no issues have been published. Application implementation has not started.
+
+Validation for this planning pass: Markdown diff checks and MDX compilation.
+PlantUML source is recorded; visual diagram rendering and application tests were
+not performed. Review completion is not a claim that the feature is ready to ship.

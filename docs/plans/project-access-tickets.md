@@ -5,11 +5,12 @@
 > Tracker: GitHub, native sub-issues and dependencies plus canonical Blocked by lines.
 > Spec: [M4.1](../specs/m4.1-project-access.md) · [Roadmap](../ROADMAP.md).
 
-The user resumed engineering review before approving or publishing this draft.
-Decisions 1A–21A are now accepted; performance and observability checkpoints
-are complete and later review sections remain unfinished. Ticket publishing is on hold. Reconcile this breakdown after review,
-including whether proposed T01 is still needed; do not start its proposed frontier
-as a substitute for completing the review.
+Engineering review is complete as of 2026-09-27: decisions 1A–21A and the
+user-directed ordinary-deployment choice (22) are recorded. This draft predates
+later findings and needs reconciliation before approval: replace T01 with the
+remaining visual design review, incorporate 18A–21A, reassess scan/report and
+operations ticket sizes, and remove maintenance/fleet-gate assumptions. No issues
+have been published and the breakdown has not been approved.
 
 Numbers below are draft IDs, not GitHub issue numbers. Upon approval, create one
 module parent, then these children in order, using real identifiers for both native
@@ -81,10 +82,10 @@ Finish the remaining project-access review and make the implementation and rollo
 
 ### Acceptance criteria
 
-- [ ] Finish performance, observability, deployment, long-term and UX review; issue 18 is resolved as 18A. This proposed review ticket may be removed once the interactive review finishes.
+- [ ] Engineering review is complete; replace this prerequisite with the remaining separate visual design review when reconciling the draft.
 - [ ] Complete the design review for invitations, Members, Shared with you, role changes, source approval and access-loss states using the existing design language.
 - [ ] Record chosen query/lock budgets, operational signals, migration/rollback sequence, rollout controls and any changed dependencies; reconcile later ticket criteria before implementation.
-- [ ] Keep accepted decisions 1A–21A unless the user explicitly revises them; do not silently reduce scope.
+- [ ] Keep accepted decisions 1A–21A and the user-directed ordinary-deployment choice (22) unless the user explicitly revises them; do not silently reduce scope.
 
 ### Blocked by
 
@@ -630,8 +631,9 @@ agents in parallel.
 | 19A bounded coordinator contention and safe retries | T04 and each affected mutation/worker/UI slice |
 | 20A bounded scans and complete paginated latest reports | T21–T22, T24–T25; reassess slice size after review |
 | 21A safe operations checks and independent alerts | T24–T25 plus lifecycle diagnostics in affected slices; reconcile after review |
-| Remaining review | In progress before ticket publishing; reconcile proposed T01 |
+| Deployment direction 22: normal deploy, no maintenance/fleet gates | T25; simplify its operational requirements |
+| Remaining visual design review | Reconcile proposed T01; engineering review is complete |
 
 Dependency edges are implementation prerequisites, not shared-directory warnings.
 There are no cycles; T25 transitively includes every implementation slice. Publishing
-and changing the roadmap to ticketed wait for granularity approval. Ticketing is paused while the active engineering review updates the spec.
+and changing the roadmap to ticketed wait for granularity approval. Reconcile this draft after the completed engineering review and remaining visual design review.
