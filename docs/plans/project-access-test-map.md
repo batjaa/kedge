@@ -1,6 +1,6 @@
 # Project access — test coverage map
 
-> 2026-09-27 · Engineering review coverage checkpoint; decisions 17A–20A accepted.
+> 2026-09-27 · Engineering review coverage checkpoint; decisions 17A–21A accepted.
 > Source: [module spec](../specs/m4.1-project-access.md) and
 > [accepted review decisions](project-access-eng-review.md).
 > This is a coverage plan, not a test-run report. No application tests were run
@@ -70,7 +70,7 @@ package "CODE PATHS — all M4.1 gaps" {
   component "C07 repository identity/fetch\nC08 import/re-sync generations\nC09 scans/configuration/errors" as Sources
   component "C10 all AI start/read/job paths\nC11 review/moderation/mentions\nC12 moves and independent shares" as Review
   component "C13 assets/legacy references\nC14 shared logout/identity\nC15 token metadata protection" as Protection
-  component "C16 schema/audit/rollout compatibility\nC17 scheduled cleanup\nC18 content-update admission" as Recovery
+  component "C16 schema/audit/rollout compatibility\nC17 scheduled cleanup\nC18 content-update admission\nC19 operations diagnostics/independent checks" as Recovery
 }
 package "USER FLOWS — all M4.1 gaps / Playwright" {
   component "U01 existing account invite-to-removal\nU02 new account/mailbox confirmation\nU03 wrong-account switch/logout failure" as Join
@@ -87,9 +87,9 @@ Protection --> Join
 Protection --> Complete
 Recovery --> Complete
 legend bottom
-M4.1 implemented contract groups: 0/28 (0%)
-Code contracts: 0/18 | User journeys: 0/10
-28 planned gaps; no instrumented coverage claim
+M4.1 implemented contract groups: 0/29 (0%)
+Code contracts: 0/19 | User journeys: 0/10
+29 planned gaps; no instrumented coverage claim
 API + concurrency for code; Playwright for journeys
 Existing regression foundations are rated separately above
 endlegend
@@ -98,7 +98,7 @@ endlegend
 
 ## Code branches and assertions
 
-All C01–C18 groups below are unimplemented module coverage. A test must assert
+All C01–C19 groups below are unimplemented module coverage. A test must assert
 observable status/data, database effects, jobs/external calls, and attribution as
 applicable. A successful status alone does not establish a permission boundary.
 Use the module's 403/404/409 precedence; never disclose a hidden target via a
@@ -125,6 +125,7 @@ journeys must not insert project membership directly.
 | C16 — schema constraints, migrations, audit and compatibility projections | Unique project/user and current project/email slot; project/workspace FK integrity and explicit indexes; zero direct-membership backfill; creation/escalation audit failure rolls back, reduction survives audit sink failure; sanitized event projections; old API missing capability fields fail closed; existing personal workspace behavior unchanged | New `api/tests/Feature/ProjectAccessSchemaTest.php`; extend audit/current-user/project features; migration fixtures from pre-module state and browser compatibility cases |
 | C17 — scheduled operation cleanup command | Revoked vs demonstrably abandoned vs legitimately waiting/retrying; bounded batches; no browser trigger; no paid/import restart; preserve good content/spend; repeat safe; cleanup racing new generation cannot overwrite; DB outage reports failure then recovers; scheduler deployment verified | New `api/tests/Feature/Console/RecoverProjectOperationsTest.php`, concurrency tests and scheduler deployment smoke |
 | C18 — content update admission/source payload and completion polling | Two pending/running submissions: exactly one admitted, other 409 before body/actor/generation changes; overlap before worker and after input read; only accepted body commits; no unique-job lost update; completion/failure/revocation cleanup allows explicit retry; timeout is pending/unknown, not fabricated unchanged success | Extend `Api/V1/DocumentContentUpdateTest.php`, `DocumentResyncTest.php`; real async concurrency and `web/e2e/update-content.spec.ts` |
+| C19 — lifecycle diagnostics, operations check and independent deployment monitor | Secret-free request/operation correlation; queue age/backlog, overdue work, cleanup success, contention; idle vs never-run/stale/unavailable; thresholds respecting legitimate backoff; no mutation/external work; telemetry failure preserves actions; stopped worker/scheduler, failing mail and recovery with Nightwatch off | New `api/tests/Feature/Console/ProjectAccessHealthTest.php`; lifecycle/log redaction feature tests, real worker integration and independent deployment-monitor smoke |
 
 Every mutation family also needs a denial assertion that no resource, queued work,
 external call or audit escalation was created. Each new route must participate
@@ -203,12 +204,13 @@ work. A visibility-safe denial is deliberate, not a silent success.
 | C16 schema/audit | Audit fails during privilege escalation | Atomic rollback; reductions follow safe audit rule | GAP, failure injection | Failed escalation, no stranded grant | Sanitized persistence failure |
 | C17 cleanup | Hard-killed worker never settles | Scheduled bounded, generation-safe terminal cleanup | GAP, command/concurrency | Honest settled failure on return | Cleanup result/backlog/error signal |
 | C18 content update | Unique job suppresses second accepted body | Reject second request before input changes | GAP, async/API/browser | Busy, retained draft, explicit retry | Admission conflict/current operation |
+| C19 operations | Scheduler stops so no failure event is emitted | Independent check detects stale/missing success; alert plus runbook, no auto-repair | GAP, command/integration/deploy | Existing pending/retry states; operator sees unhealthy status | Safe lifecycle IDs, queue/cleanup age and check availability |
 
 No new failure row is intentionally left without planned handling or user-visible
 recovery. All rows still have a **release-blocking implementation/test gap** until
 the required assertions execute successfully; a complete plan is not a passed gate.
 
-Coverage checkpoint: **0/28 M4.1 contract groups implemented**, with **18 code
+Coverage checkpoint: **0/29 M4.1 contract groups implemented**, with **19 code
 groups and 10 browser-flow groups specified above**. All remain planned gaps;
 baseline tests are reuse evidence only. The execution harness is decided by 17A,
 and the failure registry above will be maintained as later review sections refine

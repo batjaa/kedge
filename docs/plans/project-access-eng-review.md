@@ -1,7 +1,7 @@
 # Project access — engineering review
 
-> Updated 2026-09-27 · Engineering review resumed; decisions 1A–20A accepted.
-> Performance checkpoint recorded; sections 8–11 remain pending. Ticket publishing
+> Updated 2026-09-27 · Engineering review resumed; decisions 1A–21A accepted.
+> Performance and observability checkpoints recorded; sections 9–11 remain pending. Ticket publishing
 > is on hold. This is not implementation or release approval.
 > Source of truth: [M4.1 module spec](../specs/m4.1-project-access.md).
 
@@ -15,9 +15,9 @@
 | 3. Security and threat model | Five findings resolved through decisions 8A–12A; planned controls below |
 | 4. Data flow and interaction edge cases | Three findings resolved through decisions 13A–15A; flow/state map below |
 | 5. Code quality | One finding resolved through decision 16A; checkpoint below |
-| 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 28 planned coverage gaps |
+| 6. Tests and coverage diagram | One finding resolved through 17A; [coverage map](project-access-test-map.md) includes diagram and failure registry; 29 planned coverage gaps |
 | 7. Performance | Three findings resolved through 18A–20A; checkpoint below |
-| 8. Observability | Pending |
+| 8. Observability | One finding resolved through 21A; checkpoint below |
 | 9. Deployment and rollout | Pending |
 | 10. Long-term trajectory | Pending |
 | 11. Design and UX | Pending |
@@ -173,7 +173,7 @@ This maps required behavior, not verified implementation. Existing exception
 types are named below; new project-specific domain outcomes still need typed
 representations during implementation. HTTP status mapping follows the module
 spec. A process crash has no catchable PHP exception, so it is listed separately.
-There are 28 path groups, including later security/interaction findings; the two
+There are 29 path groups, including later security/interaction findings; the two
 error-policy gaps originally raised in this section were resolved by 6A and 7A.
 Detailed assertions and test coverage remain section 6 work.
 
@@ -609,10 +609,10 @@ fast suites keep their current purpose.
 The [test coverage map](project-access-test-map.md) records the detected PHPUnit/
 Playwright seams, inspected baseline assertions, a combined code/user-flow diagram,
 per-entry-point branch/error requirements, proposed test files, and real-queue/
-database boundaries. None of the 28 new M4.1 contract groups is implemented yet;
+database boundaries. None of the 29 new M4.1 contract groups is implemented yet;
 existing tests are regression foundations, not evidence for new project grants.
 The execution-harness choice is now 17A. The map includes a failure registry for
-all 18 code-path groups. These tests remain implementation requirements; no
+all 19 code-path groups. These tests remain implementation requirements; no
 application tests have been run or new test coverage implemented in this review.
 
 ## Performance findings and accepted decisions
@@ -727,6 +727,59 @@ on representative small/full pages and retained histories in the agreed integrat
 profile before choosing deployment concurrency. These estimates do not justify
 relaxing revocation, dropping outcomes, or increasing all worker counts. No
 application performance test was run during this documentation review.
+
+## Observability findings and accepted decisions
+
+### Issue 21 — lifecycle logs cannot detect work that never runs: 21A
+
+**P2, confidence 8/10.** Decision 5A in the module ends with “Verify scheduler
+operation in both deployment modes,” but did not specify ongoing liveness or
+independent detection. `api/routes/console.php:15` currently registers only
+`Schedule::command('kedge:prune-demo-docs')->hourly();` inside a SaaS-only guard.
+Existing `AiRunLedger.php:384,419` logs `ai_run.completed` / `ai_run.failed` only
+when that execution path runs. Those events cannot alone distinguish an idle
+system from a stopped worker/scheduler. This is a missing operational contract
+for new project-access work, not a claim that production monitoring was inspected.
+
+**Accepted:** structured, secret-free lifecycle correlation plus read-only
+operations checks and independent deployment alert wiring. Reuse Laravel
+[queue monitoring](https://laravel.com/framework/docs/queues#monitoring-your-queues)
+and [scheduler hooks](https://api.laravel.com/docs/13.x/Illuminate/Console/Scheduling/Event.html)
+where useful; neither alone detects a stopped scheduler if the only monitor runs
+inside it. No mandatory new monitoring platform or Nightwatch dependency.
+
+| Signal | Interpretation and recovery |
+|---|---|
+| Queue age/backlog and invitation delivery outcomes | Separate idle from pending too long or transport failure; inspect worker/mail readiness and use explicit resend under existing generation rules |
+| Operation age versus legitimate queue/runtime/retry budgets | Identify truly overdue work; inspect worker/cleanup health without auto-restarting paid work |
+| Last successful cleanup, last failure and check availability | Missing/stale/failed is not healthy; restore scheduler/configuration, then verify generation-safe cleanup |
+| Lock-budget exhaustion and wait/transaction duration | Detect sustained contention; inspect long transactions and worker pressure without weakening authorization |
+| Admission, dispatch, start, terminal and obsolete-generation outcomes | Trace a user report through safe request/operation IDs; capture branch reason, no raw exception payloads or content |
+
+Define thresholds and a recovery runbook for both deployment modes. Use bounded,
+read-only diagnostics with aggregate/low-cardinality dimensions and safe output;
+ordinary users must not gain access to operational project data. Record success
+only after a successful check. Missing storage/DB/check data reports unavailable,
+not healthy. Run alert evaluation independently of the queue/scheduler it checks;
+a queue-outage notification cannot itself require that broken queue.
+
+Keep required audit persistence distinct from best-effort telemetry. Metrics/log
+sink failure cannot undo a committed change or block access reduction, while
+creation/escalation still requires the accepted atomic audit. No automatic repair,
+resend or paid retry in the health check. Synthetic-secret tests and stopped-worker,
+stopped-scheduler, failing-mail, absent/stale-heartbeat, legitimate-backoff and
+check-failure/recovery tests run with Nightwatch off. Deployment smoke verifies
+independent detection/resolution. The coverage map adds C19 for these operations
+paths; all 29 module contract groups remain unimplemented planning gaps.
+
+### Observability checkpoint
+
+Entry/admission, meaningful branch outcomes, queued execution and terminal/cleanup
+paths now have planned safe correlation. Day-one status, queue/cleanup/lock signals,
+independent alerting and recovery are required for both editions. Correlation can
+reconstruct safe lifecycle transitions but intentionally cannot reconstruct secret
+payloads or events lost during a total logging outage. No live monitoring was
+changed or alerts sent during this review.
 
 ## System boundary
 
@@ -1041,6 +1094,14 @@ are illustrative; match repository conventions during implementation.
     outcomes page coherently; atomic publication, revoked readers, stale workers,
     crash cleanup and legacy migration preserve valid reports/content/history.
 
+- [ ] **T20 (P2)** — Operations — expose safe status and detect stalled work independently.
+  - Surfaced by: issue 21 / decision 21A.
+  - Files: lifecycle logging/queue/scheduler seams, operational check command,
+    deployment monitoring/runbooks and feature/integration/deployment tests.
+  - Verify: stopped worker/scheduler and failing mail are detected without
+    Nightwatch or browser traffic; idle/backoff are not false failures; unavailable
+    checks fail honestly; diagnostics redact secrets and never mutate user work.
+
 ## NOT in scope
 
 - Workspace invitations/management, team ACLs and custom roles: future expansion
@@ -1059,9 +1120,9 @@ are illustrative; match repository conventions during implementation.
 
 ## Decisions still pending
 
-The user resumed engineering review before publishing tickets and accepted decisions through 20A
-on 2026-09-27. Performance is complete as a planning checkpoint. Observability,
-rollout, long-term assessment and UX review remain unfinished;
+The user resumed engineering review before publishing tickets and accepted decisions through 21A
+on 2026-09-27. Performance and observability are complete as planning checkpoints.
+Rollout, long-term assessment and UX review remain unfinished;
 the separate design review is also pending.
 
 The [ticket breakdown](project-access-tickets.md) is an unpublished draft and must
