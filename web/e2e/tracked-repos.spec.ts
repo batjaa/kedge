@@ -28,6 +28,25 @@ import { postInlineComment, register, threadRail, uniqueIdentity } from './helpe
 
 const PROCESSING_STATE_READ = /\/api\/v1\/tracked-repos\/\d+(?:\?.*)?$/;
 
+type Deferred = {
+  promise: Promise<void>;
+  resolve: () => void;
+};
+
+function deferred(): Deferred {
+  let resolve!: () => void;
+  const promise = new Promise<void>((finish) => {
+    resolve = finish;
+  });
+
+  return { promise, resolve };
+}
+
+type ProcessingStateParking = {
+  release: () => Promise<void>;
+  pauseNextRead: () => { entered: Promise<void>; resume: () => void };
+};
+
 /**
  * Preserve real discovery facts and IDs, but freeze only the batch processing
  * projection once a scan has settled. New paths remain importing; changed paths
@@ -35,7 +54,12 @@ const PROCESSING_STATE_READ = /\/api\/v1\/tracked-repos\/\d+(?:\?.*)?$/;
  * operations, proving the UI never treats the report's dispatch outcomes as live
  * status.
  */
-async function parkProcessingState(page: import('@playwright/test').Page): Promise<void> {
+async function parkProcessingState(
+  page: import('@playwright/test').Page,
+): Promise<ProcessingStateParking> {
+  let parking = true;
+  let nextRead: { entered: Deferred; resume: Deferred } | null = null;
+
   await page.route(PROCESSING_STATE_READ, async (route) => {
     const response = await route.fetch();
     const body = await response.json() as { data?: {
@@ -44,8 +68,18 @@ async function parkProcessingState(page: import('@playwright/test').Page): Promi
       document_states?: Array<Record<string, unknown> & { id: number }>;
     } };
     const repo = body.data;
+    const heldRead = nextRead;
 
-    if (repo?.last_scan_status !== 'ok' || !repo.last_scan_report?.files || !repo.document_states) {
+    if (heldRead) {
+      nextRead = null;
+      heldRead.entered.resolve();
+      await heldRead.resume.promise;
+    }
+
+    // A release can begin while this handler is awaiting the real response. In
+    // that case, return the authoritative body rather than fulfill a stale
+    // parked projection after interception has been removed.
+    if (!parking || repo?.last_scan_status !== 'ok' || !repo.last_scan_report?.files || !repo.document_states) {
       await route.fulfill({ response });
       return;
     }
@@ -68,6 +102,26 @@ async function parkProcessingState(page: import('@playwright/test').Page): Promi
 
     await route.fulfill({ response, json: body });
   });
+
+  const release = async () => {
+    // Playwright's ordinary unroute() does not drain handlers that are already
+    // inside route.fetch()/route.fulfill(). Flip this first so an in-flight
+    // handler returns the real response, then wait for all test-owned page
+    // routes to finish before removing their interception.
+    parking = false;
+    await page.unrouteAll({ behavior: 'wait' });
+  };
+
+  return {
+    release,
+    pauseNextRead: () => {
+      const entered = deferred();
+      const resume = deferred();
+      nextRead = { entered, resume };
+
+      return { entered: entered.promise, resume: resume.resolve };
+    },
+  };
 }
 
 test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date', async ({
@@ -96,7 +150,7 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   const importing = projectDocuments.getByText('Importing');
 
   // Park the one batched processing projection before any row can materialize.
-  await parkProcessingState(page);
+  let processingState = await parkProcessingState(page);
 
   // 2. Track the fixture repo with a docs/**/*.md pattern and PREVIEW.
   await page.getByLabel('Repository URL', { exact: true }).fill(GITHUB_FIXTURE.repoUrl);
@@ -127,8 +181,22 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await expect(importing).toHaveCount(3, { timeout: 30_000 });
   await expect(page.getByText('3 new files · 0 changed · 0 unchanged')).toBeVisible({ timeout: 30_000 });
 
-  // 6. Release the parked batch read: each importing row settles to ready in place.
-  await page.unroute(PROCESSING_STATE_READ);
+  // 6. Reproduce the release race deterministically: an entered handler has
+  // fetched the real response but cannot fulfill until the explicit barrier is
+  // opened. release() must wait for it, rather than unroute it underneath the
+  // pending route.fulfill().
+  const heldRead = processingState.pauseNextRead();
+  await heldRead.entered;
+  let releaseFinished = false;
+  const release = processingState.release().then(() => {
+    releaseFinished = true;
+  });
+  await Promise.resolve();
+  expect(releaseFinished).toBe(false);
+  heldRead.resume();
+  await release;
+
+  // Each importing row now settles to ready in place.
   await expect(importing).toHaveCount(0, { timeout: 30_000 });
   expect(
     await page.evaluate(() => (window as Window & { __noReload?: boolean }).__noReload === true),
@@ -186,7 +254,7 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   //    document's update are observable while processing.
   await page.goto(projectUrl);
   await request.post(`${FIXTURE_ORIGIN}${GITHUB_FIXTURE.control.mutate}`);
-  await parkProcessingState(page);
+  processingState = await parkProcessingState(page);
   await page.getByRole('button', { name: 'Re-scan', exact: true }).click();
 
   // 9. The re-scan imports the NEW file (materialized importing) and keeps the
@@ -200,7 +268,7 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   // 10. Release the batch state: the new doc settles to ready and joins the list;
   //     the completed update is confirmed separately rather than inferred at
   //     discovery time.
-  await page.unroute(PROCESSING_STATE_READ);
+  await processingState.release();
   await expect(rescanImporting).toHaveCount(0, { timeout: 30_000 });
   await expect(projectDocuments.getByText('Updating')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByText('All documents ready')).toBeVisible({ timeout: 30_000 });
