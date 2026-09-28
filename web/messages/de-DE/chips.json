@@ -22,6 +22,7 @@
     "ready": "Bereit",
     "import_failed": "Importfehler",
     "update_failed": "Updatefehler",
+    "unconfirmed": "Unbestätigt",
     "import_queued": "Wartend",
     "resync_queued": "Erneuert",
     "missing": "Fehlt",

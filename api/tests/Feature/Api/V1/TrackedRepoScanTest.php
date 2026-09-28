@@ -85,6 +85,10 @@ class TrackedRepoScanTest extends TestCase
 
         // The existing import pipeline was handed each new document.
         Queue::assertPushed(ImportDocumentJob::class, 2);
+        Queue::assertPushed(
+            ImportDocumentJob::class,
+            fn (ImportDocumentJob $job) => $job->generation === $job->document->sync_generation,
+        );
     }
 
     public function test_created_documents_carry_project_provenance_and_a_blob_source(): void
@@ -193,6 +197,7 @@ class TrackedRepoScanTest extends TestCase
         $outcomes = collect($report['files'])->keyBy('path');
         $this->assertSame('import_queued', $outcomes['docs/a.md']['outcome']);
         $this->assertNotNull($outcomes['docs/a.md']['document_id']);
+        $this->assertSame(1, $outcomes['docs/a.md']['operation_generation']);
 
         $this->assertSame(TrackedScanStatus::Ok, $trackedRepo->last_scan_status);
     }
@@ -480,12 +485,13 @@ class TrackedRepoScanTest extends TestCase
             'tracked_repo_id' => $trackedRepo->id,
             'status' => DocumentStatus::Ready,
             'last_sync_status' => SyncStatus::Processing,
+            'sync_generation' => 2,
             'sync_started_at' => CarbonImmutable::now(),
         ]);
         $report = [
             'status' => 'ok', 'ref' => 'main', 'matched' => 1,
             'counts' => ['import_queued' => 0, 'resync_queued' => 1, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
-            'files' => [['path' => 'docs/spec.md', 'outcome' => 'resync_queued', 'document_id' => $document->id, 'reason' => null]],
+            'files' => [['path' => 'docs/spec.md', 'outcome' => 'resync_queued', 'document_id' => $document->id, 'operation_generation' => 2, 'reason' => null]],
             'error' => null, 'stale_takeover' => false, 'started_at' => CarbonImmutable::now()->subSecond(), 'finished_at' => CarbonImmutable::now(), 'duration_ms' => 5,
         ];
         $trackedRepo->forceFill(['last_scan_status' => TrackedScanStatus::Ok, 'last_scan_report' => $report])->save();
@@ -495,10 +501,60 @@ class TrackedRepoScanTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.document_states.0.id', $document->id)
             ->assertJsonPath('data.document_states.0.status', 'ready')
-            ->assertJsonPath('data.document_states.0.last_sync_status', 'processing');
+            ->assertJsonPath('data.document_states.0.last_sync_status', 'processing')
+            ->assertJsonPath('data.document_states.0.sync_generation', 2);
 
         $this->assertSame($report['files'], $trackedRepo->fresh()->last_scan_report['files']);
         $this->assertCount(1, $response->json('data.document_states'));
+    }
+
+    public function test_show_keeps_a_report_operation_distinct_from_a_later_document_generation(): void
+    {
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $document = Document::factory()->for($user->personalWorkspace())->create([
+            'tracked_repo_id' => $trackedRepo->id,
+            'status' => DocumentStatus::Ready,
+            'last_sync_status' => SyncStatus::Ok,
+            'sync_generation' => 3,
+        ]);
+        $trackedRepo->forceFill([
+            'last_scan_status' => TrackedScanStatus::Ok,
+            'last_scan_report' => [
+                'status' => 'ok', 'ref' => 'main', 'matched' => 1,
+                'counts' => ['import_queued' => 0, 'resync_queued' => 1, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
+                'files' => [['path' => 'docs/spec.md', 'outcome' => 'resync_queued', 'document_id' => $document->id, 'operation_generation' => 2, 'reason' => null]],
+                'error' => null, 'stale_takeover' => false, 'started_at' => CarbonImmutable::now()->subSecond(), 'finished_at' => CarbonImmutable::now(), 'duration_ms' => 5,
+            ],
+        ])->save();
+
+        $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk()
+            ->assertJsonPath('data.last_scan_report.files.0.operation_generation', 2)
+            ->assertJsonPath('data.document_states.0.sync_generation', 3);
+    }
+
+    public function test_show_does_not_leak_state_for_a_document_moved_to_another_workspace(): void
+    {
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $other = $this->registerUser('moved@example.com');
+        $moved = Document::factory()->for($other->personalWorkspace())->create(['tracked_repo_id' => $trackedRepo->id]);
+        $trackedRepo->forceFill([
+            'last_scan_status' => TrackedScanStatus::Ok,
+            'last_scan_report' => [
+                'status' => 'ok', 'ref' => 'main', 'matched' => 1,
+                'counts' => ['import_queued' => 1, 'resync_queued' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
+                'files' => [['path' => 'docs/moved.md', 'outcome' => 'import_queued', 'document_id' => $moved->id, 'operation_generation' => 1, 'reason' => null]],
+                'error' => null, 'stale_takeover' => false, 'started_at' => CarbonImmutable::now()->subSecond(), 'finished_at' => CarbonImmutable::now(), 'duration_ms' => 5,
+            ],
+        ])->save();
+
+        $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk()
+            ->assertJsonPath('data.document_states', []);
     }
 
     public function test_an_obsolete_operation_cannot_overwrite_newer_processing_state(): void

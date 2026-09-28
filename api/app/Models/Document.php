@@ -48,6 +48,7 @@ class Document extends Model
     protected $attributes = [
         'status' => 'importing',
         'last_sync_status' => 'ok',
+        'sync_generation' => '1',
         'lifecycle_status' => 'draft',
         'format' => 'md',
     ];

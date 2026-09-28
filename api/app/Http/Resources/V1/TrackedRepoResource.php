@@ -96,7 +96,7 @@ class TrackedRepoResource extends JsonResource
     }
 
     /**
-     * @return list<array{id: int, status: string, last_sync_status: string, sync_error: string|null, sync_started_at: mixed}>
+     * @return list<array{id: int, status: string, last_sync_status: string, sync_generation: int, sync_error: string|null, sync_started_at: mixed}>
      */
     private function documentStates(): array
     {
@@ -117,11 +117,15 @@ class TrackedRepoResource extends JsonResource
 
         return Document::query()
             ->whereIn('id', $ids)
-            ->get(['id', 'status', 'last_sync_status', 'sync_error', 'sync_started_at'])
+            // A tracked document can move after a scan. Do not use a historical
+            // document id to reveal current state across a workspace boundary.
+            ->where('workspace_id', $this->workspace_id)
+            ->get(['id', 'status', 'last_sync_status', 'sync_generation', 'sync_error', 'sync_started_at'])
             ->map(fn (Document $document): array => [
                 'id' => $document->id,
                 'status' => $document->status->value,
                 'last_sync_status' => $document->last_sync_status->value,
+                'sync_generation' => (int) $document->sync_generation,
                 'sync_error' => $document->sync_error,
                 'sync_started_at' => $document->sync_started_at,
             ])

@@ -22,6 +22,7 @@
     "ready": "Бэлэн",
     "import_failed": "Импорт амжилтгүй",
     "update_failed": "Шинэчлэлт амжилтгүй",
+    "unconfirmed": "Баталгаагүй",
     "import_queued": "Дараалалд",
     "resync_queued": "Шинэчилсэн",
     "missing": "Алга",

@@ -22,6 +22,7 @@
     "ready": "Listo",
     "import_failed": "Importación fallida",
     "update_failed": "Actualización fallida",
+    "unconfirmed": "Sin confirmar",
     "import_queued": "En cola",
     "resync_queued": "Resincronizado",
     "missing": "Ausente",

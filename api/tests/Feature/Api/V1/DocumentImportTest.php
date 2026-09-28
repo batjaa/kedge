@@ -55,7 +55,8 @@ class DocumentImportTest extends TestCase
         $this->assertSame(DocumentStatus::Importing, $document->status);
         Queue::assertPushed(
             ImportDocumentJob::class,
-            fn (ImportDocumentJob $job) => $job->document->is($document),
+            fn (ImportDocumentJob $job) => $job->document->is($document)
+                && $job->generation === $document->sync_generation,
         );
 
         // Run the queued import with the fetcher faked at its seam.

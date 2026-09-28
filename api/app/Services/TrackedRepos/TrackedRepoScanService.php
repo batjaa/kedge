@@ -228,7 +228,7 @@ class TrackedRepoScanService
                 continue;
             }
 
-            $report->importQueued($path, $document->id);
+            $report->importQueued($path, $document->id, (int) $document->sync_generation);
             $imported[] = $document;
         }
 
@@ -351,7 +351,7 @@ class TrackedRepoScanService
         // re-scan detects new changes, it does not babysit a specific re-sync.
         $held->forceFill(['tracked_blob_sha' => $currentSha])->save();
         $generation = $this->processing->startResync($held);
-        $report->resyncQueued($path, (int) $held->id);
+        $report->resyncQueued($path, (int) $held->id, $generation);
         $resynced[] = ['document' => $held, 'generation' => $generation];
     }
 

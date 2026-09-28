@@ -28,6 +28,8 @@ export interface ScanFileOutcome {
   path: string;
   outcome: ScanOutcome;
   document_id: number | null;
+  /** The document operation this scan dispatched; absent on pre-#158 reports. */
+  operation_generation?: number | null;
   reason: string | null;
 }
 
@@ -60,6 +62,7 @@ export interface TrackedDocumentState {
   id: number;
   status: DocumentStatus;
   last_sync_status: SyncStatus;
+  sync_generation: number;
   sync_error: string | null;
   sync_started_at: string | null;
 }
@@ -85,6 +88,18 @@ export function isDocumentProcessing(state: TrackedDocumentState | undefined): b
   return state?.status === 'importing' || state?.last_sync_status === 'processing';
 }
 
+/** Whether the document still represents this report entry's requested operation. */
+export function isReportOperationCurrent(file: ScanFileOutcome, state: TrackedDocumentState | undefined): boolean {
+  return typeof file.operation_generation === 'number' && state?.sync_generation === file.operation_generation;
+}
+
+/** A scan request is confirmed only by its own current operation, never a version alone. */
+export function isReportOperationSuccessful(file: ScanFileOutcome, state: TrackedDocumentState | undefined): boolean {
+  return isReportOperationCurrent(file, state)
+    && state?.status !== 'failed'
+    && state?.last_sync_status === 'ok';
+}
+
 /** True while a detailed report still needs one bounded current-state refresh. */
 export function needsProcessingRefresh(repo: TrackedRepo): boolean {
   const report = repo.last_scan_report;
@@ -98,7 +113,9 @@ export function needsProcessingRefresh(repo: TrackedRepo): boolean {
   const documentStates = repo.document_states ?? [];
   if (documentStates.length === 0) return true;
   const states = new Map(documentStates.map((state) => [state.id, state]));
-  return affected.some((file) => file.document_id !== null && isDocumentProcessing(states.get(file.document_id)));
+  return affected.some((file) => file.document_id !== null
+    && isReportOperationCurrent(file, states.get(file.document_id))
+    && isDocumentProcessing(states.get(file.document_id)));
 }
 
 /** Merge the current projection into a loaded list row without clobbering row-only data. */

@@ -8,6 +8,8 @@ import { runDelete, runRescan } from '@/lib/tracked-repo-actions';
 import {
   isScanInFlight,
   isDocumentProcessing,
+  isReportOperationCurrent,
+  isReportOperationSuccessful,
   isUpToDate,
   isZeroMatch,
   needsProcessingRefresh,
@@ -246,11 +248,18 @@ function ScanReportSummary({ repo, report }: { repo: TrackedRepo; report: ScanRe
   const states = new Map((repo.document_states ?? []).map((state) => [state.id, state]));
   const affectedCount = report.files.filter((file) => file.outcome === 'import_queued' || file.outcome === 'resync_queued').length;
   const checking = needsProcessingRefresh(repo) && repo.document_states === undefined;
-  const processing = [...states.values()].filter((state) => isDocumentProcessing(state));
-  const takingLonger = processing.some((state) => state.sync_started_at !== null && Date.now() - Date.parse(state.sync_started_at) > 30_000);
+  const affected = report.files.filter((file) => file.outcome === 'import_queued' || file.outcome === 'resync_queued');
+  const processing = affected.filter((file) => isReportOperationCurrent(file, states.get(file.document_id ?? -1))
+    && isDocumentProcessing(states.get(file.document_id ?? -1)));
+  const takingLonger = processing.some((file) => {
+    const state = states.get(file.document_id ?? -1);
+    return state?.sync_started_at !== null
+      && state?.sync_started_at !== undefined
+      && Date.now() - Date.parse(state.sync_started_at) > 30_000;
+  });
   const allReady = !checking && affectedCount > 0 && states.size === affectedCount
     && !needsProcessingRefresh(repo)
-    && [...states.values()].every((state) => state.status !== 'failed' && state.last_sync_status !== 'failed');
+    && affected.every((file) => isReportOperationSuccessful(file, states.get(file.document_id ?? -1)));
 
   return (
     <div className="mt-2">
@@ -318,7 +327,7 @@ function ScanReportSummary({ repo, report }: { repo: TrackedRepo; report: ScanRe
                 <code className="min-w-0 truncate font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {file.path}
                 </code>
-                <OutcomeBadge outcome={file.outcome} reason={file.reason} state={file.document_id === null ? undefined : states.get(file.document_id)} />
+                <OutcomeBadge outcome={file.outcome} reason={file.reason} state={file.document_id === null ? undefined : states.get(file.document_id)} operationGeneration={file.operation_generation} />
               </li>
             ))}
           </ul>
@@ -333,13 +342,15 @@ const BADGE_BASE = PILL_BASE;
 // One per-file outcome pill — the 13A chip glossary's scan labels, keyed by the
 // wire outcome so an unknown value falls back to the "unchanged" neutral rather
 // than crashing the report (the hard rendering rule).
-function OutcomeBadge({ outcome, reason, state }: { outcome: ScanOutcome; reason: string | null; state?: TrackedDocumentState }) {
+function OutcomeBadge({ outcome, reason, state, operationGeneration }: { outcome: ScanOutcome; reason: string | null; state?: TrackedDocumentState; operationGeneration?: number | null }) {
   const chips = useTranslations('chips');
+  const operationCurrent = typeof operationGeneration === 'number' && state?.sync_generation === operationGeneration;
 
   if (outcome === 'import_queued') {
-    if (state?.status === 'failed') return <StatusBadge tone="rose" label={chips('scan.import_failed')} title={state.sync_error} />;
-    if (isDocumentProcessing(state)) return <StatusBadge tone="amber" label={chips('scan.importing')} />;
-    if (state) return <StatusBadge tone="emerald" label={chips('scan.ready')} />;
+    if (operationCurrent && state?.status === 'failed') return <StatusBadge tone="rose" label={chips('scan.import_failed')} title={state.sync_error} />;
+    if (operationCurrent && isDocumentProcessing(state)) return <StatusBadge tone="amber" label={chips('scan.importing')} />;
+    if (operationCurrent && state) return <StatusBadge tone="emerald" label={chips('scan.ready')} />;
+    if (state) return <StatusBadge tone="zinc" label={chips('scan.unconfirmed')} />;
     return (
       <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
         {chips('scan.new_file')}
@@ -348,9 +359,10 @@ function OutcomeBadge({ outcome, reason, state }: { outcome: ScanOutcome; reason
   }
 
   if (outcome === 'resync_queued') {
-    if (state?.last_sync_status === 'failed') return <StatusBadge tone="rose" label={chips('scan.update_failed')} title={state.sync_error} />;
-    if (isDocumentProcessing(state)) return <StatusBadge tone="amber" label={chips('scan.updating')} />;
-    if (state) return <StatusBadge tone="emerald" label={chips('scan.ready')} />;
+    if (operationCurrent && state?.last_sync_status === 'failed') return <StatusBadge tone="rose" label={chips('scan.update_failed')} title={state.sync_error} />;
+    if (operationCurrent && isDocumentProcessing(state)) return <StatusBadge tone="amber" label={chips('scan.updating')} />;
+    if (operationCurrent && state) return <StatusBadge tone="emerald" label={chips('scan.ready')} />;
+    if (state) return <StatusBadge tone="zinc" label={chips('scan.unconfirmed')} />;
     return (
       <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
         {chips('scan.changed')}
@@ -384,11 +396,12 @@ function OutcomeBadge({ outcome, reason, state }: { outcome: ScanOutcome; reason
   );
 }
 
-function StatusBadge({ tone, label, title }: { tone: 'emerald' | 'amber' | 'rose'; label: string; title?: string | null }) {
+function StatusBadge({ tone, label, title }: { tone: 'emerald' | 'amber' | 'rose' | 'zinc'; label: string; title?: string | null }) {
   const colors = {
     emerald: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300',
     amber: 'bg-amber-100 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300',
     rose: 'bg-rose-100 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300',
+    zinc: 'bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-zinc-300',
   };
   return <span title={title ?? undefined} className={`${BADGE_BASE} ${colors[tone]}`}>{label}</span>;
 }

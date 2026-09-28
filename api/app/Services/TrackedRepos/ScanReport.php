@@ -35,7 +35,7 @@ final class ScanReport
 
     public const OUTCOME_FAILED = 'failed';
 
-    /** @var list<array{path: string, outcome: string, document_id: int|null, reason: string|null}> */
+    /** @var list<array{path: string, outcome: string, document_id: int|null, operation_generation: int|null, reason: string|null}> */
     private array $files = [];
 
     /** @var array{import_queued: int, resync_queued: int, unchanged: int, missing: int, failed: int} */
@@ -54,24 +54,24 @@ final class ScanReport
     ) {}
 
     /** A new matched path whose document was created and its import dispatched. */
-    public function importQueued(string $path, int $documentId): void
+    public function importQueued(string $path, int $documentId, int $generation): void
     {
-        $this->add($path, self::OUTCOME_IMPORT_QUEUED, $documentId, null);
+        $this->add($path, self::OUTCOME_IMPORT_QUEUED, $documentId, $generation, null);
     }
 
     /**
      * A held path whose upstream blob sha moved (#94): the existing
      * {@see ResyncDocumentJob} was dispatched to re-fetch and re-anchor.
      */
-    public function resyncQueued(string $path, int $documentId): void
+    public function resyncQueued(string $path, int $documentId, int $generation): void
     {
-        $this->add($path, self::OUTCOME_RESYNC_QUEUED, $documentId, null);
+        $this->add($path, self::OUTCOME_RESYNC_QUEUED, $documentId, $generation, null);
     }
 
     /** An already-tracked path whose blob sha matches — an honest no-op. */
     public function unchanged(string $path, int $documentId): void
     {
-        $this->add($path, self::OUTCOME_UNCHANGED, $documentId, null);
+        $this->add($path, self::OUTCOME_UNCHANGED, $documentId, null, null);
     }
 
     /**
@@ -80,13 +80,13 @@ final class ScanReport
      */
     public function missing(string $path, int $documentId): void
     {
-        $this->add($path, self::OUTCOME_MISSING, $documentId, null);
+        $this->add($path, self::OUTCOME_MISSING, $documentId, null, null);
     }
 
     /** A path that could not be turned into a document at discovery time. */
     public function failed(string $path, string $reason): void
     {
-        $this->add($path, self::OUTCOME_FAILED, null, $reason);
+        $this->add($path, self::OUTCOME_FAILED, null, null, $reason);
     }
 
     /**
@@ -137,12 +137,16 @@ final class ScanReport
             ->build('failed', ['code' => $code, 'message' => $message], $finishedAt);
     }
 
-    private function add(string $path, string $outcome, ?int $documentId, ?string $reason): void
+    private function add(string $path, string $outcome, ?int $documentId, ?int $generation, ?string $reason): void
     {
         $this->files[] = [
             'path' => $path,
             'outcome' => $outcome,
             'document_id' => $documentId,
+            // This immutable dispatch fact is the bridge between report history
+            // and the document's authoritative current operation. A ready version
+            // alone must never be mistaken for success of this scan's request.
+            'operation_generation' => $generation,
             'reason' => $reason,
         ];
         $this->counts[$outcome]++;

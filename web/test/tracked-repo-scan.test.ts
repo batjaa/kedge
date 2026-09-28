@@ -106,13 +106,13 @@ describe('reportImportingRows', () => {
 describe('current processing projection', () => {
   it('refreshes a settled report once on reopen, then only while a requested operation is active', () => {
     const tracked = repo('ok');
-    tracked.last_scan_report = report([{ path: 'docs/a.md', outcome: 'resync_queued', document_id: 4, reason: null }]);
+    tracked.last_scan_report = report([{ path: 'docs/a.md', outcome: 'resync_queued', document_id: 4, operation_generation: 2, reason: null }]);
     expect(needsProcessingRefresh(tracked)).toBe(true);
 
-    tracked.document_states = [{ id: 4, status: 'ready', last_sync_status: 'processing', sync_error: null, sync_started_at: null }];
+    tracked.document_states = [{ id: 4, status: 'ready', last_sync_status: 'processing', sync_generation: 2, sync_error: null, sync_started_at: null }];
     expect(needsProcessingRefresh(tracked)).toBe(true);
 
-    tracked.document_states = [{ id: 4, status: 'ready', last_sync_status: 'ok', sync_error: null, sync_started_at: null }];
+    tracked.document_states = [{ id: 4, status: 'ready', last_sync_status: 'ok', sync_generation: 2, sync_error: null, sync_started_at: null }];
     expect(needsProcessingRefresh(tracked)).toBe(false);
   });
 
@@ -128,7 +128,7 @@ describe('current processing projection', () => {
 
   it('merges a batched update without changing list-only fields', () => {
     const before = [{ ...item(4), open_threads_count: 3, status: 'ready' as const, last_sync_status: 'ok' as const }];
-    const after = mergeDocumentStates(before, [{ id: 4, status: 'ready', last_sync_status: 'processing', sync_error: null, sync_started_at: null }]);
+    const after = mergeDocumentStates(before, [{ id: 4, status: 'ready', last_sync_status: 'processing', sync_generation: 2, sync_error: null, sync_started_at: null }]);
     expect(after[0]).toMatchObject({ open_threads_count: 3, last_sync_status: 'processing' });
   });
 });
@@ -240,13 +240,18 @@ function repo(status: TrackedScanStatus): TrackedRepo {
 function report(files: ScanReport['files']): ScanReport {
   const counts = { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 };
   for (const file of files) counts[file.outcome] += 1;
+  const withOperationGenerations = files.map((file) => (
+    (file.outcome === 'import_queued' || file.outcome === 'resync_queued')
+      ? { ...file, operation_generation: file.operation_generation ?? 1 }
+      : file
+  ));
 
   return {
     status: 'ok',
     ref: 'main',
     matched: files.length - counts.missing,
     counts,
-    files,
+    files: withOperationGenerations,
     error: null,
     stale_takeover: false,
     started_at: '2026-07-21T00:00:00+00:00',

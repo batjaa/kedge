@@ -110,7 +110,7 @@ class DemoDocumentController extends Controller
             'expires_at' => $document->expires_at?->toIso8601String(),
         ]);
 
-        ImportDocumentJob::dispatch($document);
+        ImportDocumentJob::dispatch($document, (int) $document->sync_generation);
 
         return response()->json([
             'status' => $document->status->value,

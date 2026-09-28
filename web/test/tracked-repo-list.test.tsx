@@ -94,8 +94,8 @@ describe('TrackedRepoRow', () => {
       { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, reason: null },
     ]));
     tracked.document_states = [
-      { id: 1, status: 'ready', last_sync_status: 'ok', sync_error: null, sync_started_at: null },
-      { id: 2, status: 'ready', last_sync_status: 'ok', sync_error: null, sync_started_at: null },
+      { id: 1, status: 'ready', last_sync_status: 'ok', sync_generation: 1, sync_error: null, sync_started_at: null },
+      { id: 2, status: 'ready', last_sync_status: 'ok', sync_generation: 1, sync_error: null, sync_started_at: null },
     ];
 
     const html = render(tracked);
@@ -109,7 +109,7 @@ describe('TrackedRepoRow', () => {
       { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, reason: null },
     ]));
     tracked.document_states = [
-      { id: 2, status: 'ready', last_sync_status: 'processing', sync_error: null, sync_started_at: '2026-07-21T00:00:00+00:00' },
+      { id: 2, status: 'ready', last_sync_status: 'processing', sync_generation: 1, sync_error: null, sync_started_at: '2026-07-21T00:00:00+00:00' },
     ];
     expect(render(tracked)).toContain('Updating');
 
@@ -117,6 +117,19 @@ describe('TrackedRepoRow', () => {
     const html = render(tracked);
     expect(html).toContain('Update failed');
     expect(html).toContain('Showing last good version.');
+  });
+
+  it('does not turn a newer document generation into success for an older scan request', () => {
+    const tracked = repo('ok', report([
+      { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, operation_generation: 2, reason: null },
+    ]));
+    tracked.document_states = [
+      { id: 2, status: 'ready', last_sync_status: 'ok', sync_generation: 3, sync_error: null, sync_started_at: null },
+    ];
+
+    const html = render(tracked);
+    expect(html).toContain('Unconfirmed');
+    expect(html).not.toContain('All documents ready');
   });
 
   it('signals a zero-match ok scan distinctly, not "already up to date" (B3)', () => {
@@ -190,13 +203,18 @@ function repo(status: TrackedScanStatus, lastReport: ScanReport | null = null): 
 function report(files: ScanReport['files']): ScanReport {
   const counts = { import_queued: 0, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 };
   for (const file of files) counts[file.outcome] += 1;
+  const withOperationGenerations = files.map((file) => (
+    (file.outcome === 'import_queued' || file.outcome === 'resync_queued')
+      ? { ...file, operation_generation: file.operation_generation ?? 1 }
+      : file
+  ));
 
   return {
     status: 'ok',
     ref: 'main',
     matched: files.length - counts.missing,
     counts,
-    files,
+    files: withOperationGenerations,
     error: null,
     stale_takeover: false,
     started_at: '2026-07-21T00:00:00+00:00',
