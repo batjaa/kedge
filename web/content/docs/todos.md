@@ -7,6 +7,8 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- ✅ **Workspace engineering review 5A:** demo claiming waits for a settled ready/failed import. Use narrowly scoped anonymous operation authority; reject active claims with 409 and never transfer demo-job authority into a user workspace. Failed demos can be claimed then explicitly retried. Guard late callbacks and prune/claim races, with critical demo regression coverage. Architecture review is complete (2A–5A); error/rescue review is next. No application tests or implementation claimed.
+
 - ✅ **Workspace engineering review 4A:** explicit share-review routes select the exact share/document and verified participant; reuse the same business services and eliminate silent membership/share fallback. The user accepts breaking old links/clients and prioritizes the clean contract, so no legacy-link compatibility or migration is required. Preserve intended independent-share semantics and test exact-share scope, nested resources, live revocation and token-only read limits. No runtime changes.
 
 - ✅ **Workspace engineering review 3A:** replace personal-workspace collection/create/settings aliases with explicit workspace routes; carry one target through validation, authorization, persistence, audit and queued work. MCP targets the token workspace. Update callers/tests together; keep personal identity distinct. This is a deliberate pre-customer exception to additive-only v1 changes, with ordinary deployment and temporary interruption accepted. Architecture review continues; no runtime changes.

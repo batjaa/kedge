@@ -62,7 +62,8 @@ invitation/selection/admin lifecycle and independent-grant removal semantics.
 These are concrete spec defaults for review, not a claim that every choice was
 separately approved. The [review log](plans/workspace-membership-eng-review.md) records
 1A full scope, 2A membership lifecycle model, 3A explicit workspace routes and
-4A separate share-review routes without legacy compatibility.
+4A separate share-review routes without legacy compatibility, and 5A settled demo
+claiming. Architecture review is complete; error/rescue review is next.
 Complete the remaining review before ticketing. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.

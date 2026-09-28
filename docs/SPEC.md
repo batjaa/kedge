@@ -384,6 +384,13 @@ remain shared. Existing links/clients may break: the user does not require legac
 compatibility. Independent shares issued under the new contract still survive
 ordinary workspace-membership removal.
 
+**M4.0 engineering decision 5A (2026-09-27):** anonymous demos use document/
+operation-scoped public-import authority in the reserved non-member system workspace.
+Claim waits until the import settles ready/failed; active imports return 409 without
+mutation. Failed imports can be claimed and explicitly retried under current member
+authority. Claim, settlement and pruning serialize; old demo workers cannot mutate
+a claimed document. No anonymous-to-member job-authority transfer.
+
 This supersedes the project-first order. Reuse the previously reviewed invitation,
 transaction, private-asset, background-work and testing mechanics; rebase the prior
 project spec and unpublished ticket draft before execution. Use ordinary deployment
