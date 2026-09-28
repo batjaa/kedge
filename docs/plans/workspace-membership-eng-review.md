@@ -11,8 +11,8 @@
 |---|---|
 | Step 0 — scope | Complete: 1A, full scope retained |
 | 1 — architecture | Complete: four findings resolved (2A–5A) |
-| 2 — error and rescue map | Complete: 6A; 22 failure paths mapped, no unhandled planned paths |
-| 3 — security and threat model | In progress |
+| 2 — error and rescue map | In progress: 6A accepted; 22 paths mapped, AI replay decision 7 pending |
+| 3 — security and threat model | Preliminary inspection started; pending completion after decision 7 |
 | 4 — data flow and interaction edge cases | Pending |
 | 5 — code quality | Pending |
 | 6 — tests and coverage diagram | Pending |
@@ -163,6 +163,52 @@ application-owned recovery/field-error extensions. The client must tolerate prox
 errors and unknown types; no error format can prove a missing response did not
 commit. Current source: [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html).
 
+## Pending decision 7 — durable AI progress versus interrupted-run termination
+
+**P1, confidence 9/10.** Further inspection after recording 6A found that preserving
+the existing AI retry policy does not satisfy the stronger planned replay guarantee.
+The error review is reopened; 6A remains accepted. This is a source-verified contract
+mismatch, not a reproduced production double charge or a new implemented regression.
+
+Motivating requirement: spec §9 says “Retrying a job still rechecks its original
+authority and never repeats a completed paid call.” Existing evidence:
+
+- `api/app/Services/AI/AiRunLedger.php:273` claims either `Pending` or `Running`,
+  then line 278 returns true whenever the refreshed state is `Running`.
+- `api/app/Jobs/GenerateAiRunJob.php:134` executes the generator before recording
+  completion; lines 142–152 rethrow transient failures for another queue attempt.
+- `api/app/Services/AI/Generators/ReviewDigestGenerator.php:66–73` initializes an
+  empty merge and calls every chunk anew. Lines 85–100 record spend but retain the
+  merged chunk outputs only in memory until final completion.
+- `api/config/queue.php:17–20` explicitly distinguishes dispatch uniqueness from
+  redelivery. A correct reservation timeout prevents premature parallel execution;
+  it does not prove a killed worker made no paid call before redelivery.
+
+Scenario: chunk one succeeds and is billed; chunk two receives a retryable failure.
+A retried job starts at chunk one again. Separately, a worker killed after provider
+acceptance but before local completion leaves a running row that can execute again.
+The existing exception classifier cannot classify a crash that never reaches it.
+
+**7A (recommended):** persist completed per-call/chunk results with stable run/input
+identity and fence in-flight attempts before provider calls; resume only known-safe
+remaining work, and stop on an uncertain call outcome. More implementation/storage
+and moderate maintenance, but preserves successful work without automatic rebilling.
+Input/version/authority changes cannot reinterpret old results as a new operation;
+retries still need the original live authority. This is not provider exactly-once.
+
+**7B:** use a durable run-level execution fence and stop an interrupted/partly paid
+run for an explicit new request; retain safe pre-call retries but do not resume
+completed chunks. Less state/maintenance, with more abandoned partial results and
+explicit restarts that may pay again. Both options preserve honest known/unknown
+spend, conditional settlement and revocation rules.
+
+Options differ in kind, not coverage—no completeness score. 7A is recommended for
+explicit durable state and reliable recovery; the user has already said refactoring
+cost should not preserve an inferior design. The actual recovery behavior remains
+a new independent decision. Neither remedy has been applied; test planning must
+include worker loss before/after provider acceptance and result persistence, chunk
+one success plus later transient failure, duplicate delivery and concurrent revoke.
+
 ## Architecture checkpoint — complete
 
 Four new findings were resolved through decisions 2A–5A. Full scope remains 1A.
@@ -293,11 +339,11 @@ stop
 These diagrams describe the reviewed contract, not implemented code or passing
 application tests. The Section 6 test-coverage diagram remains required and pending.
 
-## Error and rescue checkpoint — complete
+## Error and rescue checkpoint — in progress
 
-22 failure paths mapped below. **No unhandled planned paths** after 6A and the
-previously accepted queue/transaction decisions; implementation and test proof are
-still pending. This is a plan map, not a claim that all rescues exist today. Named
+22 failure paths mapped below. **One unresolved recovery gap: decision 7**, found
+after the initial 6A map, concerns AI execution after partial success or worker loss.
+All implementation and test proof remain pending. This is a plan map, not a claim that all rescues exist today. Named
 application conflict/lifecycle/authority failures below are proposed typed domain
 outcomes, not an instruction to create a class for every row. Framework and existing
 source/AI exception names identify current integration seams.
@@ -319,7 +365,7 @@ source/AI exception names identify current integration seams.
 | Job admission/result settlement | Lost authority, old incarnation/revision or superseded operation | Planned authority-lost/obsolete-operation outcomes | Terminal conditional settlement/no-op; preserve good content and spend | Cancelled/obsolete current operation; no stale overwrite |
 | Import/resync source fetching | Blocked URL, revoked credential, upstream limit/timeout/oversize | `BlockedUrlException`, `TokenRevokedException`, `RateLimitedException`, fetch/import exceptions | Specific bounded classifiers; no public-to-credential fallback | Sanitized source failure or retrying status |
 | Tracked-repo scan/file results | Expected file failure versus unexpected database/program error | Explicit recoverable source exceptions; `QueryException`/unexpected exception | Continue only recoverable file cases; stop/report others; atomic report publication | Honest per-file result or failed scan, last good report retained |
-| AI start/generate/commit | Dispatch failure, provider timeout/refusal, database failure after paid call | `AiGenerationException`, provider/connection exceptions, `QueryException` | Existing `AiFailureClassifier`; no uncertain paid replay; conditional settlement/cleanup | Safe failed/uncertain result and honest cost status |
+| AI start/generate/commit | Dispatch failure, provider timeout/refusal, database failure after paid call | `AiGenerationException`, provider/connection exceptions, `QueryException` | Existing `AiFailureClassifier` is insufficient for crashes/partial replay; **GAP: decision 7** defines durable execution recovery | Safe failed/uncertain result and honest cost status; restart versus resume pending |
 | Private image/diagram delivery | Lost reach, missing object or render/storage outage | Authorization outcome; filesystem exceptions; `DiagramRenderException` | Deny or safe unavailable/source panel; never public-origin fallback | Unavailable asset; document remains usable |
 | Demo import/claim/prune | Import active, expired demo, competing claim/prune | Planned operation-in-progress/expired/stale outcomes | Ordered locks and terminal claim; generation-conditional callbacks | Wait, explicit retry or unavailable demo |
 | Independent abandoned-work cleanup | Database unavailable or operation replaced | `QueryException`; obsolete-operation outcome | Report; retry bounded scan next schedule; settle only current abandoned work | Honest stale/unavailable operational status |
