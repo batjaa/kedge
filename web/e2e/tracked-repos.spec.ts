@@ -20,24 +20,54 @@ import { postInlineComment, register, threadRail, uniqueIdentity } from './helpe
 // "already up to date".
 //
 // Determinism is by poll-parking, never timers (home-list.spec.ts's pattern): the
-// per-row document poll is stubbed to hold materialized rows `importing` long
-// enough to assert the live fill, then released so the real synchronous-ready
-// settle proceeds. The scan poll (GET /api/v1/tracked-repos/{id}, a different
-// path) is left alone — the sync E2E queue settles the scan on its first tick.
+// batch tracked-repo read is rewritten to hold the affected documents in their
+// authoritative processing state long enough to assert the live fill, then
+// released so the real synchronous-ready settle proceeds. This intentionally
+// exercises the one bounded state read the product uses; the old per-row
+// document-poll seam is no longer part of this path.
 
-// Hold every /api/bff/documents/<id> per-ROW poll at "importing" (never the list
-// route /api/bff/documents?…), so a materialized row can't settle before we assert
-// it. Released with page.unroute to let the real ready settle proceed.
-const PER_ROW_POLL = /\/api\/bff\/documents\/\d+(?:\?.*)?$/;
+const PROCESSING_STATE_READ = /\/api\/v1\/tracked-repos\/\d+(?:\?.*)?$/;
 
-async function parkRowPoll(page: import('@playwright/test').Page): Promise<void> {
-  await page.route(PER_ROW_POLL, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ status: 'importing' }),
-    }),
-  );
+/**
+ * Preserve real discovery facts and IDs, but freeze only the batch processing
+ * projection once a scan has settled. New paths remain importing; changed paths
+ * remain readable and updating. Releasing the route exposes the real completed
+ * operations, proving the UI never treats the report's dispatch outcomes as live
+ * status.
+ */
+async function parkProcessingState(page: import('@playwright/test').Page): Promise<void> {
+  await page.route(PROCESSING_STATE_READ, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json() as { data?: {
+      last_scan_status?: string;
+      last_scan_report?: { files?: Array<{ document_id: number | null; outcome: string }> };
+      document_states?: Array<Record<string, unknown> & { id: number }>;
+    } };
+    const repo = body.data;
+
+    if (repo?.last_scan_status !== 'ok' || !repo.last_scan_report?.files || !repo.document_states) {
+      await route.fulfill({ response });
+      return;
+    }
+
+    const outcomes = new Map(
+      repo.last_scan_report.files
+        .filter((file) => file.document_id !== null)
+        .map((file) => [file.document_id as number, file.outcome]),
+    );
+    repo.document_states = repo.document_states.map((state) => {
+      const outcome = outcomes.get(state.id);
+      if (outcome === 'import_queued') {
+        return { ...state, status: 'importing', last_sync_status: 'processing', sync_error: null };
+      }
+      if (outcome === 'resync_queued') {
+        return { ...state, status: 'ready', last_sync_status: 'processing', sync_error: null };
+      }
+      return state;
+    });
+
+    await route.fulfill({ response, json: body });
+  });
 }
 
 test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date', async ({
@@ -65,8 +95,8 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   const projectDocuments = page.getByRole('region', { name: GITHUB_FIXTURE.slug });
   const importing = projectDocuments.getByText('Importing');
 
-  // Park the per-row poll before any row can materialize.
-  await parkRowPoll(page);
+  // Park the one batched processing projection before any row can materialize.
+  await parkProcessingState(page);
 
   // 2. Track the fixture repo with a docs/**/*.md pattern and PREVIEW.
   await page.getByLabel('Repository URL', { exact: true }).fill(GITHUB_FIXTURE.repoUrl);
@@ -97,8 +127,8 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await expect(importing).toHaveCount(3, { timeout: 30_000 });
   await expect(page.getByText('3 new files · 0 changed · 0 unchanged')).toBeVisible({ timeout: 30_000 });
 
-  // 6. Release the parked poll: each importing row settles to ready in place.
-  await page.unroute(PER_ROW_POLL);
+  // 6. Release the parked batch read: each importing row settles to ready in place.
+  await page.unroute(PROCESSING_STATE_READ);
   await expect(importing).toHaveCount(0, { timeout: 30_000 });
   expect(
     await page.evaluate(() => (window as Window & { __noReload?: boolean }).__noReload === true),
@@ -152,22 +182,28 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await postInlineComment(page, GITHUB_FIXTURE.changed.stableSentence, survivingComment);
 
   // 8. Back on the project, MUTATE the fixture (one file changes, one is added),
-  //    then Re-scan. Re-park so the new import row is observable while importing.
+  //    then Re-scan. Re-park so both the new import and the existing readable
+  //    document's update are observable while processing.
   await page.goto(projectUrl);
   await request.post(`${FIXTURE_ORIGIN}${GITHUB_FIXTURE.control.mutate}`);
-  await parkRowPoll(page);
+  await parkProcessingState(page);
   await page.getByRole('button', { name: 'Re-scan', exact: true }).click();
 
   // 9. The re-scan imports the NEW file (materialized importing) and keeps the
   //    immutable discovery facts separate from current document completion.
   const rescanImporting = projectDocuments.getByText('Importing');
   await expect(rescanImporting).toHaveCount(1, { timeout: 30_000 });
+  await expect(projectDocuments.getByText('Updating')).toHaveCount(1, { timeout: 30_000 });
   await expect(page.getByText('1 new file · 1 changed · 2 unchanged')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('All documents ready')).toBeVisible();
+  await expect(page.getByText('All documents ready')).toHaveCount(0);
 
-  // 10. Release the poll: the new doc settles to ready and joins the list.
-  await page.unroute(PER_ROW_POLL);
+  // 10. Release the batch state: the new doc settles to ready and joins the list;
+  //     the completed update is confirmed separately rather than inferred at
+  //     discovery time.
+  await page.unroute(PROCESSING_STATE_READ);
   await expect(rescanImporting).toHaveCount(0, { timeout: 30_000 });
+  await expect(projectDocuments.getByText('Updating')).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByText('All documents ready')).toBeVisible({ timeout: 30_000 });
   await expect(projectDocuments.getByRole('link', { name: GITHUB_FIXTURE.added.title })).toBeVisible();
 
   // 11. Open the changed doc: its content re-synced to the new generation, and the

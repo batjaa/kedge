@@ -3,7 +3,12 @@
 import { type ReactNode, useCallback, useEffect, useRef } from 'react';
 import { DocumentList } from './document-list';
 import { hasMorePages } from '@/lib/document-list-live';
-import { mergeDocumentStates, mergeReportedRows, type TrackedDocumentState } from '@/lib/tracked-repo-scan';
+import {
+  isDocumentProcessing,
+  mergeDocumentStates,
+  mergeReportedRows,
+  type TrackedDocumentState,
+} from '@/lib/tracked-repo-scan';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
 import type {
   Document,
@@ -161,6 +166,7 @@ export function DocumentSection({
       projects={projects}
       onAssigned={handleAssigned}
       directoryDividers={directoryDividers}
+      batchProcessingIds={processingStates.filter(isDocumentProcessing).map((state) => state.id)}
       heading={heading}
       headingId={headingId}
       emptyTitle={emptyTitle}

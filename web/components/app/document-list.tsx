@@ -58,6 +58,7 @@ export function DocumentList({
   onAssigned = () => {},
   grouped = false,
   directoryDividers = false,
+  batchProcessingIds = [],
   filter,
   onSelectFilter,
   summary,
@@ -85,6 +86,9 @@ export function DocumentList({
   /** Interleave directory dividers between path-ordered rows (M3.10 #119) — a
    *  repo section only; the home list and "Other documents" leave it off. */
   directoryDividers?: boolean;
+  /** Document ids currently covered by a parent-level batched processing read.
+   *  Those rows must not also mount their legacy one-request-per-row poller. */
+  batchProcessingIds?: readonly number[];
   /** The active lifecycle chip (5A). Chips render only when onSelectFilter is set. */
   filter?: DocumentLifecycleFilter;
   /** Select a lifecycle chip — the dashboard only (#103); omit to hide chips. */
@@ -178,6 +182,7 @@ export function DocumentList({
                   onSettled={onSettled}
                   onRetried={onRetried}
                   onAssigned={onAssigned}
+                  batchProcessingIds={batchProcessingIds}
                 />
               </div>
             ))
@@ -190,6 +195,7 @@ export function DocumentList({
               onRetried={onRetried}
               onAssigned={onAssigned}
               directoryDividers={directoryDividers}
+              batchProcessingIds={batchProcessingIds}
             />
           )}
         </>
@@ -318,6 +324,7 @@ function RowCard({
   onRetried,
   onAssigned,
   directoryDividers = false,
+  batchProcessingIds = [],
   className,
 }: {
   items: DocumentListItem[];
@@ -327,6 +334,8 @@ function RowCard({
   onAssigned: (doc: Document) => void;
   /** Repo section only: mark directory changes between adjacent rows (#119). */
   directoryDividers?: boolean;
+  /** Parent-level processing reads cover these rows; avoid duplicate polls. */
+  batchProcessingIds?: readonly number[];
   className?: string;
 }) {
   const entries = directoryDividers
@@ -352,6 +361,7 @@ function RowCard({
               onSettled={onSettled}
               onRetried={onRetried}
               onAssigned={onAssigned}
+              batchProcessing={batchProcessingIds.includes(entry.item.id)}
             />
           ),
         )}
@@ -413,12 +423,14 @@ function DocumentRow({
   onSettled,
   onRetried,
   onAssigned,
+  batchProcessing = false,
 }: {
   item: DocumentListItem;
   projects: Project[];
   onSettled: (doc: Document) => void;
   onRetried: (id: number) => void;
   onAssigned: (doc: Document) => void;
+  batchProcessing?: boolean;
 }) {
   return (
     <li>
@@ -460,7 +472,7 @@ function DocumentRow({
           the row settles out of `importing`. A retry flips the row back to
           `importing`, which re-mounts this poller so the row settles live. The
           tested `shouldPoll` predicate owns this decision (no inlined status). */}
-      {shouldPoll(item) ? (
+      {shouldPoll(item) && !batchProcessing ? (
         <RowPoller id={item.id} onSettled={onSettled} />
       ) : null}
     </li>
