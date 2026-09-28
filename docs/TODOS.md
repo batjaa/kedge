@@ -4,6 +4,8 @@
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- ✅ **Workspace engineering review 2A:** promote membership to a first-class lifecycle model, with shared active-grant queries and explicit history. Replace passive pivot mutations, raw membership-existence permission checks and the closed role cast. The user prioritizes a clean architecture over migration/refactoring effort because there are no real customers. Full scope remains accepted (1A); architecture review continues in the [review log](plans/workspace-membership-eng-review.md). No application changes.
+
 - ✅ **Full foundation spec written:** [M4.0 workspace membership](specs/m4.0-workspace-membership.md) now defines the action/role interfaces, explicit built-in matrix, workspace-wide visibility, invitations, selection, membership/credential lifetimes, removal, operations and agreed testing seams. Built-ins ship before a custom-role editor. These are concrete defaults for engineering/design review, not application implementation or separate approval of every matrix cell. Project artifacts remain rebase-pending; no tickets published.
 
 - ✅ **Workspace membership first:** the user requires expandable membership with useful defaults, explicit action/role interfaces, and those definitions as the resource-authorization baseline. [Foundation draft](plans/workspace-membership.md) records that direction and proposed interfaces/default roles. The M4.0 spec now defines the built-in matrix, visibility, custom-role rollout and offboarding as reviewable defaults; they are not separately user-approved. Project-first sequencing is superseded; retain reviewed project mechanics and rebase its unpublished tickets after the foundation is defined. No runtime code or issues changed.

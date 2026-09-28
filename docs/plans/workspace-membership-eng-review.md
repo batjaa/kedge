@@ -37,11 +37,39 @@ permission platform. The user's earlier deployment decision also stands: ordinar
 migration, process restarts and smoke checks; temporary disruption/manual recovery
 are accepted. No maintenance cutover, forced queue drain or fleet-version gate.
 
+### 2A — first-class membership lifecycle and active access queries
+
+Accepted through the user's explicit direction on 2026-09-27: refactoring and
+migration time are not constraints worth preserving an inferior architecture for;
+choose the cleaner end state. Promote the membership pivot to a lifecycle model,
+use active-only relationship reads and a shared active-grant query, and make
+historical/revoked access explicit. Lifecycle mutation/locking still needs an
+unfiltered identity query, so do not hide inactive rows behind a global scope.
+
+Evidence: the spec retains revoked rows, while current membership checks use
+`$user->workspaces()->whereKey($workspaceId)->exists()` in
+`api/app/Policies/Concerns/AuthorizesWorkspaceMembership.php:52` and raw existence
+queries in `api/app/Http/Resources/V1/ThreadCapabilities.php:120`,
+`api/app/Http/Resources/V1/CommentCapabilities.php:127` and
+`api/app/Services/Comments/CommentMentionService.php:154`. This is a verified
+integration risk for the proposed lifecycle, not a claim that revoked-state rows
+are already implemented. P1, confidence 9/10.
+
+Replace attach/detach/sync lifecycle paths, the closed enum role cast and direct
+membership-based capability bypasses. Preserve registration, historical attribution
+and explicit reactivation without granting access from history. Require feature
+coverage across lifecycle, relations, Policies, directory/mentions, AI, capabilities
+and MCP. No application implementation has started.
+
+For remaining decisions, prefer correctness, clear boundaries and long-term
+maintenance. Do not offer retaining a weaker structure merely to save refactoring
+time; substantive product/API tradeoffs still require review.
+
 ## What already exists
 
 | Sub-problem | Existing implementation | Review direction |
 |---|---|---|
-| Tenancy and membership | Workspace, WorkspaceMember pivot, User workspace relations | Extend existing records and IDs; inspect lifecycle/query semantics |
+| Tenancy and membership | Workspace, WorkspaceMember pivot, User workspace relations | Promote to a lifecycle model with active reads and explicit history (2A) |
 | Route authorization | Laravel Policies and shared membership/share concerns | Keep enforcement entry points; centralize role/action decisions |
 | Accounts and mailbox proof | Registration, reviewer upgrade, email confirmation, OAuth and shared sign-out | Reuse; preserve recent auth fixes and cover documented logout-race debt |
 | Agent identity | Sanctum-backed AgentToken, exact workspace abilities and write-time token checks | Compose with live membership and the shared transaction boundary |

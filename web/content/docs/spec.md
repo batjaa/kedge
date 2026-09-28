@@ -363,6 +363,13 @@ tokens/jobs/invitations regaining authority after removal/rejoin. Independent Sh
 remain valid; ordinary removal is not an identity ban. These concrete defaults
 await review, rather than representing separately approved matrix cells.
 
+**M4.0 engineering decision 2A (2026-09-27):** membership becomes a first-class
+lifecycle model with active-only convenience relationships, a shared active-grant
+query and explicit history/identity queries for audit and reactivation. Replace
+passive pivot writes and scattered existence checks; retaining a revoked row must
+not retain access. The user prioritizes the cleaner architecture over minimizing
+refactoring or migration effort. See the [review log](plans/workspace-membership-eng-review.md).
+
 This supersedes the project-first order. Reuse the previously reviewed invitation,
 transaction, private-asset, background-work and testing mechanics; rebase the prior
 project spec and unpublished ticket draft before execution. Use ordinary deployment
