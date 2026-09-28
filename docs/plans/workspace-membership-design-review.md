@@ -19,7 +19,7 @@ This is a rating of written planning detail, not a visual rating of an implement
 
 | Pass | Initial | Final | Status |
 |---|---|---|---|
-| 1 — information architecture | 6/10 | — | D1A accepted; 7/10 interim, D2 pending |
+| 1 — information architecture | 6/10 | — | D1A/D2A accepted; 8/10 interim, D3 pending |
 | 2 — interaction states | 8/10 | — | Pending |
 | 3 — journey | 7/10 | — | Pending |
 | 4 — intentional app UI | 8/10 | — | Pending |
@@ -87,45 +87,69 @@ loading/error states, keyboard focus and access loss. The current page/context
 remains truthful while the list loads or fails. None of these states adds an
 account group, workspace-creation action or automatic form retargeting.
 
-**Pass 1 interim rating: 6/10 → 7/10.** Workspace orientation is settled. Members/
-invitations organization is still undecided; no completed-pass rating claimed.
+D1A settled workspace orientation; D2A below settles Members/invitations organization.
+The pass remains in progress until workspace-switch navigation is specified.
 
-## Pending D2 — Members screen organization
+## Accepted D2A — Members and Invitations tabs
 
-The spec §10 requires separate paginated members and invitation lists, but does
-not define whether both occupy the same view. That matters because all members
-can inspect the directory, while only Owner/Admin may inspect invitations.
-Current `web/app/(app)/settings/page.tsx` stacks General, Integrations and Agent
-Tokens; appending two long member lists to that stack would bury the task.
-The existing post-v1 teams preview mixes Members/Teams and does not settle this.
+User selected D2A on 2026-09-27. Members has a dedicated workspace-settings destination
+with Members as the default view and an Invitations tab for Owner/Admin. The tab has
+a pending count, and authorized administrators have a persistent Invite member action.
+Member/Viewer see the directory without inaccessible invitation controls or counts.
+Lists have independent, workspace-scoped, URL-addressable filter/pagination state.
 
-Both options give Members a dedicated destination within workspace settings,
-reuse the existing settings styling and keep invitation controls/counts restricted
-to authorized roles. This does not change any role powers or introduce Teams.
-
-**D2A (recommended):** one Members page with “Members” and “Invitations” tabs;
-Members is the default, and Owner/Admin get the Invitations tab with a pending
-count and a persistent “Invite member” action. Member/Viewer see the directory
-without a disabled/locked invitation tab. Separate URL-addressable list state keeps
-filters and pagination from interfering. Moderate specification effort now; avoids
-long mixed lists and keeps each view focused on one task.
-
-**D2B:** one Members page with Members and Invitations as two stacked sections,
-each with its own filters/pagination; unauthorized users see only the directory.
-Slightly simpler structure, with an at-a-glance admin overview, but invitation
-management moves below the member list as the workspace grows.
+Evidence: spec §10 required separate paginated lists without settling their layout.
+The existing settings page stacks General, Integrations and Agent Tokens; appending
+two long lists would bury the member/invitation task. Tabs were selected over stacked
+lists for focused navigation as the workspace grows. Neither role powers nor scope
+changes with this choice.
 
 ```text
-D2A — proposed                    D2B — alternative
-Workspace / Settings / Members    Workspace / Settings / Members
-Members          [Invite member] Members          [Invite member]
-[Members] [Invitations (3)]       Member filters + rows + pagination
-Filters + one list + pagination   Invitations: filters + rows + pagination
+Workspace / Settings / Members
+Members                         [Invite member]
+[Members] [Invitations (3)]      (Owner/Admin only)
+Selected list filters
+Selected list rows
+Pagination
 ```
 
-Recommendation follows hierarchy-as-service and one job per section. Deferring
-this choice risks implementing either two competing paginators or a hidden invitation
-workflow accidentally. Neither option is recorded as accepted yet.
+The canonical spec now includes heading/action/list hierarchy and concrete loading,
+owner-only membership, empty-invitation, filtered-empty, failed-page and permission-
+loss states. A failed count is not zero; losing administrative power removes cached
+invitation/email details. Owner-only membership still displays the Owner row, not
+an inaccurate “no members” illustration. Role details remain secondary/read-only.
+
+**Pass 1 interim rating: 6/10 → 8/10.** Location and list organization are concrete;
+workspace-switch destination is still unspecified. Other pass scores are unchanged
+until those passes are completed, even where this decision adds useful state detail.
+
+## Pending D3 — destination after selecting another workspace
+
+The spec §8 fixes explicit targets and forbids retargeting an open submission, but
+it does not say which page selecting another workspace opens. The accepted D1A
+selector makes this a routine user action. A document/project belongs to a particular
+workspace; keeping its resource ID while replacing the workspace would be incorrect.
+Workspace-wide pages such as Members do have a meaningful counterpart elsewhere.
+
+**D3A (recommended):** selecting another workspace opens its Documents/home page
+consistently. This gives one predictable place to orient to the new workspace;
+people administering several workspaces need an extra navigation step back to Members.
+Small specification effort; avoids navigation behavior depending on the previous page.
+
+**D3B:** retain the equivalent workspace-wide section when permitted (for example,
+Members → Members), falling back to the new workspace home for document/project-
+specific pages or unavailable sections. This saves repeat navigation for administrators
+but needs a clear mapping and fallback states. Moderate specification effort now.
+
+Both keep form targets/drafts bound to their original workspace and preserve the
+existing access-loss behavior. Switching does not submit or copy a form, remap a
+project/document by name, or change another tab's target. Invitation acceptance
+already opens the joined workspace and is not reopened by this decision. Nor does
+this decide a new sign-in landing preference or change stable personal identity.
+
+D3A is recommended for predictable orientation, not to save refactoring effort.
+Deferring this choice risks inconsistent behavior between settings and document
+views. No destination option is accepted yet.
 
 ## Implementation tasks so far
 
@@ -136,6 +160,14 @@ workflow accidentally. Neither option is recorded as accepted yet.
   - Verify: existing workspace-context journey F04 plus keyboard open/select/Escape,
     single/long/duplicate-name lists, failed pagination and access loss; no draft
     retargeting or late-response cross-workspace rendering.
+
+- [ ] **D-T2 (P1)** — Workspace settings — build the Members/Invitations navigation and list states.
+  - Surfaced by: D2A; independently paginated directories and offers need a clear hierarchy.
+  - Files: workspace settings pages, member/invitation clients and list components,
+    role/capability projections, localization catalogs.
+  - Verify: F01/F03/F05 plus role-dependent navigation/counts, deep links/back/refresh,
+    separate filters/cursors, Owner-only membership, empty/error states and loss of
+    admin authority while invitation details are displayed.
 
 ## NOT in scope
 
@@ -148,5 +180,5 @@ workflow accidentally. Neither option is recorded as accepted yet.
 
 ## Unresolved decisions
 
-- D2: tabs versus stacked lists on the Members page.
+- D3: new workspace home versus equivalent-section navigation after switching.
 - Remaining passes are not yet reviewed; no completion or visual approval claimed.

@@ -409,6 +409,11 @@ control beside the Kedge logo, separate from personal identity and visible on mo
 Its states retain truthful workspace context; switching never retargets an open form.
 The [design review](plans/workspace-membership-design-review.md) is in progress.
 
+**M4.0 design decision D2A (2026-09-27):** Members has a dedicated workspace-settings
+page with Members and Invitations tabs. Members is the default; only Owner/Admin
+see invitations, their pending count and Invite member. Each view has independent
+workspace-scoped navigation/filter/pagination state and truthful empty/error states.
+
 The [engineering review](plans/workspace-membership-eng-review.md) is complete across
 all 11 sections; its [test map](plans/workspace-membership-test-map.md) specifies 22
 code contracts and eight journeys to prove during implementation. Visual review
