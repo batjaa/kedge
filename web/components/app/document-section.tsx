@@ -51,6 +51,7 @@ export function DocumentSection({
   injection,
   directoryDividers = false,
   processingStates = [],
+  processingKey = null,
   className = 'mt-8',
 }: {
   /** This page's project — reassigning a row out of it drops the row (M3.6). */
@@ -71,6 +72,8 @@ export function DocumentSection({
   directoryDividers?: boolean;
   /** One repo's batched current-state projection; list metadata stays untouched. */
   processingStates?: TrackedDocumentState[];
+  /** Identity of the report that supplied `processingStates`, if any. */
+  processingKey?: string | null;
   className?: string;
 }) {
   const {
@@ -134,6 +137,23 @@ export function DocumentSection({
     if (processingStates.length === 0) return;
     setItems((prev) => mergeDocumentStates(prev, processingStates));
   }, [processingStates, setItems]);
+
+  // The batch projection deliberately contains only processing fields: it keeps
+  // its query bounded and avoids duplicating DocumentListResource. Once that
+  // batch is terminal, reconcile this one source section exactly once for its
+  // report. This replaces the retired per-document polls with one list read, so
+  // newly imported placeholder rows receive their authoritative title/version
+  // metadata and a completed re-sync can refresh list-only fields. `reload` is
+  // latest-wins, so a later scan cannot be overwritten by this older read.
+  const reconciledProcessing = useRef<string | null>(null);
+  useEffect(() => {
+    if (processingKey === null || processingStates.length === 0) return;
+    if (processingStates.some(isDocumentProcessing)) return;
+    if (reconciledProcessing.current === processingKey) return;
+
+    reconciledProcessing.current = processingKey;
+    reloadRef.current();
+  }, [processingKey, processingStates]);
 
   // Reassigning a row OUT of this project removes it from the page; staying (a
   // no-op, or a move between sections of the same project — impossible, provenance

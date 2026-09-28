@@ -135,6 +135,11 @@ export function ProjectDocuments({
           injection={injections[String(repo.id)]}
           directoryDividers
           processingStates={repo.document_states ?? []}
+          processingKey={
+            repo.last_scan_report
+              ? `${repo.last_scan_report.started_at}:${repo.last_scan_report.finished_at}`
+              : null
+          }
         />
       ))}
 
