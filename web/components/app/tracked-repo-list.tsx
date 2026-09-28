@@ -246,9 +246,8 @@ function ScanReportSummary({ repo, report }: { repo: TrackedRepo; report: ScanRe
   const t = useTranslations('tracked-repos');
   const { import_queued, resync_queued, unchanged, missing, failed } = report.counts;
   const states = new Map((repo.document_states ?? []).map((state) => [state.id, state]));
-  const affectedCount = report.files.filter((file) => file.outcome === 'import_queued' || file.outcome === 'resync_queued').length;
-  const checking = needsProcessingRefresh(repo) && repo.document_states === undefined;
   const affected = report.files.filter((file) => file.outcome === 'import_queued' || file.outcome === 'resync_queued');
+  const checking = needsProcessingRefresh(repo) && repo.document_states === undefined;
   const processing = affected.filter((file) => isReportOperationCurrent(file, states.get(file.document_id ?? -1))
     && isDocumentProcessing(states.get(file.document_id ?? -1)));
   const takingLonger = processing.some((file) => {
@@ -257,7 +256,7 @@ function ScanReportSummary({ repo, report }: { repo: TrackedRepo; report: ScanRe
       && state?.sync_started_at !== undefined
       && Date.now() - Date.parse(state.sync_started_at) > 30_000;
   });
-  const allReady = !checking && affectedCount > 0 && states.size === affectedCount
+  const allReady = !checking && affected.length > 0
     && !needsProcessingRefresh(repo)
     && affected.every((file) => isReportOperationSuccessful(file, states.get(file.document_id ?? -1)));
 

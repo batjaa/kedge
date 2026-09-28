@@ -104,6 +104,50 @@ describe('TrackedRepoRow', () => {
     expect(html).not.toContain('Queued');
   });
 
+  it('settles affected scan operations despite additional unchanged document states', () => {
+    const tracked = repo('ok', report([
+      { path: 'docs/new.md', outcome: 'import_queued', document_id: 1, operation_generation: 2, reason: null },
+      { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, operation_generation: 4, reason: null },
+      { path: 'docs/unchanged-a.md', outcome: 'unchanged', document_id: 3, reason: null },
+      { path: 'docs/unchanged-b.md', outcome: 'unchanged', document_id: 4, reason: null },
+    ]));
+    tracked.document_states = [
+      { id: 1, status: 'ready', last_sync_status: 'ok', sync_generation: 2, sync_error: null, sync_started_at: null },
+      { id: 2, status: 'ready', last_sync_status: 'ok', sync_generation: 4, sync_error: null, sync_started_at: null },
+      { id: 3, status: 'ready', last_sync_status: 'ok', sync_generation: 1, sync_error: null, sync_started_at: null },
+      { id: 4, status: 'ready', last_sync_status: 'ok', sync_generation: 1, sync_error: null, sync_started_at: null },
+    ];
+
+    const html = render(tracked);
+    expect(html).toContain('1 new file · 1 changed · 2 unchanged');
+    expect(html).toContain('All documents ready');
+  });
+
+  it.each([
+    ['an affected document state is missing', (states: NonNullable<TrackedRepo['document_states']>) => states.filter((state) => state.id !== 2), undefined],
+    ['an affected operation generation differs', (states: NonNullable<TrackedRepo['document_states']>) => states.map((state) => state.id === 2 ? { ...state, sync_generation: 5 } : state), 'Unconfirmed'],
+    ['an affected operation is still processing', (states: NonNullable<TrackedRepo['document_states']>) => states.map((state) => state.id === 2 ? { ...state, last_sync_status: 'processing' as const, sync_started_at: '2026-07-21T00:00:00+00:00' } : state), 'Updating'],
+    ['an affected operation failed', (states: NonNullable<TrackedRepo['document_states']>) => states.map((state) => state.id === 2 ? { ...state, last_sync_status: 'failed' as const, sync_error: 'Showing last good version.' } : state), 'Update failed'],
+  ])('does not claim ready when %s', (_description, modifyStates, expectedFeedback) => {
+    const tracked = repo('ok', report([
+      { path: 'docs/new.md', outcome: 'import_queued', document_id: 1, operation_generation: 2, reason: null },
+      { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, operation_generation: 4, reason: null },
+      { path: 'docs/unchanged-a.md', outcome: 'unchanged', document_id: 3, reason: null },
+      { path: 'docs/unchanged-b.md', outcome: 'unchanged', document_id: 4, reason: null },
+    ]));
+    const states: NonNullable<TrackedRepo['document_states']> = [
+      { id: 1, status: 'ready', last_sync_status: 'ok', sync_generation: 2, sync_error: null, sync_started_at: null },
+      { id: 2, status: 'ready', last_sync_status: 'ok', sync_generation: 4, sync_error: null, sync_started_at: null },
+      { id: 3, status: 'ready', last_sync_status: 'ok', sync_generation: 1, sync_error: null, sync_started_at: null },
+      { id: 4, status: 'ready', last_sync_status: 'ok', sync_generation: 1, sync_error: null, sync_started_at: null },
+    ];
+    tracked.document_states = modifyStates(states);
+
+    const html = render(tracked);
+    expect(html).not.toContain('All documents ready');
+    if (expectedFeedback) expect(html).toContain(expectedFeedback);
+  });
+
   it('keeps a readable document honest while its requested update is processing or fails', () => {
     const tracked = repo('ok', report([
       { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, reason: null },
