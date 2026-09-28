@@ -4,6 +4,8 @@
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- ✅ **Workspace design D3A:** switching to another workspace always opens its Documents/home page; choosing the current workspace is a no-op. Loading/failure states keep workspace context truthful, and pending forms/mutations retain their original targets. The [design review](plans/workspace-membership-design-review.md) continues with invitation-form presentation (D4). No runtime UI changes.
+
 - ✅ **Workspace design D2A:** a dedicated Members page uses Members/Invitations tabs with independent filters/pagination; only Owner/Admin see invitations, the pending count and Invite member. Canonical spec now defines the page hierarchy and concrete loading/empty/error/access-loss states. [Design review](plans/workspace-membership-design-review.md) continues with workspace-switch destination (D3). No runtime UI changes.
 
 - ✅ **Workspace design D1A:** named workspace switcher beside the Kedge logo, with personal identity separate and the current workspace visible on narrow screens. Loading, list errors, pagination and access loss preserve truthful context and pending-form targets. [Design review](plans/workspace-membership-design-review.md) continues with Members/invitations organization (D2); no runtime UI changes.

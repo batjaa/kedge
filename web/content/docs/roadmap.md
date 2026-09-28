@@ -71,7 +71,8 @@ and all remaining engineering review sections are complete, including 7A durable
 progress and safe resumption. The [test map](plans/workspace-membership-test-map.md)
 records 30 required contract groups. The [design review](plans/workspace-membership-design-review.md)
 is in progress: D1A selects a named switcher beside the logo and D2A uses
-Members/Invitations tabs; workspace-switch destination is next. Ticket preparation/rebase remains. The prior project
+Members/Invitations tabs; D3A always opens the destination workspace home.
+Invitation-form presentation is next. Ticket preparation/rebase remains. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.
 

@@ -414,6 +414,11 @@ page with Members and Invitations tabs. Members is the default; only Owner/Admin
 see invitations, their pending count and Invite member. Each view has independent
 workspace-scoped navigation/filter/pagination state and truthful empty/error states.
 
+**M4.0 design decision D3A (2026-09-27):** selecting another workspace always opens
+its Documents/home page. It does not retain a settings section or remap a resource.
+Pending forms/mutations remain bound to the original workspace; choosing the current
+workspace is a no-op. Invitation acceptance and auth-return destinations are unchanged.
+
 The [engineering review](plans/workspace-membership-eng-review.md) is complete across
 all 11 sections; its [test map](plans/workspace-membership-test-map.md) specifies 22
 code contracts and eight journeys to prove during implementation. Visual review

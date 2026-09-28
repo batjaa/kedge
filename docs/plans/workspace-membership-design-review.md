@@ -19,7 +19,7 @@ This is a rating of written planning detail, not a visual rating of an implement
 
 | Pass | Initial | Final | Status |
 |---|---|---|---|
-| 1 — information architecture | 6/10 | — | D1A/D2A accepted; 8/10 interim, D3 pending |
+| 1 — information architecture | 6/10 | — | D1A–D3A accepted; D4 form presentation pending |
 | 2 — interaction states | 8/10 | — | Pending |
 | 3 — journey | 7/10 | — | Pending |
 | 4 — intentional app UI | 8/10 | — | Pending |
@@ -88,7 +88,7 @@ remains truthful while the list loads or fails. None of these states adds an
 account group, workspace-creation action or automatic form retargeting.
 
 D1A settled workspace orientation; D2A below settles Members/invitations organization.
-The pass remains in progress until workspace-switch navigation is specified.
+D3A below settles workspace-switch navigation; invite-form presentation is next.
 
 ## Accepted D2A — Members and Invitations tabs
 
@@ -120,46 +120,78 @@ invitation/email details. Owner-only membership still displays the Owner row, no
 an inaccurate “no members” illustration. Role details remain secondary/read-only.
 
 **Pass 1 interim rating: 6/10 → 8/10.** Location and list organization are concrete;
-workspace-switch destination is still unspecified. Other pass scores are unchanged
-until those passes are completed, even where this decision adds useful state detail.
+D3A below completes switch destination. Invite-form presentation is the remaining
+information-architecture choice. Other pass scores remain unfinalized until reviewed.
 
-## Pending D3 — destination after selecting another workspace
+## Accepted D3A — switching opens the destination home
 
-The spec §8 fixes explicit targets and forbids retargeting an open submission, but
-it does not say which page selecting another workspace opens. The accepted D1A
-selector makes this a routine user action. A document/project belongs to a particular
-workspace; keeping its resource ID while replacing the workspace would be incorrect.
-Workspace-wide pages such as Members do have a meaningful counterpart elsewhere.
+User selected D3A on 2026-09-27. Selecting another workspace always opens its
+Documents/home page, including when switching from Members, Invitations, other
+settings, a project or a document. Do not map the current section/resource into the
+new workspace. Selecting the current workspace is a dismissal/no-op, not a page reset.
 
-**D3A (recommended):** selecting another workspace opens its Documents/home page
-consistently. This gives one predictable place to orient to the new workspace;
-people administering several workspaces need an extra navigation step back to Members.
-Small specification effort; avoids navigation behavior depending on the previous page.
+The previous spec fixed authorization/target identity but omitted destination behavior.
+D3A was selected over retaining equivalent sections for predictable orientation.
+Administrators may need another click to return to Members; this is an accepted
+interaction tradeoff, not a refactoring-cost compromise.
 
-**D3B:** retain the equivalent workspace-wide section when permitted (for example,
-Members → Members), falling back to the new workspace home for document/project-
-specific pages or unavailable sections. This saves repeat navigation for administrators
-but needs a clear mapping and fallback states. Moderate specification effort now.
+During navigation, show loading for the new destination instead of old rows under
+a new label. A failed navigation keeps the prior confirmed context or shows the
+explicit destination error, depending on whether navigation committed. Access loss
+uses the existing personal-workspace recovery action and never silently opens a
+third workspace. Pending forms, in-flight mutations and later confirmations retain
+their original target; another tab's workspace does not change. This does not alter
+invitation acceptance, valid auth returns or choose a new default after sign-in.
 
-Both keep form targets/drafts bound to their original workspace and preserve the
-existing access-loss behavior. Switching does not submit or copy a form, remap a
-project/document by name, or change another tab's target. Invitation acceptance
-already opens the joined workspace and is not reopened by this decision. Nor does
-this decide a new sign-in landing preference or change stable personal identity.
+```text
+Current workspace / Members      -- select Platform --> Platform / Documents
+Current workspace / Project X    -- select Platform --> Platform / Documents
+Current workspace / Document Y   -- select Platform --> Platform / Documents
+Current workspace / any page     -- select current  --> same page (no reset)
+```
 
-D3A is recommended for predictable orientation, not to save refactoring effort.
-Deferring this choice risks inconsistent behavior between settings and document
-views. No destination option is accepted yet.
+## Pending D4 — presentation of the invitation form
+
+The accepted Members page has an Invite member action, and the spec defines one
+recipient email, a permitted role with Member default, role explanation and the
+all-projects/Unfiled disclosure. It does not yet define where this form opens.
+That choice determines navigation context, focus/dismissal and mobile presentation.
+Invitation acceptance remains its own link-addressable page under both options.
+
+Existing app patterns support either direction: General settings and share creation
+are inline forms, while AI panels use dialog/sheet shells. Reuse their visual
+vocabulary, but do not assume existing dialogs meet every form accessibility need:
+`ai-artifact-dialog.tsx` restores focus/Escape but does not itself trap focus, while
+`mobile-thread-sheet.tsx` has an explicit focus trap. Required focus containment and
+draft protection remain implementation work whichever form presentation is selected.
+
+**D4A (recommended):** Invite member opens a compact dialog over the current Members
+view, with a full-height sheet on narrow screens. Email, role, access summary and
+Send invitation stay in one short form. Moderate effort to specify focus/dismissal;
+keeps the directory context and avoids a separate navigation step.
+
+**D4B:** Invite member opens a dedicated invitation form page within workspace
+settings, with a clear Back to Members link. More space and a stable navigation
+surface, but an extra page transition for a short task. Similar specification effort;
+no modal focus/dismissal complexity.
+
+Both offer one recipient, preserve the selected workspace and draft on failed
+submission, show only assignable roles and require explicit Send invitation.
+No bulk invite, automatic resend or role editing is introduced. D4A is recommended
+because the task is short and starts from the directory; deferring it leaves engineers
+to invent overlay/navigation behavior. Neither option is accepted yet.
 
 ## Implementation tasks so far
 
 - [ ] **D-T1 (P1)** — App shell — add the dedicated named workspace switcher.
-  - Surfaced by: D1A; workspace context must be distinct from personal identity.
+  - Surfaced by: D1A/D3A; workspace context is distinct from personal identity and
+    every switch has one predictable destination.
   - Files: `web/components/app/app-shell.tsx`, workspace discovery client and shared
     context/navigation consumers; responsive shell utilities after Pass 6.
   - Verify: existing workspace-context journey F04 plus keyboard open/select/Escape,
-    single/long/duplicate-name lists, failed pagination and access loss; no draft
-    retargeting or late-response cross-workspace rendering.
+    single/long/duplicate-name lists, failed pagination and access loss; switching
+    from settings/project/document always opens destination home; selecting current
+    is a no-op; no draft retargeting or late-response cross-workspace rendering.
 
 - [ ] **D-T2 (P1)** — Workspace settings — build the Members/Invitations navigation and list states.
   - Surfaced by: D2A; independently paginated directories and offers need a clear hierarchy.
@@ -180,5 +212,5 @@ views. No destination option is accepted yet.
 
 ## Unresolved decisions
 
-- D3: new workspace home versus equivalent-section navigation after switching.
+- D4: contextual dialog/mobile sheet versus dedicated invitation form page.
 - Remaining passes are not yet reviewed; no completion or visual approval claimed.
