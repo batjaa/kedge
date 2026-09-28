@@ -1,5 +1,9 @@
 # Project access — test coverage map
 
+> **2026-09-27 rebase pending:** this map describes the historical project-first scope.
+> Reconcile it with the [workspace test map](workspace-membership-test-map.md) and
+> [project rebase map](project-access-workspace-rebase.md) before implementation/publication.
+
 > 2026-09-27 · Engineering review coverage checkpoint; engineering review complete; decisions 17A–21A and deployment direction 22 recorded.
 > Source: [module spec](../specs/m4.1-project-access.md) and
 > [accepted review decisions](project-access-eng-review.md).

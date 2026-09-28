@@ -69,8 +69,10 @@ progress and safe resumption. The [test map](plans/workspace-membership-test-map
 records 30 required contract groups. The [design review](plans/workspace-membership-design-review.md)
 is complete: D1A selects the named switcher beside the logo, D2A uses Members/
 Invitations tabs, D3A opens destination home and D4A uses a desktop invite dialog/
-mobile sheet. All seven passes are recorded. Ticket preparation/rebase is next;
-rendered UI QA is implementation work. The prior project
+mobile sheet. All seven passes are recorded. The [29-child workspace ticket draft](plans/workspace-membership-tickets.md)
+is ready for granularity/dependency review; no tickets are published. The
+[project rebase map](plans/project-access-workspace-rebase.md) identifies absorbed work
+and remaining project decisions. Rendered UI QA is implementation work. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.
 

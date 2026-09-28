@@ -1,7 +1,7 @@
 # Project access — proposed ticket breakdown
 
 > **2026-09-27 sequencing update:** workspace membership and action/role contracts
-> are now specced first in M4.0 (engineering review pending). This artifact describes the prior project-first
+> are now specced first in M4.0 (engineering/design-plan reviews complete). This artifact describes the prior project-first
 > scope; preserve its useful decisions, but rebase it before implementation or
 > ticket publication. See the [workspace foundation spec](../specs/m4.0-workspace-membership.md).
 
@@ -20,6 +20,11 @@ Numbers below are draft IDs, not GitHub issue numbers. Existing
 [#156](https://github.com/batjaa/kedge/issues/156) remains a separate verification
 recovery issue and blocks final acceptance/release checks, not unrelated work.
 No module issues have been published and this revised breakdown is not approved.
+
+The [workspace ticket draft](workspace-membership-tickets.md) and
+[rebase map](project-access-workspace-rebase.md) supersede this draft’s shared-work
+allocation. The 27 bodies below are historical inputs, not the current publication
+proposal. Project-specific spec/design/coverage reconciliation remains pending.
 
 ## Rules shared by implementation tickets
 

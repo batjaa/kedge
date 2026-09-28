@@ -4,6 +4,8 @@
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- **Workspace ticket draft prepared, review pending:** [29 proposed children](plans/workspace-membership-tickets.md) cover the full engineering/design contract with explicit dependencies and coverage ownership. The [project rebase map](plans/project-access-workspace-rebase.md) moves common work out of the historical 27-ticket project draft and preserves project-only grants/delegation for M4.1. GitHub #156 remains open and blocks final acceptance only. No new issues, implementation or runtime verification; granularity approval and the complete project rebase remain outstanding.
+
 - ✅ **Workspace design-plan review complete:** D4A selects the compact desktop invite dialog/full-height mobile sheet. D1A–D4A are reconciled in the [spec](specs/m4.0-workspace-membership.md) and [seven-pass review](plans/workspace-membership-design-review.md), covering layout, states, journeys, Open Harbor alignment and responsive/accessibility requirements. No unresolved design choice or new deferral. Ticket reconciliation is next; runtime implementation and rendered QA remain unperformed.
 
 - ✅ **Workspace design D3A:** switching to another workspace always opens its Documents/home page; choosing the current workspace is a no-op. Loading/failure states keep workspace context truthful, and pending forms/mutations retain their original targets. The [design review](plans/workspace-membership-design-review.md) continues with invitation-form presentation (D4). No runtime UI changes.
