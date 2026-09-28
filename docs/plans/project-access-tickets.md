@@ -1,76 +1,74 @@
 # Project access — proposed ticket breakdown
 
-> 2026-09-27 · Draft for granularity/dependency approval; not published.
+> 2026-09-27 · Revised draft for granularity/dependency approval; not published.
 > Module parent: **Project access: invitations and project roles (M4.1)**.
 > Tracker: GitHub, native sub-issues and dependencies plus canonical Blocked by lines.
 > Spec: [M4.1](../specs/m4.1-project-access.md) · [Roadmap](../ROADMAP.md).
 
-Engineering review is complete as of 2026-09-27: decisions 1A–21A and the
-user-directed ordinary-deployment choice (22) are recorded. This draft predates
-later findings and needs reconciliation before approval: replace T01 with the
-remaining visual design review, incorporate 18A–21A, reassess scan/report and
-operations ticket sizes, and remove maintenance/fleet-gate assumptions. No issues
-have been published and the breakdown has not been approved.
+Engineering review is complete: decisions 1A–21A and user-directed ordinary
+deployment (22) are included below. This proposal has one parent and 27 children.
+The remaining visual design review is T01 and blocks the new invitation UI via
+T10; publishing with that prerequisite is an alternative to completing design
+review before ticketing and requires the user's approval of this breakdown.
 
-Numbers below are draft IDs, not GitHub issue numbers. Upon approval, create one
-module parent, then these children in order, using real identifiers for both native
-dependencies and each issue’s Blocked by section. No existing project-access module
-or child issues were found. Existing [#156](https://github.com/batjaa/kedge/issues/156)
-is a separate verification-recovery bug and blocks release, not unrelated refactors.
+Numbers below are draft IDs, not GitHub issue numbers. Existing
+[#156](https://github.com/batjaa/kedge/issues/156) remains a separate verification
+recovery issue and blocks final acceptance/release checks, not unrelated work.
+No module issues have been published and this revised breakdown is not approved.
 
 ## Rules shared by implementation tickets
 
-Every slice is complete through its relevant user flow, API/service/persistence
-and verification layers; no separate “schema only”, “API only” or “UI only” tickets.
-T02/T04 are deliberate prefactors demonstrated through existing endpoints; T03
-is a verifiable integration-harness slice. UI work includes the existing design
-language, four locales, both themes, keyboard/mobile and explicit recovery states.
-Each behavior-changing slice carries its own authorization/denial, regression,
-audit and failure tests; T25 verifies the whole boundary rather than supplying
-missing tests for earlier work. Use the accepted test map and 17A profile.
+Each slice delivers its complete relevant flow through persistence, API, UI and
+verification. T02/T04/T07 are prefactors exercised through existing journeys;
+T03 is a verifiable integration-profile slice. UI uses the existing design system,
+four locales, both themes, keyboard/mobile behavior and explicit recovery states.
+Every changed behavior carries its own authorization/denial, audit, failure and
+regression tests; T27 verifies the assembled experience rather than supplying
+missing tests. Follow the accepted coverage map and 17A integration profile.
 
-New invitation/project grants remain behind the agreed rollout control throughout
-implementation. Fixture-enabled demos may show a completed slice, but unintegrated
-project-only mutations fail closed and public enablement waits for T25. Existing
-independent workspace/Share grants retain their specified behavior. Maintain the
-workspace expansion seam without adding workspace invitation UI or a generic ACL.
-18A requires bounded-page grant reads and response-only reuse, with fresh write/job
-authority; incorporate it in the access and read-projection slices.
+Use bounded page/grant reads and response-only reuse (18A), fresh protected
+write/job checks, and bounded contention with safe recovery (19A). Preserve
+independent workspace/Share authorities and the seam for later workspace access.
+Lifecycle changes carry 21A safe diagnostic events; T26 adds aggregate checks and
+independent monitor wiring. Integrate the complete permission boundary before
+releasing invitations. Follow decision 22: ordinary deployment and manual recovery,
+with no additional maintenance/fleet-control system.
 
 ## Dependency overview
 
-1. **Resolve remaining engineering and design decisions** — **Blocked by:** None — can start immediately. **Delivers:** Finish the remaining project-access review and make the implementation and rollout choices explicit.
+1. **Complete the project-access visual design review** — **Blocked by:** None — can start immediately. **Delivers:** Approve the invitation, Members, Shared with you, role-change and access-loss journeys using the existing design language.
 2. **Consolidate AI generation starts** — **Blocked by:** None — can start immediately. **Delivers:** Digest, Improve-the-doc Prompt and Split Proposal requests use the same start/join and failure behavior already used by Ask and thread AI.
 3. **Add the required database-and-worker integration profile** — **Blocked by:** None — can start immediately. **Delivers:** A required CI check and a matching local command run real queue and concurrency tests without replacing the existing fast suites.
 4. **Introduce the shared transaction boundary through comment writes** — **Blocked by:** T03. **Delivers:** Existing comment and reply writes demonstrate one reusable transaction boundary for live authorization and resource placement.
 5. **Make shared sign-out reliable for account switching** — **Blocked by:** T03. **Delivers:** Ordinary sign-out confirms that the old account is gone and supports reliable return to an internal destination.
 6. **Keep repository credentials within their original origin** — **Blocked by:** None — can start immediately. **Delivers:** Authenticated source discovery and document fetches refuse redirects that would expose credentials.
-7. **Serve imported images through document-authorized delivery** — **Blocked by:** T03. **Delivers:** Images remain readable through valid document, Share or Demo Document access, while copied storage URLs no longer bypass access checks.
-8. **Protect cached diagrams and complete legacy media migration** — **Blocked by:** T07. **Delivers:** Diagrams use the same document-authorized delivery boundary, including existing cached assets.
-9. **Send a project invitation and show its safe preview** — **Blocked by:** T01, T04. **Delivers:** The workspace owner can invite a named recipient from Members, see delivery status, and send a link that reveals only the permitted preview.
-10. **Resend and revoke pending invitations safely** — **Blocked by:** T09. **Delivers:** The owner can recover delivery, replace an old invitation link or revoke a pending offer from Members.
-11. **Accept an invitation and discover the shared project** — **Blocked by:** T05, T08, T10. **Delivers:** A matching verified account explicitly joins and finds the project under Shared with you, with safe read-only access and no sibling-workspace disclosure.
-12. **Manage project members, roles and voluntary leaving** — **Blocked by:** T11. **Delivers:** Members shows effective access and lets authorized people invite, change roles, remove others or leave their own direct membership.
-13. **Enable role-aware commenting, own-thread actions and mentions** — **Blocked by:** T12. **Delivers:** Project Reviewers and Maintainers can discuss documents and manage their own contributions, while Viewers remain read-only.
-14. **Enable version-pinned approvals and suggestion decisions** — **Blocked by:** T12. **Delivers:** Project Reviewers approve under their own identity, and Maintainers decide proposed suggestions without impersonating another reviewer.
-15. **Enable Maintainer project and review moderation** — **Blocked by:** T12. **Delivers:** Maintainers can edit project details, change document lifecycle and moderate threads without rewriting others’ contributions.
-16. **Manage document Shares and move documents between project audiences** — **Blocked by:** T12. **Delivers:** Maintainers can manage project-document Shares and move a document between projects they maintain, with its complete review history.
-17. **Import public and pasted documents as a Maintainer** — **Blocked by:** T06, T12. **Delivers:** Maintainers add documents to the invited project using pasted/uploaded content or credential-free public sources.
-18. **Re-sync documents with current source authority** — **Blocked by:** T17. **Delivers:** Maintainers refresh an accessible source while preserving Document identity, review anchors and the last good version on failure.
-19. **Replace pasted content without losing a competing editor’s draft** — **Blocked by:** T18. **Delivers:** A Maintainer can submit a new version of pasted content; a competing editor receives a clear busy state and keeps their draft.
-20. **Approve private repositories and delegate file import and re-sync** — **Blocked by:** T18. **Delivers:** The owner approves a repository for a project, then a Maintainer can import or refresh its files without accessing workspace credentials.
-21. **Add and scan Tracked Repos with delegated project access** — **Blocked by:** T20. **Delivers:** Maintainers attach approved private or public Tracked Repos, preview matches, scan them and read a report limited to their current audience.
-22. **Change tracked branches and path filters without losing document identity** — **Blocked by:** T21. **Delivers:** Maintainers change a Tracked Repo’s selected branch or paths while existing documents keep their identity and review history.
-23. **Enable role-aware AI tools and private artifacts** — **Blocked by:** T02, T12. **Delivers:** Reviewers use Ask and reply drafts, Maintainers use all existing AI tools, and Viewers read only shared artifacts.
-24. **Recover revoked or abandoned project operations without a browser visit** — **Blocked by:** T21, T23. **Delivers:** The scheduler settles stranded imports, re-syncs, scans and AI Runs safely so users do not return to permanent pending states.
-25. **Verify the complete access boundary and enable invitations** — **Blocked by:** T13, T14, T15, T16, T19, T22, T24, #156. **Delivers:** The complete project-access experience is ready to enable in both editions, with verified migration, recovery and operational behavior.
+7. **Bound tracked scans and paginate complete latest reports** — **Blocked by:** T03. **Delivers:** Existing tracked-repository scans handle accumulated document history in bounded batches and show complete paginated results.
+8. **Serve imported images through document-authorized delivery** — **Blocked by:** T03. **Delivers:** Images remain readable through valid document, Share or Demo Document access, while copied storage URLs no longer bypass access checks.
+9. **Protect cached diagrams and complete legacy media migration** — **Blocked by:** T08. **Delivers:** Diagrams use the same document-authorized delivery boundary, including existing cached assets.
+10. **Send a project invitation and show its safe preview** — **Blocked by:** T01, T04. **Delivers:** The workspace owner can invite a named recipient from Members, see delivery status, and send a link that reveals only the permitted preview.
+11. **Resend and revoke pending invitations safely** — **Blocked by:** T10. **Delivers:** The owner can recover delivery, replace an old invitation link or revoke a pending offer from Members.
+12. **Accept an invitation and discover the shared project** — **Blocked by:** T05, T09, T11. **Delivers:** A matching verified account explicitly joins and finds the project under Shared with you, with safe read-only access and no sibling-workspace disclosure.
+13. **Manage project members, roles and voluntary leaving** — **Blocked by:** T12. **Delivers:** Members shows effective access and lets authorized people invite, change roles, remove others or leave their own direct membership.
+14. **Enable role-aware commenting, own-thread actions and mentions** — **Blocked by:** T13. **Delivers:** Project Reviewers and Maintainers can discuss documents and manage their own contributions, while Viewers remain read-only.
+15. **Enable version-pinned approvals and suggestion decisions** — **Blocked by:** T13. **Delivers:** Project Reviewers approve under their own identity, and Maintainers decide proposed suggestions without impersonating another reviewer.
+16. **Enable Maintainer project and review moderation** — **Blocked by:** T13. **Delivers:** Maintainers can edit project details, change document lifecycle and moderate threads without rewriting others’ contributions.
+17. **Manage document Shares and move documents between project audiences** — **Blocked by:** T13. **Delivers:** Maintainers can manage project-document Shares and move a document between projects they maintain, with its complete review history.
+18. **Import public and pasted documents as a Maintainer** — **Blocked by:** T06, T13. **Delivers:** Maintainers add documents to the invited project using pasted/uploaded content or credential-free public sources.
+19. **Re-sync documents with current source authority** — **Blocked by:** T18. **Delivers:** Maintainers refresh an accessible source while preserving Document identity, review anchors and the last good version on failure.
+20. **Replace pasted content without losing a competing editor’s draft** — **Blocked by:** T19. **Delivers:** A Maintainer can submit a new version of pasted content; a competing editor receives a clear busy state and keeps their draft.
+21. **Approve private repositories and delegate file import and re-sync** — **Blocked by:** T19. **Delivers:** The owner approves a repository for a project, then a Maintainer can import or refresh its files without accessing workspace credentials.
+22. **Add and scan Tracked Repos with delegated project access** — **Blocked by:** T21, T07. **Delivers:** Maintainers attach approved private or public Tracked Repos, preview matches, scan them and read a report limited to their current audience.
+23. **Change tracked branches and path filters without losing document identity** — **Blocked by:** T22. **Delivers:** Maintainers change a Tracked Repo’s selected branch or paths while existing documents keep their identity and review history.
+24. **Enable role-aware AI tools and private artifacts** — **Blocked by:** T02, T13. **Delivers:** Reviewers use Ask and reply drafts, Maintainers use all existing AI tools, and Viewers read only shared artifacts.
+25. **Recover revoked or abandoned project operations without a browser visit** — **Blocked by:** T22, T24. **Delivers:** The scheduler settles stranded imports, re-syncs, scans and AI Runs safely so users do not return to permanent pending states.
+26. **Detect stalled project work with independent operational checks** — **Blocked by:** T25. **Delivers:** Operators can detect and diagnose stalled invitation delivery, workers and cleanup without depending on those processes or Nightwatch.
+27. **Verify the complete access boundary and enable invitations** — **Blocked by:** T14, T15, T16, T17, T20, T23, T26, #156. **Delivers:** The complete project-access experience is ready to enable in both editions, with verified migration, recovery and operational behavior.
 
 ## Draft issue bodies
 
-The Spec line below is the only source-path reference needed in published bodies.
 The shared implementation rules above accompany each applicable published child.
 
-## T01 — Resolve remaining engineering and design decisions
+## T01 — Complete the project-access visual design review
 
 ### Spec
 
@@ -78,14 +76,14 @@ docs/specs/m4.1-project-access.md
 
 ### What to build
 
-Finish the remaining project-access review and make the implementation and rollout choices explicit.
+Approve the invitation, Members, Shared with you, role-change and access-loss journeys using the existing design language.
 
 ### Acceptance criteria
 
-- [ ] Engineering review is complete; replace this prerequisite with the remaining separate visual design review when reconciling the draft.
-- [ ] Complete the design review for invitations, Members, Shared with you, role changes, source approval and access-loss states using the existing design language.
-- [ ] Record chosen query/lock budgets, operational signals, migration/rollback sequence, rollout controls and any changed dependencies; reconcile later ticket criteria before implementation.
-- [ ] Keep accepted decisions 1A–21A and the user-directed ordinary-deployment choice (22) unless the user explicitly revises them; do not silently reduce scope.
+- [ ] Walk the complete acceptance/account-switch, member administration, owner-approved source and access-loss journeys, including loading, empty, error, partial and success states.
+- [ ] Confirm keyboard/focus behavior, narrow-screen layouts, both themes and all four locales using the existing design system.
+- [ ] Record actionable UI decisions and reconcile affected implementation ticket criteria before their new surfaces are built.
+- [ ] Preserve accepted engineering decisions 1A–21A and the ordinary-deployment choice (22); do not reopen completed engineering review.
 
 ### Blocked by
 
@@ -149,6 +147,7 @@ Existing comment and reply writes demonstrate one reusable transaction boundary 
 - [ ] Integrate existing comment/reply transactions and MCP revocation guards without conflicting lock order; keep external work outside locks.
 - [ ] Preserve existing endpoint behavior while establishing the reusable boundary; later slices adopt it for their own domain operations.
 - [ ] Prove rollback, changed placement/authority and MCP revoke/write ordering on both supported databases.
+- [ ] Apply 19A: a finite total contention budget with safe retries only after confirmed rollback, fresh authority and original target revision; no external/paid replay, no falsely successful removal, and recoverable busy outcomes.
 
 ### Blocked by
 
@@ -190,13 +189,35 @@ Authenticated source discovery and document fetches refuse redirects that would 
 - [ ] Reject changed scheme, host or effective port before contacting the redirect target, including later hops in a chain.
 - [ ] Keep credential-free public redirects and the existing SSRF, DNS pinning, timeout and size defenses.
 - [ ] Exercise discovery and file-fetch entry points with controlled transports and prove rejected destinations receive no request or credential.
-- [ ] Preserve clear source-error recovery; repository approval identity checks are added by T20.
+- [ ] Preserve clear source-error recovery; repository approval identity checks are added by T21.
 
 ### Blocked by
 
 Blocked by: None — can start immediately
 
-## T07 — Serve imported images through document-authorized delivery
+## T07 — Bound tracked scans and paginate complete latest reports
+
+### Spec
+
+docs/specs/m4.1-project-access.md
+
+### What to build
+
+Existing tracked-repository scans handle accumulated document history in bounded batches and show complete paginated results.
+
+### Acceptance criteria
+
+- [ ] Refactor the existing scan journey through bounded database batches; the current-match file cap must not be treated as a bound on retained document history.
+- [ ] Persist complete per-file results and scoped totals, with database pagination and loading/empty/error states in the existing report UI; do not retain only a capped detail sample.
+- [ ] Stage results under scan/configuration generation and atomically publish valid completed reports; keep prior valid results until replacement and show current progress/failure separately.
+- [ ] Pin pages to one publication, return explicit refresh for retired generations, reauthorize each read, and prevent stale or failed workers from overwriting newer results.
+- [ ] Migrate legacy report data; test history well above the match cap, page boundaries, bounded allocations, publication/failure races and cleanup without changing Document identity, content or review history.
+
+### Blocked by
+
+Blocked by: T03
+
+## T08 — Serve imported images through document-authorized delivery
 
 ### Spec
 
@@ -217,7 +238,7 @@ Images remain readable through valid document, Share or Demo Document access, wh
 
 Blocked by: T03
 
-## T08 — Protect cached diagrams and complete legacy media migration
+## T09 — Protect cached diagrams and complete legacy media migration
 
 ### Spec
 
@@ -236,9 +257,9 @@ Diagrams use the same document-authorized delivery boundary, including existing 
 
 ### Blocked by
 
-Blocked by: T07
+Blocked by: T08
 
-## T09 — Send a project invitation and show its safe preview
+## T10 — Send a project invitation and show its safe preview
 
 ### Spec
 
@@ -254,13 +275,13 @@ The workspace owner can invite a named recipient from Members, see delivery stat
 - [ ] Persist the invitation generation, required audit and encrypted delivery job atomically on the same database connection; reject incompatible configuration.
 - [ ] Use seven-day tokens, bounded same-generation retries and honest uncertain-delivery status; rollback/crash tests prove no stranded queued invitation.
 - [ ] Preview GET grants no membership/session/verification; cover token redaction in nested auth destinations, logs and headers plus no-store/no-referrer/noindex, including errors.
-- [ ] Keep invitation entry points behind the agreed rollout control until T25; demonstrate using controlled mail and actual links.
+- [ ] Keep invitation entry points behind the agreed rollout control until T27; demonstrate using controlled mail and actual links.
 
 ### Blocked by
 
 Blocked by: T01, T04
 
-## T10 — Resend and revoke pending invitations safely
+## T11 — Resend and revoke pending invitations safely
 
 ### Spec
 
@@ -279,9 +300,9 @@ The owner can recover delivery, replace an old invitation link or revoke a pendi
 
 ### Blocked by
 
-Blocked by: T09
+Blocked by: T10
 
-## T11 — Accept an invitation and discover the shared project
+## T12 — Accept an invitation and discover the shared project
 
 ### Spec
 
@@ -298,12 +319,13 @@ A matching verified account explicitly joins and finds the project under Shared 
 - [ ] Provide paginated Shared with you, direct project/roster reads, safe source grouping, documents/versions/discussions and shared-artifact reads through Policies and scoped queries.
 - [ ] Keep personal-workspace home/settings and MCP scope unchanged; deny all not-yet-integrated direct-project mutations until their slices land, even for persisted higher roles.
 - [ ] Read real test-mail links in browser journeys; include asset access, foreign/nested-ID denial and role/field minimization.
+- [ ] Apply 18A to project/discovery/roster reads: batch only the current page, scope read reuse to actor/credential/surface, and prove bounded query counts plus fresh next-request and write/job authority.
 
 ### Blocked by
 
-Blocked by: T05, T08, T10
+Blocked by: T05, T09, T11
 
-## T12 — Manage project members, roles and voluntary leaving
+## T13 — Manage project members, roles and voluntary leaving
 
 ### Spec
 
@@ -323,9 +345,9 @@ Members shows effective access and lets authorized people invite, change roles, 
 
 ### Blocked by
 
-Blocked by: T11
+Blocked by: T12
 
-## T13 — Enable role-aware commenting, own-thread actions and mentions
+## T14 — Enable role-aware commenting, own-thread actions and mentions
 
 ### Spec
 
@@ -344,9 +366,9 @@ Project Reviewers and Maintainers can discuss documents and manage their own con
 
 ### Blocked by
 
-Blocked by: T12
+Blocked by: T13
 
-## T14 — Enable version-pinned approvals and suggestion decisions
+## T15 — Enable version-pinned approvals and suggestion decisions
 
 ### Spec
 
@@ -365,9 +387,9 @@ Project Reviewers approve under their own identity, and Maintainers decide propo
 
 ### Blocked by
 
-Blocked by: T12
+Blocked by: T13
 
-## T15 — Enable Maintainer project and review moderation
+## T16 — Enable Maintainer project and review moderation
 
 ### Spec
 
@@ -386,9 +408,9 @@ Maintainers can edit project details, change document lifecycle and moderate thr
 
 ### Blocked by
 
-Blocked by: T12
+Blocked by: T13
 
-## T16 — Manage document Shares and move documents between project audiences
+## T17 — Manage document Shares and move documents between project audiences
 
 ### Spec
 
@@ -407,9 +429,9 @@ Maintainers can manage project-document Shares and move a document between proje
 
 ### Blocked by
 
-Blocked by: T12
+Blocked by: T13
 
-## T17 — Import public and pasted documents as a Maintainer
+## T18 — Import public and pasted documents as a Maintainer
 
 ### Spec
 
@@ -428,9 +450,9 @@ Maintainers add documents to the invited project using pasted/uploaded content o
 
 ### Blocked by
 
-Blocked by: T06, T12
+Blocked by: T06, T13
 
-## T18 — Re-sync documents with current source authority
+## T19 — Re-sync documents with current source authority
 
 ### Spec
 
@@ -449,9 +471,9 @@ Maintainers refresh an accessible source while preserving Document identity, rev
 
 ### Blocked by
 
-Blocked by: T17
+Blocked by: T18
 
-## T19 — Replace pasted content without losing a competing editor’s draft
+## T20 — Replace pasted content without losing a competing editor’s draft
 
 ### Spec
 
@@ -470,9 +492,9 @@ A Maintainer can submit a new version of pasted content; a competing editor rece
 
 ### Blocked by
 
-Blocked by: T18
+Blocked by: T19
 
-## T20 — Approve private repositories and delegate file import and re-sync
+## T21 — Approve private repositories and delegate file import and re-sync
 
 ### Spec
 
@@ -492,9 +514,9 @@ The owner approves a repository for a project, then a Maintainer can import or r
 
 ### Blocked by
 
-Blocked by: T18
+Blocked by: T19
 
-## T21 — Add and scan Tracked Repos with delegated project access
+## T22 — Add and scan Tracked Repos with delegated project access
 
 ### Spec
 
@@ -511,12 +533,13 @@ Maintainers attach approved private or public Tracked Repos, preview matches, sc
 - [ ] Continue only explicitly recoverable file failures; stop/report authority, database and programming failures while preserving earlier valid commits.
 - [ ] Skip inaccessible moved documents without exposing paths/counts, duplicating imports or reassigning them; untracking retains documents and reviews.
 - [ ] Prove empty repository versus no matches, partial failure, removal during scan and obsolete report/cleanup protection.
+- [ ] Extend the complete paginated latest-report foundation to direct project grants: each page and total rechecks current source/document reach, and revoked or moved authority cannot disclose historical paths.
 
 ### Blocked by
 
-Blocked by: T20
+Blocked by: T21, T07
 
-## T22 — Change tracked branches and path filters without losing document identity
+## T23 — Change tracked branches and path filters without losing document identity
 
 ### Spec
 
@@ -535,9 +558,9 @@ Maintainers change a Tracked Repo’s selected branch or paths while existing do
 
 ### Blocked by
 
-Blocked by: T21
+Blocked by: T22
 
-## T23 — Enable role-aware AI tools and private artifacts
+## T24 — Enable role-aware AI tools and private artifacts
 
 ### Spec
 
@@ -556,9 +579,9 @@ Reviewers use Ask and reply drafts, Maintainers use all existing AI tools, and V
 
 ### Blocked by
 
-Blocked by: T02, T12
+Blocked by: T02, T13
 
-## T24 — Recover revoked or abandoned project operations without a browser visit
+## T25 — Recover revoked or abandoned project operations without a browser visit
 
 ### Spec
 
@@ -574,12 +597,35 @@ The scheduler settles stranded imports, re-syncs, scans and AI Runs safely so us
 - [ ] Preserve last good content and AI spend; never automatically restart imports or paid generation.
 - [ ] Repeated cleanup and races with replacement work are harmless; database/scheduler outage has explicit diagnostics and recoverable operation.
 - [ ] Demonstrate no-browser recovery and scheduler operation in both deployment modes using required real-database tests.
+- [ ] Clean abandoned staged report results and obsolete publications in bounded generation-safe work, preserving the current valid report and returning an explicit refresh outcome for retired pages.
 
 ### Blocked by
 
-Blocked by: T21, T23
+Blocked by: T22, T24
 
-## T25 — Verify the complete access boundary and enable invitations
+## T26 — Detect stalled project work with independent operational checks
+
+### Spec
+
+docs/specs/m4.1-project-access.md
+
+### What to build
+
+Operators can detect and diagnose stalled invitation delivery, workers and cleanup without depending on those processes or Nightwatch.
+
+### Acceptance criteria
+
+- [ ] Correlate admission, handoff, execution, terminal outcomes, obsolete-generation skips and contention using safe IDs/reasons/timings; redact tokens, links, recipient emails, credentials and content.
+- [ ] Provide bounded read-only status for queue age/backlog, overdue work, last successful cleanup and lock-budget failures; distinguish idle, stale, never-run and unavailable states.
+- [ ] Document thresholds that respect legitimate waiting/backoff, usable status output and recovery procedures; wire the deployment monitor independently of the monitored queue/scheduler.
+- [ ] Reuse existing logging, Laravel and deployment mechanisms; require no Nightwatch or new mandatory monitoring platform, and never mutate work or restart paid operations from a check.
+- [ ] Prove stopped-worker/scheduler and failing-mail detection plus recovery with Nightwatch disabled; telemetry failure cannot undo committed actions or block access reduction, while required transactional audits remain atomic.
+
+### Blocked by
+
+Blocked by: T25
+
+## T27 — Verify the complete access boundary and enable invitations
 
 ### Spec
 
@@ -591,49 +637,36 @@ The complete project-access experience is ready to enable in both editions, with
 
 ### Acceptance criteria
 
-- [ ] Execute every accepted capability and coverage-map contract, including all grant combinations, current/legacy media, real-mail accept/remove and unchanged MCP refusal.
-- [ ] Apply the reviewed additive migration/API-before-web sequence and rollback plan; no partially protected invitations become available between slices.
-- [ ] Finish the operational signals, request/lock/query measurements and deployment checks decided by T01; scheduler, queue and private storage/cache configuration are verified.
-- [ ] Complete keyboard/mobile/both-theme/four-locale journeys on Kedge’s actual documentation project and validate mixed-version clients fail closed.
-- [ ] Ensure existing verification-recovery issue #156 is resolved before release; record concrete release evidence and enable the agreed invitation control only after every required gate passes.
+- [ ] Execute the accepted capability and coverage-map contracts, including grant combinations, current/legacy media, real-mail accept/remove and unchanged MCP refusal; earlier slices already carry their own tests.
+- [ ] Use ordinary Coolify/Compose deployment: additive migrations/data conversion, API/worker/scheduler restarts, the matching web build and core smoke checks; document manual compatible redeploy or fix-forward recovery.
+- [ ] Accept temporary interruption at the current low-traffic, pre-customer stage; introduce no maintenance cutover, rolling compatibility release, fleet-version gate, enforced rollback floor or separate drain protocol.
+- [ ] Verify implemented operational signals and independent monitoring, bounded query/lock/batch behavior, configured queue/scheduler and private storage/cache delivery.
+- [ ] Complete keyboard/mobile/both-theme/four-locale journeys on Kedge’s actual documentation project; existing clients still fail closed on missing capability fields.
+- [ ] Ensure existing verification-recovery issue #156 is resolved before the acceptance/release smoke; demonstrate the complete permission boundary before making invitations available.
 
 ### Blocked by
 
-Blocked by: T13, T14, T15, T16, T19, T22, T24, #156
+Blocked by: T14, T15, T16, T17, T20, T23, T26, #156
 
-## Frontier and decision coverage
+## Frontier and review changes
 
-Proposed frontier after review and breakdown approval: T01 (remaining reviews), T02 (AI prefactor), T03 (integration
-profile), T06 (credential redirects). Work one ticket at a time with `$implement`,
-clearing context between tickets; frontier independence is not a request to run
-agents in parallel.
+After approval/publication, the initial frontier is T01 (visual design), T02 (AI
+prefactor), T03 (integration profile) and T06 (credential redirects). Work one ticket
+per `$implement` session, clearing context between tickets. Independence does not
+request parallel agents or worktrees.
 
-| Accepted decision | Primary tickets |
-|---|---|
-| 1A complete scope, staged enablement | All; T25 release gate |
-| 2A shared transaction coordinator | T04; adopted by each mutation slice |
-| 3A operation generations | T17–T19, T21, T23–T24 |
-| 4A selected branch follows existing documents | T22 |
-| 5A scheduled cleanup | T24 |
-| 6A uncertain delivery retries | T09–T10 |
-| 7A explicit scan error categories | T21 |
-| 8A secret-free request metadata | T09–T11, T25 deployment checks |
-| 9A stable repository/owner identity | T20–T22 |
-| 10A authenticated redirect boundary | T06, T20 |
-| 11A shared reliable sign-out | T05, T11 |
-| 12A live asset delivery, 12B only future option | T07–T08, T16, T25 |
-| 13A target revision checks | T10, T12, T16, T20, T22 |
-| 14A atomic encrypted invitation enqueue | T09–T10 |
-| 15A one active content update | T19 |
-| 16A consolidate AI starts; refactor as needed | T02, T23 |
-| 17A required focused CI | T03; extended in every relevant slice |
-| 18A batched request-local read facts; fresh writes/jobs | T11–T12 and each affected read/mutation slice |
-| 19A bounded coordinator contention and safe retries | T04 and each affected mutation/worker/UI slice |
-| 20A bounded scans and complete paginated latest reports | T21–T22, T24–T25; reassess slice size after review |
-| 21A safe operations checks and independent alerts | T24–T25 plus lifecycle diagnostics in affected slices; reconcile after review |
-| Deployment direction 22: normal deploy, no maintenance/fleet gates | T25; simplify its operational requirements |
-| Remaining visual design review | Reconcile proposed T01; engineering review is complete |
+Changes from the original 25-ticket proposal:
 
-Dependency edges are implementation prerequisites, not shared-directory warnings.
-There are no cycles; T25 transitively includes every implementation slice. Publishing
-and changing the roadmap to ticketed wait for granularity approval. Reconcile this draft after the completed engineering review and remaining visual design review.
+- Replace the completed engineering-review prerequisite with visual design only.
+- Add T07 for 20A's bounded scans and complete paginated report, as a prefactor to
+  delegated scans (T22).
+- Add T26 for 21A's independent operational checks after recovery (T25).
+- Add 18A page/query/freshness criteria to discovery (T12) and shared rules.
+- Add 19A contention/retry criteria to the shared coordinator (T04) and its callers.
+- Simplify T27 deployment to the user's ordinary-deploy choice; remove proposed
+  maintenance, rolling-release and fleet-gate requirements.
+
+Dependency order and transitive coverage are checked: no cycles or redundant
+edges, and T27 transitively includes every child plus external issue #156.
+Publishing and the roadmap's `ticketed` status await this breakdown's approval.
+The module spec is unchanged by this ticketing pass.
