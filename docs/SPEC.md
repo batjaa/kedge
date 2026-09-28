@@ -340,7 +340,7 @@ The `reanchor.completed` event logs `{anchored, relocated, orphaned}` counts —
 - Later growth: custom-role editing, WorkOS SSO/SAML + SCIM, IP allowlists and retention. Workspace membership UI is now planned v1 scope.
 - Intended shape when teams arrive (noted 2026-07-23; design preview `docs/designs/app-teams.html`, no v1 scope change): **account** (billing/SSO grouping; `workspaces.account_id` added only when billing exists; personal workspaces have none; a self-hosted instance *is* the account) → **workspace** (tenancy root, unchanged) → **teams** (`teams` + `team_members`) as people-groups for mentions, queue routing, and required-approval rules — never content containers (projects own content). Magic-link reviewers stay outside membership: a guest sees only the doc shared with them.
 
-**M4.0 workspace authorization foundation (specced 2026-09-27; review and implementation pending):**
+**M4.0 workspace authorization foundation (engineering review complete 2026-09-27; visual review and implementation pending):**
 workspace membership precedes project membership. The user requires extensibility,
 useful defaults and explicit action/role interfaces as the resource-authorization
 baseline. The [module spec](specs/m4.0-workspace-membership.md) supplies the concrete
@@ -358,8 +358,8 @@ all collection/create flows; old personal-workspace aliases are removed under 3A
 Personal identity remains distinct from the current target. Stable membership
 incarnations, assignment/definition revisions and live commit checks prevent old
 tokens/jobs/invitations regaining authority after removal/rejoin. Independent Shares
-remain valid; ordinary removal is not an identity ban. These concrete defaults
-await review, rather than representing separately approved matrix cells.
+remain valid; ordinary removal is not an identity ban. These defaults are the reviewed implementation contract; the review does not
+claim a separate user vote on every matrix cell.
 
 **M4.0 engineering decision 2A (2026-09-27):** membership becomes a first-class
 lifecycle model with active-only convenience relationships, a shared active-grant
@@ -403,6 +403,11 @@ the original live authority; reuse paid results and retry publication without
 regeneration. Unknown provider outcomes stop automatic execution, preserve honest
 cost evidence and require an explicit new run. Apply the same boundary to all six
 tools and transport retries; no provider exactly-once guarantee is implied.
+
+The [engineering review](plans/workspace-membership-eng-review.md) is complete across
+all 11 sections; its [test map](plans/workspace-membership-test-map.md) specifies 22
+code contracts and eight journeys to prove during implementation. Visual review
+and reconciliation of the unpublished project ticket structure remain.
 
 This supersedes the project-first order. Reuse the previously reviewed invitation,
 transaction, private-asset, background-work and testing mechanics; rebase the prior
@@ -715,7 +720,7 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 - **M3.9 — Web i18n** (wedge, added 2026-07-23): **en-US source · es-US · mn-MN · de-DE** via next-intl without locale routing (strict-allowlist cookie + Accept-Language negotiation, en-US merge fallback, CI key-parity); mn-MN display falls back to the system stack (Space Grotesk has no Cyrillic); chip strings as a constrained glossary; switcher on app, landing, and shared surfaces; **document content never translated**. Runs **after M3.10** so the glossary snapshots stable strings. ✅ a Mongolian-browser guest opens a share link and reviews in Mongolian chrome.
 - **M3.10 — Source provenance** (wedge, added 2026-07-24): read-only **provenance chips** on every document row (repo-relative path · `owner/repo` + path · source host · pasted) derived server-side in one place from stored columns (no migration); **project pages group repo-sourced docs under their tracked repo, path-ordered** with directory dividers (flattened tree, never folders — §2 non-goal intact); `GET /documents` gains a workspace-scoped `tracked_repo` filter + `order=path`. Group-by-source home toggle deferred. ✅ Kedge's own tracked `docs/` renders on its project page in repo order with path chips; a pasted doc is visibly "pasted".
 - **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, ask-about-the-doc, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
-- **M4.0 — Workspace membership & authorization** (specced 2026-09-27; review pending): extensible action/role catalogs with Owner/Admin/Member/Viewer defaults, invite/verify/accept, explicit workspace selection, member administration and live resource authorization. Implement before direct project membership. [Module spec](specs/m4.0-workspace-membership.md). Demo: invite a teammate to a workspace → accept → review within their role → downgrade/remove and verify revoked writes/jobs/assets.
+- **M4.0 — Workspace membership & authorization** (engineering review complete 2026-09-27; visual review pending): extensible action/role catalogs with Owner/Admin/Member/Viewer defaults, invite/verify/accept, explicit workspace selection, member administration and live resource authorization. Implement before direct project membership. [Module spec](specs/m4.0-workspace-membership.md). Demo: invite a teammate to a workspace → accept → review within their role → downgrade/remove and verify revoked writes/jobs/assets.
 - **M4.1 — Project access** (wedge, planned 2026-09-26; rebase pending workspace foundation 2026-09-27): email invitations to a project, acceptance through verified accounts, discovery of invited projects, role-based project/document access, pending invitation and member management. Direct project membership grants no access to the rest of the workspace; rebase it onto the M4.0 workspace foundation. The [module spec](specs/m4.1-project-access.md) records confirmed product decisions and testing seams; engineering review is complete (2026-09-27), with separate design review pending. Demo target: invite a second account to Kedge's documentation project → accept and review → remove project access; unrelated projects remain inaccessible.
 - **M5 — Notifications & queue**: in-app inbox, Postmark notifications, mentions, digest scheduling, per-user prefs, approval events, **review-queue dashboard**. ✅ reviewer replies → author gets the email; dashboard shows "needs your attention".
 - **M6 — Private sources & post-back**: **GitHub App** (install → pick repo → private import → push-webhook auto re-sync) for the SaaS; **PAT remains a supported connector** (self-host primary) — plus the guided register-your-own-App docs for self-hosters; Confluence via API token (storage-format conversion); **digest post-back** to PR/Confluence. ✅ private repo doc auto-resyncs on push; digest lands on the PR.

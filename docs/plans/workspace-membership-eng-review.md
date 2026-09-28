@@ -1,6 +1,6 @@
 # Workspace membership — engineering review
 
-> Started 2026-09-27 · In progress; no implementation or ticket publication.
+> Completed 2026-09-27 · Engineering planning review only; no implementation or ticket publication.
 > Source: [M4.0 workspace membership spec](../specs/m4.0-workspace-membership.md).
 > Prior [project review](project-access-eng-review.md) supplies reusable decisions;
 > it does not automatically approve the new workspace architecture or matrix.
@@ -12,15 +12,15 @@
 | Step 0 — scope | Complete: 1A, full scope retained |
 | 1 — architecture | Complete: four findings resolved (2A–5A) |
 | 2 — error and rescue map | Complete: 6A/7A; 22 paths mapped, no unresolved recovery decisions |
-| 3 — security and threat model | In progress |
-| 4 — data flow and interaction edge cases | Pending |
-| 5 — code quality | Pending |
-| 6 — tests and coverage diagram | Pending |
-| 7 — performance | Pending |
-| 8 — observability | Pending |
-| 9 — deployment | Pending |
-| 10 — long-term trajectory | Pending |
-| 11 — design and UX | Pending |
+| 3 — security and threat model | Complete: existing privacy requirement extended to checkpoints; no new decision |
+| 4 — data flow and interaction edge cases | Complete: 10 flows plus seven interaction groups |
+| 5 — code quality | Complete: accepted refactors cover findings |
+| 6 — tests and coverage diagram | Complete: 30 contract groups mapped; implementation proof pending |
+| 7 — performance | Complete: bounded paths, query/index checks and planning estimates |
+| 8 — observability | Complete: required diagnostics and independent checks specified |
+| 9 — deployment | Complete: ordinary deployment decision retained |
+| 10 — long-term trajectory | Complete: reversibility 3/5; no new deferral |
+| 11 — design and UX | Complete: engineering pass; separate visual review remains |
 
 ## Accepted decisions
 
@@ -238,7 +238,7 @@ The remaining architecture responsibilities are already stated in the spec:
   at 100x concurrency in one workspace, contention/connection pressure is the likely
   bottleneck. Keep bounded waits and measure before changing lock granularity.
   These are architectural estimates, not measured throughput claims; detailed
-  performance review remains pending.
+  performance analysis is recorded in its checkpoint below.
 - **Failure domains:** the application database is shared by state, grants and
   durable invitation enqueue; its outage refuses mutations. A stopped worker
   delays jobs/mail; independent scheduled cleanup and monitoring detect stalls.
@@ -247,12 +247,12 @@ The remaining architecture responsibilities are already stated in the spec:
   committed reviews. Detailed exception/rescue mapping is the next section.
 - **Security:** each surface chooses its own grant evidence; no global Owner,
   null-actor or share fallback bypass. Actor privacy, credential bounds and
-  resource relationships constrain role actions. Threat-model review is pending.
+  resource relationships constrain role actions. Threat-model analysis is recorded below.
 - **Recovery/distribution:** update matching API/web/worker builds, migrate/restart
   and smoke-test; temporary disruption and manual compatible-build/fix-forward
   recovery are accepted. No new package, binary, container type or authorization
   service needs its own distribution pipeline. Existing application packaging
-  remains the distribution boundary; detailed deployment review is pending.
+  remains the distribution boundary; deployment details are recorded below.
 
 ### System boundaries
 
@@ -342,7 +342,7 @@ stop
 ```
 
 These diagrams describe the reviewed contract, not implemented code or passing
-application tests. The Section 6 test-coverage diagram remains required and pending.
+application tests. The Section 6 test-coverage diagram is in the accompanying implementation test map.
 
 ## Error and rescue checkpoint — complete
 
@@ -413,26 +413,440 @@ stop
 @enduml
 ```
 
-### Implementation task from error review
+Implementation tasks T6/T7 are recorded in the consolidated task list below.
 
-- [ ] **T6 (P1)** — HTTP/client boundary — implement RFC 9457 and truthful recovery.
-  - Surfaced by: 6A; fragmented response handling cannot express the approved stale,
-    busy and uncertain-write states.
-  - Files: `api/bootstrap/app.php`, domain service outcomes, affected API routes,
-    `web/lib/csrf-client.ts`, affected workspace/resource/share clients and UI states.
-  - Verify: PHPUnit HTTP contract/failure-injection tests plus client decoder tests
-    and Playwright lost-response, stale-form and account-change recovery; preserve
-    native MCP behavior. Include non-JSON/malformed/unknown problems and valid 204.
+## Security and threat-model checkpoint — complete
 
-- [ ] **T7 (P1)** — AI execution — persist immutable call plans, fenced attempts and checkpoints.
-  - Surfaced by: 7A; whole-job retry currently repeats completed chunks and cannot
-    distinguish an interrupted paid call from work never sent.
-  - Files: AI run/call models and migrations, `AiRunLedger`, `GenerateAiRunJob`,
-    `StructuredCall`, all six generators, classifier/SDK transport integration,
-    cleanup, run projections and recovery UI.
-  - Verify: PHPUnit database-backed call-count and crash-boundary checks, controlled
-    duplicate delivery/revocation, chunk resume, no-call publication retries, input
-    isolation and idempotent/unknown accounting; Playwright interrupted-run recovery.
+No new independent decision. One privacy integration gap is resolved by carrying
+SPEC §14's existing transcript scrubbing into 7A (P1, confidence 9/10, evidence in
+the 7A entry). The remaining threats already have required handling in the spec.
+These are implementation requirements, not claims of runtime enforcement today.
+
+| Threat / entry point | Required boundary and verification |
+|---|---|
+| Caller-controlled workspace/child IDs | Resolve the explicit workspace before tenant-sensitive validation, scope nested IDs, and apply live Policies to resource routes; test two workspaces, same IDs under wrong parents, removed grants and Unfiled |
+| Role/Owner escalation | Server-controlled action catalog, role scope/provenance validation, explicit current-and-requested role ceilings, immutable Owner; reject mass-assigned actor/state/incarnation/definition fields |
+| Historical attribution as access | 2A active queries and current role predicates on all read/write consumers, including raw-query mentions and AI poll; former author/Viewer cannot keep writes |
+| Share confusion | 4A exact-share participant, no member/share fallback; `CommentMentionService::audienceQuery` currently chooses membership then any active document participant and must be refactored, not reused as-is |
+| Agent credential confusion | Preserve app-wide `RejectAgentTokenAuth` and MCP-only opt-in; token workspace/incarnation and current role restrict every tool; cookies cannot become agent identity |
+| Invitation theft/replay/enumeration | High-entropy hashed token, verified exact recipient, explicit CSRF POST, generation/revision/expiry/inviter recheck; invalid secrets uniform, valid preview deliberately exposes only the documented offer |
+| Secrets escaping through infrastructure | Encrypted delivery job, no plaintext in failed-job/log payloads, nested return URL/header/proxy redaction, no-referrer/no-store/no-index including errors; synthetic-token smoke probes |
+| Email/member-directory disclosure | Context-specific projection/search allowlist; ordinary member cannot infer hidden email via search or totals; `UserResource` contains self email and is not a reusable public-directory serializer |
+| Source credentials and SSRF | Owner-only credential use, no credential fallback for public imports, reject authenticated cross-origin redirect before request, retain existing URL/IP/size protections |
+| Assets bypassing revocation | Private backing storage, exact document/asset association and selected surface on every delivery; test legacy direct URLs and cache/origin bypasses |
+| AI prompt injection and saved content | Existing untrusted-input fencing and human-confirmed drafts remain; checkpoints do not create new tool powers; temporary content scrubs on terminal settlement and never appears in shared run projection |
+| Input/SQL/template abuse | Use FormRequest scalar/type/length validation, allowed filter/sort keys, parameterized queries and escaped text; preserve mention LIKE escaping, MDX allowlists and diagram engine allowlist |
+| Queue duplicates and authority races | Coordinator at admission/result publication, exact operation and grant evidence; 7A per-call fence; no external I/O under locks and no automatic uncertain replay |
+| Dependency and resource abuse | Reuse framework crypto/queue/auth and existing SDK; no new policy engine; bounded input/page/job budgets and existing source/AI limits; invitation limiters must cover authenticated actor/workspace and anonymous preview ingress |
+
+The inspection covered `api/routes/api.php`, `api/bootstrap/app.php`, Policies,
+`CommentMentionService`, `AiRunResource`, `UserResource`, `ShareResource`, current
+rate-limit definitions and the proposed catalog/admin contracts. `CommentResource`
+projects author ID/name, not the general self-user resource; no email leak through
+that inspected projection was found. Existing mixed membership/share and personal-
+workspace assumptions are the already accepted 2A–4A work, not new choices.
+
+_No new tasks beyond accepted authorization, secrecy and 7A privacy work._
+
+## Data-flow and interaction checkpoint — complete
+
+No new independent decision. The following traces cover the plan's new flows; each
+row lists behavior from input through output, including nil/empty/error/timeout.
+No operation treats malformed/missing data as permission or a fabricated success.
+
+| Flow | Input → validation → transform → persist → output | Boundary behavior |
+|---|---|---|
+| Provision/migrate | User identity → unique personal workspace/Owner invariant → mapped role → lifecycle row/reference → stable personal identity | Missing/ambiguous legacy Owner reports repair; duplicate provisioning joins the same identity; transaction failure leaves no partial workspace |
+| Discover/switch | Actor + explicit workspace → active reach → scoped page/capabilities → optional last-used preference → named workspace | No memberships yields permitted personal/onboarding state, not system workspace; missing target denies; unavailable read is distinct from zero results |
+| Invite/resend | Email/role/expected revision → verified admin + ceilings → normalize/token generation → offer/audit/encrypted job atomically → queued offer | Nil/empty/overlong/wrong type is 422; duplicate pending offer reused without another send; failed resend preserves old token; unknown response reconciles |
+| Accept | Token + signed-in verified account → recipient/expiry/generation/inviter → membership incarnation → accepted grant/audit atomically → joined workspace | No token invalid; wrong account switches only after confirmed logout; double acceptance returns same active accepted incarnation; removed/rejoined grant never revived |
+| Role/remove/leave | Target + expected revision → current actor/target ceiling → role/revoke transition → membership/audit → refreshed capabilities | Owner protected; stale/ABA state 409; unauthorized stale request does not disclose revision; lost response may have committed; self-leave refreshes accessible workspaces |
+| Resource mutation | Explicit context + input/revisions → current action and nested scope → domain mutation → guarded resource/audit → updated resource | Empty content follows existing validation; conflicting active content write fails before body change; validation preserves draft; optional notification failure cannot undo commit |
+| Source/scan | Source/filter revision → scope/credential/SSRF checks → bounded discovery/import → generation-bound staged report → paginated published report | Empty repository/zero matches remain distinct from source failure; retained history unbounded in count but batched; partial expected file errors recorded; unexpected failure preserves prior report |
+| Async AI/content | Original context + immutable operation → preflight/live authority → fetch/generate → conditional checkpoints/result → honest terminal/progress state | Obsolete/no-longer-authorized work stops; uncertain paid call stops; known-safe call resumes from saved progress; cleanup handles dead worker without user traffic |
+| Shared review/assets | Exact share token + participant/child → selected surface and live reach → safe projection/review mutation → guarded write/private asset read → document-scoped result | Missing/invalid token uniform; no workspace discovery; token alone read-only; revoke mid-write denies; unavailable asset degrades without public fallback |
+| Demo claim | Demo + explicit destination → terminal import/expiry/destination capability → ownership handoff → ordered guarded claim → destination document | Import still active 409; ready/failed claims allowed; competing prune/claim serialized; failed claim does not enqueue a hidden import retry |
+
+Interaction follow-through (covered by existing accepted intent, not new scope):
+
+- **Double-click:** disable duplicate UI submits, but prove server behavior too:
+  invite/accept coalesce as specified; role/remove use expected revisions; content
+  has single-operation admission. Ask intentionally remains dedupe-exempt per
+  SPEC §14; an uncertain POST must not be silently resent as another question.
+- **Account/workspace switch during fetch:** capture original actor/target and tag
+  reads with their context. Cancel/ignore late responses after context changes;
+  a previous workspace's success cannot overwrite the new screen. Scope cache keys
+  and clear account-scoped state on confirmed sign-out. A pending form never moves
+  its target because another tab changed the last-used preference.
+- **Reinvite after accepted membership is removed:** the one current invitation
+  slot must admit a new generation after live checks find no active membership,
+  including a previously accepted slot. Preserve its prior audit history; the old
+  digest/link cannot restore or change the replacement incarnation. This is necessary
+  follow-through on the existing one-slot plus explicit-rejoin requirements.
+- **Navigate away or abort:** aborting a client fetch does not cancel a committed
+  mutation or prove its failure. Reconcile on return; do not auto-submit on mount.
+- **Zero/one/10k results:** explicit empty states, database pagination with stable
+  order/tie-breaker and bounded sizes; no read-all-and-slice, hidden-email search or
+  inaccessible totals. Deletion between pages may change the live list; no snapshot
+  promise is introduced. Report pages remain pinned to one published generation.
+- **Stale CSRF / slow connection:** one recognized pre-handler refresh under the
+  same actor/intent; request timeout or malformed response uses 6A recovery.
+- **Concurrent change:** role revisions, membership incarnations, placement/source
+  revisions and call/operation generations protect distinct identities. A move-back
+  or role restoration never makes an old expected revision current again.
+
+_No new tasks beyond applying these interactions to the accepted lifecycle/UI tests._
+
+## Code-quality checkpoint — complete
+
+No new independent decision. Required refactoring is already authorized, and the
+review favors clear shared boundaries over preserving current shortcuts.
+
+- **Organization:** keep route/FormRequest/Policy adapters thin; services own
+  lifecycle, mutation coordination, source work and call execution. Domain failure
+  outcomes feed HTTP/MCP adapters; they do not depend on a browser or HTTP session.
+- **DRY:** 2A removes repeated membership-existence checks; 3A removes repeated
+  personal-workspace targeting; 4A shares review business services under separate
+  contexts; 6A consolidates response decoding; 7A consolidates six generators' paid-
+  call handling. The reason is consistent authority/recovery, not cosmetic similarity.
+- **Naming/state:** distinguish membership identity/incarnation/assignment revision,
+  role-definition revision, invitation generation, operation generation and AI call
+  attempt. Fixed lifecycle states use backed enums; role references remain extensible.
+  Do not overload a generic version or status field across these purposes.
+- **Complexity:** the current AI classifier has more than five branches, but named
+  exception classification is intentional; use explicit category helpers/tables
+  and boundary tests, not catch-and-continue. New lifecycle coordinators should
+  separate resolve/validate/lock/transition/project stages rather than nesting each
+  role, surface and exception combination in one controller. Policies delegate
+  decisions rather than duplicating the matrix in every method.
+- **Under/over-engineering:** durable call receipts are justified by 7A's crash gap;
+  a general workflow/event-sourcing platform, runtime role inheritance, global
+  ambient workspace state and a second authorization service are unnecessary.
+- **Stale explanatory code:** update the additive-only comment in `api/routes/api.php`,
+  personal-only workspace client/controller comments, pivot semantics, mixed-share
+  Policy comments and `GenerateAiRunJob`'s statement that stuck runs are impossible.
+  Its own comment admits hard-killed workers may skip failure handling; the revised
+  model explicitly relies on independent cleanup and durable call evidence.
+- **Diagrams:** preserve the system/operation diagrams and update touched inline
+  state explanations alongside implementation. Planning diagrams describe the new
+  contract, not today's runtime. No unrelated diagram rewrite is required.
+
+_No independent code-quality task beyond the accepted refactors and their documentation._
+
+## Test checkpoint — complete
+
+The required combined code-path/user-flow diagram, branch mapping, proposed test
+files and failure registry are in the [implementation test map](workspace-membership-test-map.md).
+It traces 22 code contracts and eight journeys, with all 30 requiring proof during
+implementation. No application tests ran in this planning review, and no percentage
+of application line/branch coverage is claimed. The target is behavior plus edge and
+error assertions for every group, not one unit test per implementation method.
+
+Harness inspection confirmed PHPUnit, Vitest and Playwright. The current in-memory
+SQLite/sync-queue defaults cannot prove the accepted concurrency/durability promises;
+the already approved PostgreSQL/file-backed SQLite/real-worker CI profile is required.
+Critical demo regression coverage is explicit, and 7A adds deterministic provider-call
+counts across process crashes and publication retries. No new framework or paid
+provider test is introduced. Prompt semantics remain unchanged; input-equivalence
+and injection-fence tests protect the refactor, with no new quality eval needed.
+
+The map includes expected success, missing/invalid inputs, zero/large collections,
+exceptions, partial work, timeout, unknown writes, actor/context changes and all
+role/action cases. Extend existing suites rather than treating them as proof of new
+features. No new testing-seam decision is needed; these are the agreed seams.
+
+## Performance checkpoint — complete
+
+No new independent decision. Existing accepted batching, private caching, lock-budget
+and complete-report decisions cover the identified risks. The following are required
+implementation checks, not measured performance claims.
+
+| Hot path / risk | Required treatment |
+|---|---|
+| Collections/directory/capabilities create N+1 grant checks | Scope in SQL, load membership/role facts once per bounded actor/credential/surface/context page, eager-load projected relations; compare query counts for 1 versus 50 records |
+| Personal-only collections currently call `get()` | Replace affected unbounded collection reads, including tracked-repo and share-management listings, with bounded database pagination; no post-fetch slicing |
+| Workspace totals perform repeated full scans | Use shared authorized base queries and combined compatible aggregates; do not load documents to count them; retain explicit safe error rather than false zero |
+| Membership/invitation/call/report lookups | Unique workspace/user, invitation workspace/normalized email, run/call identity; explicit indexes for workspace/state, inviter, expiry, actor/grant, operation/deadline and report generation/order access paths |
+| Search by lowercased display name | Preserve escaped parameterized LIKE and tenant filtering; a leading-wildcard search is not accelerated merely by adding a normal name index; inspect real supported-database plans with large fixtures |
+| Large retained scan history | Bounded batches and generation-bound paginated reports; memory bounded by batch/page, not historical repository count; stage publication atomically and clean abandoned staging |
+| AI checkpoint storage | Bound immutable inputs/results by existing context/output budgets, process ordered calls without loading unrelated runs, scrub terminal transient content; receipt/index writes are short transactions |
+| Workspace guard contention | Five-second total/three-attempt budget with shorter enclosing deadline, no network under locks; separate DB implementations; measure wait versus hold time before changing granularity |
+| Private images/diagrams | Cache content-addressed backing objects while checking live authorization per delivery; no public delivery URL or cross-context permission cache |
+| Connection pressure | Web and worker processes share finite database connections; do not hold transactions/connections across provider calls unnecessarily; stagger bounded cleanup and cap worker concurrency to deployment capacity |
+
+Planning estimates for the three likely slowest newly affected request paths, under
+warm local database/indexes and low contention (not benchmarks or SLO promises):
+
+1. **Source preview:** roughly 1–15 seconds per upstream request under the current
+   fetch timeout, potentially longer for bounded multi-request discovery. External
+   latency dominates; keep it off GET and within endpoint/time/size budgets. Record
+   total duration and preserve a clear unavailable outcome when the budget expires.
+2. **Workspace summary / large member-search page:** estimated p99 0.2–1 second at
+   roughly 10k relevant rows before tuning. Compare query plans, aggregates and
+   serialization cost with representative fixtures; no full-row materialization.
+3. **Membership administration / guarded publication:** estimated p99 0.05–0.3 seconds
+   without lock contention; a busy workspace can hit the accepted five-second cap.
+   Keep audit/enqueue local and atomic; network time must not lengthen lock hold.
+
+AI itself remains asynchronous; the current 300-second default job ceiling is not
+an HTTP latency target. At 10x load, query growth/page memory are the first checks;
+at 100x concentrated in one workspace, the stable guard and shared database can
+become bottlenecks. The plan bounds failure and measures contention rather than
+promising linear scaling. Refine locking only with measured need, as already agreed.
+
+_No new performance task beyond the accepted query/scan/coordinator work and tests._
+
+## Observability checkpoint — complete
+
+No new independent decision. Use the existing structured logger, operational commands,
+worker/scheduler processes and optional telemetry. No mandatory SaaS monitoring
+service or new analytics platform. Safe diagnostics are part of the accepted work.
+
+| Operation / branch | Evidence to record without private payloads |
+|---|---|
+| Request/lifecycle entry and committed exit | Correlation ID, actor/workspace/target IDs, action/surface, expected/result revision and safe outcome; required audit atomic with mutation |
+| Permission/stale/busy branch | Safe reason category, bounded counters, transaction wait/hold duration and retry exhaustion; avoid hidden-resource details in client response |
+| Invitation delivery | Invitation ID/generation, queue age, sent/failed/uncertain status and attempt; no token, full recipient or secret-bearing URL in general diagnostics |
+| Content/scan/AI work | Operation/run/call/attempt identity, admission/conditional commit/obsolete/cancelled/failed/uncertain events, duration, known spend and unknown-cost flag; never prompts/results |
+| Cleanup and mail recovery | Last successful scan time, examined/settled/skipped/error counts and oldest overdue age; an unavailable DB is not an empty successful scan |
+| Private delivery | Safe route/status, cache-hit backing lookup and render/storage failure class, no token/path source leakage |
+
+Operational defaults to document and make configurable during implementation: cleanup
+runs every minute in bounded batches; warn after three missed minute heartbeats;
+flag still-unsettled operations two cleanup intervals beyond their derived execution/
+queue/retry deadline. Check oldest queued invitation delivery at five minutes.
+Require five consecutive one-minute samples before alerting on persistent lock-budget
+exhaustion. These are initial low-traffic defaults to calibrate, not measured SLOs.
+Use absolute deadline/counter signals so zero traffic is distinguishable from a
+stopped worker. High-cardinality IDs belong in correlated logs, not metric labels.
+
+The read-only operational command supplies machine-readable status and nonzero exit
+for unavailable/unhealthy checks. An independent existing operator check consumes it
+and heartbeat age; monitoring a dead scheduler through that same scheduler is not
+sufficient. Day-one diagnosis should reconstruct actor/context, original grant,
+operation revision, last completed boundary and safe failure without reopening a
+private prompt or leaking a token. Fault-injection smoke stops worker/scheduler and
+confirms the distinction between healthy idle, stale and unavailable. Optional
+telemetry failure never prevents removal or rolls back a completed comment.
+
+_No new observability scope beyond the accepted independent checks and recovery._
+
+## Deployment checkpoint — complete
+
+Follow the user's explicit ordinary-deployment decision. Temporary interruption,
+manual recovery and refactoring are acceptable; no compatibility aliases, maintenance
+cutover, traffic gate, fleet gate, forced drain or seamless downgrade protocol.
+
+1. Ship reviewed migrations/backfills with the matching application build. Preserve
+   IDs/attribution; report ambiguous Owner/creator data for explicit repair rather
+   than guessing another member. Use bounded backfills where needed. Verify data
+   invariants through the migration tests, without inventing a production-user gate.
+2. Map roles/revisions/personal-workspace identity and bind valid token incarnations.
+   Settle old jobs/runs lacking trustworthy grant/call evidence. Migrate retained
+   reports/assets and close public-origin delivery as part of their slices.
+3. Run migrations and restart API/web/queue processes using the current deployment
+   tooling; confirm the independent scheduler runs in both supported editions.
+   Users may need a page refresh for 3A/4A route changes. No old-client promise.
+4. Smoke invite → receive mail → accept → review → remove, matching API/UI paths,
+   database worker, scheduler heartbeat and private image/diagram delivery. Self-host
+   remains free of demo endpoints and mandatory telemetry/provider credentials.
+5. On failure, diagnose the concrete migration/build/process fault and use a compatible
+   build or fix forward. Do not assert an old binary can interpret the new schema or
+   resurrect unsafe jobs. Backup restoration, if needed, is manual recovery with its
+   normal data-loss implications, not an automatic step in this plan.
+
+Accepted risks: mixed builds can fail during restart; schema/backfill changes can
+need manual repair; route/public-asset changes invalidate stale clients/links.
+Rollback is not guaranteed seamless. These were deliberately accepted and are not
+reopened as a request for a maintenance window. Existing images/Compose/CI remain
+the distribution path; the module introduces no separate binary/package to publish.
+
+```plantuml
+@startuml
+actor Operator
+participant "Existing deployment tooling" as Deploy
+database "Application database / private assets" as Data
+participant "API + web + queue workers" as App
+participant "Independent scheduler / checks" as Checks
+Operator -> Deploy : Deploy matching reviewed build
+Deploy -> Data : Migrate/backfill; settle unsafe legacy work
+Deploy -> App : Restart matching processes
+Deploy -> Checks : Confirm schedule and independent checks
+Operator -> App : Invite / accept / review / remove smoke
+Operator -> Data : Verify private-origin closure
+alt Concrete deployment failure
+  Operator -> Deploy : Compatible-build repair or fix forward
+else Smoke succeeds
+  Operator -> Checks : Continue ordinary operations
+end
+@enduml
+```
+
+_No new rollout choice; no implementation deployment was performed in this review._
+
+## Long-term trajectory checkpoint — complete
+
+**Reversibility: 3/5.** Built-in role definitions, named actions and adapters can evolve
+cleanly, but persisted membership/incarnation, public route and call-ledger contracts
+will become meaningful compatibility obligations once customers exist. Their state
+names and invariants must stay documented alongside migrations and tests.
+
+The workspace-first design does not force project guests into workspace membership:
+project grants remain additive, scope-specific inputs to the same resolver. Future
+workspace-owned roles use the catalog provider seam and explicit assignment ceilings;
+no wildcard or implicit hierarchy has to be unwound. Ownership transfer/private
+projects/team grouping remain deliberate later capabilities. An Org/account entity
+is not smuggled in merely to rename the workspace tenancy root.
+
+The main maintenance burden is keeping actions, role assignments, route adapters,
+query scopes, capabilities and tests in sync. The matrix/endpoint manifest and custom
+provider contract tests make omissions visible. AI call checkpoints add state, but
+it solves a demonstrated retry-contract gap and stays within AI execution rather
+than becoming an application-wide workflow platform. Keep safe metadata after
+terminal scrubbing so future debugging does not depend on retained prompt copies.
+
+A new engineer's starting path is SPEC §10.1 → module spec → action matrix and state
+diagrams → implementation test map. Legacy project drafts are visibly superseded/
+rebase-pending; do not publish both sets of overlapping tickets. No new independent
+debt item or deferral was introduced by this review.
+
+## Design and UX checkpoint — complete (engineering pass)
+
+No new engineering UX decision. Visual design review remains separate and required
+before UI delivery; this pass does not approve mockups or claim browser QA occurred.
+
+- **Information order:** visible selected workspace in the app shell; Members in
+  workspace settings; active people/invitations separately paginated; role inspector
+  explains powers in product language. Owner is visibly protected; invite defaults
+  to Member and states all projects plus Unfiled before submission.
+- **Interaction states:** loading/empty/unavailable are distinct; queued/sent/failed/
+  uncertain mail are truthful; accepting is explicit after sign-in/verification;
+  wrong account can recover; stale admin form refreshes without silent resubmit.
+  Removed access closes unavailable controls and does not submit into another workspace.
+- **Partial/unknown outcomes:** saved AI progress stays internal until final artifact
+  publication; uncertainty explains potential charges and offers an explicit new run.
+  An uncertain write or missing one-time token is not a success toast or generic
+  retry loop. Preserve useful drafts and the original target.
+- **Responsive/accessibility:** keyboard-accessible switcher/list/role inspector,
+  labeled forms, announced status/errors, focus restoration after dialogs and
+  narrow-screen identity/role/action layouts. Role and delivery status are textual,
+  not color-only. Test Owner/Admin/Member/Viewer presentations and both themes.
+- **Design conventions:** existing Open Harbor patterns, Tailwind utilities,
+  self-hosted display font and localized strings; no new font, custom-role editor
+  placeholder or implementation identifiers in product copy.
+
+```text
+Selected workspace -> Members -> Invite (Member; all-projects disclosure)
+  -> queued/sent/uncertain mail -> recipient opens read-only offer
+     -> wrong account: confirmed logout -> sign in to exact verified account
+     -> unverified/new account: verify/register -> return to offer
+     -> valid: explicit Accept -> joined workspace -> review
+     -> inactive: contact inviter; no automatic resend/accept
+Administration -> role/remove confirmation -> current revision check
+  -> success: refreshed capabilities / accessible workspace list
+  -> stale: keep intent -> refresh permitted state -> explicit resubmit
+  -> uncertain: reconcile, never auto-replay
+Removal -> workspace authority ends; explicit independent Share can still work
+```
+
+## Implementation tasks
+
+This is a review task list, not a published tracker breakdown. Each includes the
+already approved full-scope work; no tasks are permission to ship a partial boundary.
+Test IDs refer to the accompanying test map. T6/T7 are the new error-review decisions;
+the other tasks implement accepted architecture or carried project decisions.
+
+- [ ] **T1 (P1)** — Authorization domain — implement catalogs, lifecycle membership and full action matrix.
+  - Surfaced by: 1A/2A, active versus historical membership and extensible roles.
+  - Files: `api/app/Models`, `api/app/Policies`, authorization services, membership/catalog migrations and fixtures.
+  - Verify: C01/C02/C08/C19; unknown roles deny, custom provider seam works and revoked history grants nothing.
+- [ ] **T2 (P1)** — Target adapters — replace personal-workspace aliases with explicit workspace context.
+  - Surfaced by: 3A and collection/MCP targeting evidence.
+  - Files: `api/routes`, FormRequests/controllers/services, MCP tools, `web/lib` and workspace navigation.
+  - Verify: C03/C19/F04, including tenant-sensitive validation, old aliases and late-response context isolation.
+- [ ] **T3 (P1)** — Membership workflows — implement invitation, acceptance, role/remove/leave and durable delivery.
+  - Surfaced by: 1A plus carried invitation/atomic mail/concurrency decisions.
+  - Files: membership/invitation services/models/routes/resources/jobs/mail, auth return and shared logout integration.
+  - Verify: C04–C06/C20/C22/F01–F05; real queue/audit rollback, ceilings, new generation after removal and concurrent logout.
+- [ ] **T4 (P1)** — Shared review — bind explicit share routes to the exact participant and shared business services.
+  - Surfaced by: 4A mixed-surface fallback gap.
+  - Files: shared routes/controllers, Policies/capabilities, mentions, shared client/cache keys.
+  - Verify: C09/C16/F06; wrong share/child, token-only writes and no fallback after revocation.
+- [ ] **T5 (P1)** — Demo operations — implement scoped anonymous authority and settled claim/prune handoff.
+  - Surfaced by: 5A demo regression risk.
+  - Files: demo/claim controllers, import and prune services/jobs, demo UI and operation persistence.
+  - Verify: C17/F07 critical regression cases with real controlled worker overlap.
+- [ ] **T6 (P1)** — HTTP/client errors — implement RFC 9457 and truthful recovery.
+  - Surfaced by: 6A fragmented failure handling.
+  - Files: `api/bootstrap/app.php`, domain failure adapters, `web/lib/csrf-client.ts`, affected clients and recovery UI.
+  - Verify: C18/F03/F04; malformed/lost responses, valid 204, unchanged-actor CSRF retry and native MCP errors.
+- [ ] **T7 (P1)** — AI execution — persist immutable plans, fenced call attempts and completed checkpoints.
+  - Surfaced by: 7A paid replay gap and existing transcript-scrubbing requirement.
+  - Files: AI models/migrations, ledger/job, `StructuredCall`, six generators, classifier/transport, cleanup and run projection.
+  - Verify: C11/C12/F08; no repeated completed calls, uncertain execution stops, final publication retry, idempotent spend and terminal scrubbing.
+- [ ] **T8 (P1)** — Commit authorization — integrate one coordinator across human/MCP/content jobs and token incarnations.
+  - Surfaced by: accepted ordered-commit, lock-budget and queued-authority decisions.
+  - Files: transaction coordinator/Policies/services, tokens/MCP writer, content jobs and operation migrations.
+  - Verify: C07/C08/C10/C13 on PostgreSQL and file-backed SQLite; original authority and expected revision always retained.
+- [ ] **T9 (P1)** — Source and reports — complete role-aware source configuration and bounded scan/report publication.
+  - Surfaced by: retained full scope, credential boundaries and carried scan/redirect/report decisions.
+  - Files: source/fetch/tracked-repo services/jobs/controllers/resources/migrations and report UI.
+  - Verify: C14/C15/C19; Owner-only credentials, no authenticated cross-origin request, large retained history and atomic complete reports.
+- [ ] **T10 (P1)** — Assets — serve images/diagrams through live authorization with private backing storage.
+  - Surfaced by: carried private-delivery decision.
+  - Files: asset/diagram routes, render/storage services, web rendering, legacy-reference migration and deployed origin configuration.
+  - Verify: C16/F06; old public URLs closed, valid member/share/demo access and hashes/anchors preserved.
+- [ ] **T11 (P1)** — Operations — implement independent cleanup, safe diagnostics and ordinary migration/recovery runbook.
+  - Surfaced by: carried cleanup/observability/deployment decisions and 7A uncertain calls.
+  - Files: migrations, commands/schedule, structured events, read-only checks, existing deployment/setup docs.
+  - Verify: C20/C21/C22; stopped-worker/scheduler versus idle, expired deadlines, unsafe legacy work settled and real deployment smoke.
+- [ ] **T12 (P1)** — Workspace UI — complete switcher, members/roles/invitations and every recovery state.
+  - Surfaced by: full accepted product scope and interaction review.
+  - Files: app shell/settings/invitation pages, localized strings, capability-driven review clients and responsive components.
+  - Verify: F01–F08, accessibility/keyboard/narrow-screen checks and separate approved visual review.
+- [ ] **T13 (P1)** — Verification harness — add the required database/worker/browser integration CI profile.
+  - Surfaced by: carried test-seam decision and test-map gaps; current sync queue is insufficient.
+  - Files: `.github/workflows/ci.yml`, API integration harness, Playwright worker/provider fixtures and local reproduction docs.
+  - Verify: all 30 contract groups, deterministic barriers/call counts, isolated teardown; missing prerequisites or skipped mandatory scenarios fail.
+
+## Workstream sequencing
+
+Sequential implementation, no parallelization opportunity at the reviewed module
+boundary: the tasks share `api/app` authorization/services and most also affect
+`web/lib` context/capabilities. Separate worktrees would not make these independent.
+After T1 fixes the domain contract, land T2/T8 and the T13 harness early, then complete
+T3–T7 and T9–T11 in reviewable vertical slices with T12 alongside each user journey.
+This is sequencing advice, not authorization to spawn agents or publish tickets.
+Revisit parallel UI/document work only after stable contracts permit truly separate
+modules. Every slice keeps relevant tests; invitations are not release-ready until
+all required boundaries are complete.
+
+## Completion summary
+
+| Area | Result |
+|---|---|
+| Step 0 | 1A full scope accepted; no later reduction |
+| Architecture | Four independent findings resolved by 2A–5A |
+| Error map | 22 failure paths; two independent decisions 6A/7A resolved; no unresolved recovery choice |
+| Security | One checkpoint-retention integration gap resolved under existing privacy requirements; no unresolved High-severity decision |
+| Edge cases | 10 end-to-end data flows and seven interaction groups mapped; required follow-through recorded |
+| Code quality | Accepted refactors cover findings; no independent unresolved choice |
+| Tests | Combined diagram produced; 30 contract groups require implementation proof (22 code + eight journeys) |
+| Performance | Batching/index/lock/storage risks mapped; three estimated slow request paths; no measurement claim |
+| Observability | Required events, independent health signals and initial thresholds specified; implementation pending |
+| Deployment | Three accepted operational risk categories; ordinary migration/restart/smoke and compatible-build repair |
+| Long term | Reversibility 3/5; no new independent debt/deferral |
+| Design/UX | Engineering flow/state review complete; separate visual review pending |
+| NOT in scope / existing code | Written below; previous product deferrals unchanged |
+| TODOS | Accepted decisions/completion recorded; no new deferral needing approval |
+| Failure modes | 22 code-path rows in test map; no unacknowledged silent failure; all new proof remains pending |
+| Tasks / workstreams | 13 review tasks, sequential shared-module implementation; no tickets published |
+
+Unresolved engineering decisions: **none**. This means the plan is ready for its
+remaining design/ticket preparation steps, not that implementation is complete.
+The project-access spec and unpublished 27-ticket draft still need rebasing onto
+this workspace foundation. No runtime behavior, live email delivery, deployment
+smoke or application-test pass is claimed by this planning review.
 
 ## What already exists
 
@@ -445,7 +859,7 @@ stop
 | AI generation | AiRunStarter, run ledger and conditional transitions | Consolidate starts; retain privacy, deduplication and accounting |
 | Import and scans | Existing source/import/tracked-repo services and jobs | Add authority/operation evidence around their behavior |
 | Delivery and recovery | Database queue, configured mail transport, Compose worker/scheduler | Reuse; validate durable invitation enqueue and independent cleanup |
-| Test seams | PHPUnit API/MCP tests, database concurrency checks and Playwright journeys | Extend agreed seams; coverage mapping remains pending |
+| Test seams | PHPUnit API/MCP tests, database concurrency checks and Playwright journeys | Extend agreed seams; full coverage mapping is in the implementation test map |
 
 ## NOT in scope
 
