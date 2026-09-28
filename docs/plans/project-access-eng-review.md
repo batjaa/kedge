@@ -1,9 +1,9 @@
 # Project access — engineering review
 
 > **2026-09-27 sequencing update:** workspace membership and action/role contracts
-> are now being defined first. This artifact describes the prior project-first
+> are now specced first in M4.0 (engineering review pending). This artifact describes the prior project-first
 > scope; preserve its useful decisions, but rebase it before implementation or
-> ticket publication. See the [workspace foundation draft](workspace-membership.md).
+> ticket publication. See the [workspace foundation spec](../specs/m4.0-workspace-membership.md).
 
 > Completed 2026-09-27 · Decisions 1A–21A and user-directed deployment decision 22
 > recorded. All engineering review sections complete; separate design review,

@@ -27,7 +27,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | done (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
-| Workspace membership & authorization | L | Scaffold · AI & agents | defining (2026-09-27) | [Foundation draft](plans/workspace-membership.md); spec pending |
+| Workspace membership & authorization | L | Scaffold · AI & agents | specced (2026-09-27); review pending | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) |
 | Project access | L | Workspace membership & authorization · Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | rebase pending workspace foundation | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
@@ -47,8 +47,8 @@ Gists (full scope + demo criteria: SPEC §21):
 - **Web i18n** (M3.9, wedge 2026-07-23) — en-US · es-US · mn-MN · de-DE via next-intl without locale routing (strict-allowlist cookie + negotiation, en-US merge fallback); mn-MN display font falls back to the system stack (no Cyrillic in Space Grotesk); chip strings as a constrained glossary; document content never translated. Runs after M3.10 so the glossary snapshots stable strings.
 - **Source provenance** (M3.10, wedge 2026-07-24) — read-only provenance chips on every row (repo path · owner/repo + path · host · pasted) derived server-side from stored columns; project pages group repo-sourced docs under their tracked repo, path-ordered with directory dividers (flattened tree — projects stay the only user-managed hierarchy, wikis/folders non-goal intact); `tracked_repo` filter + `order=path` on the shared list query. Group-by-source toggle deferred.
 - **AI & agents** (M4) — digest, improve-prompt, reply drafts, comment split, thread summaries, `ai_runs` UI; MCP server with agent badges.
-- **Workspace membership & authorization** (added 2026-09-27; milestone number pending) — define extensible actions/roles with good built-in defaults and establish workspace membership as the resource-authorization baseline. [Definition draft](plans/workspace-membership.md).
-- **Project access** (M4.1, specced 2026-09-26) — invite by email, accept into a project, discover and review its documents within a role, manage pending invitations/members, and remove access. No implicit workspace membership; designed for later workspace invitations. [Module spec with confirmed product decisions](specs/m4.1-project-access.md).
+- **Workspace membership & authorization** (M4.0, specced 2026-09-27) — extensible action/role catalogs; Owner/Admin/Member/Viewer defaults; workspace invitations, explicit selection, administration and live resource authorization. Custom-role editing follows later. [Module spec](specs/m4.0-workspace-membership.md).
+- **Project access** (M4.1, specced 2026-09-26) — invite by email, accept into a project, discover and review its documents within a role, manage pending invitations/members, and remove access. No implicit workspace membership; direct project grants extend the workspace foundation. Rebase pending. [Module spec with prior confirmed product decisions](specs/m4.1-project-access.md).
 - **Notifications & review queue** (M5) — in-app inbox, Postmark email, mentions, digest scheduling, per-user prefs, review-queue dashboard.
 - **Private sources & post-back** (M6) — GitHub App with push-webhook auto re-sync, Confluence import via API token, digest post-back to PR/Confluence.
 - **Self-host distribution** (M7) — `deploy/` compose + Caddy single-origin, tagged images, migrate-on-boot, telemetry ping + opt-out, backup/upgrade/self-hosting guides, public-repo hygiene (CONTRIBUTING, SECURITY.md).
@@ -58,14 +58,14 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Workspace membership & authorization — defining (2026-09-27).** Workspace
-membership now precedes project membership. Explicit action/role interfaces,
-extensibility and useful defaults are confirmed requirements; the built-in matrix,
-custom-role rollout, visibility and offboarding remain to define. See the
-[foundation draft](plans/workspace-membership.md). The previous project engineering
-review is retained, but its [spec](specs/m4.1-project-access.md) and unpublished
-[ticket structure](plans/project-access-tickets.md) must be rebased afterward.
-
+**Workspace membership & authorization — specced; review pending (2026-09-27).**
+The [M4.0 spec](specs/m4.0-workspace-membership.md) defines the built-in matrix,
+code-backed extensibility interface, all-projects/Unfiled baseline visibility,
+invitation/selection/admin lifecycle and independent-grant removal semantics.
+These are concrete spec defaults for review, not a claim that every choice was
+separately approved. Run engineering review before ticketing. The prior project
+[spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
+remain rebase-pending; do not publish their old dependency order.
 
 1. ~~**Anchoring port spike** (P1, S)~~ — **RESOLVED (M3, 2026-07-20)**: the exact→fuzzy→orphan ladder shipped (#76/#77) on `@sanity/diff-match-patch`, validated by the Vitest re-anchoring golden corpus (the moat regression net). (TODOS.md)
 2. **CLA/DCO** (P2, S) — decide before the first external contribution; blocks CONTRIBUTING in **Self-host distribution** and therefore **Launch**. (SPEC §22.6)
@@ -73,7 +73,9 @@ review is retained, but its [spec](specs/m4.1-project-access.md) and unpublished
 
 ## Decisions so far
 
-- **Workspace authorization first (2026-09-27)** — user redirected the sequence: define expandable workspace membership, ship useful defaults, and specify action/role interfaces as the resource-authorization baseline before project membership. This supersedes the earlier project-first order; [foundation draft](plans/workspace-membership.md) records proposals and open choices.
+- **Workspace foundation specced (2026-09-27)** — [M4.0](specs/m4.0-workspace-membership.md) defines Owner/Admin/Member/Viewer, Member-default invitations, code-backed action/role definitions with a future custom-role provider seam, explicit workspace targets and live resource authorization. Membership covers all workspace projects/Unfiled; source credentials remain Owner-only; independent Shares survive removal. These are spec defaults awaiting review.
+
+- **Workspace authorization first (2026-09-27)** — user redirected the sequence: define expandable workspace membership, ship useful defaults, and specify action/role interfaces as the resource-authorization baseline before project membership. This supersedes the earlier project-first order; [foundation draft](plans/workspace-membership.md) records the original proposals; the [M4.0 spec](specs/m4.0-workspace-membership.md) now supplies the concrete contract.
 
 - **Project content/moderation confirmed (2026-09-26)** — Maintainers manage project details, document lifecycle, pasted/uploaded versions, threads, suggestions, and inappropriate-comment deletion; nobody rewrites another author's comments or approves on their behalf. Reviewers manage their own contributions; Viewers remain read-only. Product decisions are complete. [Module spec](specs/m4.1-project-access.md).
 
@@ -89,7 +91,7 @@ review is retained, but its [spec](specs/m4.1-project-access.md) and unpublished
 
 - **Project roles confirmed (2026-09-26)** — Viewer, Reviewer, and Maintainer; Reviewer is the default invitation role. Membership administration is confirmed: Maintainers manage Viewers/Reviewers, only the owner manages Maintainer seats, and members may leave voluntarily. The complete capability matrix is now confirmed. [Module spec](specs/m4.1-project-access.md).
 
-- **Project access pulled forward; workspace management follows later** — user direction, 2026-09-26. Invitation grants only the project; preserve an expansion path to workspace membership. [Module spec](specs/m4.1-project-access.md) records confirmed product decisions; testing uses agreed PHPUnit API features, Playwright journeys, database concurrency checks, and a real-mail deployment smoke test.
+- **Project access pulled forward; workspace management follows later (historical; sequence superseded 2026-09-27)** — user direction, 2026-09-26. Invitation grants only the project; preserve an expansion path to workspace membership. [Module spec](specs/m4.1-project-access.md) records confirmed product decisions; testing uses agreed PHPUnit API features, Playwright journeys, database concurrency checks, and a real-mail deployment smoke test.
 - **Approach B′, moat-first milestone order** — CEO plan review, TODOS.md decision log 2026-07-01.
 - **Seven v1 expansions** (MCP server, approvals lite, suggested edits, digest post-back, instant demo mode, diff view + comment overlay, review queue) — SPEC.md Rev 2.
 - **Self-hostable distribution** (AGPL-3.0, full parity, compose reference; Fumadocs replaces Protocol code; PAT permanent; Nova optional) — SPEC.md Rev 3, TODOS.md 2026-07-01.
@@ -121,5 +123,5 @@ review is retained, but its [spec](specs/m4.1-project-access.md) and unpublished
 - **Raw comment sync-back to GitHub/Confluence** — digest post-back only in v1.
 - **Realtime cursors/presence** — polling v1; Reverb later.
 - **Enterprise SSO/SAML/SCIM** — self-hosting is the v1 enterprise trust answer; generic OIDC is post-v1.
-- **Billing, SSO and team groups** — remain later scope. Workspace membership and its authorization foundation are now being defined before project access.
+- **Billing, SSO and team groups** — remain later scope. Workspace membership and its authorization foundation are specced in M4.0 before project access.
 - **Cross-document search, wikis, folders** — the review queue is the only aggregation surface in v1.

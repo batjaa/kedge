@@ -1,6 +1,8 @@
 # Workspace membership and resource authorization
 
-> 2026-09-27 · Defining the foundation; not a finished spec or ticket breakdown.
+> 2026-09-27 · Historical definition draft, superseded by the
+> [M4.0 workspace membership spec](../specs/m4.0-workspace-membership.md).
+> Proposals/open questions below record the earlier discussion, not remaining spec gaps.
 > Confirmed direction: workspace membership first; extensible roles with good
 > built-in defaults; an explicit action/role interface under resource authorization.
 > Role definitions, default resource visibility and customization rollout below
@@ -212,5 +214,6 @@ Concrete scenarios for checking the model:
 Retain the meaningful authorization/concurrency/mail tests and ordinary deployment
 choice already reviewed. Redistribute reusable project tickets into the foundation
 where appropriate; do not duplicate their services or restart all review work.
-No workspace spec, implementation tickets, runtime permission package or application
-code is created by this definition draft.
+The subsequent [M4.0 spec](../specs/m4.0-workspace-membership.md) supplies the concrete
+contract and implementation/testing boundaries. Engineering review and project-ticket
+rebasing remain; no runtime permission package or application code has been added.

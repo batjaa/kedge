@@ -1,9 +1,9 @@
 # Project access — proposed ticket breakdown
 
 > **2026-09-27 sequencing update:** workspace membership and action/role contracts
-> are now being defined first. This artifact describes the prior project-first
+> are now specced first in M4.0 (engineering review pending). This artifact describes the prior project-first
 > scope; preserve its useful decisions, but rebase it before implementation or
-> ticket publication. See the [workspace foundation draft](workspace-membership.md).
+> ticket publication. See the [workspace foundation spec](../specs/m4.0-workspace-membership.md).
 
 > 2026-09-27 · Revised draft for granularity/dependency approval; not published.
 > Module parent: **Project access: invitations and project roles (M4.1)**.

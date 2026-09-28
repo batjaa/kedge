@@ -54,7 +54,7 @@ Commenting is table stakes Kedge must match (Confluence, Google Docs, Notion all
 - Raw comment sync-back to GitHub/Confluence (digest post-back only; full sync is a later phase).
 - Real-time collaborative cursors/presence (polling v1; Reverb later).
 - Cross-document full-text search, wikis, folders beyond the review queue.
-- Billing, team workspace management UI. Project invitations and access are now a planned v1 exception (M4.1; 2026-09-26), with workspace expansion kept in view.
+- Billing, SSO and team groups. Workspace membership/administration (M4.0) and subsequent project access (M4.1) are planned v1 scope (amended 2026-09-27).
 - Enterprise SSO/SAML/SCIM — **self-hosting is the v1 answer to enterprise trust**; generic OIDC login is a later add for both editions.
 
 ## 3. Personas & core flows
@@ -339,28 +339,43 @@ The `reanchor.completed` event logs `{anchored, relocated, orphaned}` counts —
 
 ### 10.1 Tenancy — prototype-fast, enterprise-ready schema
 
-- Every table carries `workspace_id`; v1 UX never shows workspaces (auto-created personal workspace per user). `workspace_members` + roles (`owner`/`member`) and `audit_logs` exist from day one, no UI.
-- Growth path (out of v1): team workspaces UI → WorkOS SSO/SAML + SCIM → IP allowlists, retention.
+- Shipped baseline: workspace tenancy, an auto-created personal workspace per user, `workspace_members` with Owner/Member roles and audit logs. M4.0 below adds workspace selection, invitations, role administration and explicit resource authorization; membership alone must no longer imply administrative power.
+- Later growth: custom-role editing, WorkOS SSO/SAML + SCIM, IP allowlists and retention. Workspace membership UI is now planned v1 scope.
 - Intended shape when teams arrive (noted 2026-07-23; design preview `docs/designs/app-teams.html`, no v1 scope change): **account** (billing/SSO grouping; `workspaces.account_id` added only when billing exists; personal workspaces have none; a self-hosted instance *is* the account) → **workspace** (tenancy root, unchanged) → **teams** (`teams` + `team_members`) as people-groups for mentions, queue routing, and required-approval rules — never content containers (projects own content). Magic-link reviewers stay outside membership: a guest sees only the doc shared with them.
 
-**Sequencing amendment (2026-09-27 — workspace authorization first):** define
-workspace membership before implementing project membership. The user requires
-an expandable membership model with useful built-in defaults, explicit interfaces
-for actions and roles, and that model as the baseline for resource authorization.
-The [workspace foundation draft](plans/workspace-membership.md) separates this
-confirmed direction from proposed roles, visibility and customization choices.
-This supersedes the project-first build order below; retain its reviewed mechanics
-as reusable work, but rebase the project spec and ticket draft before execution.
-Workspace membership management is now in scope; billing, SSO and team groups
-remain separate. No application implementation or issue publication has started.
+**M4.0 workspace authorization foundation (specced 2026-09-27; review and implementation pending):**
+workspace membership precedes project membership. The user requires extensibility,
+useful defaults and explicit action/role interfaces as the resource-authorization
+baseline. The [module spec](specs/m4.0-workspace-membership.md) supplies the concrete
+contract: Owner/Admin/Member/Viewer, Member-default invitations, one role per
+membership, explicit versioned action sets and Laravel Policies using a shared
+resolver for decisions, collection scopes and UI capabilities. Built-in definitions
+ship now; custom-role editing is deferred behind that resolver interface.
 
-**Planned scope amendment (2026-09-26, M4.1 — Project access):** email invitations, project membership, and member management are pulled forward so a person can join a project without gaining access to the rest of its workspace. Workspace membership management remains later scope; the project design must accommodate it without replacing users or project memberships. The personal-workspace-only behavior above describes the shipped baseline, not a constraint on this new module. The [M4.1 module spec](specs/m4.1-project-access.md) now defines the role/action matrix, invitation lifecycle, API contracts, and grant interactions. All product decisions and testing seams are now confirmed by the user (2026-09-26). Engineering review is complete (2026-09-27); separate design review and implementation remain pending.
+The spec defaults grant baseline reach to all workspace projects and Unfiled,
+constrain writes by actions and resource predicates, keep source credentials
+Owner-only and preserve private AI artifacts. Admin manages Member/Viewer seats;
+Owner appoints Admin. Owner cannot be removed/demoted; ownership transfer is later
+scope. Explicit workspace selection replaces personal-workspace assumptions for
+new flows while compatibility aliases retain personal meaning. Stable membership
+incarnations, assignment/definition revisions and live commit checks prevent old
+tokens/jobs/invitations regaining authority after removal/rejoin. Independent Shares
+remain valid; ordinary removal is not an identity ban. These concrete defaults
+await review, rather than representing separately approved matrix cells.
+
+This supersedes the project-first order. Reuse the previously reviewed invitation,
+transaction, private-asset, background-work and testing mechanics; rebase the prior
+project spec and unpublished ticket draft before execution. Use ordinary deployment
+with migrations/restarts/smoke checks, per the user's decision; no maintenance cutover.
+No application implementation or issue publication has started.
+
+**Planned scope amendment (2026-09-26, M4.1 — Project access):** email invitations, project membership, and member management are pulled forward so a person can join a project without gaining access to the rest of its workspace. The original workspace-later sequence is superseded by M4.0; direct project grants will extend that foundation without replacing users or workspace memberships. The personal-workspace-only behavior above describes the shipped baseline, not a constraint on this new module. The [M4.1 module spec](specs/m4.1-project-access.md) now defines the role/action matrix, invitation lifecycle, API contracts, and grant interactions. All product decisions and testing seams are now confirmed by the user (2026-09-26). Engineering review is complete (2026-09-27); separate design review and implementation remain pending.
 
 **M4.1 confirmed product decisions (2026-09-26; not implemented):**
 
 - **Role set confirmed by the user:** Viewer, Reviewer (default invitation role), and Maintainer. The workspace owner inherits project administration; direct project grants create no workspace membership. Existing workspace grants and project grants contribute capabilities independently; broader workspace access is never silently restricted by a project role.
 - **Membership administration confirmed by the user:** Maintainers invite, change roles, and remove Viewers/Reviewers; only the workspace owner appoints, demotes, or removes Maintainers. Anyone may leave their own direct project membership; inherited owner access remains.
-- **Invitation lifecycle confirmed by the user:** verified full accounts accept invitations addressed to their verified email; links expire after seven days; resend replaces the old link and restarts expiry; pre-acceptance revocation is available; loss of the inviter's authority to grant the role cancels pending invitations. Invitations and memberships have separate records; acceptance is idempotent and rechecks authority. Workspace invitations will reuse lifecycle behavior with explicit workspace records later.
+- **Invitation lifecycle confirmed by the user:** verified full accounts accept invitations addressed to their verified email; links expire after seven days; resend replaces the old link and restarts expiry; pre-acceptance revocation is available; loss of the inviter's authority to grant the role cancels pending invitations. Invitations and memberships have separate records; acceptance is idempotent and rechecks authority. M4.0 workspace invitations establish the shared lifecycle first, with separate explicit records for each membership scope.
 - **Source authority confirmed by the user:** Maintainers manage project sources, including URL imports, tracked repos, branches/path filters, and scans. Private repositories require owner approval for that project; credentials and Repository Approvals remain owner-controlled. Public imports never silently fall back to workspace credentials. Revoking a repository approval stops future delegated credential use, including queued jobs, while preserving imported documents.
 - **AI access confirmed by the user:** Reviewers generate Ask answers and reply drafts; Maintainers use all existing AI tools; Viewers read shared results only. Personal questions/drafts remain private. Costs use the owning workspace's provider under existing gates/rate limits; generation grants no extra permission to apply its output.
 - **Document sharing confirmed by the user:** Maintainers can create, list, and revoke share links for project documents, including links another authorized person created. Viewers/Reviewers cannot manage shares. Existing document-level share identity/visibility rules apply; share-management authority follows the document's current project.
@@ -510,7 +525,9 @@ documents ||--o{ ai_runs
 @enduml
 ```
 
-**M4.1 schema addition (draft):** explicit project memberships (unique project/user, role, grant version) and project invitations (unique current project/normalized-email slot, inviter, role, token digest/generation, expiry, acceptance and delivery states). Both carry owning-workspace/project foreign keys with consistency enforced. Repository Approvals additionally bind project, workspace integration, and canonical repository identity with grant version/revocation state; existing repos require explicit owner approval for delegated credential use. Existing projects inherit owner access without per-project owner backfills. Details and future workspace extension are in the [module spec](specs/m4.1-project-access.md).
+**M4.0 schema addition (specced; not implemented):** stable personal-workspace references, explicit role references, membership state/incarnation/revision, workspace invitations with token/delivery generations, and membership-bound agent-token evidence. Built-in role definitions are code-backed and versioned; no custom-role table/editor yet. See the [workspace spec](specs/m4.0-workspace-membership.md).
+
+**M4.1 schema addition (prior draft; rebase pending):** explicit project memberships (unique project/user, role, grant version) and project invitations (unique current project/normalized-email slot, inviter, role, token digest/generation, expiry, acceptance and delivery states). Both carry owning-workspace/project foreign keys with consistency enforced. Repository Approvals additionally bind project, workspace integration, and canonical repository identity with grant version/revocation state; existing repos require explicit owner approval for delegated credential use. Existing projects inherit owner access without per-project owner backfills. Prior project details to rebase onto M4.0 are in the [module spec](specs/m4.1-project-access.md).
 
 Indexes: every FK; `shares.token` unique; `(document_id, content_hash)` unique; `(thread_id, document_version_id)`; `(document_id, status)` on threads; notifications read-state. `notifications` = standard Laravel table. `personal_access_tokens` = standard Sanctum table — the **Agent Token** (§15): named per agent, workspace scope carried as a `workspace:{id}` ability, revoked by deleting the row.
 
@@ -657,8 +674,8 @@ B′ order (moat first), expansions folded in. Each milestone ends demoable; com
 - **M3.9 — Web i18n** (wedge, added 2026-07-23): **en-US source · es-US · mn-MN · de-DE** via next-intl without locale routing (strict-allowlist cookie + Accept-Language negotiation, en-US merge fallback, CI key-parity); mn-MN display falls back to the system stack (Space Grotesk has no Cyrillic); chip strings as a constrained glossary; switcher on app, landing, and shared surfaces; **document content never translated**. Runs **after M3.10** so the glossary snapshots stable strings. ✅ a Mongolian-browser guest opens a share link and reviews in Mongolian chrome.
 - **M3.10 — Source provenance** (wedge, added 2026-07-24): read-only **provenance chips** on every document row (repo-relative path · `owner/repo` + path · source host · pasted) derived server-side in one place from stored columns (no migration); **project pages group repo-sourced docs under their tracked repo, path-ordered** with directory dividers (flattened tree, never folders — §2 non-goal intact); `GET /documents` gains a workspace-scoped `tracked_repo` filter + `order=path`. Group-by-source home toggle deferred. ✅ Kedge's own tracked `docs/` renders on its project page in repo order with path chips; a pasted doc is visibly "pasted".
 - **M4 — AI & agents**: digest, improve-prompt (consumes accepted suggestions), reply drafts, comment split, thread summaries, ask-about-the-doc, `ai_runs` polling UI; **MCP server** (read + comment tools, agent badges). ✅ an agent connects over MCP and posts a review comment; author closes the loop: comments → digest → improve-prompt → Claude Code revises → re-sync.
-- **Workspace membership & authorization — prerequisite being defined (2026-09-27):** extensible action/role contracts with built-in defaults, workspace membership and baseline resource authorization; implement before direct project membership. See [foundation draft](plans/workspace-membership.md); role matrix and milestone numbering remain open.
-- **M4.1 — Project access** (wedge, planned 2026-09-26; rebase pending workspace foundation 2026-09-27): email invitations to a project, acceptance through verified accounts, discovery of invited projects, role-based project/document access, pending invitation and member management. Project membership grants no access to the rest of the workspace; design for later workspace invitations. The [module spec](specs/m4.1-project-access.md) records confirmed product decisions and testing seams; engineering review is complete (2026-09-27), with separate design review pending. Demo target: invite a second account to Kedge's documentation project → accept and review → remove project access; unrelated projects remain inaccessible.
+- **M4.0 — Workspace membership & authorization** (specced 2026-09-27; review pending): extensible action/role catalogs with Owner/Admin/Member/Viewer defaults, invite/verify/accept, explicit workspace selection, member administration and live resource authorization. Implement before direct project membership. [Module spec](specs/m4.0-workspace-membership.md). Demo: invite a teammate to a workspace → accept → review within their role → downgrade/remove and verify revoked writes/jobs/assets.
+- **M4.1 — Project access** (wedge, planned 2026-09-26; rebase pending workspace foundation 2026-09-27): email invitations to a project, acceptance through verified accounts, discovery of invited projects, role-based project/document access, pending invitation and member management. Direct project membership grants no access to the rest of the workspace; rebase it onto the M4.0 workspace foundation. The [module spec](specs/m4.1-project-access.md) records confirmed product decisions and testing seams; engineering review is complete (2026-09-27), with separate design review pending. Demo target: invite a second account to Kedge's documentation project → accept and review → remove project access; unrelated projects remain inaccessible.
 - **M5 — Notifications & queue**: in-app inbox, Postmark notifications, mentions, digest scheduling, per-user prefs, approval events, **review-queue dashboard**. ✅ reviewer replies → author gets the email; dashboard shows "needs your attention".
 - **M6 — Private sources & post-back**: **GitHub App** (install → pick repo → private import → push-webhook auto re-sync) for the SaaS; **PAT remains a supported connector** (self-host primary) — plus the guided register-your-own-App docs for self-hosters; Confluence via API token (storage-format conversion); **digest post-back** to PR/Confluence. ✅ private repo doc auto-resyncs on push; digest lands on the PR.
 - **M7 — Self-host distribution**: `deploy/` compose + Caddy single-origin mode, tagged Docker images, migrate-on-boot, telemetry ping + opt-out, backup/upgrade docs, self-hosting guide, public-repo hygiene (CONTRIBUTING, SECURITY.md, issue templates). ✅ fresh VM: `docker compose up` → working instance importing a private doc via PAT, nothing leaving the network.
