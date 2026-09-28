@@ -24,7 +24,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | done (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
-| Workspace membership & authorization | L | Scaffold · AI & agents | specced (2026-09-27); engineering review complete | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) |
+| Workspace membership & authorization | L | Scaffold · AI & agents | specced (2026-09-27); engineering/design-plan reviews complete | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) |
 | Project access | L | Workspace membership & authorization · Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | rebase pending workspace foundation | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
@@ -55,7 +55,7 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Workspace membership & authorization — engineering review complete (2026-09-27).**
+**Workspace membership & authorization — engineering/design-plan reviews complete (2026-09-27).**
 The [M4.0 spec](specs/m4.0-workspace-membership.md) defines the built-in matrix,
 code-backed extensibility interface, all-projects/Unfiled baseline visibility,
 invitation/selection/admin lifecycle and independent-grant removal semantics.
@@ -67,9 +67,10 @@ claiming, plus 6A RFC 9457 errors and uncertain-write recovery. Architecture rev
 and all remaining engineering review sections are complete, including 7A durable AI
 progress and safe resumption. The [test map](plans/workspace-membership-test-map.md)
 records 30 required contract groups. The [design review](plans/workspace-membership-design-review.md)
-is in progress: D1A selects a named switcher beside the logo and D2A uses
-Members/Invitations tabs; D3A always opens the destination workspace home.
-Invitation-form presentation is next. Ticket preparation/rebase remains. The prior project
+is complete: D1A selects the named switcher beside the logo, D2A uses Members/
+Invitations tabs, D3A opens destination home and D4A uses a desktop invite dialog/
+mobile sheet. All seven passes are recorded. Ticket preparation/rebase is next;
+rendered UI QA is implementation work. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.
 
@@ -79,7 +80,7 @@ remain rebase-pending; do not publish their old dependency order.
 
 ## Decisions so far
 
-- **Workspace foundation specced (2026-09-27)** — [M4.0](specs/m4.0-workspace-membership.md) defines Owner/Admin/Member/Viewer, Member-default invitations, code-backed action/role definitions with a future custom-role provider seam, explicit workspace targets and live resource authorization. Membership covers all workspace projects/Unfiled; source credentials remain Owner-only; independent Shares survive removal. Engineering review is complete; visual review and implementation remain.
+- **Workspace foundation specced (2026-09-27)** — [M4.0](specs/m4.0-workspace-membership.md) defines Owner/Admin/Member/Viewer, Member-default invitations, code-backed action/role definitions with a future custom-role provider seam, explicit workspace targets and live resource authorization. Membership covers all workspace projects/Unfiled; source credentials remain Owner-only; independent Shares survive removal. Engineering and design-plan reviews are complete; implementation remains.
 
 - **Workspace authorization first (2026-09-27)** — user redirected the sequence: define expandable workspace membership, ship useful defaults, and specify action/role interfaces as the resource-authorization baseline before project membership. This supersedes the earlier project-first order; [foundation draft](plans/workspace-membership.md) records the original proposals; the [M4.0 spec](specs/m4.0-workspace-membership.md) now supplies the concrete contract.
 

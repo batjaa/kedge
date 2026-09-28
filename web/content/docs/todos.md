@@ -7,6 +7,8 @@ description: "Decision log, open spikes, debt registry (dogfood copy)"
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- ✅ **Workspace design-plan review complete:** D4A selects the compact desktop invite dialog/full-height mobile sheet. D1A–D4A are reconciled in the [spec](specs/m4.0-workspace-membership.md) and [seven-pass review](plans/workspace-membership-design-review.md), covering layout, states, journeys, Open Harbor alignment and responsive/accessibility requirements. No unresolved design choice or new deferral. Ticket reconciliation is next; runtime implementation and rendered QA remain unperformed.
+
 - ✅ **Workspace design D3A:** switching to another workspace always opens its Documents/home page; choosing the current workspace is a no-op. Loading/failure states keep workspace context truthful, and pending forms/mutations retain their original targets. The [design review](plans/workspace-membership-design-review.md) continues with invitation-form presentation (D4). No runtime UI changes.
 
 - ✅ **Workspace design D2A:** a dedicated Members page uses Members/Invitations tabs with independent filters/pagination; only Owner/Admin see invitations, the pending count and Invite member. Canonical spec now defines the page hierarchy and concrete loading/empty/error/access-loss states. [Design review](plans/workspace-membership-design-review.md) continues with workspace-switch destination (D3). No runtime UI changes.

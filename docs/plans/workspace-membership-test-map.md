@@ -172,6 +172,22 @@ bounded structured counters rather than a verbose log for every normal rejection
 | C21 | Legacy job resumes without authority evidence | Yes: settle and explicit restart | C21 | Interrupted operation | Migration/recovery counts |
 | C22 | Token nested in auth-return error gets logged | Yes: redaction before capture | C22 | Safe error | Secret-free route/status |
 
+## Design-review additions (D1A–D4A)
+
+Extend F01/F03/F04/F05 to assert the dedicated named selector, home destination on
+every workspace change, current-workspace no-op and independent Members/Invitations
+navigation with capability-specific counts/email. F01/F05 cover the desktop invite
+dialog/mobile sheet: initial focus, containment/restoration, inert background,
+pristine/dirty/pending dismissal, validation, duplicate pending offer, unknown send,
+queued feedback and software-keyboard layout. F02 verifies safe standalone offer
+hierarchy and explicit Join after returning from auth. Include read-only role detail,
+removal/leave consequences and no hidden invitation data after admin access loss.
+
+Rendered checks during implementation cover both themes, 320px/narrow/tablet/desktop,
+200% zoom, long localized names/copy, keyboard-only operation and reduced motion.
+These add assertions to the existing 30 groups, not new coverage claims or a live
+visual/accessibility audit already performed.
+
 ## Required verification procedure
 
 1. Fast PHPUnit/Vitest tests cover deterministic decisions, endpoint behavior and
