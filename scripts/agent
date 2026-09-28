@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Reproducible local checks for isolated Symphony checkouts. No production services.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+case "${1:-}" in
+  version) printf 'kedge-agent %s\n' "${APP_VERSION:-dev}" ;;
+  bootstrap)
+    php -r 'if (PHP_VERSION_ID < 80500) {fwrite(STDERR, "PHP 8.5+ is required\n"); exit(1);}'
+    node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<20 || (a===20 && b<9)) throw new Error("Node 20.9+ is required")'
+    composer --working-dir=api install --no-interaction --no-progress --prefer-dist
+    if [ ! -f api/.env ]; then
+      cp api/.env.example api/.env
+      php api/artisan key:generate
+    fi
+    npm --prefix web ci --no-audit --no-fund
+    ;;
+  verify)
+    # PHPUnit uses disposable in-memory SQLite and disables AI providers.
+    (cd api && php artisan config:clear && vendor/bin/pint --test && php artisan test)
+    npm --prefix web run types:check
+    npm --prefix web test
+    npm --prefix web run build
+    ;;
+  *) printf 'Usage: scripts/agent {version|bootstrap|verify}\n' >&2; exit 2 ;;
+esac

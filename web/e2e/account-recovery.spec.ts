@@ -2,18 +2,29 @@ import { expect, test } from '@playwright/test';
 import { formIsHydrated, signIn, uniqueIdentity } from './helpers';
 import { latestAccountMailUrl } from './mailbox';
 
-test('confirm signup on another device and recover a forgotten password', async ({ page, browser }, testInfo) => {
+test('an existing unverified password account confirms on another device and preserves its destination', async ({ page, browser }, testInfo) => {
   const identity = uniqueIdentity('account-recovery');
-  await page.goto('/signup?next=%2Fsettings');
+  const destination = '/settings?section=profile';
+  await page.goto(`/signup?next=${encodeURIComponent(destination)}`);
   await formIsHydrated(page);
   await page.getByLabel('Name', { exact: true }).fill(identity.name);
   await page.getByLabel('Email', { exact: true }).fill(identity.email);
   await page.getByLabel('Password', { exact: true }).fill(identity.password);
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
-  await expect(page).toHaveURL(/\/verify-email\?next=/);
+  await expect(page).toHaveURL(`/verify-email?next=${encodeURIComponent(destination)}`);
   await expect(page.getByRole('heading', { name: 'Confirm your email' })).toBeVisible();
   const forbidden = await page.request.get('http://localhost:8000/api/v1/documents', { headers: { accept: 'application/json', origin: new URL(page.url()).origin } });
   expect(forbidden.status()).toBe(403);
+
+  // This account now represents a pre-confirmation rollout user: it has a
+  // persisted password/session record, but no verification timestamp. Re-enter
+  // through sign-in instead of relying on signup's immediate redirect.
+  await page.context().clearCookies();
+  await page.goto(`/signin?next=${encodeURIComponent(destination)}`);
+  await signIn(page, identity, `/verify-email?next=${encodeURIComponent(destination)}`);
+  const beforeConfirmation = await page.request.get('http://localhost:8000/api/v1/me', { headers: { accept: 'application/json', origin: new URL(page.url()).origin } });
+  expect(await beforeConfirmation.json()).toMatchObject({ email_verified: false });
+
   const shots = testInfo.outputPath();
   await page.screenshot({ path: `${shots}/desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -30,9 +41,26 @@ test('confirm signup on another device and recover a forgotten password', async 
   await expect(otherPage.getByRole('heading', { name: 'Email confirmed', exact: true })).toBeVisible();
   await expect(otherPage.getByRole('link', { name: 'Back to sign in' })).toBeVisible();
   await otherDevice.close();
+
+  // The original session must observe the fresh verification state after a
+  // refresh; confirmation itself deliberately never logs the other device in.
+  const afterConfirmation = await page.request.get('http://localhost:8000/api/v1/me', { headers: { accept: 'application/json', origin: new URL(page.url()).origin } });
+  expect(await afterConfirmation.json()).toMatchObject({ email_verified: true });
   await page.getByRole('button', { name: 'I’ve confirmed my email' }).click();
-  await expect(page).toHaveURL('/settings');
+  await expect(page).toHaveURL(destination);
   await page.waitForLoadState('networkidle');
+
+  // Re-open the protected destination in the original browser context. Its
+  // persisted session must retain the newly observed verification state.
+  await page.reload();
+  await expect(page).toHaveURL(destination);
+
+  const freshDevice = await browser.newContext();
+  const freshPage = await freshDevice.newPage();
+  await freshPage.goto(`/signin?next=${encodeURIComponent(destination)}`);
+  await signIn(freshPage, identity, destination);
+  await freshDevice.close();
+
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/signin/);
   await page.getByRole('link', { name: 'Forgot password?' }).click();

@@ -9,7 +9,10 @@
 		reverse_proxy web:3000
 	}
 
-	@api path /api/* /sanctum/* /auth/* /login /logout /register /up /storage/*
+	# Account confirmation routes are root-level Laravel routes. They must not
+	# fall through to Next: a signed /email/verify/* link and the authenticated
+	# resend POST are the only recovery path for an existing unverified account.
+	@api path /api/* /sanctum/* /auth/* /email/* /login /logout /register /up /storage/*
 	handle @api {
 		reverse_proxy api:80 {
 			# TLS always terminates upstream of this box, so the public
