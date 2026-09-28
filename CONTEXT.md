@@ -68,6 +68,11 @@ _Avoid_: plain text (ambiguous), extraction
 
 ### Access & review
 
+**Workspace Member**:
+A person who belongs to a workspace under an assigned workspace role, which
+provides their baseline authority over that workspace's resources.
+_Avoid_: Project Member, account owner, org member
+
 **Project Member**:
 A person granted access to a project and its documents, within an assigned
 role. Project membership alone grants no access to the rest of its workspace.

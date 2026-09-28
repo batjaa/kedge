@@ -2,6 +2,10 @@
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
+## Decision log (workspace authorization foundation, 2026-09-27)
+
+- ✅ **Workspace membership first:** the user requires expandable membership with useful defaults, explicit action/role interfaces, and those definitions as the resource-authorization baseline. [Foundation draft](plans/workspace-membership.md) records that direction and proposed interfaces/default roles. Built-in role matrix, default visibility, custom-role rollout and offboarding are not yet approved. Project-first sequencing is superseded; retain reviewed project mechanics and rebase its unpublished tickets after the foundation is defined. No runtime code or issues changed.
+
 ## Decision log (project access engineering review, 2026-09-27)
 
 - ✅ **Engineering review complete:** decisions 1A–21A plus user-directed deployment decision 22 are recorded in the [review](plans/project-access-eng-review.md). Long-term and engineering UX checks found no additional issues. The test map has 29 planned contract groups, all implementation gaps; no application tests ran in this planning pass. Separate design review and ticket-breakdown reconciliation remain before publishing; no tickets were created.
