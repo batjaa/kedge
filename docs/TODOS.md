@@ -4,6 +4,8 @@
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- ✅ **Workspace design D1A:** named workspace switcher beside the Kedge logo, with personal identity separate and the current workspace visible on narrow screens. Loading, list errors, pagination and access loss preserve truthful context and pending-form targets. [Design review](plans/workspace-membership-design-review.md) continues with Members/invitations organization (D2); no runtime UI changes.
+
 - ✅ **Workspace engineering review complete:** full scope 1A and decisions 2A–7A are recorded in the [review](plans/workspace-membership-eng-review.md). All 11 sections are complete; the [test map](plans/workspace-membership-test-map.md) specifies 22 code contracts and eight journeys requiring implementation proof. Existing transcript privacy, context-safe UI reads and accepted-slot reinvitation are carried through. No unresolved engineering decision or new deferral; visual review and project-ticket rebase remain. Documentation validation only; no application implementation, tickets or passing runtime tests claimed.
 
 - ✅ **Workspace engineering review 7A:** persist immutable AI call plans, fenced attempts and completed chunk results; resume only known-safe remaining work and stop on uncertain provider outcomes. Final publication reuses checkpoints without rebilling; original authority, privacy and honest cost accounting remain mandatory. This resolves the AI replay mismatch: error/rescue review is complete, security review continues. No runtime implementation or test result claimed.

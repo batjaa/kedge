@@ -404,6 +404,11 @@ regeneration. Unknown provider outcomes stop automatic execution, preserve hones
 cost evidence and require an explicit new run. Apply the same boundary to all six
 tools and transport retries; no provider exactly-once guarantee is implied.
 
+**M4.0 design decision D1A (2026-09-27):** the workspace switcher is a named
+control beside the Kedge logo, separate from personal identity and visible on mobile.
+Its states retain truthful workspace context; switching never retargets an open form.
+The [design review](plans/workspace-membership-design-review.md) is in progress.
+
 The [engineering review](plans/workspace-membership-eng-review.md) is complete across
 all 11 sections; its [test map](plans/workspace-membership-test-map.md) specifies 22
 code contracts and eight journeys to prove during implementation. Visual review

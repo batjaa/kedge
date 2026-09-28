@@ -19,7 +19,7 @@ This is a rating of written planning detail, not a visual rating of an implement
 
 | Pass | Initial | Final | Status |
 |---|---|---|---|
-| 1 — information architecture | 6/10 | — | D1 pending |
+| 1 — information architecture | 6/10 | — | D1A accepted; 7/10 interim, D2 pending |
 | 2 — interaction states | 8/10 | — | Pending |
 | 3 — journey | 7/10 | — | Pending |
 | 4 — intentional app UI | 8/10 | — | Pending |
@@ -64,38 +64,78 @@ Violet remains reserved for AI controls; membership actions are human actions.
 | Existing resource/review surfaces | Read and Operate | Workspace orientation, capability changes, retained draft/access-loss behavior |
 | Demo claim and AI interruption | Operate: finish or recover existing task | Waiting/explicit claim, safe resumption versus uncertain new-run action |
 
-## Pending D1 — workspace switcher placement
+## Accepted D1A — dedicated workspace switcher
 
-Evidence: module spec §8 calls for “a workspace switcher in the app shell” and a
-visible current workspace on creation/admin forms, without fixing placement.
-`app-shell.tsx:31–84` contains personal identity/actions but no workspace selector.
-The old `app-teams.html:25` explicitly describes an “avatar menu open, showing the
-Account → Workspace switcher”; that preview also assumes excluded account features.
-Neither source settles the new foundation's navigation choice.
+User selected D1A on 2026-09-27. Place a named workspace switcher beside the Kedge
+logo, with personal identity separate. Keep the named control visible on mobile;
+exact utility rearrangement is still reviewed in Pass 6. This updates module spec
+§8/§10 and DESIGN.md; the old avatar-menu preview is not the selected navigation.
 
-**D1A (recommended):** dedicated named workspace switcher beside the Kedge logo;
-personal identity stays distinct. It makes the current work context visible and
-switching discoverable. Small effort to specify now; mobile header space needs an
-intentional responsive arrangement in Pass 6.
+Evidence: module spec §8 previously said only “a workspace switcher in the app shell.”
+`app-shell.tsx:31–84` contains personal identity/actions but no workspace selector;
+`app-teams.html:25` described an avatar/account switcher for a different post-v1 scope.
 
 ```text
 kedge | Platform workspace v | Documents ... | personal identity
-        [current workspace]
-        [other joined workspaces]
-        [personal workspace]
+        Platform workspace  [selected]  Member
+        Other workspace                 Viewer
+        Personal workspace  [Personal]  Owner
 ```
 
-**D1B:** workspace switching inside the avatar/account menu, with the current
-workspace still named persistently in the app chrome. One consolidated menu uses
-less navigation space, but users must learn that a personal identity control also
-changes workspace context. Small effort to specify now.
+Carry the accepted choice through long names, matching names, paginated lists,
+loading/error states, keyboard focus and access loss. The current page/context
+remains truthful while the list loads or fails. None of these states adds an
+account group, workspace-creation action or automatic form retargeting.
 
-Both preserve explicit target URLs, personal identity, role capabilities and the
-rule that switching cannot retarget an open form. Do not introduce account grouping,
-workspace creation or a new global sidebar through this choice. Deferring placement
-risks divergent controls across dashboard, settings and review pages. D1A follows
-hierarchy-as-service: workspace identity should be visible where workspace actions
-are performed. No option is recorded as accepted yet.
+**Pass 1 interim rating: 6/10 → 7/10.** Workspace orientation is settled. Members/
+invitations organization is still undecided; no completed-pass rating claimed.
+
+## Pending D2 — Members screen organization
+
+The spec §10 requires separate paginated members and invitation lists, but does
+not define whether both occupy the same view. That matters because all members
+can inspect the directory, while only Owner/Admin may inspect invitations.
+Current `web/app/(app)/settings/page.tsx` stacks General, Integrations and Agent
+Tokens; appending two long member lists to that stack would bury the task.
+The existing post-v1 teams preview mixes Members/Teams and does not settle this.
+
+Both options give Members a dedicated destination within workspace settings,
+reuse the existing settings styling and keep invitation controls/counts restricted
+to authorized roles. This does not change any role powers or introduce Teams.
+
+**D2A (recommended):** one Members page with “Members” and “Invitations” tabs;
+Members is the default, and Owner/Admin get the Invitations tab with a pending
+count and a persistent “Invite member” action. Member/Viewer see the directory
+without a disabled/locked invitation tab. Separate URL-addressable list state keeps
+filters and pagination from interfering. Moderate specification effort now; avoids
+long mixed lists and keeps each view focused on one task.
+
+**D2B:** one Members page with Members and Invitations as two stacked sections,
+each with its own filters/pagination; unauthorized users see only the directory.
+Slightly simpler structure, with an at-a-glance admin overview, but invitation
+management moves below the member list as the workspace grows.
+
+```text
+D2A — proposed                    D2B — alternative
+Workspace / Settings / Members    Workspace / Settings / Members
+Members          [Invite member] Members          [Invite member]
+[Members] [Invitations (3)]       Member filters + rows + pagination
+Filters + one list + pagination   Invitations: filters + rows + pagination
+```
+
+Recommendation follows hierarchy-as-service and one job per section. Deferring
+this choice risks implementing either two competing paginators or a hidden invitation
+workflow accidentally. Neither option is recorded as accepted yet.
+
+## Implementation tasks so far
+
+- [ ] **D-T1 (P1)** — App shell — add the dedicated named workspace switcher.
+  - Surfaced by: D1A; workspace context must be distinct from personal identity.
+  - Files: `web/components/app/app-shell.tsx`, workspace discovery client and shared
+    context/navigation consumers; responsive shell utilities after Pass 6.
+  - Verify: existing workspace-context journey F04 plus keyboard open/select/Escape,
+    single/long/duplicate-name lists, failed pagination and access loss; no draft
+    retargeting or late-response cross-workspace rendering.
 
 ## NOT in scope
 
@@ -108,5 +148,5 @@ are performed. No option is recorded as accepted yet.
 
 ## Unresolved decisions
 
-- D1: dedicated workspace switcher versus avatar-menu switching.
+- D2: tabs versus stacked lists on the Members page.
 - Remaining passes are not yet reviewed; no completion or visual approval claimed.

@@ -69,7 +69,9 @@ a separate user vote. The [review log](plans/workspace-membership-eng-review.md)
 claiming, plus 6A RFC 9457 errors and uncertain-write recovery. Architecture review
 and all remaining engineering review sections are complete, including 7A durable AI
 progress and safe resumption. The [test map](plans/workspace-membership-test-map.md)
-records 30 required contract groups. Visual review and ticket preparation/rebase remain. The prior project
+records 30 required contract groups. The [design review](plans/workspace-membership-design-review.md)
+is in progress: D1A selects a named switcher beside the logo; Members-page layout
+is next. Ticket preparation/rebase remains. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.
 
