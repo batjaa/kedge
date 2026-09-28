@@ -400,6 +400,13 @@ Lost or malformed write responses remain outcome-unknown until reconciled; no
 automatic replay or false success. Preserve native MCP and background error contracts,
 safe redaction and the existing bounded, cost-aware job retry behavior.
 
+**M4.0 engineering decision 7A (2026-09-27):** AI runs persist immutable call plans,
+fenced attempts and completed results. Resume only known-safe remaining calls under
+the original live authority; reuse paid results and retry publication without
+regeneration. Unknown provider outcomes stop automatic execution, preserve honest
+cost evidence and require an explicit new run. Apply the same boundary to all six
+tools and transport retries; no provider exactly-once guarantee is implied.
+
 This supersedes the project-first order. Reuse the previously reviewed invitation,
 transaction, private-asset, background-work and testing mechanics; rebase the prior
 project spec and unpublished ticket draft before execution. Use ordinary deployment

@@ -64,8 +64,8 @@ separately approved. The [review log](plans/workspace-membership-eng-review.md) 
 1A full scope, 2A membership lifecycle model, 3A explicit workspace routes and
 4A separate share-review routes without legacy compatibility, and 5A settled demo
 claiming, plus 6A RFC 9457 errors and uncertain-write recovery. Architecture review
-is complete; error/rescue decision 7 remains open for AI recovery after partial
-success or worker loss. Security inspection has started; its review is not complete.
+and error/rescue reviews are complete, including 7A durable AI progress and safe
+resumption after interruption. Security review is in progress.
 Complete the remaining review before ticketing. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.

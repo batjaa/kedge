@@ -4,7 +4,9 @@
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
-- ✅ **Workspace engineering review 6A:** use RFC 9457 Problem Details for affected HTTP flows, with shared decoding and explicit recovery. Lost/malformed write responses require reconciliation without automatic replay; preserve native MCP errors and cost-aware job classifications. Error/rescue review maps 22 failure paths; further inspection found a mismatch between AI whole-job retries and the no-paid-replay requirement, leaving decision 7 pending in the review log. Documentation validation only, not implemented or tested application behavior.
+- ✅ **Workspace engineering review 7A:** persist immutable AI call plans, fenced attempts and completed chunk results; resume only known-safe remaining work and stop on uncertain provider outcomes. Final publication reuses checkpoints without rebilling; original authority, privacy and honest cost accounting remain mandatory. This resolves the AI replay mismatch: error/rescue review is complete, security review continues. No runtime implementation or test result claimed.
+
+- ✅ **Workspace engineering review 6A:** use RFC 9457 Problem Details for affected HTTP flows, with shared decoding and explicit recovery. Lost/malformed write responses require reconciliation without automatic replay; preserve native MCP errors and cost-aware job classifications. Error/rescue review maps 22 failure paths; further inspection found a mismatch between AI whole-job retries and the no-paid-replay requirement, subsequently resolved by 7A in the review log. Documentation validation only, not implemented or tested application behavior.
 
 - ✅ **Workspace engineering review 5A:** demo claiming waits for a settled ready/failed import. Use narrowly scoped anonymous operation authority; reject active claims with 409 and never transfer demo-job authority into a user workspace. Failed demos can be claimed then explicitly retried. Guard late callbacks and prune/claim races, with critical demo regression coverage. Architecture review is complete (2A–5A); error/rescue review is next. No application tests or implementation claimed.
 
