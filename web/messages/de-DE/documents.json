@@ -17,6 +17,7 @@
   },
   "sync": {
     "importing": "Import läuft…",
+    "updating": "Aktualisierung läuft…",
     "importFailed": "Import fehlgeschlagen",
     "syncFailed": "Sync fehlgeschlagen",
     "ready": "bereit",

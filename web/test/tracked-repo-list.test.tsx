@@ -47,12 +47,12 @@ describe('TrackedRepoRow', () => {
       ])),
     );
 
-    expect(html).toContain('2 queued');
-    expect(html).toContain('1 unchanged');
+    expect(html).toContain('Last scan:');
+    expect(html).toContain('2 new files · 0 changed · 1 unchanged');
     expect(html).toContain('3 files scanned');
     // Per-file outcomes with badges.
     expect(html).toContain('docs/spec.md');
-    expect(html).toContain('Queued');
+    expect(html).toContain('New file');
     expect(html).toContain('Unchanged');
   });
 
@@ -66,11 +66,11 @@ describe('TrackedRepoRow', () => {
       ])),
     );
 
-    expect(html).toContain('1 re-synced');
+    expect(html).toContain('1 new file · 1 changed · 1 unchanged');
     expect(html).toContain('1 missing');
     // Matched excludes the missing path (3 scanned), and the summary flags it.
     expect(html).toContain('3 files scanned');
-    expect(html).toContain('Re-synced');
+    expect(html).toContain('Changed');
     expect(html).toContain('Missing');
   });
 
@@ -86,6 +86,37 @@ describe('TrackedRepoRow', () => {
     expect(html).toContain('2 files unchanged');
     // No queued/failed noise in the honest no-op.
     expect(html).not.toContain('0 queued');
+  });
+
+  it('renders authoritative document completion, not the historic dispatch label', () => {
+    const tracked = repo('ok', report([
+      { path: 'docs/new.md', outcome: 'import_queued', document_id: 1, reason: null },
+      { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, reason: null },
+    ]));
+    tracked.document_states = [
+      { id: 1, status: 'ready', last_sync_status: 'ok', sync_error: null, sync_started_at: null },
+      { id: 2, status: 'ready', last_sync_status: 'ok', sync_error: null, sync_started_at: null },
+    ];
+
+    const html = render(tracked);
+    expect(html).toContain('All documents ready');
+    expect(html).toContain('Ready');
+    expect(html).not.toContain('Queued');
+  });
+
+  it('keeps a readable document honest while its requested update is processing or fails', () => {
+    const tracked = repo('ok', report([
+      { path: 'docs/changed.md', outcome: 'resync_queued', document_id: 2, reason: null },
+    ]));
+    tracked.document_states = [
+      { id: 2, status: 'ready', last_sync_status: 'processing', sync_error: null, sync_started_at: '2026-07-21T00:00:00+00:00' },
+    ];
+    expect(render(tracked)).toContain('Updating');
+
+    tracked.document_states[0] = { ...tracked.document_states[0], last_sync_status: 'failed', sync_error: 'Showing last good version.' };
+    const html = render(tracked);
+    expect(html).toContain('Update failed');
+    expect(html).toContain('Showing last good version.');
   });
 
   it('signals a zero-match ok scan distinctly, not "already up to date" (B3)', () => {

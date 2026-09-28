@@ -10,6 +10,7 @@ use App\Jobs\ImportDocumentJob;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Services\AuditLogger;
+use App\Services\Documents\DocumentProcessing;
 use App\Services\Import\Exceptions\UnsupportedSourceException;
 use App\Services\Import\Normalization\Normalizer;
 use Illuminate\Support\Facades\Log;
@@ -36,10 +37,14 @@ class DocumentImporter
         private readonly TextProjector $projector,
         private readonly AuditLogger $audit,
         private readonly Normalizer $normalizer,
+        private readonly DocumentProcessing $processing,
     ) {}
 
-    public function import(Document $document): void
+    public function import(Document $document, ?int $generation = null): void
     {
+        if (! $this->processing->isCurrent($document, $generation)) {
+            return;
+        }
         $startedAt = microtime(true);
 
         Log::info('import.started', [
@@ -56,21 +61,32 @@ class DocumentImporter
             $prepared->versionAttributes(),
         );
 
-        $document->forceFill([
+        $update = Document::query()->whereKey($document->id);
+        if ($generation !== null) {
+            $update->where('sync_generation', $generation);
+        }
+
+        $settledNow = $document->status === DocumentStatus::Importing
+            || (int) $document->current_version_id !== (int) $version->id;
+
+        if ($update->update([
             'title' => $prepared->title,
             'format' => $prepared->format(),
             'current_version_id' => $version->id,
             'status' => DocumentStatus::Ready,
             'last_sync_status' => SyncStatus::Ok,
             'sync_error' => null,
-        ])->save();
+            'sync_started_at' => null,
+        ]) !== 1) {
+            return;
+        }
+
+        $document->refresh();
 
         // Did THIS run actually settle the import, or is it a redelivery of a job
         // whose document was already Ready on this version? Only a real transition
         // earns a feed row / M5 notification — a re-run over already-imported
         // content is a no-op save (nothing changed) and stays silent.
-        $settledNow = $document->wasChanged(['status', 'current_version_id']);
-
         Log::info('import.completed', [
             'document_id' => $document->id,
             'connector' => $prepared->connector,

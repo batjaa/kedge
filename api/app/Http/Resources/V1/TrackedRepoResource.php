@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Enums\TrackedScanStatus;
+use App\Models\Document;
 use App\Models\TrackedRepo;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -55,6 +56,10 @@ class TrackedRepoResource extends JsonResource
             'scan_error' => $this->scan_error,
             'last_scanned_at' => $this->last_scanned_at,
             'last_scan_report' => $this->report(),
+            // A batched projection of the report's affected documents. This is
+            // deliberately separate from the immutable report: it is current DB
+            // state, not a revised account of what discovery observed.
+            'document_states' => $this->documentStates(),
             'created_at' => $this->created_at,
         ];
     }
@@ -88,5 +93,39 @@ class TrackedRepoResource extends JsonResource
         $report['files'] = [];
 
         return $report;
+    }
+
+    /**
+     * @return list<array{id: int, status: string, last_sync_status: string, sync_error: string|null, sync_started_at: mixed}>
+     */
+    private function documentStates(): array
+    {
+        if (! $this->detailed || $this->last_scan_report === null) {
+            return [];
+        }
+
+        $ids = collect($this->last_scan_report['files'] ?? [])
+            ->pluck('document_id')
+            ->filter(fn ($id): bool => is_int($id) || ctype_digit((string) $id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return Document::query()
+            ->whereIn('id', $ids)
+            ->get(['id', 'status', 'last_sync_status', 'sync_error', 'sync_started_at'])
+            ->map(fn (Document $document): array => [
+                'id' => $document->id,
+                'status' => $document->status->value,
+                'last_sync_status' => $document->last_sync_status->value,
+                'sync_error' => $document->sync_error,
+                'sync_started_at' => $document->sync_started_at,
+            ])
+            ->values()
+            ->all();
     }
 }

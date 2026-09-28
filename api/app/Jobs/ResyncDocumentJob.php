@@ -39,6 +39,7 @@ class ResyncDocumentJob implements ShouldBeUnique, ShouldQueue
     public function __construct(
         public readonly Document $document,
         public readonly ?int $actorId = null,
+        public readonly ?int $generation = null,
     ) {}
 
     /**
@@ -51,7 +52,9 @@ class ResyncDocumentJob implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return (string) $this->document->id;
+        return $this->generation === null
+            ? (string) $this->document->id
+            : $this->document->id.':'.$this->generation;
     }
 
     public function handle(ResyncService $resync): void
@@ -59,7 +62,7 @@ class ResyncDocumentJob implements ShouldBeUnique, ShouldQueue
         $actor = $this->actor();
 
         try {
-            $resync->resync($this->document, $actor);
+            $resync->resync($this->document, $actor, $this->generation);
         } catch (BlockedUrlException $e) {
             $this->markFailed($e->userMessage(), 'blocked', $e, $actor);
         } catch (TokenRevokedException $e) {
@@ -100,11 +103,18 @@ class ResyncDocumentJob implements ShouldBeUnique, ShouldQueue
 
     private function markFailed(string $message, string $reason, ?Throwable $e, ?User $actor): void
     {
-        $this->document->refresh();
-        $this->document->forceFill([
+        $update = Document::query()->whereKey($this->document->id);
+        if ($this->generation !== null) {
+            $update->where('sync_generation', $this->generation);
+        }
+        if ($update->update([
             'last_sync_status' => SyncStatus::Failed,
             'sync_error' => $message,
-        ])->save();
+            'sync_started_at' => null,
+        ]) !== 1) {
+            return;
+        }
+        $this->document->refresh();
 
         Log::warning('resync.failed', $this->logContext($reason, $e));
 

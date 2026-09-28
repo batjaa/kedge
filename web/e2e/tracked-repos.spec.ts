@@ -95,7 +95,7 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   // 5. The scan settles and materializes the three imported files as importing
   //    rows on the project island — without a reload — and the panel reports them.
   await expect(importing).toHaveCount(3, { timeout: 30_000 });
-  await expect(page.getByText('3 queued')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('3 new files · 0 changed · 0 unchanged')).toBeVisible({ timeout: 30_000 });
 
   // 6. Release the parked poll: each importing row settles to ready in place.
   await page.unroute(PER_ROW_POLL);
@@ -158,13 +158,12 @@ test('track a fixture repo: preview, live fill, mutate, re-scan, and up-to-date'
   await parkRowPoll(page);
   await page.getByRole('button', { name: 'Re-scan', exact: true }).click();
 
-  // 9. The re-scan imports the NEW file (materialized importing) and reports the
-  //    diff: one queued, one re-synced, two unchanged.
+  // 9. The re-scan imports the NEW file (materialized importing) and keeps the
+  //    immutable discovery facts separate from current document completion.
   const rescanImporting = projectDocuments.getByText('Importing');
   await expect(rescanImporting).toHaveCount(1, { timeout: 30_000 });
-  await expect(page.getByText('1 queued')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('1 re-synced')).toBeVisible();
-  await expect(page.getByText('2 unchanged')).toBeVisible();
+  await expect(page.getByText('1 new file · 1 changed · 2 unchanged')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('All documents ready')).toBeVisible();
 
   // 10. Release the poll: the new doc settles to ready and joins the list.
   await page.unroute(PER_ROW_POLL);

@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'workspace_id', 'project_id', 'tracked_repo_id', 'tracked_path', 'tracked_blob_sha', 'integration_id',
     'source_type', 'source_url', 'source_meta',
-    'title', 'format', 'current_version_id', 'status', 'last_sync_status',
+    'title', 'format', 'current_version_id', 'status', 'last_sync_status', 'sync_generation', 'sync_started_at',
     'sync_error', 'lifecycle_status', 'expires_at', 'created_by',
 ])]
 class Document extends Model
@@ -247,6 +247,7 @@ class Document extends Model
             'format' => DocumentFormat::class,
             'status' => DocumentStatus::class,
             'last_sync_status' => SyncStatus::class,
+            'sync_started_at' => 'datetime',
             'lifecycle_status' => LifecycleStatus::class,
             'expires_at' => 'datetime',
         ];

@@ -42,6 +42,14 @@
     "removeHint": "Баримтууд нь төсөлд үлдэнэ — зөвхөн бүртгэл хасагдана."
   },
   "report": {
+    "lastScan": "Сүүлийн scan: {date, date, short}",
+    "discovery": "{new, number} шинэ файл · {changed, number} өөрчлөгдсөн · {unchanged, number} өөрчлөлтгүй",
+    "checkingStatus": "Баримтын төлөвийг шалгаж байна…",
+    "processing": "Баримтууд боловсруулагдаж байна…",
+    "takingLonger": "Ердийнхөөс удаж байна",
+    "allReady": "Бүх баримт бэлэн",
+    "statusUnavailable": "Төлөв боломжгүй ·",
+    "refresh": "Шинэчлэх",
     "zeroMatched": "0 файл таарлаа",
     "adjustPattern": " — хэвээ засна уу.",
     "upToDate": "Аль хэдийн шинэ байна",

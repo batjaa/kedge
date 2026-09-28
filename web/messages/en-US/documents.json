@@ -17,6 +17,7 @@
   },
   "sync": {
     "importing": "Importing…",
+    "updating": "Updating…",
     "importFailed": "Import failed",
     "syncFailed": "Sync failed",
     "ready": "ready",

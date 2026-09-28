@@ -23,6 +23,7 @@ use App\Models\Workspace;
 use App\Policies\DocumentPolicy;
 use App\Services\AuditLogger;
 use App\Services\Documents\DocumentLifecycleService;
+use App\Services\Documents\DocumentProcessing;
 use App\Services\Documents\DocumentProjectAssignment;
 use App\Services\Import\ConnectorRegistry;
 use App\Services\Import\Connectors\UploadConnector;
@@ -207,7 +208,7 @@ class DocumentController extends Controller
             $request->ip(),
         );
 
-        ImportDocumentJob::dispatch($document);
+        ImportDocumentJob::dispatch($document, (int) $document->sync_generation);
 
         // Load the project so a project-page import's 202 carries the chip.
         return DocumentResource::make($document->load('project'))
@@ -258,6 +259,9 @@ class DocumentController extends Controller
             'title' => $titles->filenameFrom($url),
             'format' => DocumentFormat::Md,
             'status' => DocumentStatus::Importing,
+            'last_sync_status' => SyncStatus::Processing,
+            'sync_generation' => 1,
+            'sync_started_at' => now(),
         ]);
     }
 
@@ -287,6 +291,9 @@ class DocumentController extends Controller
             'title' => $title !== '' ? $title : 'Untitled document',
             'format' => DocumentFormat::Md,
             'status' => DocumentStatus::Importing,
+            'last_sync_status' => SyncStatus::Processing,
+            'sync_generation' => 1,
+            'sync_started_at' => now(),
         ]);
     }
 
@@ -362,7 +369,7 @@ class DocumentController extends Controller
     /**
      * POST /api/v1/documents/{document}/retry — re-run a failed import (SPEC 19).
      */
-    public function retry(Request $request, Document $document): JsonResponse
+    public function retry(Request $request, Document $document, DocumentProcessing $processing): JsonResponse
     {
         $this->authorize('update', $document);
 
@@ -385,12 +392,8 @@ class DocumentController extends Controller
             }
         }
 
-        $document->forceFill([
-            'status' => DocumentStatus::Importing,
-            'last_sync_status' => SyncStatus::Ok,
-            'sync_error' => null,
-            ...$rebind,
-        ])->save();
+        $document->forceFill($rebind)->save();
+        $generation = $processing->startImport($document);
 
         $this->audit->record(
             $document->workspace,
@@ -400,7 +403,7 @@ class DocumentController extends Controller
             ip: $request->ip(),
         );
 
-        ImportDocumentJob::dispatch($document);
+        ImportDocumentJob::dispatch($document, $generation);
 
         return DocumentResource::make($document)
             ->response()
@@ -410,7 +413,7 @@ class DocumentController extends Controller
     /**
      * POST /api/v1/documents/{document}/resync — manually pull the source again.
      */
-    public function resync(Request $request, Document $document): JsonResponse
+    public function resync(Request $request, Document $document, DocumentProcessing $processing): JsonResponse
     {
         $this->authorize('resync', $document);
 
@@ -420,7 +423,8 @@ class DocumentController extends Controller
             'Only a ready document can be re-synced.',
         );
 
-        ResyncDocumentJob::dispatch($document, $request->user()?->id);
+        $generation = $processing->startResync($document);
+        ResyncDocumentJob::dispatch($document, $request->user()?->id, $generation);
 
         return DocumentResource::make($document)
             ->response()
@@ -451,7 +455,7 @@ class DocumentController extends Controller
      * it is the ONLY versioning path an upload has, so gating it there would
      * strand pasted documents.
      */
-    public function updateContent(UpdateDocumentContentRequest $request, Document $document): JsonResponse
+    public function updateContent(UpdateDocumentContentRequest $request, Document $document, DocumentProcessing $processing): JsonResponse
     {
         $this->authorize('updateContent', $document);
 
@@ -477,11 +481,10 @@ class DocumentController extends Controller
                 (string) $request->validated('content'),
                 (string) ($document->source_meta['title'] ?? ''),
             ),
-            'last_sync_status' => SyncStatus::Ok,
-            'sync_error' => null,
         ])->save();
 
-        ResyncDocumentJob::dispatch($document, $request->user()?->id);
+        $generation = $processing->startResync($document);
+        ResyncDocumentJob::dispatch($document, $request->user()?->id, $generation);
 
         return DocumentResource::make($document)
             ->response()

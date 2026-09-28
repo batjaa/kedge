@@ -15,6 +15,13 @@
     "pasted": "буулгасан"
   },
   "scan": {
+    "new_file": "Шинэ файл",
+    "changed": "Өөрчлөгдсөн",
+    "importing": "Импортлож байна…",
+    "updating": "Шинэчилж байна…",
+    "ready": "Бэлэн",
+    "import_failed": "Импорт амжилтгүй",
+    "update_failed": "Шинэчлэлт амжилтгүй",
     "import_queued": "Дараалалд",
     "resync_queued": "Шинэчилсэн",
     "missing": "Алга",

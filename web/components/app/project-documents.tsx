@@ -134,6 +134,7 @@ export function ProjectDocuments({
           projects={projects}
           injection={injections[String(repo.id)]}
           directoryDividers
+          processingStates={repo.document_states ?? []}
         />
       ))}
 

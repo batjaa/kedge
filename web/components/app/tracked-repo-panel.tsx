@@ -129,6 +129,13 @@ export function TrackedRepoPanel({
     [setRepos],
   );
 
+  const handleProcessingUpdated = useCallback(
+    (repo: TrackedRepo) => {
+      setRepos((prev) => prev.map((existing) => (existing.id === repo.id ? repo : existing)));
+    },
+    [setRepos],
+  );
+
   const handleRemoved = useCallback(
     (id: number) => {
       setRepos((prev) => prev.filter((existing) => existing.id !== id));
@@ -223,6 +230,7 @@ export function TrackedRepoPanel({
         onScanned={handleScanned}
         onRescanned={handleRescanned}
         onRemoved={handleRemoved}
+        onProcessingUpdated={handleProcessingUpdated}
       />
     </div>
   );

@@ -42,6 +42,14 @@
     "removeHint": "Sus documentos permanecen en el proyecto — solo se elimina el rastreo."
   },
   "report": {
+    "lastScan": "Último escaneo: {date, date, short}",
+    "discovery": "{new, plural, one {# archivo nuevo} other {# archivos nuevos}} · {changed, number} cambiados · {unchanged, number} sin cambios",
+    "checkingStatus": "Comprobando el estado de los documentos…",
+    "processing": "Los documentos se están procesando…",
+    "takingLonger": "Está tardando más de lo habitual",
+    "allReady": "Todos los documentos están listos",
+    "statusUnavailable": "Estado no disponible ·",
+    "refresh": "Actualizar",
     "zeroMatched": "0 archivos coincidieron",
     "adjustPattern": " — ajusta el patrón.",
     "upToDate": "Ya está al día",

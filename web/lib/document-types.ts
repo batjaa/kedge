@@ -3,7 +3,7 @@
 // Keep in sync with api/app/Http/Resources/V1/{Document,DocumentVersion}Resource.php.
 
 export type DocumentStatus = 'importing' | 'ready' | 'failed';
-export type SyncStatus = 'ok' | 'failed';
+export type SyncStatus = 'processing' | 'ok' | 'failed';
 export type LifecycleStatus = 'draft' | 'in_review' | 'approved' | 'superseded';
 export type DocumentFormat = 'md' | 'mdx' | 'html';
 

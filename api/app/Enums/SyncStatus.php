@@ -12,6 +12,8 @@ namespace App\Enums;
  */
 enum SyncStatus: string
 {
+    /** A requested import/re-sync is not yet terminal. */
+    case Processing = 'processing';
     case Ok = 'ok';
     case Failed = 'failed';
 }

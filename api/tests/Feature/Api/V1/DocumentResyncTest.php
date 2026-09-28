@@ -43,7 +43,8 @@ class DocumentResyncTest extends TestCase
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/resync")
             ->assertStatus(202)
-            ->assertJsonPath('status', 'ready');
+            ->assertJsonPath('status', 'ready')
+            ->assertJsonPath('last_sync_status', 'processing');
 
         Queue::assertPushed(
             ResyncDocumentJob::class,

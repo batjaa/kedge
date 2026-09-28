@@ -3,7 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useRef } from 'react';
 import { DocumentList } from './document-list';
 import { hasMorePages } from '@/lib/document-list-live';
-import { mergeReportedRows } from '@/lib/tracked-repo-scan';
+import { mergeDocumentStates, mergeReportedRows, type TrackedDocumentState } from '@/lib/tracked-repo-scan';
 import { useLiveDocumentList } from '@/lib/use-live-document-list';
 import type {
   Document,
@@ -45,6 +45,7 @@ export function DocumentSection({
   projects,
   injection,
   directoryDividers = false,
+  processingStates = [],
   className = 'mt-8',
 }: {
   /** This page's project — reassigning a row out of it drops the row (M3.6). */
@@ -63,6 +64,8 @@ export function DocumentSection({
   injection?: SectionInjection;
   /** Interleave directory dividers (#119) — a repo section, never Other. */
   directoryDividers?: boolean;
+  /** One repo's batched current-state projection; list metadata stays untouched. */
+  processingStates?: TrackedDocumentState[];
   className?: string;
 }) {
   const {
@@ -118,6 +121,14 @@ export function DocumentSection({
     });
     setMeta((prev) => (prev && added > 0 ? { ...prev, total: prev.total + added } : prev));
   }, [injection, setItems, setMeta]);
+
+  // The tracked-repo report has no authority over document work. Its separate,
+  // batched current-state projection updates rows in place, including a readable
+  // prior version during re-sync, without an N-per-document read.
+  useEffect(() => {
+    if (processingStates.length === 0) return;
+    setItems((prev) => mergeDocumentStates(prev, processingStates));
+  }, [processingStates, setItems]);
 
   // Reassigning a row OUT of this project removes it from the page; staying (a
   // no-op, or a move between sections of the same project — impossible, provenance

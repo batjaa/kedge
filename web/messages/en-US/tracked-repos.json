@@ -42,6 +42,14 @@
     "removeHint": "Its documents stay in the project — only tracking is removed."
   },
   "report": {
+    "lastScan": "Last scan: {date, date, short}",
+    "discovery": "{new, plural, one {# new file} other {# new files}} · {changed, plural, one {# changed} other {# changed}} · {unchanged, plural, one {# unchanged} other {# unchanged}}",
+    "checkingStatus": "Checking document status…",
+    "processing": "Documents are processing…",
+    "takingLonger": "Taking longer than usual",
+    "allReady": "All documents ready",
+    "statusUnavailable": "Status unavailable ·",
+    "refresh": "Refresh",
     "zeroMatched": "0 files matched",
     "adjustPattern": " — adjust the pattern.",
     "upToDate": "Already up to date",

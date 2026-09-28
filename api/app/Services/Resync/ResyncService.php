@@ -12,6 +12,7 @@ use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\Documents\DocumentProcessing;
 use App\Services\Import\DocumentImporter;
 use App\Services\Reanchor\Exceptions\ReanchorUnavailableException;
 use App\Services\Reanchor\ReanchorClient;
@@ -30,11 +31,15 @@ class ResyncService
         private readonly DocumentImporter $importer,
         private readonly ReanchorClient $reanchor,
         private readonly AuditLogger $audit,
+        private readonly DocumentProcessing $processing,
     ) {}
 
-    public function resync(Document $document, ?User $actor): void
+    public function resync(Document $document, ?User $actor, ?int $generation = null): void
     {
         $document->refresh();
+        if (! $this->processing->isCurrent($document, $generation)) {
+            return;
+        }
         $current = $this->currentVersion($document);
         $startedAt = microtime(true);
 
@@ -49,10 +54,18 @@ class ResyncService
         $prepared = $this->importer->prepareVersion($document);
 
         if ($prepared->contentHash === $current->content_hash) {
-            $document->forceFill([
+            $update = Document::query()->whereKey($document->id);
+            if ($generation !== null) {
+                $update->where('sync_generation', $generation);
+            }
+            if ($update->update([
                 'last_sync_status' => SyncStatus::Ok,
                 'sync_error' => null,
-            ])->save();
+                'sync_started_at' => null,
+            ]) !== 1) {
+                return;
+            }
+            $document->refresh();
 
             $this->logCompleted($document, $prepared->connector, $startedAt, deduped: true);
             $this->audit->recordSafely($document->workspace, $actor, AuditEvent::ResyncCompleted, $document, [
@@ -86,14 +99,18 @@ class ResyncService
         /** @var Collection<int, Approval> $goneStaleApprovals */
         $goneStaleApprovals = collect();
 
-        DB::transaction(function () use ($document, $current, $target, $prepared, $results, $anchorsByThread, &$counts, &$threadsByState, &$goneStaleApprovals): void {
+        $committed = DB::transaction(function () use ($document, $current, $target, $prepared, $results, $anchorsByThread, $generation, &$counts, &$threadsByState, &$goneStaleApprovals): bool {
             // Lock the document row so a concurrent approval (which also locks it,
             // {@see ApprovalService::approveCurrent}) can't slip in between reading
             // the stranded set and committing the flip. "Stale approval" is a
             // derived state (Approval::staleFor) with no discrete domain action, so
             // the spec-consistent write point is this flip — the moment
             // current_version_id leaves the version they approved (M3.8 #108).
-            Document::query()->whereKey($document->id)->lockForUpdate()->first();
+            $locked = Document::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
+            if (($generation !== null && (int) $locked->sync_generation !== $generation)
+                || (int) $locked->current_version_id !== (int) $current->id) {
+                return false;
+            }
 
             // Active approvals still pinned to the outgoing version, captured (and
             // row-locked) inside the transaction so the set is consistent with the
@@ -141,6 +158,7 @@ class ResyncService
                 'status' => DocumentStatus::Ready,
                 'last_sync_status' => SyncStatus::Ok,
                 'sync_error' => null,
+                'sync_started_at' => null,
             ])->save();
 
             Log::info('reanchor.completed', [
@@ -149,7 +167,13 @@ class ResyncService
                 'to_version_id' => $target->id,
                 ...$counts,
             ]);
+
+            return true;
         });
+
+        if (! $committed) {
+            return;
+        }
 
         // The flip has committed. Every audit write below is a post-commit side
         // effect through the never-throwing seam (recordSafely): a dead audit sink

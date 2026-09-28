@@ -50,6 +50,7 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly Document $document,
+        public readonly ?int $generation = null,
     ) {}
 
     /**
@@ -67,13 +68,15 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
      */
     public function uniqueId(): string
     {
-        return (string) $this->document->id;
+        return $this->generation === null
+            ? (string) $this->document->id
+            : $this->document->id.':'.$this->generation;
     }
 
     public function handle(DocumentImporter $importer): void
     {
         try {
-            $importer->import($this->document);
+            $importer->import($this->document, $this->generation);
         } catch (BlockedUrlException $e) {
             // Deterministic: a private/reserved address won't resolve to a public
             // one on the next attempt. Terminal now, no retry, no rethrow.
@@ -105,16 +108,26 @@ class ImportDocumentJob implements ShouldBeUnique, ShouldQueue
 
     private function markFailed(string $message): void
     {
-        $this->document->forceFill([
+        $wasImporting = $this->document->status === DocumentStatus::Importing;
+        $update = Document::query()->whereKey($this->document->id);
+        if ($this->generation !== null) {
+            $update->where('sync_generation', $this->generation);
+        }
+
+        if ($update->update([
             'status' => DocumentStatus::Failed,
             'last_sync_status' => SyncStatus::Failed,
             'sync_error' => $message,
-        ])->save();
+            'sync_started_at' => null,
+        ]) !== 1) {
+            return;
+        }
+        $this->document->refresh();
 
         // Only a genuine transition into failure earns a feed row / M5
         // notification: a redelivery of a job whose document is already Failed
         // leaves the status unchanged and stays silent (no duplicate settle event).
-        if (! $this->document->wasChanged('status')) {
+        if (! $wasImporting) {
             return;
         }
 

@@ -8,7 +8,7 @@
 // materializes — which is how the scan closes the M3.5 out-of-band-liveness TODO
 // (story 22). Both are pure so they test without a browser.
 
-import type { DocumentListItem, ProjectRef } from './document-types';
+import type { DocumentListItem, DocumentStatus, ProjectRef, SyncStatus } from './document-types';
 
 export type TrackedScanStatus = 'pending' | 'running' | 'ok' | 'failed';
 
@@ -55,6 +55,15 @@ export interface ScanReport {
   duration_ms: number;
 }
 
+/** Current, authoritative state for a document affected by the last scan. */
+export interface TrackedDocumentState {
+  id: number;
+  status: DocumentStatus;
+  last_sync_status: SyncStatus;
+  sync_error: string | null;
+  sync_started_at: string | null;
+}
+
 /** A tracked repo as the panel reads it. Mirrors TrackedRepoResource::toArray. */
 export interface TrackedRepo {
   id: number;
@@ -66,7 +75,43 @@ export interface TrackedRepo {
   scan_error: string | null;
   last_scanned_at: string | null;
   last_scan_report: ScanReport | null;
+  /** Batched on a detailed repo read; never part of ScanReport history. */
+  document_states?: TrackedDocumentState[];
   created_at: string | null;
+}
+
+/** A scan asked this file to process and its current document operation remains open. */
+export function isDocumentProcessing(state: TrackedDocumentState | undefined): boolean {
+  return state?.status === 'importing' || state?.last_sync_status === 'processing';
+}
+
+/** True while a detailed report still needs one bounded current-state refresh. */
+export function needsProcessingRefresh(repo: TrackedRepo): boolean {
+  const report = repo.last_scan_report;
+  if (!report || report.status !== 'ok') return false;
+  // Collection reads deliberately omit report.files. A later page visit must
+  // still perform one detailed read rather than mistaking that slim payload for
+  // a no-op scan.
+  if (report.files.length === 0 && report.counts.import_queued + report.counts.resync_queued > 0) return true;
+  const affected = report.files.filter((file) => file.outcome === 'import_queued' || file.outcome === 'resync_queued');
+  if (affected.length === 0) return false;
+  const documentStates = repo.document_states ?? [];
+  if (documentStates.length === 0) return true;
+  const states = new Map(documentStates.map((state) => [state.id, state]));
+  return affected.some((file) => file.document_id !== null && isDocumentProcessing(states.get(file.document_id)));
+}
+
+/** Merge the current projection into a loaded list row without clobbering row-only data. */
+export function mergeDocumentStates(
+  items: DocumentListItem[],
+  states: TrackedDocumentState[],
+): DocumentListItem[] {
+  if (states.length === 0) return items;
+  const byId = new Map(states.map((state) => [state.id, state]));
+  return items.map((item) => {
+    const state = byId.get(item.id);
+    return state ? { ...item, ...state } : item;
+  });
 }
 
 /**
@@ -151,7 +196,7 @@ export function reportImportingRows(
       id: file.document_id,
       title: rowTitle(file.path),
       status: 'importing',
-      last_sync_status: 'ok',
+      last_sync_status: 'processing',
       sync_error: null,
       lifecycle_status: 'draft',
       open_threads_count: 0,

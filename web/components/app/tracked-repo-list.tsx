@@ -1,21 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { deleteTrackedRepo, readTrackedRepo, rescanTrackedRepo } from '@/lib/tracked-repos-client';
 import { runDelete, runRescan } from '@/lib/tracked-repo-actions';
 import {
   isScanInFlight,
+  isDocumentProcessing,
   isUpToDate,
   isZeroMatch,
+  needsProcessingRefresh,
   scanSettled,
   type ScanOutcome,
+  type TrackedDocumentState,
   type ScanReport,
   type TrackedRepo,
 } from '@/lib/tracked-repo-scan';
 import { importNeedsReconnect } from '@/lib/import-retry';
-import { usePollUntilSettled } from '@/lib/use-poll-until-settled';
+import { POLL_INTERVAL_MS, usePollUntilSettled } from '@/lib/use-poll-until-settled';
 import { repoShortName } from '@/lib/project-sections';
 import { PILL_BASE, ROSE_PANEL } from '@/lib/tracked-repo-styles';
 
@@ -50,11 +53,13 @@ export function TrackedRepoList({
   onScanned,
   onRescanned,
   onRemoved,
+  onProcessingUpdated = () => {},
 }: {
   repos: TrackedRepo[];
   onScanned: (repo: TrackedRepo) => void;
   onRescanned: (repo: TrackedRepo) => void;
   onRemoved: (id: number) => void;
+  onProcessingUpdated?: (repo: TrackedRepo) => void;
 }) {
   if (repos.length === 0) return null;
 
@@ -67,6 +72,7 @@ export function TrackedRepoList({
           onScanned={onScanned}
           onRescanned={onRescanned}
           onRemoved={onRemoved}
+          onProcessingUpdated={onProcessingUpdated}
         />
       ))}
     </ul>
@@ -78,11 +84,13 @@ export function TrackedRepoRow({
   onScanned,
   onRescanned,
   onRemoved,
+  onProcessingUpdated = () => {},
 }: {
   repo: TrackedRepo;
   onScanned: (repo: TrackedRepo) => void;
   onRescanned: (repo: TrackedRepo) => void;
   onRemoved: (id: number) => void;
+  onProcessingUpdated?: (repo: TrackedRepo) => void;
 }) {
   const t = useTranslations('tracked-repos');
   const inFlight = isScanInFlight(repo.last_scan_status);
@@ -112,7 +120,7 @@ export function TrackedRepoRow({
           {repo.scan_error ?? t('row.scanFailedFallback')}
         </p>
       ) : report ? (
-        <ScanReportSummary report={report} />
+        <ScanReportSummary repo={repo} report={report} />
       ) : (
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('row.notScanned')}</p>
       )}
@@ -120,7 +128,10 @@ export function TrackedRepoRow({
       {inFlight ? (
         <ScanPoller id={repo.id} onScanned={onScanned} />
       ) : (
-        <RowActions repo={repo} onRescanned={onRescanned} onRemoved={onRemoved} />
+        <>
+          <ProcessingPoller repo={repo} onUpdated={onProcessingUpdated} />
+          <RowActions repo={repo} onRescanned={onRescanned} onRemoved={onRemoved} />
+        </>
       )}
     </li>
   );
@@ -229,12 +240,26 @@ function RowActions({
   );
 }
 
-function ScanReportSummary({ report }: { report: ScanReport }) {
+function ScanReportSummary({ repo, report }: { repo: TrackedRepo; report: ScanReport }) {
   const t = useTranslations('tracked-repos');
   const { import_queued, resync_queued, unchanged, missing, failed } = report.counts;
+  const states = new Map((repo.document_states ?? []).map((state) => [state.id, state]));
+  const affectedCount = report.files.filter((file) => file.outcome === 'import_queued' || file.outcome === 'resync_queued').length;
+  const checking = needsProcessingRefresh(repo) && repo.document_states === undefined;
+  const processing = [...states.values()].filter((state) => isDocumentProcessing(state));
+  const takingLonger = processing.some((state) => state.sync_started_at !== null && Date.now() - Date.parse(state.sync_started_at) > 30_000);
+  const allReady = !checking && affectedCount > 0 && states.size === affectedCount
+    && !needsProcessingRefresh(repo)
+    && [...states.values()].every((state) => state.status !== 'failed' && state.last_sync_status !== 'failed');
 
   return (
     <div className="mt-2">
+      <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+        {t('report.lastScan', { date: new Date(report.finished_at) })}
+        {' · '}
+        {t('report.discovery', { new: import_queued, changed: resync_queued, unchanged })}
+      </p>
+
       {isZeroMatch(report) ? (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           <span className="font-medium text-amber-700 dark:text-amber-400">
@@ -257,16 +282,11 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
         </p>
       ) : (
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          <span className="font-medium text-emerald-700 dark:text-emerald-400">
-            {t('report.queued', { count: import_queued })}
-          </span>
-          {resync_queued > 0 ? (
-            <span className="text-emerald-700 dark:text-emerald-400">
-              {t('report.resynced', { count: resync_queued })}
-            </span>
+          {checking ? t('report.checkingStatus') : processing.length > 0 ? (
+            <span className="font-medium text-amber-700 dark:text-amber-400">{takingLonger ? t('report.takingLonger') : t('report.processing')}</span>
+          ) : allReady ? (
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">{t('report.allReady')}</span>
           ) : null}
-          {' · '}
-          {t('report.unchanged', { count: unchanged })}
           {missing > 0 ? (
             <span className="text-amber-700 dark:text-amber-400">
               {t('report.missing', { count: missing })}
@@ -298,7 +318,7 @@ function ScanReportSummary({ report }: { report: ScanReport }) {
                 <code className="min-w-0 truncate font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {file.path}
                 </code>
-                <OutcomeBadge outcome={file.outcome} reason={file.reason} />
+                <OutcomeBadge outcome={file.outcome} reason={file.reason} state={file.document_id === null ? undefined : states.get(file.document_id)} />
               </li>
             ))}
           </ul>
@@ -313,21 +333,27 @@ const BADGE_BASE = PILL_BASE;
 // One per-file outcome pill — the 13A chip glossary's scan labels, keyed by the
 // wire outcome so an unknown value falls back to the "unchanged" neutral rather
 // than crashing the report (the hard rendering rule).
-function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: string | null }) {
+function OutcomeBadge({ outcome, reason, state }: { outcome: ScanOutcome; reason: string | null; state?: TrackedDocumentState }) {
   const chips = useTranslations('chips');
 
   if (outcome === 'import_queued') {
+    if (state?.status === 'failed') return <StatusBadge tone="rose" label={chips('scan.import_failed')} title={state.sync_error} />;
+    if (isDocumentProcessing(state)) return <StatusBadge tone="amber" label={chips('scan.importing')} />;
+    if (state) return <StatusBadge tone="emerald" label={chips('scan.ready')} />;
     return (
       <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
-        {chips('scan.import_queued')}
+        {chips('scan.new_file')}
       </span>
     );
   }
 
   if (outcome === 'resync_queued') {
+    if (state?.last_sync_status === 'failed') return <StatusBadge tone="rose" label={chips('scan.update_failed')} title={state.sync_error} />;
+    if (isDocumentProcessing(state)) return <StatusBadge tone="amber" label={chips('scan.updating')} />;
+    if (state) return <StatusBadge tone="emerald" label={chips('scan.ready')} />;
     return (
       <span className={`${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300`}>
-        {chips('scan.resync_queued')}
+        {chips('scan.changed')}
       </span>
     );
   }
@@ -358,6 +384,15 @@ function OutcomeBadge({ outcome, reason }: { outcome: ScanOutcome; reason: strin
   );
 }
 
+function StatusBadge({ tone, label, title }: { tone: 'emerald' | 'amber' | 'rose'; label: string; title?: string | null }) {
+  const colors = {
+    emerald: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300',
+    amber: 'bg-amber-100 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300',
+    rose: 'bg-rose-100 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300',
+  };
+  return <span title={title ?? undefined} className={`${BADGE_BASE} ${colors[tone]}`}>{label}</span>;
+}
+
 /**
  * One in-flight tracked repo's poll loop — the shared hook's fourth consumer. It
  * polls the show endpoint until the scan settles, then hands the settled record up
@@ -371,4 +406,58 @@ function ScanPoller({ id, onScanned }: { id: number; onScanned: (repo: TrackedRe
   });
 
   return null;
+}
+
+/**
+ * One bounded, batched read for every affected path in a report. It starts on
+ * mount too, so opening an old report resolves current state rather than trusting
+ * a historic dispatch result. Sequence/cancel guards make late reads harmless.
+ */
+function ProcessingPoller({ repo, onUpdated }: { repo: TrackedRepo; onUpdated: (repo: TrackedRepo) => void }) {
+  const t = useTranslations('tracked-repos');
+  const [unavailable, setUnavailable] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!needsProcessingRefresh(repo)) return;
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      const fresh = await readTrackedRepo(repo.id);
+      if (cancelled) return;
+      if (fresh === null) {
+        setUnavailable(true);
+      } else {
+        setUnavailable(false);
+        setRefreshRequired(false);
+        onUpdated(fresh);
+        if (!needsProcessingRefresh(fresh)) return;
+      }
+      attempts += 1;
+      if (attempts >= 20) {
+        setRefreshRequired(true);
+        return;
+      }
+      timer = setTimeout(refresh, POLL_INTERVAL_MS);
+    };
+    timer = setTimeout(refresh, 0);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [repo.id, repo.last_scan_report?.finished_at, onUpdated, refreshKey]);
+
+  if (!unavailable && !refreshRequired) return null;
+  const retry = () => {
+    setUnavailable(false);
+    setRefreshRequired(false);
+    setRefreshKey((value) => value + 1);
+  };
+  return (
+    <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+      {unavailable ? t('report.statusUnavailable') : t('report.takingLonger')}{' '}
+      <button type="button" className="underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onClick={retry}>
+        {t('report.refresh')}
+      </button>
+    </p>
+  );
 }

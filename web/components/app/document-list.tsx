@@ -633,6 +633,15 @@ function SyncState({ item }: { item: DocumentListItem }) {
     );
   }
 
+  if (item.last_sync_status === 'processing') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+        <Spinner />
+        {t('sync.updating')}
+      </span>
+    );
+  }
+
   // A ready document whose LATER re-sync failed (SPEC §19): the row must not read
   // healthy emerald while the doc page shows the failure banner. Rose treatment
   // carrying the sync error in a title, checked before the healthy branch.

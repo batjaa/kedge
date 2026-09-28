@@ -6,6 +6,7 @@ use App\Enums\AuditEvent;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentStatus;
 use App\Enums\SourceType;
+use App\Enums\SyncStatus;
 use App\Enums\TrackedScanStatus;
 use App\Jobs\ImportDocumentJob;
 use App\Jobs\ResyncDocumentJob;
@@ -13,6 +14,7 @@ use App\Models\Document;
 use App\Models\TrackedRepo;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\Documents\DocumentProcessing;
 use App\Services\Import\TitleSynthesizer;
 use App\Services\TrackedRepos\Exceptions\DiscoveryException;
 use Carbon\CarbonImmutable;
@@ -52,6 +54,7 @@ class TrackedRepoScanService
         private readonly RepoDiscoveryService $discovery,
         private readonly TitleSynthesizer $titles,
         private readonly AuditLogger $audit,
+        private readonly DocumentProcessing $processing,
     ) {}
 
     /**
@@ -195,7 +198,7 @@ class TrackedRepoScanService
 
         /** @var list<Document> $imported */
         $imported = [];
-        /** @var list<Document> $resynced */
+        /** @var list<array{document: Document, generation: int}> $resynced */
         $resynced = [];
 
         foreach ($discovery->paths as $path) {
@@ -249,10 +252,10 @@ class TrackedRepoScanService
         // Only now dispatch — the report is already durable, so a job can never race
         // the report write, and the scan never waited on one.
         foreach ($imported as $document) {
-            ImportDocumentJob::dispatch($document);
+            ImportDocumentJob::dispatch($document, (int) $document->sync_generation);
         }
-        foreach ($resynced as $document) {
-            ResyncDocumentJob::dispatch($document, $actorId);
+        foreach ($resynced as $operation) {
+            ResyncDocumentJob::dispatch($operation['document'], $actorId, $operation['generation']);
         }
 
         Log::info('scan.completed', [
@@ -322,7 +325,7 @@ class TrackedRepoScanService
      * URL floats with the branch, so that in-flight import already fetches the
      * current content; re-syncing a version-less document would only fail.
      *
-     * @param  list<Document>  $resynced  Accumulator dispatched after the atomic report write.
+     * @param  list<array{document: Document, generation: int}>  $resynced  Accumulator dispatched after the atomic report write.
      */
     private function diffHeldPath(
         ScanReport $report,
@@ -347,8 +350,9 @@ class TrackedRepoScanService
         // change, and the document's own retry affordance owns any re-sync failure —
         // re-scan detects new changes, it does not babysit a specific re-sync.
         $held->forceFill(['tracked_blob_sha' => $currentSha])->save();
+        $generation = $this->processing->startResync($held);
         $report->resyncQueued($path, (int) $held->id);
-        $resynced[] = $held;
+        $resynced[] = ['document' => $held, 'generation' => $generation];
     }
 
     /**
@@ -411,6 +415,9 @@ class TrackedRepoScanService
             'title' => $this->titles->filenameFrom($blobUrl),
             'format' => DocumentFormat::Md,
             'status' => DocumentStatus::Importing,
+            'last_sync_status' => SyncStatus::Processing,
+            'sync_generation' => 1,
+            'sync_started_at' => now(),
             'created_by' => $repo->created_by,
         ]);
     }

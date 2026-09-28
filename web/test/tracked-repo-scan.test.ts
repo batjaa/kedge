@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   isScanInFlight,
+  mergeDocumentStates,
+  needsProcessingRefresh,
   isUpToDate,
   isZeroMatch,
   mergeReportedRows,
@@ -98,6 +100,36 @@ describe('reportImportingRows', () => {
     );
 
     expect(rows[0].project).toBeNull();
+  });
+});
+
+describe('current processing projection', () => {
+  it('refreshes a settled report once on reopen, then only while a requested operation is active', () => {
+    const tracked = repo('ok');
+    tracked.last_scan_report = report([{ path: 'docs/a.md', outcome: 'resync_queued', document_id: 4, reason: null }]);
+    expect(needsProcessingRefresh(tracked)).toBe(true);
+
+    tracked.document_states = [{ id: 4, status: 'ready', last_sync_status: 'processing', sync_error: null, sync_started_at: null }];
+    expect(needsProcessingRefresh(tracked)).toBe(true);
+
+    tracked.document_states = [{ id: 4, status: 'ready', last_sync_status: 'ok', sync_error: null, sync_started_at: null }];
+    expect(needsProcessingRefresh(tracked)).toBe(false);
+  });
+
+  it('does not mistake the index payload’s intentionally slim report for an idle scan', () => {
+    const tracked = repo('ok');
+    tracked.last_scan_report = {
+      ...report([]),
+      matched: 1,
+      counts: { import_queued: 1, resync_queued: 0, unchanged: 0, missing: 0, failed: 0 },
+    };
+    expect(needsProcessingRefresh(tracked)).toBe(true);
+  });
+
+  it('merges a batched update without changing list-only fields', () => {
+    const before = [{ ...item(4), open_threads_count: 3, status: 'ready' as const, last_sync_status: 'ok' as const }];
+    const after = mergeDocumentStates(before, [{ id: 4, status: 'ready', last_sync_status: 'processing', sync_error: null, sync_started_at: null }]);
+    expect(after[0]).toMatchObject({ open_threads_count: 3, last_sync_status: 'processing' });
   });
 });
 

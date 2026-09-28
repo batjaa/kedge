@@ -15,6 +15,13 @@
     "pasted": "pegado"
   },
   "scan": {
+    "new_file": "Archivo nuevo",
+    "changed": "Cambiado",
+    "importing": "Importando…",
+    "updating": "Actualizando…",
+    "ready": "Listo",
+    "import_failed": "Importación fallida",
+    "update_failed": "Actualización fallida",
     "import_queued": "En cola",
     "resync_queued": "Resincronizado",
     "missing": "Ausente",

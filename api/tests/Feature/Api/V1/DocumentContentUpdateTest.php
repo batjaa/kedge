@@ -77,9 +77,9 @@ class DocumentContentUpdateTest extends TestCase
 
     public function test_a_prior_failed_status_is_cleared_before_the_new_attempt_dispatches(): void
     {
-        // A doc left FAILED by an earlier update must reset to Ok before dispatch
-        // (like retry(), SPEC §19), so the web's completion poll never reads the
-        // stale failure as this attempt's outcome.
+        // A doc left FAILED by an earlier update enters the persisted processing
+        // state before dispatch, so the web never reads stale failure as this
+        // request's outcome.
         Queue::fake();
         [$author, $document] = $this->uploadDocument();
         $document->forceFill([
@@ -90,11 +90,11 @@ class DocumentContentUpdateTest extends TestCase
         $this->actingAs($author)->fromWebApp()
             ->postJson("/api/v1/documents/{$document->id}/content", ['content' => self::NEW_CONTENT])
             ->assertStatus(202)
-            ->assertJsonPath('last_sync_status', 'ok')
+            ->assertJsonPath('last_sync_status', 'processing')
             ->assertJsonPath('sync_error', null);
 
         $document->refresh();
-        $this->assertSame(SyncStatus::Ok, $document->last_sync_status);
+        $this->assertSame(SyncStatus::Processing, $document->last_sync_status);
         $this->assertNull($document->sync_error);
     }
 

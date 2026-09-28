@@ -4,8 +4,10 @@ namespace Tests\Feature\Api\V1;
 
 use App\Enums\DocumentStatus;
 use App\Enums\SourceType;
+use App\Enums\SyncStatus;
 use App\Enums\TrackedScanStatus;
 use App\Jobs\ImportDocumentJob;
+use App\Jobs\ResyncDocumentJob;
 use App\Jobs\ScanTrackedRepoJob;
 use App\Models\AuditLog;
 use App\Models\Document;
@@ -13,6 +15,7 @@ use App\Models\Integration;
 use App\Models\Project;
 use App\Models\TrackedRepo;
 use App\Models\User;
+use App\Services\Documents\DocumentProcessing;
 use App\Services\Fetch\DnsResolver;
 use App\Services\Fetch\HttpTransport;
 use App\Services\TrackedRepos\TrackedRepoScanService;
@@ -467,6 +470,54 @@ class TrackedRepoScanTest extends TestCase
             ->assertJsonPath('data.id', $trackedRepo->id)
             ->assertJsonPath('data.last_scan_status', 'ok')
             ->assertJsonPath('data.last_scan_report.counts.import_queued', 1);
+    }
+
+    public function test_show_projects_current_document_processing_separately_from_the_immutable_report(): void
+    {
+        $user = $this->registerUser();
+        $trackedRepo = TrackedRepo::factory()->for($user->personalWorkspace())->create();
+        $document = Document::factory()->for($user->personalWorkspace())->create([
+            'tracked_repo_id' => $trackedRepo->id,
+            'status' => DocumentStatus::Ready,
+            'last_sync_status' => SyncStatus::Processing,
+            'sync_started_at' => CarbonImmutable::now(),
+        ]);
+        $report = [
+            'status' => 'ok', 'ref' => 'main', 'matched' => 1,
+            'counts' => ['import_queued' => 0, 'resync_queued' => 1, 'unchanged' => 0, 'missing' => 0, 'failed' => 0],
+            'files' => [['path' => 'docs/spec.md', 'outcome' => 'resync_queued', 'document_id' => $document->id, 'reason' => null]],
+            'error' => null, 'stale_takeover' => false, 'started_at' => CarbonImmutable::now()->subSecond(), 'finished_at' => CarbonImmutable::now(), 'duration_ms' => 5,
+        ];
+        $trackedRepo->forceFill(['last_scan_status' => TrackedScanStatus::Ok, 'last_scan_report' => $report])->save();
+
+        $response = $this->actingAs($user)->fromWebApp()
+            ->getJson("/api/v1/tracked-repos/{$trackedRepo->id}")
+            ->assertOk()
+            ->assertJsonPath('data.document_states.0.id', $document->id)
+            ->assertJsonPath('data.document_states.0.status', 'ready')
+            ->assertJsonPath('data.document_states.0.last_sync_status', 'processing');
+
+        $this->assertSame($report['files'], $trackedRepo->fresh()->last_scan_report['files']);
+        $this->assertCount(1, $response->json('data.document_states'));
+    }
+
+    public function test_an_obsolete_operation_cannot_overwrite_newer_processing_state(): void
+    {
+        $document = Document::factory()->for($this->registerUser()->personalWorkspace())->create([
+            'status' => DocumentStatus::Ready,
+            'last_sync_status' => SyncStatus::Ok,
+        ]);
+        $processing = app(DocumentProcessing::class);
+        $oldGeneration = $processing->startResync($document);
+        $newGeneration = $processing->startResync($document);
+
+        (new ResyncDocumentJob($document, generation: $oldGeneration))
+            ->failed(new \RuntimeException('late failure'));
+
+        $document->refresh();
+        $this->assertSame($newGeneration, $document->sync_generation);
+        $this->assertSame(SyncStatus::Processing, $document->last_sync_status);
+        $this->assertNull($document->sync_error);
     }
 
     public function test_show_reports_a_running_scan(): void

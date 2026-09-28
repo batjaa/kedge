@@ -17,6 +17,7 @@
   },
   "sync": {
     "importing": "Импортлож байна…",
+    "updating": "Шинэчилж байна…",
     "importFailed": "Импорт амжилтгүй",
     "syncFailed": "Sync амжилтгүй",
     "ready": "бэлэн",
