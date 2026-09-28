@@ -394,6 +394,12 @@ mutation. Failed imports can be claimed and explicitly retried under current mem
 authority. Claim, settlement and pruning serialize; old demo workers cannot mutate
 a claimed document. No anonymous-to-member job-authority transfer.
 
+**M4.0 engineering decision 6A (2026-09-27):** affected HTTP failures use RFC 9457
+Problem Details with shared server rendering/client decoding and explicit recovery.
+Lost or malformed write responses remain outcome-unknown until reconciled; no
+automatic replay or false success. Preserve native MCP and background error contracts,
+safe redaction and the existing bounded, cost-aware job retry behavior.
+
 This supersedes the project-first order. Reuse the previously reviewed invitation,
 transaction, private-asset, background-work and testing mechanics; rebase the prior
 project spec and unpublished ticket draft before execution. Use ordinary deployment

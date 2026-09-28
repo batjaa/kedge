@@ -11,8 +11,8 @@
 |---|---|
 | Step 0 — scope | Complete: 1A, full scope retained |
 | 1 — architecture | Complete: four findings resolved (2A–5A) |
-| 2 — error and rescue map | Pending |
-| 3 — security and threat model | Pending |
+| 2 — error and rescue map | Complete: 6A; 22 failure paths mapped, no unhandled planned paths |
+| 3 — security and threat model | In progress |
 | 4 — data flow and interaction edge cases | Pending |
 | 5 — code quality | Pending |
 | 6 — tests and coverage diagram | Pending |
@@ -140,6 +140,28 @@ CRITICAL regression coverage for anonymous import and both successful/failed cla
 journeys, active claims, late worker callbacks, expiration, concurrent claims and
 prune races. This preserves intended demo behavior without promising old-client
 compatibility.
+
+### 6A — RFC 9457 HTTP failures and explicit recovery
+
+User selected 6A on 2026-09-27. Use centralized Laravel Problem Details rendering
+and shared client decoding across affected HTTP flows. Keep native MCP errors and
+existing background classifications. Distinguish input correction, authentication,
+access loss, stale state, in-progress work, contention and uncertain write outcomes.
+A lost response never authorizes replay, a success toast or an empty-state fiction.
+
+Evidence: the spec §7 says “A lost response does not justify replay against a new
+membership,” but `web/lib/workspace-client.ts:29` unconditionally parses successful
+JSON and line 46 collapses remaining failures to “Could not save your changes.
+Please try again.” `api/bootstrap/app.php` currently configures JSON rendering but
+no shared Problem Details contract. This is a verified integration requirement for
+the planned flows, P1, confidence 9/10; no new runtime regression is claimed.
+Existing agent-token mint recovery already distinguishes a lost secret response.
+
+Options differed in kind (RFC 9457 versus an application-owned envelope), not
+coverage. The chosen contract uses standard HTTP problem semantics with explicitly
+application-owned recovery/field-error extensions. The client must tolerate proxy
+errors and unknown types; no error format can prove a missing response did not
+commit. Current source: [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html).
 
 ## Architecture checkpoint — complete
 
@@ -270,6 +292,86 @@ stop
 
 These diagrams describe the reviewed contract, not implemented code or passing
 application tests. The Section 6 test-coverage diagram remains required and pending.
+
+## Error and rescue checkpoint — complete
+
+22 failure paths mapped below. **No unhandled planned paths** after 6A and the
+previously accepted queue/transaction decisions; implementation and test proof are
+still pending. This is a plan map, not a claim that all rescues exist today. Named
+application conflict/lifecycle/authority failures below are proposed typed domain
+outcomes, not an instruction to create a class for every row. Framework and existing
+source/AI exception names identify current integration seams.
+
+| Method / codepath | What can go wrong | Exception / outcome | Planned rescue | User sees |
+|---|---|---|---|---|
+| Action/role resolution | Unknown/wrong-scope role; malformed catalog | Denied decision; configuration `LogicException` | Deny unknowns; fail closed and report invalid definitions | Safe denial or unavailable, no accidental grant |
+| Target/authentication resolution | Missing session, hidden target, forbidden action | `AuthenticationException`, `ModelNotFoundException`, `AuthorizationException` | Central 401/404/403 mapping without resource leakage | Sign-in, not found or denied |
+| Collections/directory/role inspector | Database failure instead of empty result | `QueryException` | Report; unavailable problem; no empty-list fallback | Retry reading; retained last known state |
+| Request validation | Wrong type, bounds, invalid role or target | `ValidationException` | 422 safe field projection after tenant authorization | Correct fields; draft retained |
+| Role/remove/move/source mutations | Stale revision, revoked grant, contention | Planned stale/denied outcomes; classified lock `QueryException` | Fresh check; rollback-only bounded retries; 409/403/503 | Refresh or busy; never false success |
+| Invitation creation/acceptance uniqueness | Concurrent pending offer or membership activation | `UniqueConstraintViolationException` | Roll back/reload under protected state; reuse offer or conflict, no implicit role overwrite | Current offer or already-member recovery |
+| Invitation preview/acceptance | Invalid token, inactive generation, wrong verified recipient, changed role definition | Planned invitation lifecycle outcomes | Uniform invalid response; safe 410/403/409 where recognized | Contact inviter, switch account or refresh |
+| Invitation/audit/encrypted enqueue transaction | Queue insertion, encryption or required audit fails | `QueryException`; encryption/serialization exception at queue boundary | Roll back whole mutation; report unexpected failures | Not queued; previous invitation generation remains usable |
+| Mail delivery/status commit | Transport refusal, timeout, ambiguous delivery or stale generation | `TransportExceptionInterface`; `QueryException`; obsolete-generation outcome | Bounded same-generation retry; conditional status; never silently rotate | Queued, failed or email may have arrived |
+| Session/logout/CSRF | Expired CSRF; failed or uncertain logout; actor changed | `TokenMismatchException`; browser transport failure | Recognized 419 refresh once; confirm logout; stop on actor change | Explicit sign-in/switch-account recovery |
+| Exact-share review | Revoked share/participant; wrong nested document | Authorization/not-found outcomes | Recheck exact context at commit; no alternate-share/member fallback | Access unavailable, retained draft |
+| MCP read/write adapters | Revoked token or grant; inaccessible target | `AuthenticationException`, `McpToolException` | Safe native MCP errors; report unexpected exceptions | Tool denial/recovery without HTTP-envelope nesting |
+| Job admission/result settlement | Lost authority, old incarnation/revision or superseded operation | Planned authority-lost/obsolete-operation outcomes | Terminal conditional settlement/no-op; preserve good content and spend | Cancelled/obsolete current operation; no stale overwrite |
+| Import/resync source fetching | Blocked URL, revoked credential, upstream limit/timeout/oversize | `BlockedUrlException`, `TokenRevokedException`, `RateLimitedException`, fetch/import exceptions | Specific bounded classifiers; no public-to-credential fallback | Sanitized source failure or retrying status |
+| Tracked-repo scan/file results | Expected file failure versus unexpected database/program error | Explicit recoverable source exceptions; `QueryException`/unexpected exception | Continue only recoverable file cases; stop/report others; atomic report publication | Honest per-file result or failed scan, last good report retained |
+| AI start/generate/commit | Dispatch failure, provider timeout/refusal, database failure after paid call | `AiGenerationException`, provider/connection exceptions, `QueryException` | Existing `AiFailureClassifier`; no uncertain paid replay; conditional settlement/cleanup | Safe failed/uncertain result and honest cost status |
+| Private image/diagram delivery | Lost reach, missing object or render/storage outage | Authorization outcome; filesystem exceptions; `DiagramRenderException` | Deny or safe unavailable/source panel; never public-origin fallback | Unavailable asset; document remains usable |
+| Demo import/claim/prune | Import active, expired demo, competing claim/prune | Planned operation-in-progress/expired/stale outcomes | Ordered locks and terminal claim; generation-conditional callbacks | Wait, explicit retry or unavailable demo |
+| Independent abandoned-work cleanup | Database unavailable or operation replaced | `QueryException`; obsolete-operation outcome | Report; retry bounded scan next schedule; settle only current abandoned work | Honest stale/unavailable operational status |
+| Optional notification/telemetry | Post-commit transport/observer failure | Specific transport failure; unexpected exception reported at boundary | Preserve committed result; record optional failure safely | Confirmed mutation remains successful |
+| HTTP response decoding | Lost response, abort, malformed/unknown/non-JSON response | `TypeError`, `DOMException` (`AbortError`), `SyntaxError`, invalid-shape outcome | Read unavailable; submitted write outcome unknown; reconcile without replay | Retained draft and refresh/recovery, no false toast |
+| One-time agent-token result | Created token response lost or secret absent | Transport/invalid-success outcome | Inspect list and revoke orphan if needed; no secret reconstruction | Explicit token recovery instructions |
+
+Catch-all audit: `TrackedRepoScanService::completeScan` currently catches `Throwable`
+per file and continues (around line 214); narrowing this was already approved in
+the carried project decision 7A. It must not turn authorization loss or programming/
+database failures into ordinary file failures. By contrast, the outer AI job catch
+feeds `AiFailureClassifier`, whose known categories and conservative unknown handling
+are useful existing behavior. Keep a final reporting boundary, not a catch-and-ignore
+policy. All new typed outcomes need safe messages and either bounded retry,
+conditional terminal settlement, graceful read degradation or contextual rethrow.
+
+```plantuml
+@startuml
+start
+:Resolve actor, target and access surface;
+if (HTTP failure classified?) then (yes)
+  :Render sanitized Problem Details;
+  if (Verified pre-handler CSRF rejection?) then (yes)
+    :Refresh once only with unchanged actor/intent;
+  else (no)
+    :Decode recovery category; preserve draft;
+    :Correct, sign in, refresh, wait or stop;
+  endif
+else (no / missing response)
+  if (Write submitted?) then (yes)
+    :Outcome unknown;
+    :Reconcile permitted current state;
+    :Require explicit reviewed resubmission;
+  else (no)
+    :Read unavailable; allow bounded retry;
+  endif
+endif
+:Never infer success, empty data or retry safety from transport failure;
+stop
+@enduml
+```
+
+### Implementation task from error review
+
+- [ ] **T6 (P1)** — HTTP/client boundary — implement RFC 9457 and truthful recovery.
+  - Surfaced by: 6A; fragmented response handling cannot express the approved stale,
+    busy and uncertain-write states.
+  - Files: `api/bootstrap/app.php`, domain service outcomes, affected API routes,
+    `web/lib/csrf-client.ts`, affected workspace/resource/share clients and UI states.
+  - Verify: PHPUnit HTTP contract/failure-injection tests plus client decoder tests
+    and Playwright lost-response, stale-form and account-change recovery; preserve
+    native MCP behavior. Include non-JSON/malformed/unknown problems and valid 204.
 
 ## What already exists
 
