@@ -2,6 +2,10 @@
 
 > Maintained by plan reviews. Effort: S/M/L/XL · Priority: P1/P2/P3.
 
+## Decision log (tracked-repo processing status #158, 2026-09-28)
+
+- ✅ **Scan history and live processing state are deliberately separate.** A `ScanReport` remains immutable, timestamped discovery evidence (new, changed, unchanged, and missing files), so dispatch is never displayed as successful completion. Each affected document records a monotonic `sync_generation`, `sync_started_at`, and `last_sync_status: processing|ok|failed`; workers condition their result on that generation so an older import or re-sync cannot replace a newer request. The project UI resolves only the latest matching operations through one workspace-scoped batched state read, refreshes until settlement or unmount, and keeps an existing readable version open while an update is processing or has failed. Prolonged and unavailable reads are distinct feedback, and legacy/superseded operations remain unconfirmed rather than borrowing a later result.
+
 ## Decision log (project access engineering review, 2026-09-27)
 
 - ✅ **Engineering review complete:** decisions 1A–21A plus user-directed deployment decision 22 are recorded in the [review](plans/project-access-eng-review.md). Long-term and engineering UX checks found no additional issues. The test map has 29 planned contract groups, all implementation gaps; no application tests ran in this planning pass. Separate design review and ticket-breakdown reconciliation remain before publishing; no tickets were created.
