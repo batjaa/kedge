@@ -4,6 +4,8 @@
 
 ## Decision log (workspace authorization foundation, 2026-09-27)
 
+- ✅ **Workspace engineering review 4A:** explicit share-review routes select the exact share/document and verified participant; reuse the same business services and eliminate silent membership/share fallback. The user accepts breaking old links/clients and prioritizes the clean contract, so no legacy-link compatibility or migration is required. Preserve intended independent-share semantics and test exact-share scope, nested resources, live revocation and token-only read limits. No runtime changes.
+
 - ✅ **Workspace engineering review 3A:** replace personal-workspace collection/create/settings aliases with explicit workspace routes; carry one target through validation, authorization, persistence, audit and queued work. MCP targets the token workspace. Update callers/tests together; keep personal identity distinct. This is a deliberate pre-customer exception to additive-only v1 changes, with ordinary deployment and temporary interruption accepted. Architecture review continues; no runtime changes.
 
 - ✅ **Workspace engineering review 2A:** promote membership to a first-class lifecycle model, with shared active-grant queries and explicit history. Replace passive pivot mutations, raw membership-existence permission checks and the closed role cast. The user prioritizes a clean architecture over migration/refactoring effort because there are no real customers. Full scope remains accepted (1A); architecture review continues in the [review log](plans/workspace-membership-eng-review.md). No application changes.

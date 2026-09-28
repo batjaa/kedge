@@ -88,6 +88,32 @@ request target through validation, persistence/audit/jobs and MCP, parent/child
 mismatches, absence of working old aliases, multi-tab targeting and stable personal
 identity. Commit-time checks remain fresh.
 
+### 4A — explicit share-review routes, without legacy compatibility
+
+Accepted through the user's direction on 2026-09-27: existing shared links and
+clients need not keep working; there are no production users, so build the clean
+contract now. Use dedicated `/shared/{token}/…` review routes over shared business
+services. The selected share/document and exact verified participant supply write
+authority. Token possession alone remains read-only. Workspace and MCP requests
+must not silently fall back to share permissions, nor share requests to membership.
+
+Evidence: `api/app/Policies/Concerns/ResolvesShareReviewers.php:32–33` returns
+`$this->memberOf($user, $document) || $this->reviewerOf($user, $document)`, and
+`api/app/Policies/ThreadPolicy.php:21–30` uses it for create/reply. The shared review
+client currently posts to the same document-ID routes. This is an integration gap
+between the proposed separate surfaces and the existing implementation, P1,
+confidence 9/10; it is not evidence of a deployed workspace-role regression.
+
+Refactor route/context adapters, client calls, Policy/capability/mention decisions,
+cache keys and commit guards together. Require exact-share, wrong-child,
+revocation-race, token-only-write-denial and no-fallback tests. Preserve future
+independent Share semantics, but do not build compatibility aliases, redirect
+bridges or old-link migration. Update route and security documentation accordingly.
+
+The user's broader instruction applies through the remaining review: backward
+compatibility is not a pre-customer release requirement. Prefer a clear and correct
+end state; continue to preserve intended domain behavior and data deliberately.
+
 ## What already exists
 
 | Sub-problem | Existing implementation | Review direction |
