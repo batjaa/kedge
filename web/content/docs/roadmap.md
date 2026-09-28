@@ -27,7 +27,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | done (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
-| Workspace membership & authorization | L | Scaffold · AI & agents | specced (2026-09-27); review pending | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) |
+| Workspace membership & authorization | L | Scaffold · AI & agents | specced (2026-09-27); engineering review in progress | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) |
 | Project access | L | Workspace membership & authorization · Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | rebase pending workspace foundation | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
@@ -58,12 +58,14 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Workspace membership & authorization — specced; review pending (2026-09-27).**
+**Workspace membership & authorization — engineering review in progress (2026-09-27).**
 The [M4.0 spec](specs/m4.0-workspace-membership.md) defines the built-in matrix,
 code-backed extensibility interface, all-projects/Unfiled baseline visibility,
 invitation/selection/admin lifecycle and independent-grant removal semantics.
 These are concrete spec defaults for review, not a claim that every choice was
-separately approved. Run engineering review before ticketing. The prior project
+separately approved. The [review log](plans/workspace-membership-eng-review.md) records
+1A full scope, 2A membership lifecycle model and 3A explicit workspace routes.
+Complete the remaining review before ticketing. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)
 remain rebase-pending; do not publish their old dependency order.
 

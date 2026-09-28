@@ -65,6 +65,29 @@ For remaining decisions, prefer correctness, clear boundaries and long-term
 maintenance. Do not offer retaining a weaker structure merely to save refactoring
 time; substantive product/API tradeoffs still require review.
 
+### 3A — explicit workspace routes replace personal aliases
+
+User selected 3A on 2026-09-27. Remove superseded personal-workspace collection,
+create and settings aliases. Refactor API, web/BFF clients, validation, Policies,
+queries, services, audit and queued-work admission around one explicit target.
+MCP resolves its token workspace, not the owner's personal workspace; resource-ID
+routes derive the target from stored ownership. No ambient session/global target.
+Personal workspace identity and `/me` retain their personal meaning.
+
+Evidence: the previous spec preserved aliases, while
+`api/app/Http/Requests/StoreProjectRequest.php:27` scopes validation using
+`$this->user()?->personalWorkspace()?->id` and
+`api/app/Mcp/Tools/ListDocumentsTool.php:55` lists through
+`$agent->personalWorkspace()->documents()`. Joined-workspace support must replace
+these deeper assumptions, not just change controller routes.
+
+The user accepts removing the extra compatibility surface. This explicitly
+supersedes the generic additive-only v1 API convention for the affected routes;
+ordinary deployment with temporary interruption remains accepted. Test the full
+request target through validation, persistence/audit/jobs and MCP, parent/child
+mismatches, absence of working old aliases, multi-tab targeting and stable personal
+identity. Commit-time checks remain fresh.
+
 ## What already exists
 
 | Sub-problem | Existing implementation | Review direction |

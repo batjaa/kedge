@@ -152,7 +152,7 @@ MCP --> API : same policies, same data
 - **Self-host constraint (Rev 3)**: no hard SaaS dependencies. The stack was already 12-factor — database queues (no Redis), SQLite-capable, `MEDIA_DISK` local/R2, Laravel mail abstracts Postmark→SMTP. Self-hosting formalizes this: every external service is env-pluggable, every SaaS-only surface sits behind a `SELF_HOSTED` flag. Nova (paid license) is SaaS-ops only — **never a runtime dependency of the open-source app** (it ships in the repo behind a composer suggest / separate install so self-hosters run without it).
 - Accepted costs: two deployables; cross-app auth (pinned below); API types duplicated in TS (OpenAPI codegen later).
 
-**Auth pattern (pinned):** `app.kedge.review` + `api.kedge.review`, `SESSION_DOMAIN=.kedge.review`, `SANCTUM_STATEFUL_DOMAINS=app.kedge.review`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are additive within `/v1`** — the two deployables are never atomic.
+**Auth pattern (pinned):** `app.kedge.review` + `api.kedge.review`, `SESSION_DOMAIN=.kedge.review`, `SANCTUM_STATEFUL_DOMAINS=app.kedge.review`. Client components call the API with credentials + XSRF token. Server components go through **BFF route handlers** that forward the incoming cookies to the API. **Deploy order: api before web; API changes are normally additive within `/v1`** — the two deployables are never atomic. M4.0 decision 3A is an explicit pre-customer exception: replace personal-workspace collection/create/settings aliases with explicit workspace routes and update all first-party callers; temporary interruption and matching-build recovery are accepted (§10.1).
 
 **Account confirmation and recovery (2026-09-26):** Email/password signup queues a welcome email with a signed confirmation link (60-minute lifetime). The account has a session immediately, but workspace resources and MCP require a verified email; identity, sign-out, and throttled confirmation resend remain available. Links confirm mailbox possession on any device without logging the recipient in. The web preserves the requested destination through confirmation. Existing unverified password accounts must also confirm; no timestamp is backfilled without mailbox proof. GitHub registration/linking trusts its verified primary email and new GitHub accounts receive a welcome email. Upgrading a reviewer to a password account requires fresh confirmation, since entering a previously verified reviewer's email is not proof of ownership.
 
@@ -357,7 +357,8 @@ constrain writes by actions and resource predicates, keep source credentials
 Owner-only and preserve private AI artifacts. Admin manages Member/Viewer seats;
 Owner appoints Admin. Owner cannot be removed/demoted; ownership transfer is later
 scope. Explicit workspace selection replaces personal-workspace assumptions for
-new flows while compatibility aliases retain personal meaning. Stable membership
+all collection/create flows; old personal-workspace aliases are removed under 3A.
+Personal identity remains distinct from the current target. Stable membership
 incarnations, assignment/definition revisions and live commit checks prevent old
 tokens/jobs/invitations regaining authority after removal/rejoin. Independent Shares
 remain valid; ordinary removal is not an identity ban. These concrete defaults
@@ -369,6 +370,14 @@ query and explicit history/identity queries for audit and reactivation. Replace
 passive pivot writes and scattered existence checks; retaining a revoked row must
 not retain access. The user prioritizes the cleaner architecture over minimizing
 refactoring or migration effort. See the [review log](plans/workspace-membership-eng-review.md).
+
+**M4.0 engineering decision 3A (2026-09-27):** use explicit workspace routes and
+one target context across validation, Policies, queries, services, audit and jobs;
+remove the old personal-workspace aliases and update first-party callers together.
+MCP resolves its token workspace; resource-ID routes resolve stored ownership.
+Personal identity remains unchanged. This is the accepted exception to additive-only
+v1 changes, with ordinary deployment and temporary interruption rather than a
+compatibility layer.
 
 This supersedes the project-first order. Reuse the previously reviewed invitation,
 transaction, private-asset, background-work and testing mechanics; rebase the prior
