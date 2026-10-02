@@ -1,13 +1,13 @@
-# Workspace membership — proposed ticket breakdown
+# Workspace membership — published ticket breakdown
 
-> 2026-09-27 · Local draft for granularity/dependency review; not approved or published.
-> Proposed module parent: **Workspace membership and resource authorization (M4.0)**.
+> Published 2026-10-01 · Approved 29-ticket breakdown; native GitHub hierarchy and dependencies verified.
+> Module parent: [#160 — Workspace membership and resource authorization (M4.0)](https://github.com/batjaa/kedge/issues/160).
 > Tracker: GitHub native sub-issues and dependencies, with canonical Blocked by lines.
 > Spec: [M4.0](../specs/m4.0-workspace-membership.md) · [Roadmap](../ROADMAP.md).
 
-Engineering decisions 1A–7A and design decisions D1A–D4A are complete. This draft
-turns them into one parent and **29 children**, not 29 new product decisions. W IDs
-are local draft identifiers, not GitHub issue numbers. The [project rebase map](project-access-workspace-rebase.md)
+Engineering decisions 1A–7A and design decisions D1A–D4A are complete. The published
+breakdown contains one parent and **29 children**, not 29 new product decisions. W IDs
+are stable planning identifiers; their GitHub issue mapping appears below. The [project rebase map](project-access-workspace-rebase.md)
 identifies shared work absorbed here and the remaining M4.1 scope.
 
 ## Shared delivery rules
@@ -34,9 +34,9 @@ and denial behavior remain explicit; tests must assert forbidden effects as well
 responses. Required audit/enqueue failures roll back; optional telemetry does not
 undo committed changes. Final verification assembles existing per-ticket evidence.
 
-Issue bodies below inherit these shared rules; include them when publishing.
-[#156](https://github.com/batjaa/kedge/issues/156) was read and remains **open** on
-2026-09-27. It blocks final acceptance, not unrelated implementation; its diagnosis
+Published issue bodies include these shared rules and real GitHub blocker numbers.
+[#156](https://github.com/batjaa/kedge/issues/156) was rechecked and remains **open** on
+2026-10-01. It blocks final acceptance, not unrelated implementation; its diagnosis
 and deployed-account recovery remain owned by that existing issue.
 
 ## Dependency overview
@@ -71,7 +71,7 @@ and deployed-account recovery remain owned by that existing issue.
 28. **W28 — Expose independent operational checks and recovery guidance** — **Blocked by:** W27. **Delivers:** Operators can distinguish healthy idle from stalled queue, cleanup and protected writes using checks outside the monitored processes.
 29. **W29 — Verify the complete workspace boundary and ordinary deployment** — **Blocked by:** W08, W15, W19, W21, W23, W28, #156. **Delivers:** The assembled foundation is ready to release with complete resource authorization, verified migration and real operational smoke evidence.
 
-## Draft issue bodies
+## Issue body source
 
 ## W01 — Run access contracts with real databases and workers
 
@@ -787,9 +787,53 @@ Blocked by: W08, W15, W19, W21, W23, W28, #156
 W29 verifies all owners’ evidence together. The test map remains **0/30 certified**
 for the new contract until implementation actually supplies passing evidence.
 
-## Review and publication
+## Publication record
 
-Review granularity, real prerequisite edges and any merges/splits before tracker
-publication. The initial frontier is W01, W02 and W04; recommended sequential start
-is W01, then W02. No issue numbers, sub-issue links or tracker status are claimed.
-M4.0 stays specced until publication; M4.1 stays rebase-pending.
+Published 2026-10-01 after the user requested another attempt with updated session
+permissions. Earlier blocked attempts created nothing. The GitHub CLI successfully
+created parent #160, all 29 native sub-issues and all 40 native dependency edges;
+read-back verification matched every canonical Blocked by line, parent relation,
+label and child checklist. No body-only relationship fallback was needed.
+
+The reviewed spec is pinned by commit in each issue. Planning documents and this
+publication record are published on `docs/workspace-membership`; remote `main` is
+unchanged. Runtime implementation, the required tests and visual QA remain pending.
+M4.0 is ticketed; M4.1 still needs its separate rebase.
+
+Initial frontier: #161 (W01), #162 (W02), #164 (W04). Recommended first ticket:
+#161, the real-database/worker profile. Work one ticket per session with `$implement`.
+Issue #156 blocks only the final acceptance ticket #189.
+
+## Published issue mapping
+
+| Planning ID | GitHub issue | Blocked by |
+|---|---|---|
+| W01 | [#161](https://github.com/batjaa/kedge/issues/161) | None |
+| W02 | [#162](https://github.com/batjaa/kedge/issues/162) | None |
+| W03 | [#163](https://github.com/batjaa/kedge/issues/163) | #161, #162 |
+| W04 | [#164](https://github.com/batjaa/kedge/issues/164) | None |
+| W05 | [#165](https://github.com/batjaa/kedge/issues/165) | #163, #164 |
+| W06 | [#166](https://github.com/batjaa/kedge/issues/166) | #163, #164 |
+| W07 | [#167](https://github.com/batjaa/kedge/issues/167) | #166 |
+| W08 | [#168](https://github.com/batjaa/kedge/issues/168) | #167 |
+| W09 | [#169](https://github.com/batjaa/kedge/issues/169) | #165 |
+| W10 | [#170](https://github.com/batjaa/kedge/issues/170) | #169 |
+| W11 | [#171](https://github.com/batjaa/kedge/issues/171) | #161, #164 |
+| W12 | [#172](https://github.com/batjaa/kedge/issues/172) | #170, #171 |
+| W13 | [#173](https://github.com/batjaa/kedge/issues/173) | #172 |
+| W14 | [#174](https://github.com/batjaa/kedge/issues/174) | #165 |
+| W15 | [#175](https://github.com/batjaa/kedge/issues/175) | #174 |
+| W16 | [#176](https://github.com/batjaa/kedge/issues/176) | #165 |
+| W17 | [#177](https://github.com/batjaa/kedge/issues/177) | #176 |
+| W18 | [#178](https://github.com/batjaa/kedge/issues/178) | #177 |
+| W19 | [#179](https://github.com/batjaa/kedge/issues/179) | #178 |
+| W20 | [#180](https://github.com/batjaa/kedge/issues/180) | #178 |
+| W21 | [#181](https://github.com/batjaa/kedge/issues/181) | #180 |
+| W22 | [#182](https://github.com/batjaa/kedge/issues/182) | #178 |
+| W23 | [#183](https://github.com/batjaa/kedge/issues/183) | #165 |
+| W24 | [#184](https://github.com/batjaa/kedge/issues/184) | #165 |
+| W25 | [#185](https://github.com/batjaa/kedge/issues/185) | #184 |
+| W26 | [#186](https://github.com/batjaa/kedge/issues/186) | #185 |
+| W27 | [#187](https://github.com/batjaa/kedge/issues/187) | #173, #180, #182, #186 |
+| W28 | [#188](https://github.com/batjaa/kedge/issues/188) | #187 |
+| W29 | [#189](https://github.com/batjaa/kedge/issues/189) | #168, #175, #179, #181, #183, #188, #156 |

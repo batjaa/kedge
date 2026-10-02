@@ -24,7 +24,7 @@ Modules map 1:1 onto SPEC §21's milestones (M0–M7), which were CEO-approved i
 | Web i18n | M | Activity & landing · Source provenance | done (2026-07-25) | [specs/m3.9-i18n.md](specs/m3.9-i18n.md) · [#121](https://github.com/batjaa/kedge/issues/121) |
 | Source provenance | S | Projects & tracked repos · Design refresh | done (2026-07-24) | [specs/m3.10-source-provenance.md](specs/m3.10-source-provenance.md) · [#115](https://github.com/batjaa/kedge/issues/115) |
 | AI & agents | M | Comments & suggestions · Versions, diff & approvals | done (2026-08-18) | [specs/m4-ai-agents.md](specs/m4-ai-agents.md) · [#128](https://github.com/batjaa/kedge/issues/128) |
-| Workspace membership & authorization | L | Scaffold · AI & agents | specced (2026-09-27); engineering/design-plan reviews complete | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) |
+| Workspace membership & authorization | L | Scaffold · AI & agents | ticketed (2026-10-01) | [specs/m4.0-workspace-membership.md](specs/m4.0-workspace-membership.md) · [#160](https://github.com/batjaa/kedge/issues/160) |
 | Project access | L | Workspace membership & authorization · Projects & tracked repos · Comments & suggestions · Versions, diff & approvals · AI & agents | rebase pending workspace foundation | [specs/m4.1-project-access.md](specs/m4.1-project-access.md) |
 | Notifications & review queue | M | Comments & suggestions · Versions, diff & approvals | ready-to-spec | — |
 | Private sources & post-back | M | Import & render · Versions, diff & approvals · AI & agents | ready-to-spec | — |
@@ -55,7 +55,7 @@ Gists (full scope + demo criteria: SPEC §21):
 
 Work these one per session (`/wayfinder` work mode):
 
-**Workspace membership & authorization — engineering/design-plan reviews complete (2026-09-27).**
+**Workspace membership & authorization — ticketed (2026-10-01).**
 The [M4.0 spec](specs/m4.0-workspace-membership.md) defines the built-in matrix,
 code-backed extensibility interface, all-projects/Unfiled baseline visibility,
 invitation/selection/admin lifecycle and independent-grant removal semantics.
@@ -69,8 +69,9 @@ progress and safe resumption. The [test map](plans/workspace-membership-test-map
 records 30 required contract groups. The [design review](plans/workspace-membership-design-review.md)
 is complete: D1A selects the named switcher beside the logo, D2A uses Members/
 Invitations tabs, D3A opens destination home and D4A uses a desktop invite dialog/
-mobile sheet. All seven passes are recorded. The [29-child workspace ticket draft](plans/workspace-membership-tickets.md)
-is ready for granularity/dependency review; no tickets are published. The
+mobile sheet. All seven passes are recorded. The [29-child workspace breakdown](plans/workspace-membership-tickets.md)
+is published under [#160](https://github.com/batjaa/kedge/issues/160), with native
+sub-issues and dependencies verified. Start with [#161](https://github.com/batjaa/kedge/issues/161). The
 [project rebase map](plans/project-access-workspace-rebase.md) identifies absorbed work
 and remaining project decisions. Rendered UI QA is implementation work. The prior project
 [spec](specs/m4.1-project-access.md) and unpublished [ticket structure](plans/project-access-tickets.md)

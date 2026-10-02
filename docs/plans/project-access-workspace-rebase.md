@@ -1,8 +1,8 @@
 # Project access — workspace foundation rebase map
 
-> 2026-09-27 · Reconciliation draft; no tickets published and no project-spec rebase completion claimed.
+> Updated 2026-10-01 · Workspace tickets published; project reconciliation remains a draft.
 > Baseline: [M4.0 workspace spec](../specs/m4.0-workspace-membership.md) and
-> [29-ticket workspace draft](workspace-membership-tickets.md).
+> [29-ticket workspace breakdown](workspace-membership-tickets.md).
 
 The old [27-ticket project draft](project-access-tickets.md) preserves reviewed
 requirements but is no longer the publication plan. Common authorization, execution,
@@ -12,8 +12,8 @@ delegation. Do not implement the old foundation tickets a second time.
 
 ## Old ticket disposition
 
-T IDs below refer to the unpublished project draft; W IDs refer to the workspace
-draft. “Reuse” still requires project-specific adapters and regression tests.
+T IDs below refer to the unpublished project draft; W IDs refer to the published workspace
+breakdown. “Reuse” still requires project-specific adapters and regression tests.
 
 | Old project ticket | Workspace foundation destination | Remaining M4.1 behavior |
 |---|---|---|
@@ -97,6 +97,6 @@ seams open. The project spec and its historical review remain rebase-pending.
 
 ## Publication state
 
-M4.0: engineering/design-plan reviews complete; 29-child local draft awaits
-granularity review. M4.1: historical 27-child draft must not be published as-is.
-Neither module has been implemented or published by this planning work.
+M4.0: [parent #160](https://github.com/batjaa/kedge/issues/160) and 29 native children
+are published with verified dependencies (2026-10-01). M4.1: historical 27-child draft
+must not be published as-is. Neither module has been implemented by this planning work.

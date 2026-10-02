@@ -438,7 +438,7 @@ This supersedes the project-first order. Reuse the previously reviewed invitatio
 transaction, private-asset, background-work and testing mechanics; rebase the prior
 project spec and unpublished ticket draft before execution. Use ordinary deployment
 with migrations/restarts/smoke checks, per the user's decision; no maintenance cutover.
-No application implementation or issue publication has started.
+Workspace tickets were published on 2026-10-01 under [#160](https://github.com/batjaa/kedge/issues/160); application implementation remains pending.
 
 **Planned scope amendment (2026-09-26, M4.1 — Project access):** email invitations, project membership, and member management are pulled forward so a person can join a project without gaining access to the rest of its workspace. The original workspace-later sequence is superseded by M4.0; direct project grants will extend that foundation without replacing users or workspace memberships. The personal-workspace-only behavior above describes the shipped baseline, not a constraint on this new module. The [M4.1 module spec](specs/m4.1-project-access.md) now defines the role/action matrix, invitation lifecycle, API contracts, and grant interactions. All product decisions and testing seams are now confirmed by the user (2026-09-26). Engineering review is complete (2026-09-27); separate design review and implementation remain pending.
 
