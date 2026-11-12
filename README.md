@@ -1,6 +1,7 @@
 # Kedge
 
 [![CI](https://github.com/batjaa/kedge/actions/workflows/ci.yml/badge.svg)](https://github.com/batjaa/kedge/actions/workflows/ci.yml)
+[![Kedge on StartupScores](https://startupscores.com/badge/kedge.svg?style=shield&v=combo&theme=dark)](https://startupscores.com/open-source/kedge)
 
 Open-source ([AGPL-3.0](LICENSE)) spec-review platform. Paste a link to an
 RFC/spec wherever it lives (GitHub, Confluence, raw URL, `.md`/`.mdx`/`.html`)
